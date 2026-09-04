@@ -10,7 +10,7 @@ product to describe.
 
 ## Current status
 
-Seven pure-Kotlin/JVM modules are implemented and tested:
+Eight pure-Kotlin/JVM modules are implemented and tested:
 
 - `core-agent` — agent state machine, tool interface/registry/bounded-retry
   executor, conversation context, the `Planner` contract, a bounded Forge
@@ -84,6 +84,22 @@ Seven pure-Kotlin/JVM modules are implemented and tested:
   the device controller. A real Android-backed `DeviceController` remains
   PLANNED — it needs the Android SDK to even compile against (real
   Accessibility/`PackageManager` APIs) plus a connected/emulated device.
+- `core-shell` — the one module so far where a real implementation was
+  the *only* honest choice: spawning a subprocess is a plain JVM
+  capability, not an Android-only one, so unlike `core-build`'s
+  `MockBuildExecutor` or `core-tools-android`'s `NullDeviceController`,
+  `ProcessBuilderShellExecutor` genuinely runs real commands. Every
+  command is passed as a plain argument vector — never `sh -c "..."` —
+  so shell-metacharacter injection is impossible by construction, not
+  merely discouraged. Fail-closed by default: an empty executable
+  allow-list means nothing runs until explicitly permitted, and the same
+  applies to working-directory overrides. Tested against real
+  subprocesses (`echo`, `true`, `false`, `sleep`, `pwd`, `env`, `seq`) —
+  a real enforced timeout, real cancellation, real working-directory
+  containment, real output truncation. `ShellTool` routes through
+  `core-security`'s real `SecureToolExecutor` exactly like the other
+  device/build tools, proven with the real executor: a denied command
+  provably never spawns a process.
 
 Everything else described in the architecture doc — the Android app shell,
 root execution, a real LLM provider, a real build executor, a real device

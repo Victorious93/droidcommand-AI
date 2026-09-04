@@ -57,7 +57,19 @@ DroidForge AI
 │                            connected/emulated device this environment
 │                            does not have.
 │
-├── core-shell               Non-root shell execution tool (PLANNED)
+├── core-shell               Unlike core-tools-android/core-build, a real,
+│                            working ShellExecutor genuinely belongs here:
+│                            spawning a subprocess is a plain JVM
+│                            capability, not an Android-only one.
+│                            ProcessBuilderShellExecutor runs a command as
+│                            a plain argv vector (never `sh -c "..."`, so
+│                            shell-metacharacter injection is impossible
+│                            by construction), fail-closed by default
+│                            (empty executable allow-list — nothing runs
+│                            until explicitly permitted), with a real
+│                            enforced timeout and real cancellation.
+│                            Tested against real subprocesses (echo, true,
+│                            false, sleep, pwd, env, seq), not mocked.
 │
 ├── core-root                Root-authorized execution boundary, isolated from
 │                            core-tools-android (PLANNED)
@@ -113,11 +125,11 @@ DroidForge AI
 ```
 
 `core-agent`, `core-llm`, `core-security`, `core-config`, `core-remote`,
-`core-build`, and `core-tools-android` are implemented so far because none
-has a *compile-time* Android dependency (none of this code needs
-`android.jar`): `core-llm`'s tests use a scripted fake provider rather than
-a live network call, `core-security`'s root/permission checks are injected
-functions rather than real device queries, `core-config`'s
+`core-build`, `core-tools-android`, and `core-shell` are implemented so
+far because none has a *compile-time* Android dependency (none of this
+code needs `android.jar`): `core-llm`'s tests use a scripted fake provider
+rather than a live network call, `core-security`'s root/permission checks
+are injected functions rather than real device queries, `core-config`'s
 `EnvConfigSource` wraps `System.getenv` behind an injectable function so
 its tests never read or depend on real process environment, `core-remote`'s
 network tests talk only to a real HTTP server bound to loopback
@@ -125,11 +137,14 @@ network tests talk only to a real HTTP server bound to loopback
 workspace/pipeline tests run against real `java.nio.file` temporary
 directories with a real (mock, not fabricated) executor (see
 `docs/CORE_BUILD.md`, including two real bugs its own tests caught before
-they shipped), and `core-tools-android`'s `DeviceController` is only
+they shipped), `core-tools-android`'s `DeviceController` is only
 implemented by `NullDeviceController`, which fails every method
 explicitly rather than fabricating a successful tap, swipe, or UI-tree
-read. Every other module is scaffolding-only or not yet created — see
-Section 6.
+read, and `core-shell` is the one exception to the "nothing real" pattern:
+spawning a subprocess doesn't need Android, so `ProcessBuilderShellExecutor`
+is a real, working, fail-closed-by-default shell executor, tested against
+real subprocesses (`echo`, `sleep`, `pwd`, `env`, ...) rather than mocked.
+Every other module is scaffolding-only or not yet created — see Section 6.
 
 ## 3. Two-mode architecture
 
@@ -151,8 +166,8 @@ Section 6.
               core-agent.ToolRegistry
                          │
               core-tools-android (Tool wrappers implemented; only
-              NullDeviceController exists — see Section 6) / core-shell /
-              core-root (PLANNED)
+              NullDeviceController exists — see Section 6) / core-shell
+              (implemented and real) / core-root (PLANNED)
 ```
 
 Both modes route through the same `ToolRegistry` and `ToolExecutor` so a tool
@@ -355,7 +370,9 @@ it.
 | core-tools-android: core-security integration | IMPLEMENTED | `DeviceToolSecureExecutorIntegrationTest` — a denied tap never reaches the device controller |
 | core-tools-android: NullDeviceController | IMPLEMENTED (explicitly non-real) | Every method fails explicitly ("no real device is connected"); never fabricates a successful tap, swipe, or UI-tree read |
 | core-tools-android: a real Android-backed DeviceController | PLANNED | Needs the Android SDK (to compile against real Accessibility/PackageManager APIs) and a connected/emulated device, neither present in this environment |
-| core-shell | PLANNED | Not created |
+| core-shell: ShellCommand / ShellSecurityPolicy / ShellExecutor | IMPLEMENTED | Compiles, unit-tested |
+| core-shell: ProcessBuilderShellExecutor | IMPLEMENTED (real, not mocked) | Tested against real subprocesses (`echo`/`true`/`false`/`sleep`/`pwd`/`env`/`seq`) — real timeout, real cancellation, real working-directory containment, real fail-closed executable allow-list, real output truncation |
+| core-shell: ShellTool + core-security integration | IMPLEMENTED | `ShellToolSecureExecutorIntegrationTest`, using the real executor — a denied command provably never spawns a process |
 | core-root | PLANNED | Not created |
 | core-build: domain model (BuildRequest, ProjectType, BuildTarget, ArtifactType, BuildError, BuildResult, BuildEvent) | IMPLEMENTED | Compiles, unit-tested; see docs/CORE_BUILD.md |
 | core-build: WorkspaceManager / WorkspacePathValidator (real filesystem, path security) | IMPLEMENTED | Real java.nio.file operations, unit-tested incl. traversal/absolute-escape/symlink-adjacent cleanup containment |
