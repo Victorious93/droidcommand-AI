@@ -40,9 +40,22 @@ DroidForge AI
 │                            local) is implemented yet (PARTIAL — see
 │                            Section 6).
 │
-├── core-tools-android       Android-API-backed tools: UI inspection/
-│                            interaction, app launch/management, screenshots,
-│                            notifications, device info (PLANNED)
+├── core-tools-android       DeviceController (the extension point for
+│                            actual device control — mirrors
+│                            core-build.BuildExecutor), a device-agnostic
+│                            UiNode/UiTree/Selector domain model, and Tool
+│                            wrappers (tap/swipe/type/pressKey/launchApp/
+│                            findElement/tapElement/getUiTree/
+│                            listInstalledApps/takeScreenshot) gated by
+│                            core-security exactly like core-build's
+│                            BuildTool. NullDeviceController is the only
+│                            implementation — every method fails
+│                            explicitly ("no real device is connected"),
+│                            never fabricating a successful tap or UI
+│                            read. A real Android-backed controller
+│                            (PLANNED) needs the Android SDK and a
+│                            connected/emulated device this environment
+│                            does not have.
 │
 ├── core-shell               Non-root shell execution tool (PLANNED)
 │
@@ -99,20 +112,24 @@ DroidForge AI
                              authToken() call, not captured at load time.
 ```
 
-`core-agent`, `core-llm`, `core-security`, `core-config`, `core-remote`, and
-`core-build` are implemented so far because none has an Android dependency:
-`core-llm`'s tests use a scripted fake provider rather than a live network
-call, `core-security`'s root/permission checks are injected functions
-rather than real device queries, `core-config`'s `EnvConfigSource` wraps
-`System.getenv` behind an injectable function so its tests never read or
-depend on real process environment, `core-remote`'s network tests talk
-only to a real HTTP server bound to loopback (127.0.0.1) that the test
-itself starts and stops, and `core-build`'s workspace/pipeline tests run
-against real `java.nio.file` temporary directories with a real (mock, not
-fabricated) executor — see `docs/CORE_BUILD.md` for the full picture,
-including two real bugs its own tests caught before they shipped.
-All three build and test honestly in this environment. Every other module
-is scaffolding-only or not yet created — see Section 6.
+`core-agent`, `core-llm`, `core-security`, `core-config`, `core-remote`,
+`core-build`, and `core-tools-android` are implemented so far because none
+has a *compile-time* Android dependency (none of this code needs
+`android.jar`): `core-llm`'s tests use a scripted fake provider rather than
+a live network call, `core-security`'s root/permission checks are injected
+functions rather than real device queries, `core-config`'s
+`EnvConfigSource` wraps `System.getenv` behind an injectable function so
+its tests never read or depend on real process environment, `core-remote`'s
+network tests talk only to a real HTTP server bound to loopback
+(127.0.0.1) that the test itself starts and stops, `core-build`'s
+workspace/pipeline tests run against real `java.nio.file` temporary
+directories with a real (mock, not fabricated) executor (see
+`docs/CORE_BUILD.md`, including two real bugs its own tests caught before
+they shipped), and `core-tools-android`'s `DeviceController` is only
+implemented by `NullDeviceController`, which fails every method
+explicitly rather than fabricating a successful tap, swipe, or UI-tree
+read. Every other module is scaffolding-only or not yet created — see
+Section 6.
 
 ## 3. Two-mode architecture
 
@@ -133,7 +150,9 @@ is scaffolding-only or not yet created — see Section 6.
                          │
               core-agent.ToolRegistry
                          │
-              core-tools-android / core-shell / core-root (PLANNED)
+              core-tools-android (Tool wrappers implemented; only
+              NullDeviceController exists — see Section 6) / core-shell /
+              core-root (PLANNED)
 ```
 
 Both modes route through the same `ToolRegistry` and `ToolExecutor` so a tool
@@ -331,7 +350,11 @@ it.
 | core-llm: request/response/error types, LlmProvider interface | IMPLEMENTED | `LlmTypes.kt`, `LlmProvider.kt`, compiles |
 | core-llm: LlmPlanner (Planner adapter) | IMPLEMENTED | `LlmPlanner.kt`, unit-tested, and exercised end-to-end with `ObjectiveEngine` in `ObjectiveEngineIntegrationTest` |
 | core-llm: concrete provider (Anthropic / OpenAI-compatible / local) | PLANNED | No implementation exists; every test uses a scripted fake `LlmProvider` — no live network call, no credentials, has never been run against a real model |
-| core-tools-android | PLANNED | Not created |
+| core-tools-android: domain model (UiNode/UiTree/Selector/Rect) + UiTreeRenderer | IMPLEMENTED | Compiles, unit-tested — pure Kotlin, no Android dependency |
+| core-tools-android: DeviceController + Tool wrappers (tap/swipe/type/pressKey/launchApp/findElement/tapElement/getUiTree/listInstalledApps/takeScreenshot) | IMPLEMENTED | Unit-tested against a scripted `DeviceController` fake, incl. invalid-input paths that never call the device |
+| core-tools-android: core-security integration | IMPLEMENTED | `DeviceToolSecureExecutorIntegrationTest` — a denied tap never reaches the device controller |
+| core-tools-android: NullDeviceController | IMPLEMENTED (explicitly non-real) | Every method fails explicitly ("no real device is connected"); never fabricates a successful tap, swipe, or UI-tree read |
+| core-tools-android: a real Android-backed DeviceController | PLANNED | Needs the Android SDK (to compile against real Accessibility/PackageManager APIs) and a connected/emulated device, neither present in this environment |
 | core-shell | PLANNED | Not created |
 | core-root | PLANNED | Not created |
 | core-build: domain model (BuildRequest, ProjectType, BuildTarget, ArtifactType, BuildError, BuildResult, BuildEvent) | IMPLEMENTED | Compiles, unit-tested; see docs/CORE_BUILD.md |
@@ -354,7 +377,7 @@ it.
 | core-config: LlmConfigLoader | IMPLEMENTED | `LlmConfigLoader.kt`, unit-tested incl. that `authToken()` re-reads the source on every call rather than caching |
 | core-config: SecurityPolicyLoader | IMPLEMENTED | `SecurityPolicyLoader.kt`, unit-tested |
 | core-config: a real, deployed configuration source (device settings UI, secure storage) | PLANNED | Only `EnvConfigSource`/`MapConfigSource`/`CompositeConfigSource` exist; no Android-backed source (e.g. EncryptedSharedPreferences) has been built |
-| Pilot Mode (end-to-end) | PARTIAL | `DroidForgeSession.runPilotInstruction` is implemented and tested against fake tools only — no real Android-backed tool exists yet (depends on core-tools-android) |
+| Pilot Mode (end-to-end) | PARTIAL | `DroidForgeSession.runPilotInstruction` is implemented and tested against `core-tools-android`'s real `Tool` wrappers, but every one of them is backed by `NullDeviceController` — no real Android-backed `DeviceController` exists yet |
 | Forge Mode (end-to-end) | PARTIAL | The objective loop itself (planning/tool-selection/execution/observation/bounded iteration) is implemented and tested; it has never run against a real LLM or a real device tool; core-build's pipeline/workspace scaffolding now exists but has no real BuildExecutor to actually compile anything |
 | Mode switching (Pilot <-> Forge) | IMPLEMENTED | `DroidForgeSession.switchMode`, unit-tested for the idle case and for rejection during an active task |
 | Root capabilities | PLANNED | Depends on core-root; also requires a rooted test device this environment does not have |
