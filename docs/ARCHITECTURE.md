@@ -36,9 +36,9 @@ DroidForge AI
 │                            (LlmProvider, LlmRequest/Response, LlmConfig)
 │                            plus LlmPlanner, an adapter implementing
 │                            core-agent's Planner against an LlmProvider. No
-│                            OpenAI-compatible/local provider is implemented
-│                            yet, but core-llm-anthropic now supplies a real
-│                            one (PARTIAL — see Section 6).
+│                            local-model-only provider is implemented yet,
+│                            but core-llm-anthropic and core-llm-openai now
+│                            supply real ones (PARTIAL — see Section 6).
 │
 ├── core-llm-anthropic       AnthropicLlmProvider — a real LlmProvider
 │                            implementation, not a fake, built on
@@ -65,6 +65,29 @@ DroidForge AI
 │                            user message because Message carries no
 │                            tool_use_id for Anthropic's native tool_result
 │                            block.
+│
+├── core-llm-openai          OpenAiLlmProvider — a second real LlmProvider,
+│                            speaking the OpenAI Chat Completions API
+│                            shape that OpenAI itself serves and that most
+│                            self-hosted "OpenAI-compatible" servers
+│                            (Ollama, vLLM, LM Studio, llama.cpp's server)
+│                            implement too, so config.endpoint pointing at
+│                            a local server is the expected case, not an
+│                            edge case. Built on the same core-remote
+│                            RemoteClient/HttpTransport as
+│                            core-llm-anthropic. Unlike Anthropic's API,
+│                            this one genuinely does use RemoteClient's
+│                            built-in bearer-token auth (OpenAI's real API
+│                            accepts Authorization: Bearer for real), and a
+│                            missing key is not rejected up front — many
+│                            self-hosted OpenAI-compatible servers accept
+│                            requests with no key at all, so failing closed
+│                            here would misrepresent what this shape
+│                            actually requires. Same two documented
+│                            simplifications as core-llm-anthropic (open
+│                            tool parameter schema; TOOL-role Message maps
+│                            to `user`, not OpenAI's native tool role,
+│                            since Message carries no tool_call_id).
 │
 ├── core-tools-android       DeviceController (the extension point for
 │                            actual device control — mirrors
@@ -175,12 +198,13 @@ DroidForge AI
                              authToken() call, not captured at load time.
 ```
 
-`core-agent`, `core-llm`, `core-llm-anthropic`, `core-security`, `core-config`,
-`core-remote`, `core-build`, `core-tools-android`, `core-shell`,
-`core-apk-lifecycle`, and `core-root` are implemented so far because none has
-a *compile-time* Android dependency (none of this code needs `android.jar`):
-`core-llm-anthropic`'s tests hit a real local HTTP server, never
-api.anthropic.com or a real credential, `core-security`'s
+`core-agent`, `core-llm`, `core-llm-anthropic`, `core-llm-openai`,
+`core-security`, `core-config`, `core-remote`, `core-build`,
+`core-tools-android`, `core-shell`, `core-apk-lifecycle`, and `core-root`
+are implemented so far because none has a *compile-time* Android dependency
+(none of this code needs `android.jar`): `core-llm-anthropic`'s and
+`core-llm-openai`'s tests hit a real local HTTP server, never a live
+provider endpoint or a real credential, `core-security`'s
 root/permission checks are injected functions rather than real device
 queries, `core-config`'s `EnvConfigSource` wraps `System.getenv` behind an
 injectable function so its tests never read or depend on real process
@@ -457,6 +481,48 @@ never been run against `api.anthropic.com` itself, since this environment
 has no LLM credentials — the JSON shape is modeled from Anthropic's
 published API, not verified against a live response.
 
+## 5f. core-llm-openai (implemented — a second real LlmProvider)
+
+`OpenAiLlmProvider` mirrors `core-llm-anthropic.AnthropicLlmProvider`
+structurally — same `RemoteClient`/`HttpTransport` foundation, same
+`kotlinx.serialization` DTOs, same two documented mapping simplifications
+(an open `{"type":"object"}` tool schema, and a `TOOL`-role `Message`
+mapped to `user`) — but it speaks the OpenAI Chat Completions API shape
+instead: `POST /v1/chat/completions`, a `messages` array carrying the
+system prompt as a `system`-role message rather than a separate top-level
+field, and `tool_calls` whose `function.arguments` is a JSON object
+serialized as a *string*, which this provider parses and then flattens the
+same way `AnthropicLlmProvider` flattens `tool_use.input`.
+
+This shape matters beyond OpenAI itself: most self-hosted
+"OpenAI-compatible" model servers (Ollama, vLLM, LM Studio, llama.cpp's
+server, and others) implement exactly this endpoint shape, so
+`config.endpoint` pointing at `http://localhost:...` rather than
+`DEFAULT_BASE_URL` is the expected, common case for this provider — not an
+edge case the way a self-hosted Anthropic-shaped server would be.
+
+One deliberate difference from `AnthropicLlmProvider`'s auth handling:
+this provider *does* use `RemoteClient`'s built-in `Authorization: Bearer`
+header, since OpenAI's real API (and every OpenAI-compatible server this
+was modeled against) genuinely accepts it — unlike Anthropic's `x-api-key`
+requirement. And a missing API key is not rejected up front here, unlike
+`AnthropicLlmProvider`'s fail-closed check: many self-hosted
+OpenAI-compatible servers accept requests with no key at all, so refusing
+to send one would misrepresent what this shape actually requires rather
+than protect anything.
+
+`OpenAiLlmProviderIntegrationTest` proves the same category of round trip
+as `AnthropicLlmProviderIntegrationTest` against a real local `HttpServer`
+speaking this shape: a text response, a `tool_calls` response (including a
+nested-object argument value flattened to compact JSON text), a 401
+mapping to `LlmError.Authentication`, repeated 503s mapping to
+`LlmError.ModelUnavailable` after retries are exhausted, a malformed body
+mapping to `LlmError.InvalidResponse` instead of throwing, a request with
+no API key succeeding rather than being blocked, and the `TOOL`-role
+mapping. What remains PLANNED: this has never been run against a real
+OpenAI account or a real self-hosted server — the JSON shape is modeled
+from OpenAI's published API, not verified against a live response.
+
 ## 6. Component status (Section 3 naming — "Never fabricate features")
 
 | Component | Status | Evidence |
@@ -472,7 +538,8 @@ published API, not verified against a live response.
 | app (Android shell) | PLANNED | Manifest/Gradle scaffold only, not yet buildable — no Android SDK in this environment (Section 7) |
 | core-llm: request/response/error types, LlmProvider interface | IMPLEMENTED | `LlmTypes.kt`, `LlmProvider.kt`, compiles |
 | core-llm: LlmPlanner (Planner adapter) | IMPLEMENTED | `LlmPlanner.kt`, unit-tested, and exercised end-to-end with `ObjectiveEngine` in `ObjectiveEngineIntegrationTest` |
-| core-llm: concrete provider (Anthropic) | IMPLEMENTED | `core-llm-anthropic.AnthropicLlmProvider`, real HTTP + real JSON, tested against a real local `HttpServer`; see Section 5e. No OpenAI-compatible or local provider exists yet |
+| core-llm: concrete provider (Anthropic) | IMPLEMENTED | `core-llm-anthropic.AnthropicLlmProvider`, real HTTP + real JSON, tested against a real local `HttpServer`; see Section 5e |
+| core-llm: concrete provider (OpenAI / OpenAI-compatible) | IMPLEMENTED | `core-llm-openai.OpenAiLlmProvider`, real HTTP + real JSON, tested against a real local `HttpServer`; see Section 5f. No local-model-specific (non-OpenAI-shaped) provider exists yet |
 | core-tools-android: domain model (UiNode/UiTree/Selector/Rect) + UiTreeRenderer | IMPLEMENTED | Compiles, unit-tested — pure Kotlin, no Android dependency |
 | core-tools-android: DeviceController + Tool wrappers (tap/swipe/type/pressKey/launchApp/findElement/tapElement/getUiTree/listInstalledApps/takeScreenshot) | IMPLEMENTED | Unit-tested against a scripted `DeviceController` fake, incl. invalid-input paths that never call the device |
 | core-tools-android: core-security integration | IMPLEMENTED | `DeviceToolSecureExecutorIntegrationTest` — a denied tap never reaches the device controller |
@@ -505,6 +572,8 @@ published API, not verified against a live response.
 | core-remote: a concrete LlmProvider using RemoteClient | IMPLEMENTED | `core-llm-anthropic.AnthropicLlmProvider` consumes `RemoteClient`/`HttpTransport` directly; no build-server client on top of `RemoteClient` exists yet |
 | core-llm-anthropic: AnthropicRequest/AnthropicResponse JSON mapping | IMPLEMENTED | `AnthropicMessagesApi.kt`, kotlinx.serialization, unit-tested against a real local server's real JSON |
 | core-llm-anthropic: AnthropicLlmProvider (real HTTP LlmProvider) | IMPLEMENTED (real, not mocked) | Real request encoding/response parsing over `RemoteClient`; x-api-key auth read fresh per call, never cached; status-code -> LlmError mapping (401/403 Authentication, 429/5xx ModelUnavailable, other non-2xx InvalidResponse); tested against a real local `HttpServer`, never api.anthropic.com |
+| core-llm-openai: OpenAiChatRequest/OpenAiChatResponse JSON mapping | IMPLEMENTED | `OpenAiChatApi.kt`, kotlinx.serialization, unit-tested against a real local server's real JSON |
+| core-llm-openai: OpenAiLlmProvider (real HTTP LlmProvider) | IMPLEMENTED (real, not mocked) | Real request encoding/response parsing over `RemoteClient`, reusing its built-in bearer-token auth; status-code -> LlmError mapping identical to core-llm-anthropic; tested against a real local `HttpServer`, never api.openai.com or a self-hosted server |
 | core-security: SecurityPolicy / SecurityPolicyEnforcer | IMPLEMENTED | `SecurityPolicy.kt`, `SecurityPolicyEnforcer.kt`, compiles, unit-tested |
 | core-security: SecureToolExecutor (controlled execution boundary) | IMPLEMENTED | `SecureToolExecutor.kt`, unit-tested incl. "denied tool is never invoked" and "AwaitingApproval before prompting" |
 | core-security: real root detection / real Android permission grants | PLANNED | `rootAvailable`/`grantedPermissions` are injected functions, now exercised end-to-end by `core-root.RootToolSecureExecutorIntegrationTest` — but still only against fixtures, not a real device |
@@ -516,7 +585,7 @@ published API, not verified against a live response.
 | Forge Mode (end-to-end) | PARTIAL | The objective loop itself (planning/tool-selection/execution/observation/bounded iteration) is implemented and tested; it has never run against a real LLM or a real device tool; core-build's pipeline/workspace scaffolding now exists but has no real BuildExecutor to actually compile anything |
 | Mode switching (Pilot <-> Forge) | IMPLEMENTED | `DroidForgeSession.switchMode`, unit-tested for the idle case and for rejection during an active task |
 | Root capabilities | PARTIAL | `core-root`'s Tool/gate/policy wiring is implemented and tested end-to-end against `core-security`; no real root command has ever executed, since that requires a rooted test device this environment does not have |
-| LLM integration | PARTIAL | The abstraction, the planner adapter, and a real Anthropic-backed `LlmProvider` are all implemented and tested (the provider against a real local server, not a fake); it has never made a live call to api.anthropic.com, since this environment has no LLM credentials |
+| LLM integration | PARTIAL | The abstraction, the planner adapter, and two real HTTP-backed `LlmProvider`s (Anthropic-shaped and OpenAI-shaped) are all implemented and tested (each provider against a real local server, not a fake); neither has ever made a live call to a real provider endpoint, since this environment has no LLM credentials |
 | APK build/install/test pipeline | PARTIAL | `core-build.BuildPipeline` + `core-apk-lifecycle.ApkLifecyclePipeline` orchestration is implemented and tested end-to-end against fakes; neither has a real executor, so nothing has actually been built, installed, or launched on a device — that needs the Android SDK + device/emulator this environment does not have |
 
 ## 7. Environment constraints recorded for this implementation pass

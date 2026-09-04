@@ -10,7 +10,7 @@ product to describe.
 
 ## Current status
 
-Twelve pure-Kotlin/JVM modules are implemented and tested:
+Thirteen pure-Kotlin/JVM modules are implemented and tested:
 
 - `core-agent` — agent state machine, tool interface/registry/bounded-retry
   executor, conversation context, the `Planner` contract, a bounded Forge
@@ -19,11 +19,11 @@ Twelve pure-Kotlin/JVM modules are implemented and tested:
   rejects a mode switch attempted while a task is active.
 - `core-llm` — provider-independent LLM request/response/error types, the
   `LlmProvider` interface, and `LlmPlanner` (a `Planner` implementation
-  backed by an `LlmProvider`). No OpenAI-compatible endpoint or local model
-  provider is implemented yet, but `core-llm-anthropic` now supplies a real
-  Anthropic-backed one — every `LlmPlanner` test still runs against a
-  scripted fake provider, since that's what proves the planner's own logic
-  in isolation.
+  backed by an `LlmProvider`). No local-model-specific provider is
+  implemented yet, but `core-llm-anthropic` and `core-llm-openai` now
+  supply real ones — every `LlmPlanner` test still runs against a scripted
+  fake provider, since that's what proves the planner's own logic in
+  isolation.
 - `core-security` — `SecurityPolicy`/`SecurityPolicyEnforcer` decide whether
   a tool invocation is allowed, needs explicit approval, or is denied
   (root/permission requirements), and `SecureToolExecutor` enforces that
@@ -78,6 +78,23 @@ Twelve pure-Kotlin/JVM modules are implemented and tested:
   against the real `api.anthropic.com` — this environment has no LLM
   credentials — so the JSON shape is modeled from Anthropic's published
   API, not verified against a live response.
+- `core-llm-openai` — a second real `LlmProvider`, mirroring
+  `core-llm-anthropic` structurally but speaking the OpenAI Chat
+  Completions API shape (`POST /v1/chat/completions`) instead — the shape
+  OpenAI itself serves and that most self-hosted "OpenAI-compatible"
+  servers (Ollama, vLLM, LM Studio, llama.cpp's server) implement too, so
+  pointing `config.endpoint` at a local server is the expected case here,
+  not an edge case. One deliberate difference from `core-llm-anthropic`:
+  this provider genuinely uses `RemoteClient`'s built-in
+  `Authorization: Bearer` auth, since OpenAI's real API accepts it (unlike
+  Anthropic's `x-api-key` requirement), and a missing API key is *not*
+  rejected up front — many self-hosted OpenAI-compatible servers accept
+  requests with no key at all, so failing closed there would misrepresent
+  what this shape actually requires. Same status-code → `LlmError` mapping
+  and the same two documented simplifications (open tool schema, `TOOL`
+  role mapped to `user`) as `core-llm-anthropic`. Tested the same way,
+  against a real local `HttpServer` — never a live call to `api.openai.com`
+  or a real self-hosted server.
 - `core-build` — the workspace/build-pipeline foundation for Forge Mode
   (`BuildRequest → WorkspaceManager → BuildPipeline → BuildExecutor →
   BuildResult → Artifact`). `WorkspaceManager` does real, path-secured
@@ -161,8 +178,8 @@ Twelve pure-Kotlin/JVM modules are implemented and tested:
   rooted device this environment does not have.
 
 Everything else described in the architecture doc — the Android app shell,
-an OpenAI-compatible or local LLM provider, a real build executor, a real
-device controller, a real adb-backed APK lifecycle executor, and a real
+a local-model-specific LLM provider, a real build executor, a real device
+controller, a real adb-backed APK lifecycle executor, and a real
 rooted-device executor — is not yet built.
 
 ```
