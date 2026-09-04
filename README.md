@@ -8,7 +8,7 @@ finished product only once there is a finished product to describe.
 
 ## Current status
 
-Four pure-Kotlin/JVM modules are implemented and tested:
+Five pure-Kotlin/JVM modules are implemented and tested:
 
 - `core-agent` — agent state machine, tool interface/registry/bounded-retry
   executor, conversation context, the `Planner` contract, a bounded Forge
@@ -36,6 +36,21 @@ Four pure-Kotlin/JVM modules are implemented and tested:
   calls and checks each call sees the current one. Only in-process sources
   exist; a real Android-backed source (e.g. `EncryptedSharedPreferences`)
   remains PLANNED.
+- `core-remote` — the first module with a genuinely working implementation,
+  not just an interface plus fakes: `JdkHttpTransport` is a real HTTP
+  client (`java.net.http`), tested against a real local `HttpServer` on
+  loopback (127.0.0.1) — a real network round trip and a real timeout,
+  never leaving the sandbox. That test actually caught a real bug this
+  session (HTTP header names are case-insensitive; the first version
+  wasn't, and the round-trip test failed for real until it was fixed).
+  `RemoteEndpoint` only ever resolves a relative path against its own
+  configured host, so a request can't be aimed elsewhere by construction,
+  and `RemoteClient` reuses `core-agent`'s `RetryPolicy` to retry 5xx/I-O
+  failures while never retrying a 4xx. `RemoteClientIntegrationTest`
+  proves the retry path against a real local server too (503, 503, then
+  200). Still PLANNED: TLS pinning/mTLS beyond "must be HTTPS", and any
+  concrete `LlmProvider` or build-server client actually built on top of
+  this transport.
 
 Everything else described in the architecture doc — the Android app shell,
 device control tools, root execution, a real LLM provider, the Forge
