@@ -8,7 +8,7 @@ finished product only once there is a finished product to describe.
 
 ## Current status
 
-Three pure-Kotlin/JVM modules are implemented and tested:
+Four pure-Kotlin/JVM modules are implemented and tested:
 
 - `core-agent` — agent state machine, tool interface/registry/bounded-retry
   executor, conversation context, the `Planner` contract, a bounded Forge
@@ -28,6 +28,14 @@ Three pure-Kotlin/JVM modules are implemented and tested:
   injected functions, tested with fixtures — real on-device root detection
   and Android permission grants remain PLANNED (need `core-root` /
   `core-tools-android` and a real device).
+- `core-config` — `LlmConfigLoader`/`SecurityPolicyLoader` build `core-llm`'s
+  and `core-security`'s config objects from a `ConfigSource` (environment
+  variables by default). No secret is ever held as a plain field: an LLM
+  API key is read from the source fresh on every call, not captured at load
+  time — verified by a test that changes the underlying value between two
+  calls and checks each call sees the current one. Only in-process sources
+  exist; a real Android-backed source (e.g. `EncryptedSharedPreferences`)
+  remains PLANNED.
 
 Everything else described in the architecture doc — the Android app shell,
 device control tools, root execution, a real LLM provider, the Forge

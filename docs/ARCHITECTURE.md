@@ -70,14 +70,22 @@ DroidForge AI
 │                            grantedPermissions), so the policy itself
 │                            stays device-agnostic and fully testable.
 │
-└── core-config               Provider/endpoint/model configuration, no
-                             hard-coded secrets (PLANNED)
+└── core-config               ConfigSource/ConfigReader plus LlmConfigLoader
+                             and SecurityPolicyLoader, which build
+                             core-llm's LlmConfig and core-security's
+                             SecurityPolicy from a key/value source. No
+                             secret is ever held as a plain field — an API
+                             key is read from the source fresh on every
+                             authToken() call, not captured at load time.
 ```
 
-`core-agent`, `core-llm`, and `core-security` are implemented so far because
-none has an Android dependency: `core-llm`'s tests use a scripted fake
-provider rather than a live network call, and `core-security`'s root/
-permission checks are injected functions rather than real device queries.
+`core-agent`, `core-llm`, `core-security`, and `core-config` are implemented
+so far because none has an Android dependency: `core-llm`'s tests use a
+scripted fake provider rather than a live network call, `core-security`'s
+root/permission checks are injected functions rather than real device
+queries, and `core-config`'s `EnvConfigSource` wraps `System.getenv` behind
+an injectable function so its tests never read or depend on real process
+environment.
 All three build and test honestly in this environment. Every other module
 is scaffolding-only or not yet created — see Section 6.
 
@@ -208,6 +216,38 @@ un-testable here is real root detection and real permission grants on an
 actual Android device — that is `core-root`/`core-tools-android`'s job,
 not this module's, and both remain PLANNED (Section 6).
 
+## 5c. Configuration loading (implemented, device-agnostic)
+
+`core-config` is the seam between raw configuration (environment variables,
+or any other `ConfigSource`) and the typed config objects `core-llm` and
+`core-security` already define. `ConfigReader` gives typed access
+(`require`/`optional`/`optionalInt`/`optionalDouble`/`optionalBoolean`)
+over any `ConfigSource`; a missing required key throws
+`MissingConfigException` rather than producing a half-built config object
+that fails confusingly later.
+
+`LlmConfigLoader.load(source)` builds an `LlmConfig`: `provider` and
+`model` are required, `endpoint`/`temperature`/`maxOutputTokens` are
+optional, and `authToken` is a lambda that reads `DROIDFORGE_LLM_API_KEY`
+from the source fresh on every call — the loader itself never captures the
+key into a field. This is verified directly, not just designed that way in
+prose: a test changes the underlying source's value between two calls to
+the returned config's `authToken()` and asserts each call sees the current
+value, proving nothing was cached at load time.
+
+`SecurityPolicyLoader.load(source, rootAvailable)` builds a
+`SecurityPolicy` from comma-separated permission and auto-approve-level
+lists, defaulting to root disabled, no granted permissions, and only
+`SecurityLevel.NORMAL` auto-approved — the same conservative defaults
+`SecurityPolicy` itself uses. `rootAvailable` is deliberately never sourced
+from configuration (root availability is a device fact, not a setting);
+the loader only threads through whatever function the caller supplies.
+
+`EnvConfigSource` wraps `System.getenv` behind an injectable function
+(defaulting to `System::getenv`), so production code gets real environment
+variables while every test in this module supplies a fake — no test here
+reads or depends on this sandbox's actual process environment.
+
 ## 6. Component status (Section 3 naming — "Never fabricate features")
 
 | Component | Status | Evidence |
@@ -233,7 +273,10 @@ not this module's, and both remain PLANNED (Section 6).
 | core-security: SecurityPolicy / SecurityPolicyEnforcer | IMPLEMENTED | `SecurityPolicy.kt`, `SecurityPolicyEnforcer.kt`, compiles, unit-tested |
 | core-security: SecureToolExecutor (controlled execution boundary) | IMPLEMENTED | `SecureToolExecutor.kt`, unit-tested incl. "denied tool is never invoked" and "AwaitingApproval before prompting" |
 | core-security: real root detection / real Android permission grants | PLANNED | `rootAvailable`/`grantedPermissions` are injected functions exercised only with test fixtures; depends on core-root / core-tools-android and a real device |
-| core-config | PLANNED | Not created |
+| core-config: ConfigSource / ConfigReader | IMPLEMENTED | `ConfigSource.kt`, `ConfigReader.kt`, compiles, unit-tested |
+| core-config: LlmConfigLoader | IMPLEMENTED | `LlmConfigLoader.kt`, unit-tested incl. that `authToken()` re-reads the source on every call rather than caching |
+| core-config: SecurityPolicyLoader | IMPLEMENTED | `SecurityPolicyLoader.kt`, unit-tested |
+| core-config: a real, deployed configuration source (device settings UI, secure storage) | PLANNED | Only `EnvConfigSource`/`MapConfigSource`/`CompositeConfigSource` exist; no Android-backed source (e.g. EncryptedSharedPreferences) has been built |
 | Pilot Mode (end-to-end) | PARTIAL | `DroidForgeSession.runPilotInstruction` is implemented and tested against fake tools only — no real Android-backed tool exists yet (depends on core-tools-android) |
 | Forge Mode (end-to-end) | PARTIAL | The objective loop itself (planning/tool-selection/execution/observation/bounded iteration) is implemented and tested; it has never run against a real LLM or a real device tool, and core-build (compile step) does not exist |
 | Mode switching (Pilot <-> Forge) | IMPLEMENTED | `DroidForgeSession.switchMode`, unit-tested for the idle case and for rejection during an active task |
