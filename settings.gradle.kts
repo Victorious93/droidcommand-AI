@@ -11,6 +11,7 @@ include(":core-shell")
 include(":core-apk-lifecycle")
 include(":core-root")
 include(":core-llm-anthropic")
+include(":core-llm-openai")
 
 // The following modules are part of the target architecture (see
 // docs/ARCHITECTURE.md) but do not yet contain implemented code and are
