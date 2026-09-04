@@ -57,7 +57,19 @@ DroidForge AI
 │                            connected/emulated device this environment
 │                            does not have.
 │
-├── core-shell               Non-root shell execution tool (PLANNED)
+├── core-shell               Unlike core-tools-android/core-build, a real,
+│                            working ShellExecutor genuinely belongs here:
+│                            spawning a subprocess is a plain JVM
+│                            capability, not an Android-only one.
+│                            ProcessBuilderShellExecutor runs a command as
+│                            a plain argv vector (never `sh -c "..."`, so
+│                            shell-metacharacter injection is impossible
+│                            by construction), fail-closed by default
+│                            (empty executable allow-list — nothing runs
+│                            until explicitly permitted), with a real
+│                            enforced timeout and real cancellation.
+│                            Tested against real subprocesses (echo, true,
+│                            false, sleep, pwd, env, seq), not mocked.
 │
 ├── core-root                Root-authorized execution boundary, isolated from
 │                            core-tools-android (PLANNED)
@@ -77,8 +89,20 @@ DroidForge AI
 │                            Gradle or a real build server this
 │                            environment does not have).
 │
-├── core-apk-lifecycle        Build → install → launch → log → test → result
-│                            (PLANNED, device-dependent)
+├── core-apk-lifecycle        ApkLifecyclePipeline consumes an already-
+│                            completed core-build.BuildResult (building
+│                            and deploying are separate concerns) and
+│                            orchestrates select-artifact → install →
+│                            launch → (best-effort) collect logs →
+│                            (optional) test → result through an
+│                            ApkLifecycleExecutor extension point — same
+│                            pattern as BuildExecutor/DeviceController.
+│                            NullApkLifecycleExecutor is the only
+│                            implementation; every method fails explicitly
+│                            rather than fabricating a successful install
+│                            or launch. A real adb-backed executor
+│                            (PLANNED) needs a connected/emulated device
+│                            this environment does not have.
 │
 ├── core-remote               RemoteEndpoint (HTTPS-by-default, path-only
 │                            resolution so a request can never be aimed at
@@ -113,23 +137,31 @@ DroidForge AI
 ```
 
 `core-agent`, `core-llm`, `core-security`, `core-config`, `core-remote`,
-`core-build`, and `core-tools-android` are implemented so far because none
-has a *compile-time* Android dependency (none of this code needs
-`android.jar`): `core-llm`'s tests use a scripted fake provider rather than
-a live network call, `core-security`'s root/permission checks are injected
-functions rather than real device queries, `core-config`'s
-`EnvConfigSource` wraps `System.getenv` behind an injectable function so
-its tests never read or depend on real process environment, `core-remote`'s
-network tests talk only to a real HTTP server bound to loopback
-(127.0.0.1) that the test itself starts and stops, `core-build`'s
-workspace/pipeline tests run against real `java.nio.file` temporary
-directories with a real (mock, not fabricated) executor (see
+`core-build`, `core-tools-android`, `core-shell`, and `core-apk-lifecycle`
+are implemented so far because none has a *compile-time* Android
+dependency (none of this code needs `android.jar`): `core-llm`'s tests use
+a scripted fake provider rather than a live network call, `core-security`'s
+root/permission checks are injected functions rather than real device
+queries, `core-config`'s `EnvConfigSource` wraps `System.getenv` behind an
+injectable function so its tests never read or depend on real process
+environment, `core-remote`'s network tests talk only to a real HTTP server
+bound to loopback (127.0.0.1) that the test itself starts and stops,
+`core-build`'s workspace/pipeline tests run against real `java.nio.file`
+temporary directories with a real (mock, not fabricated) executor (see
 `docs/CORE_BUILD.md`, including two real bugs its own tests caught before
-they shipped), and `core-tools-android`'s `DeviceController` is only
+they shipped), `core-tools-android`'s `DeviceController` is only
 implemented by `NullDeviceController`, which fails every method
 explicitly rather than fabricating a successful tap, swipe, or UI-tree
-read. Every other module is scaffolding-only or not yet created — see
-Section 6.
+read, `core-shell` is the one exception to the "nothing real" pattern:
+spawning a subprocess doesn't need Android, so `ProcessBuilderShellExecutor`
+is a real, working, fail-closed-by-default shell executor, tested against
+real subprocesses (`echo`, `sleep`, `pwd`, `env`, ...) rather than mocked,
+and `core-apk-lifecycle` follows `core-tools-android`'s pattern again:
+`ApkLifecyclePipeline` is real orchestration logic (consuming an
+already-completed `core-build.BuildResult`), but `NullApkLifecycleExecutor`
+is the only `ApkLifecycleExecutor`, and it fails every install/launch/log/
+test call explicitly rather than fabricating a successful deployment.
+Every other module is scaffolding-only or not yet created — see Section 6.
 
 ## 3. Two-mode architecture
 
@@ -151,8 +183,8 @@ Section 6.
               core-agent.ToolRegistry
                          │
               core-tools-android (Tool wrappers implemented; only
-              NullDeviceController exists — see Section 6) / core-shell /
-              core-root (PLANNED)
+              NullDeviceController exists — see Section 6) / core-shell
+              (implemented and real) / core-root (PLANNED)
 ```
 
 Both modes route through the same `ToolRegistry` and `ToolExecutor` so a tool
@@ -355,7 +387,9 @@ it.
 | core-tools-android: core-security integration | IMPLEMENTED | `DeviceToolSecureExecutorIntegrationTest` — a denied tap never reaches the device controller |
 | core-tools-android: NullDeviceController | IMPLEMENTED (explicitly non-real) | Every method fails explicitly ("no real device is connected"); never fabricates a successful tap, swipe, or UI-tree read |
 | core-tools-android: a real Android-backed DeviceController | PLANNED | Needs the Android SDK (to compile against real Accessibility/PackageManager APIs) and a connected/emulated device, neither present in this environment |
-| core-shell | PLANNED | Not created |
+| core-shell: ShellCommand / ShellSecurityPolicy / ShellExecutor | IMPLEMENTED | Compiles, unit-tested |
+| core-shell: ProcessBuilderShellExecutor | IMPLEMENTED (real, not mocked) | Tested against real subprocesses (`echo`/`true`/`false`/`sleep`/`pwd`/`env`/`seq`) — real timeout, real cancellation, real working-directory containment, real fail-closed executable allow-list, real output truncation |
+| core-shell: ShellTool + core-security integration | IMPLEMENTED | `ShellToolSecureExecutorIntegrationTest`, using the real executor — a denied command provably never spawns a process |
 | core-root | PLANNED | Not created |
 | core-build: domain model (BuildRequest, ProjectType, BuildTarget, ArtifactType, BuildError, BuildResult, BuildEvent) | IMPLEMENTED | Compiles, unit-tested; see docs/CORE_BUILD.md |
 | core-build: WorkspaceManager / WorkspacePathValidator (real filesystem, path security) | IMPLEMENTED | Real java.nio.file operations, unit-tested incl. traversal/absolute-escape/symlink-adjacent cleanup containment |
@@ -365,7 +399,11 @@ it.
 | core-build: BuildTool + core-security integration | IMPLEMENTED | `BuildToolSecureExecutorIntegrationTest` — a denied build never creates a workspace, verified on disk |
 | core-build: MockBuildExecutor | IMPLEMENTED (explicitly non-real) | Never performs a real build; default outcome is zero artifacts with an output message saying so |
 | core-build: a real BuildExecutor (AndroidGradleBuildExecutor / LocalProcessBuildExecutor / RemoteBuildExecutor) | PLANNED | Needs Android SDK/JDK/Gradle or a real build server this environment does not have |
-| core-apk-lifecycle | PLANNED | Not created |
+| core-apk-lifecycle: domain model (InstallRequest/Result, LaunchResult, LogEntry, TestCaseResult, ApkLifecycleError/Event) | IMPLEMENTED | Compiles, unit-tested |
+| core-apk-lifecycle: ApkLifecyclePipeline | IMPLEMENTED | Unit-tested for every stage's success/failure path, incl. best-effort log collection vs. fatal install/launch/test-harness failures |
+| core-apk-lifecycle: ApkLifecycleTool + core-security integration | IMPLEMENTED | `ApkLifecycleToolSecureExecutorIntegrationTest` — a denied deployment never reaches the executor |
+| core-apk-lifecycle: NullApkLifecycleExecutor | IMPLEMENTED (explicitly non-real) | Every method fails explicitly ("no real device/adb is connected"); never fabricates a successful install, launch, or test run |
+| core-apk-lifecycle: a real adb-backed ApkLifecycleExecutor | PLANNED | Needs a connected/emulated Android device this environment does not have |
 | core-remote: RemoteEndpoint / HttpTransport / RemoteClient | IMPLEMENTED | `RemoteEndpoint.kt`, `HttpTransport.kt`, `RemoteClient.kt`, unit-tested against a fake transport |
 | core-remote: JdkHttpTransport (real HTTP client) | IMPLEMENTED | `JdkHttpTransport.kt`, tested against a real local `HttpServer` on loopback — a genuine network round trip and a genuine timeout, not mocked |
 | core-remote: TLS identity verification beyond "must be HTTPS" (pinning/mTLS) | PLANNED | Not built |
@@ -382,7 +420,7 @@ it.
 | Mode switching (Pilot <-> Forge) | IMPLEMENTED | `DroidForgeSession.switchMode`, unit-tested for the idle case and for rejection during an active task |
 | Root capabilities | PLANNED | Depends on core-root; also requires a rooted test device this environment does not have |
 | LLM integration | PARTIAL | The abstraction and the planner adapter are implemented and tested against a fake provider; no concrete provider is implemented, and this environment has no LLM credentials to test one against even if it existed |
-| APK build/install/test pipeline | PLANNED | Depends on core-apk-lifecycle; also requires Android SDK + device/emulator not present in this environment |
+| APK build/install/test pipeline | PARTIAL | `core-build.BuildPipeline` + `core-apk-lifecycle.ApkLifecyclePipeline` orchestration is implemented and tested end-to-end against fakes; neither has a real executor, so nothing has actually been built, installed, or launched on a device — that needs the Android SDK + device/emulator this environment does not have |
 
 ## 7. Environment constraints recorded for this implementation pass
 
