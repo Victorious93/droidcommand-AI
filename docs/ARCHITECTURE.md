@@ -3,8 +3,11 @@
 Status: DRAFT. Reflects the design adopted for implementation; components are
 individually classified IMPLEMENTED / PARTIAL / PLANNED / CONFIGURATION-DEPENDENT
 in Section 6 — do not read a component's presence in the diagram below as proof
-it is built. Source of truth for what actually exists is the repository itself
-plus `docs/PHASE1_AUDIT.md` (the empty-repo state recorded 2026-09-04).
+it is built. Source of truth for what actually exists is the repository
+itself. (The Phase 1 repository/provenance/licensing audit that preceded this
+document was conducted and reported in the originating chat session; it found
+the repository empty of code at the time, with no license or branding
+findings to carry forward. It was not committed as a standalone file.)
 
 ## 1. Why this shape
 
@@ -22,10 +25,19 @@ DroidForge AI
 ├── app                      Android application module (UI shell, DI wiring)
 │
 ├── core-agent               Pure Kotlin/JVM. Agent state machine, tool
-│                            registry/executor, bounded retry policy.
-│                            No Android dependency — testable on any JVM.
+│                            registry/executor, bounded retry policy,
+│                            conversation context, Planner contract, and
+│                            the bounded Forge objective loop
+│                            (ObjectiveEngine). No Android dependency —
+│                            testable on any JVM.
 │
-├── core-llm                 LLM provider abstraction (PLANNED)
+├── core-llm                 Provider-independent chat/tool-call abstraction
+│                            (LlmProvider, LlmRequest/Response, LlmConfig)
+│                            plus LlmPlanner, an adapter implementing
+│                            core-agent's Planner against an LlmProvider.
+│                            No concrete provider (Anthropic/OpenAI-compatible/
+│                            local) is implemented yet (PARTIAL — see
+│                            Section 6).
 │
 ├── core-tools-android       Android-API-backed tools: UI inspection/
 │                            interaction, app launch/management, screenshots,
@@ -53,8 +65,9 @@ DroidForge AI
                              hard-coded secrets (PLANNED)
 ```
 
-`core-agent` is implemented in this pass because it has no Android or network
-dependency and can be honestly built, compiled, and unit-tested in this
+`core-agent` and `core-llm` are implemented in this pass because neither has
+an Android dependency, and `core-llm`'s tests use a scripted fake provider
+rather than a live network call, so both build and test honestly in this
 environment. Every other module is scaffolding-only or not yet created —
 see Section 6.
 
@@ -67,9 +80,11 @@ see Section 6.
               │                     │
           PILOT MODE            FORGE MODE
               │                     │
-       core-agent.Tool         core-agent.Planner (PLANNED)
-       Executor (direct,             │
-       single-step)           core-agent.Objective loop
+       core-agent.Tool         core-agent.ObjectiveEngine, driven by
+       Executor (direct,       a core-agent.Planner — core-llm.LlmPlanner
+       single-step)            is the only implementation so far, and it
+              │                talks to LlmProvider (no concrete provider
+              │                implemented — PARTIAL, Section 6)
               │                     │
               └──────────┬──────────┘
                          │
@@ -95,6 +110,34 @@ the mechanism that prevents an agent from being resumed after it has already
 terminated. Retry is bounded by an explicit `RetryPolicy(maxAttempts, backoff)`
 passed into the executor; there is no unbounded loop anywhere in this module.
 
+## 4b. Objective engine and LLM abstraction (implemented, partial)
+
+`ConversationContext` (`core-agent`) is an append-only, ordered message
+history with an optional system prompt. `Planner` (`core-agent`) is the
+contract an objective loop consults for its next step —
+`InvokeTool`/`Complete`/`Abort` — and `ObjectiveEngine` (`core-agent`) drives
+the Forge loop against it: each iteration re-enters `Planning`, asks the
+planner, and either runs a tool through `ToolExecutor` or terminates. Agent
+safety is enforced by `maxIterations` (default 25, validated `>= 1`): a
+planner that never returns `Complete` or `Abort` cannot loop forever — the
+engine gives up and transitions to `Failed` once the bound is hit. This is
+verified directly, not just claimed: `ObjectiveEngineTest`'s
+"never exceeds maxIterations" case runs a planner that always requests a
+tool and asserts the tool was invoked exactly `maxIterations` times, no more.
+
+`core-llm` defines the provider-independent side: `LlmRequest`/`LlmResponse`/
+`LlmError`, and `LlmProvider`, an interface with no implementation yet.
+`LlmConfig.authToken` is a function (`() -> String?`), not a stored string,
+so no code path in this module can hold or serialize a credential.
+`LlmPlanner` implements `core-agent.Planner` against an `LlmProvider`: a
+tool-call response becomes `InvokeTool`, plain text becomes `Complete`
+(the model considers the objective satisfied), and a provider error becomes
+`Abort` rather than an uncaught exception. Because no real provider exists,
+every test — including the end-to-end `ObjectiveEngineIntegrationTest`,
+which drives `ObjectiveEngine` + `LlmPlanner` + a real registered `Tool`
+through one full tool-call-then-complete cycle — runs against a scripted
+fake `LlmProvider`. That proves the wiring, not a live model; see Section 6.
+
 ## 5. Build strategy decision
 
 [Likely — recommendation, not yet validated against real build workloads]
@@ -116,8 +159,13 @@ architecture; the server half is out of scope for this repository.
 | core-agent: Tool interface | IMPLEMENTED | `Tool.kt`, compiles, unit-tested |
 | core-agent: ToolRegistry | IMPLEMENTED | `ToolRegistry.kt`, compiles, unit-tested |
 | core-agent: ToolExecutor + bounded retry | IMPLEMENTED | `ToolExecutor.kt`, compiles, unit-tested |
+| core-agent: ConversationContext | IMPLEMENTED | `Conversation.kt`, compiles, unit-tested |
+| core-agent: Planner contract | IMPLEMENTED | `Planner.kt` (interface only — see LlmPlanner for the one implementation) |
+| core-agent: ObjectiveEngine (bounded Forge loop) | IMPLEMENTED | `ObjectiveEngine.kt`, compiles, unit-tested incl. the maxIterations bound |
 | app (Android shell) | PLANNED | Manifest/Gradle scaffold only, not yet buildable — no Android SDK in this environment (Section 7) |
-| core-llm | PLANNED | Not created |
+| core-llm: request/response/error types, LlmProvider interface | IMPLEMENTED | `LlmTypes.kt`, `LlmProvider.kt`, compiles |
+| core-llm: LlmPlanner (Planner adapter) | IMPLEMENTED | `LlmPlanner.kt`, unit-tested, and exercised end-to-end with `ObjectiveEngine` in `ObjectiveEngineIntegrationTest` |
+| core-llm: concrete provider (Anthropic / OpenAI-compatible / local) | PLANNED | No implementation exists; every test uses a scripted fake `LlmProvider` — no live network call, no credentials, has never been run against a real model |
 | core-tools-android | PLANNED | Not created |
 | core-shell | PLANNED | Not created |
 | core-root | PLANNED | Not created |
@@ -127,9 +175,9 @@ architecture; the server half is out of scope for this repository.
 | core-security | PLANNED | Not created |
 | core-config | PLANNED | Not created |
 | Pilot Mode (end-to-end) | PLANNED | Depends on core-tools-android |
-| Forge Mode (end-to-end) | PLANNED | Depends on core-llm, core-build |
+| Forge Mode (end-to-end) | PARTIAL | The objective loop itself (planning/tool-selection/execution/observation/bounded iteration) is implemented and tested; it has never run against a real LLM or a real device tool, and core-build (compile step) does not exist |
 | Root capabilities | PLANNED | Depends on core-root; also requires a rooted test device this environment does not have |
-| LLM integration | PLANNED | Depends on core-llm; also requires provider credentials not present in this environment |
+| LLM integration | PARTIAL | The abstraction and the planner adapter are implemented and tested against a fake provider; no concrete provider is implemented, and this environment has no LLM credentials to test one against even if it existed |
 | APK build/install/test pipeline | PLANNED | Depends on core-apk-lifecycle; also requires Android SDK + device/emulator not present in this environment |
 
 ## 7. Environment constraints recorded for this implementation pass
