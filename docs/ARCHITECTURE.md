@@ -49,9 +49,20 @@ DroidForge AI
 ├── core-root                Root-authorized execution boundary, isolated from
 │                            core-tools-android (PLANNED)
 │
-├── core-build               Forge Mode build/compile engine — workspace,
-│                            source→artifact pipeline (PLANNED, likely
-│                            remote/hybrid — see Section 5)
+├── core-build               BuildRequest -> WorkspaceManager -> BuildPipeline
+│                            -> BuildExecutor -> BuildResult -> Artifact.
+│                            WorkspaceManager, WorkspacePathValidator,
+│                            BuildPipeline, SystemBuildEnvironmentDetector,
+│                            and DryRunPlanner are real, working
+│                            implementations against real java.nio.file
+│                            operations — not fakes. MockBuildExecutor is
+│                            the only BuildExecutor (never performs a real
+│                            build; see docs/CORE_BUILD.md). No
+│                            AndroidGradleBuildExecutor/
+│                            LocalProcessBuildExecutor/RemoteBuildExecutor
+│                            exists yet (PLANNED — needs Android SDK/JDK/
+│                            Gradle or a real build server this
+│                            environment does not have).
 │
 ├── core-apk-lifecycle        Build → install → launch → log → test → result
 │                            (PLANNED, device-dependent)
@@ -88,16 +99,18 @@ DroidForge AI
                              authToken() call, not captured at load time.
 ```
 
-`core-agent`, `core-llm`, `core-security`, `core-config`, and `core-remote`
-are implemented so far because none has an Android dependency:
+`core-agent`, `core-llm`, `core-security`, `core-config`, `core-remote`, and
+`core-build` are implemented so far because none has an Android dependency:
 `core-llm`'s tests use a scripted fake provider rather than a live network
 call, `core-security`'s root/permission checks are injected functions
 rather than real device queries, `core-config`'s `EnvConfigSource` wraps
 `System.getenv` behind an injectable function so its tests never read or
-depend on real process environment, and `core-remote`'s network tests talk
+depend on real process environment, `core-remote`'s network tests talk
 only to a real HTTP server bound to loopback (127.0.0.1) that the test
-itself starts and stops — a genuine round trip, but one that never leaves
-the sandbox and needs no external network access.
+itself starts and stops, and `core-build`'s workspace/pipeline tests run
+against real `java.nio.file` temporary directories with a real (mock, not
+fabricated) executor — see `docs/CORE_BUILD.md` for the full picture,
+including two real bugs its own tests caught before they shipped.
 All three build and test honestly in this environment. Every other module
 is scaffolding-only or not yet created — see Section 6.
 
@@ -321,7 +334,14 @@ it.
 | core-tools-android | PLANNED | Not created |
 | core-shell | PLANNED | Not created |
 | core-root | PLANNED | Not created |
-| core-build | PLANNED | Not created |
+| core-build: domain model (BuildRequest, ProjectType, BuildTarget, ArtifactType, BuildError, BuildResult, BuildEvent) | IMPLEMENTED | Compiles, unit-tested; see docs/CORE_BUILD.md |
+| core-build: WorkspaceManager / WorkspacePathValidator (real filesystem, path security) | IMPLEMENTED | Real java.nio.file operations, unit-tested incl. traversal/absolute-escape/symlink-adjacent cleanup containment |
+| core-build: BuildPipeline (orchestrator) | IMPLEMENTED | Unit-tested for every stage's success/failure path, cancellation, and a simulated timeout via a fake clock |
+| core-build: SystemBuildEnvironmentDetector / PathExecutableDetector | IMPLEMENTED | Real detection (env vars, file existence, PATH scan — no process spawning), unit-tested against fixtures |
+| core-build: DryRunPlanner | IMPLEMENTED | Unit-tested incl. "performs no filesystem mutation" |
+| core-build: BuildTool + core-security integration | IMPLEMENTED | `BuildToolSecureExecutorIntegrationTest` — a denied build never creates a workspace, verified on disk |
+| core-build: MockBuildExecutor | IMPLEMENTED (explicitly non-real) | Never performs a real build; default outcome is zero artifacts with an output message saying so |
+| core-build: a real BuildExecutor (AndroidGradleBuildExecutor / LocalProcessBuildExecutor / RemoteBuildExecutor) | PLANNED | Needs Android SDK/JDK/Gradle or a real build server this environment does not have |
 | core-apk-lifecycle | PLANNED | Not created |
 | core-remote: RemoteEndpoint / HttpTransport / RemoteClient | IMPLEMENTED | `RemoteEndpoint.kt`, `HttpTransport.kt`, `RemoteClient.kt`, unit-tested against a fake transport |
 | core-remote: JdkHttpTransport (real HTTP client) | IMPLEMENTED | `JdkHttpTransport.kt`, tested against a real local `HttpServer` on loopback — a genuine network round trip and a genuine timeout, not mocked |
@@ -335,7 +355,7 @@ it.
 | core-config: SecurityPolicyLoader | IMPLEMENTED | `SecurityPolicyLoader.kt`, unit-tested |
 | core-config: a real, deployed configuration source (device settings UI, secure storage) | PLANNED | Only `EnvConfigSource`/`MapConfigSource`/`CompositeConfigSource` exist; no Android-backed source (e.g. EncryptedSharedPreferences) has been built |
 | Pilot Mode (end-to-end) | PARTIAL | `DroidForgeSession.runPilotInstruction` is implemented and tested against fake tools only — no real Android-backed tool exists yet (depends on core-tools-android) |
-| Forge Mode (end-to-end) | PARTIAL | The objective loop itself (planning/tool-selection/execution/observation/bounded iteration) is implemented and tested; it has never run against a real LLM or a real device tool, and core-build (compile step) does not exist |
+| Forge Mode (end-to-end) | PARTIAL | The objective loop itself (planning/tool-selection/execution/observation/bounded iteration) is implemented and tested; it has never run against a real LLM or a real device tool; core-build's pipeline/workspace scaffolding now exists but has no real BuildExecutor to actually compile anything |
 | Mode switching (Pilot <-> Forge) | IMPLEMENTED | `DroidForgeSession.switchMode`, unit-tested for the idle case and for rejection during an active task |
 | Root capabilities | PLANNED | Depends on core-root; also requires a rooted test device this environment does not have |
 | LLM integration | PARTIAL | The abstraction and the planner adapter are implemented and tested against a fake provider; no concrete provider is implemented, and this environment has no LLM credentials to test one against even if it existed |
