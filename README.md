@@ -11,8 +11,10 @@ finished product only once there is a finished product to describe.
 Two pure-Kotlin/JVM modules are implemented and tested:
 
 - `core-agent` — agent state machine, tool interface/registry/bounded-retry
-  executor, conversation context, the `Planner` contract, and a bounded
-  Forge objective loop (`ObjectiveEngine`).
+  executor, conversation context, the `Planner` contract, a bounded Forge
+  objective loop (`ObjectiveEngine`), and `DroidForgeSession`, which
+  coordinates Pilot Mode and Forge Mode over that shared infrastructure and
+  rejects a mode switch attempted while a task is active.
 - `core-llm` — provider-independent LLM request/response/error types, the
   `LlmProvider` interface, and `LlmPlanner` (a `Planner` implementation
   backed by an `LlmProvider`). No concrete provider (Anthropic, an

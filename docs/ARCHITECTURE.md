@@ -100,6 +100,20 @@ loop (UNDERSTAND → PLAN → SELECT TOOLS → EXECUTE → OBSERVE → VALIDATE 
 DIAGNOSE → FIX → REBUILD → RETEST → ITERATE → COMPLETE). The active mode must
 be surfaced in the UI at all times (UI itself: PLANNED, Phase 15).
 
+`DroidForgeSession` (`core-agent`) is the mode coordinator: it exposes
+`mode: AgentMode` (`PILOT`/`FORGE`), `runPilotInstruction(...)`, and
+`runForgeObjective(...)`, and it is the single place a mode switch is
+rejected while a task is active. A switch attempted mid-task throws
+`IllegalModeSwitch` rather than silently queuing or corrupting state, and
+this is tested for real concurrent-looking behavior, not just documented
+intent: a test drives an active Pilot task whose cancellation callback
+itself attempts `switchMode(FORGE)` mid-execution and asserts it is
+rejected, then asserts the same switch succeeds once the task has actually
+finished. The lock guarding this is held only for the mode/active-flag
+check, never across the task's own execution, so a switch attempt from a
+genuinely different thread fails fast instead of blocking on a long-running
+tool or objective loop.
+
 ## 4. Agent state machine (implemented in `core-agent`)
 
 `AgentState` is a sealed hierarchy: `Idle`, `Planning`, `AwaitingApproval`,
@@ -162,6 +176,7 @@ architecture; the server half is out of scope for this repository.
 | core-agent: ConversationContext | IMPLEMENTED | `Conversation.kt`, compiles, unit-tested |
 | core-agent: Planner contract | IMPLEMENTED | `Planner.kt` (interface only — see LlmPlanner for the one implementation) |
 | core-agent: ObjectiveEngine (bounded Forge loop) | IMPLEMENTED | `ObjectiveEngine.kt`, compiles, unit-tested incl. the maxIterations bound |
+| core-agent: DroidForgeSession (Pilot/Forge mode switching) | IMPLEMENTED | `DroidForgeSession.kt`, unit-tested incl. a rejected mode switch attempted mid-task |
 | app (Android shell) | PLANNED | Manifest/Gradle scaffold only, not yet buildable — no Android SDK in this environment (Section 7) |
 | core-llm: request/response/error types, LlmProvider interface | IMPLEMENTED | `LlmTypes.kt`, `LlmProvider.kt`, compiles |
 | core-llm: LlmPlanner (Planner adapter) | IMPLEMENTED | `LlmPlanner.kt`, unit-tested, and exercised end-to-end with `ObjectiveEngine` in `ObjectiveEngineIntegrationTest` |
@@ -174,8 +189,9 @@ architecture; the server half is out of scope for this repository.
 | core-remote | PLANNED | Not created |
 | core-security | PLANNED | Not created |
 | core-config | PLANNED | Not created |
-| Pilot Mode (end-to-end) | PLANNED | Depends on core-tools-android |
+| Pilot Mode (end-to-end) | PARTIAL | `DroidForgeSession.runPilotInstruction` is implemented and tested against fake tools only — no real Android-backed tool exists yet (depends on core-tools-android) |
 | Forge Mode (end-to-end) | PARTIAL | The objective loop itself (planning/tool-selection/execution/observation/bounded iteration) is implemented and tested; it has never run against a real LLM or a real device tool, and core-build (compile step) does not exist |
+| Mode switching (Pilot <-> Forge) | IMPLEMENTED | `DroidForgeSession.switchMode`, unit-tested for the idle case and for rejection during an active task |
 | Root capabilities | PLANNED | Depends on core-root; also requires a rooted test device this environment does not have |
 | LLM integration | PARTIAL | The abstraction and the planner adapter are implemented and tested against a fake provider; no concrete provider is implemented, and this environment has no LLM credentials to test one against even if it existed |
 | APK build/install/test pipeline | PLANNED | Depends on core-apk-lifecycle; also requires Android SDK + device/emulator not present in this environment |
