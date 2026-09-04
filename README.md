@@ -10,7 +10,7 @@ product to describe.
 
 ## Current status
 
-Six pure-Kotlin/JVM modules are implemented and tested:
+Seven pure-Kotlin/JVM modules are implemented and tested:
 
 - `core-agent` — agent state machine, tool interface/registry/bounded-retry
   executor, conversation context, the `Planner` contract, a bounded Forge
@@ -69,10 +69,25 @@ Six pure-Kotlin/JVM modules are implemented and tested:
   entirely) — see `docs/CORE_BUILD.md`. No real `BuildExecutor`
   (Android/local-process/remote) exists yet — that needs an Android SDK,
   JDK, Gradle, and/or a real build server this environment doesn't have.
+- `core-tools-android` — device-control `Tool`s (tap/swipe/type/pressKey/
+  launchApp/findElement/tapElement/getUiTree/listInstalledApps/
+  takeScreenshot), a device-agnostic UI-tree domain model
+  (`UiNode`/`UiTree`/`Selector`) with real query logic behind it, and
+  `DeviceController` — the extension point for real device control,
+  mirroring `core-build`'s `BuildExecutor` role for compilation.
+  `NullDeviceController` is the only implementation, and unlike
+  `MockBuildExecutor` it has no coherent "success" default: every method
+  fails explicitly ("no real device is connected") rather than fabricating
+  a successful tap or UI read. Tap/swipe/type/pressKey/launchApp are
+  `SENSITIVE` and route through `core-security`'s real
+  `SecureToolExecutor`, proven by a test where a denied tap never reaches
+  the device controller. A real Android-backed `DeviceController` remains
+  PLANNED — it needs the Android SDK to even compile against (real
+  Accessibility/`PackageManager` APIs) plus a connected/emulated device.
 
 Everything else described in the architecture doc — the Android app shell,
-device control tools, root execution, a real LLM provider, a real build
-executor, the APK install/test pipeline — is not yet built.
+root execution, a real LLM provider, a real build executor, a real device
+controller, the APK install/test pipeline — is not yet built.
 
 ```
 ./gradlew test
