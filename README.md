@@ -3,12 +3,14 @@
 An Android AI-agent platform in early development. See
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the target architecture
 and an honest, per-component status (IMPLEMENTED / PARTIAL / PLANNED /
-CONFIGURATION-DEPENDENT) — this README will be rewritten to describe the
-finished product only once there is a finished product to describe.
+CONFIGURATION-DEPENDENT), and [`docs/CORE_BUILD.md`](docs/CORE_BUILD.md)
+for the build/workspace pipeline specifically — this README will be
+rewritten to describe the finished product only once there is a finished
+product to describe.
 
 ## Current status
 
-Five pure-Kotlin/JVM modules are implemented and tested:
+Six pure-Kotlin/JVM modules are implemented and tested:
 
 - `core-agent` — agent state machine, tool interface/registry/bounded-retry
   executor, conversation context, the `Planner` contract, a bounded Forge
@@ -51,10 +53,26 @@ Five pure-Kotlin/JVM modules are implemented and tested:
   200). Still PLANNED: TLS pinning/mTLS beyond "must be HTTPS", and any
   concrete `LlmProvider` or build-server client actually built on top of
   this transport.
+- `core-build` — the workspace/build-pipeline foundation for Forge Mode
+  (`BuildRequest → WorkspaceManager → BuildPipeline → BuildExecutor →
+  BuildResult → Artifact`). `WorkspaceManager` does real, path-secured
+  filesystem work (creates/imports/cleans real directories under an
+  explicitly authorized root, rejects traversal and absolute-path
+  escapes), `BuildPipeline` orchestrates seven explicit stages each with
+  its own success/failure semantics, and `MockBuildExecutor` is the only
+  `BuildExecutor` — it never performs a real build, and its default
+  outcome says so explicitly. `BuildTool` routes through `core-security`'s
+  real `SecureToolExecutor`, proven by a test where a denied approval
+  means no workspace is ever created on disk. Two real bugs were caught
+  and fixed by this module's own tests before shipping (a workspace
+  lifecycle gap, and an artifact-path containment check that was missing
+  entirely) — see `docs/CORE_BUILD.md`. No real `BuildExecutor`
+  (Android/local-process/remote) exists yet — that needs an Android SDK,
+  JDK, Gradle, and/or a real build server this environment doesn't have.
 
 Everything else described in the architecture doc — the Android app shell,
-device control tools, root execution, a real LLM provider, the Forge
-build/APK pipeline — is not yet built.
+device control tools, root execution, a real LLM provider, a real build
+executor, the APK install/test pipeline — is not yet built.
 
 ```
 ./gradlew test
