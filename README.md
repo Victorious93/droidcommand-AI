@@ -10,7 +10,7 @@ product to describe.
 
 ## Current status
 
-Nine pure-Kotlin/JVM modules are implemented and tested:
+Ten pure-Kotlin/JVM modules are implemented and tested:
 
 - `core-agent` — agent state machine, tool interface/registry/bounded-retry
   executor, conversation context, the `Planner` contract, a bounded Forge
@@ -27,9 +27,9 @@ Nine pure-Kotlin/JVM modules are implemented and tested:
   (root/permission requirements), and `SecureToolExecutor` enforces that
   decision before a tool ever runs: a denied tool is never invoked, no
   matter what an LLM or planner requested. Root/permission checks are
-  injected functions, tested with fixtures — real on-device root detection
-  and Android permission grants remain PLANNED (need `core-root` /
-  `core-tools-android` and a real device).
+  injected functions — now exercised end-to-end against a real `Tool` by
+  `core-root`'s integration test — but real on-device root detection and
+  Android permission grants remain PLANNED (need a real device).
 - `core-config` — `LlmConfigLoader`/`SecurityPolicyLoader` build `core-llm`'s
   and `core-security`'s config objects from a `ConfigSource` (environment
   variables by default). No secret is ever held as a plain field: an LLM
@@ -116,11 +116,29 @@ Nine pure-Kotlin/JVM modules are implemented and tested:
   other tools: a denied deployment never reaches the executor. A real
   `adb`-backed executor remains PLANNED — needs a connected/emulated
   device this environment does not have.
+- `core-root` — closes a loop left open since `core-security` was first
+  built: its `rootEnabled`/`rootAvailable` gate existed for several
+  increments but was never exercised end to end against a real `Tool`
+  until `RootTool` existed to test it with. `RootTool` declares
+  `requiresRoot = true` and `SecurityLevel.ROOT`; `core-security`'s
+  `SecurityPolicyEnforcer` denies it outright — no prompt, not even an
+  approval opportunity — unless the session's `rootEnabled` is true *and*
+  `rootAvailable()` reports true, only asking for explicit approval after
+  both hold. `PolicyEnforcingRootExecutor` adds a second, narrower
+  fail-closed executable allow-list beneath that session-level gate — a
+  command outside it never reaches the delegate. `NullRootExecutor` is
+  the only `RootExecutor`: `isRootAvailable()` truthfully returns false,
+  and `execute()` fails explicitly rather than fabricating a successful
+  elevated command. `RootToolSecureExecutorIntegrationTest` runs the full
+  root test matrix (root disabled, root unavailable, user denies,
+  approved-and-executed, command failure) against real `core-security`
+  code. A real rooted-device executor remains PLANNED — needs an actual
+  rooted device this environment does not have.
 
 Everything else described in the architecture doc — the Android app shell,
-root execution, a real LLM provider, a real build executor, a real device
-controller, and a real adb-backed APK lifecycle executor — is not yet
-built.
+a real LLM provider, a real build executor, a real device controller, a
+real adb-backed APK lifecycle executor, and a real rooted-device
+executor — is not yet built.
 
 ```
 ./gradlew test

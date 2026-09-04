@@ -71,8 +71,21 @@ DroidForge AI
 │                            Tested against real subprocesses (echo, true,
 │                            false, sleep, pwd, env, seq), not mocked.
 │
-├── core-root                Root-authorized execution boundary, isolated from
-│                            core-tools-android (PLANNED)
+├── core-root                RootTool declares requiresRoot=true and
+│                            SecurityLevel.ROOT, closing the loop on
+│                            core-security's rootEnabled/rootAvailable
+│                            gate (built in an earlier phase, never
+│                            exercised end-to-end until now).
+│                            PolicyEnforcingRootExecutor adds a second,
+│                            narrower fail-closed allow-list layer beneath
+│                            that session-level gate. NullRootExecutor is
+│                            the only RootExecutor — isRootAvailable()
+│                            truthfully returns false, and execute() fails
+│                            explicitly rather than fabricating a
+│                            successful elevated command. A real
+│                            rooted-device executor (PLANNED) needs an
+│                            actual rooted device this environment does
+│                            not have.
 │
 ├── core-build               BuildRequest -> WorkspaceManager -> BuildPipeline
 │                            -> BuildExecutor -> BuildResult -> Artifact.
@@ -137,9 +150,9 @@ DroidForge AI
 ```
 
 `core-agent`, `core-llm`, `core-security`, `core-config`, `core-remote`,
-`core-build`, `core-tools-android`, `core-shell`, and `core-apk-lifecycle`
-are implemented so far because none has a *compile-time* Android
-dependency (none of this code needs `android.jar`): `core-llm`'s tests use
+`core-build`, `core-tools-android`, `core-shell`, `core-apk-lifecycle`, and
+`core-root` are implemented so far because none has a *compile-time*
+Android dependency (none of this code needs `android.jar`): `core-llm`'s tests use
 a scripted fake provider rather than a live network call, `core-security`'s
 root/permission checks are injected functions rather than real device
 queries, `core-config`'s `EnvConfigSource` wraps `System.getenv` behind an
@@ -160,8 +173,15 @@ and `core-apk-lifecycle` follows `core-tools-android`'s pattern again:
 `ApkLifecyclePipeline` is real orchestration logic (consuming an
 already-completed `core-build.BuildResult`), but `NullApkLifecycleExecutor`
 is the only `ApkLifecycleExecutor`, and it fails every install/launch/log/
-test call explicitly rather than fabricating a successful deployment.
-Every other module is scaffolding-only or not yet created — see Section 6.
+test call explicitly rather than fabricating a successful deployment, and
+`core-root` closes a loop left open since Phase 6/7: `core-security`'s
+`rootEnabled`/`rootAvailable` gate has existed for several increments but
+was never exercised end to end against a real `Tool` until `RootTool`
+existed to test it with — `NullRootExecutor` truthfully reports root as
+unavailable and fails every command explicitly, and
+`PolicyEnforcingRootExecutor` adds its own fail-closed executable
+allow-list beneath that session-level gate. Every other module is
+scaffolding-only or not yet created — see Section 6.
 
 ## 3. Two-mode architecture
 
@@ -184,7 +204,8 @@ Every other module is scaffolding-only or not yet created — see Section 6.
                          │
               core-tools-android (Tool wrappers implemented; only
               NullDeviceController exists — see Section 6) / core-shell
-              (implemented and real) / core-root (PLANNED)
+              (implemented and real) / core-root (Tool + gate wiring
+              implemented; only NullRootExecutor exists)
 ```
 
 Both modes route through the same `ToolRegistry` and `ToolExecutor` so a tool
@@ -390,7 +411,11 @@ it.
 | core-shell: ShellCommand / ShellSecurityPolicy / ShellExecutor | IMPLEMENTED | Compiles, unit-tested |
 | core-shell: ProcessBuilderShellExecutor | IMPLEMENTED (real, not mocked) | Tested against real subprocesses (`echo`/`true`/`false`/`sleep`/`pwd`/`env`/`seq`) — real timeout, real cancellation, real working-directory containment, real fail-closed executable allow-list, real output truncation |
 | core-shell: ShellTool + core-security integration | IMPLEMENTED | `ShellToolSecureExecutorIntegrationTest`, using the real executor — a denied command provably never spawns a process |
-| core-root | PLANNED | Not created |
+| core-root: RootCommand / RootSecurityPolicy / RootExecutor | IMPLEMENTED | Compiles, unit-tested |
+| core-root: PolicyEnforcingRootExecutor | IMPLEMENTED | Unit-tested — rejects a command outside its allow-list without reaching the delegate; fail-closed by default (empty allow-list) |
+| core-root: RootTool + core-security integration | IMPLEMENTED | `RootToolSecureExecutorIntegrationTest` exercises the full root test matrix (root disabled, root unavailable, user denies, approved-and-executed, command failure) against real `SecureToolExecutor`/`SecurityPolicyEnforcer` |
+| core-root: NullRootExecutor | IMPLEMENTED (explicitly non-real) | `isRootAvailable()` truthfully returns false; `execute()` fails explicitly rather than fabricating a successful elevated command |
+| core-root: a real rooted-device RootExecutor | PLANNED | Needs an actual rooted device this environment does not have |
 | core-build: domain model (BuildRequest, ProjectType, BuildTarget, ArtifactType, BuildError, BuildResult, BuildEvent) | IMPLEMENTED | Compiles, unit-tested; see docs/CORE_BUILD.md |
 | core-build: WorkspaceManager / WorkspacePathValidator (real filesystem, path security) | IMPLEMENTED | Real java.nio.file operations, unit-tested incl. traversal/absolute-escape/symlink-adjacent cleanup containment |
 | core-build: BuildPipeline (orchestrator) | IMPLEMENTED | Unit-tested for every stage's success/failure path, cancellation, and a simulated timeout via a fake clock |
@@ -410,7 +435,7 @@ it.
 | core-remote: a concrete LlmProvider or build-server client using RemoteClient | PLANNED | RemoteClient exists as a transport; nothing in core-llm or core-build consumes it yet |
 | core-security: SecurityPolicy / SecurityPolicyEnforcer | IMPLEMENTED | `SecurityPolicy.kt`, `SecurityPolicyEnforcer.kt`, compiles, unit-tested |
 | core-security: SecureToolExecutor (controlled execution boundary) | IMPLEMENTED | `SecureToolExecutor.kt`, unit-tested incl. "denied tool is never invoked" and "AwaitingApproval before prompting" |
-| core-security: real root detection / real Android permission grants | PLANNED | `rootAvailable`/`grantedPermissions` are injected functions exercised only with test fixtures; depends on core-root / core-tools-android and a real device |
+| core-security: real root detection / real Android permission grants | PLANNED | `rootAvailable`/`grantedPermissions` are injected functions, now exercised end-to-end by `core-root.RootToolSecureExecutorIntegrationTest` — but still only against fixtures, not a real device |
 | core-config: ConfigSource / ConfigReader | IMPLEMENTED | `ConfigSource.kt`, `ConfigReader.kt`, compiles, unit-tested |
 | core-config: LlmConfigLoader | IMPLEMENTED | `LlmConfigLoader.kt`, unit-tested incl. that `authToken()` re-reads the source on every call rather than caching |
 | core-config: SecurityPolicyLoader | IMPLEMENTED | `SecurityPolicyLoader.kt`, unit-tested |
@@ -418,7 +443,7 @@ it.
 | Pilot Mode (end-to-end) | PARTIAL | `DroidForgeSession.runPilotInstruction` is implemented and tested against `core-tools-android`'s real `Tool` wrappers, but every one of them is backed by `NullDeviceController` — no real Android-backed `DeviceController` exists yet |
 | Forge Mode (end-to-end) | PARTIAL | The objective loop itself (planning/tool-selection/execution/observation/bounded iteration) is implemented and tested; it has never run against a real LLM or a real device tool; core-build's pipeline/workspace scaffolding now exists but has no real BuildExecutor to actually compile anything |
 | Mode switching (Pilot <-> Forge) | IMPLEMENTED | `DroidForgeSession.switchMode`, unit-tested for the idle case and for rejection during an active task |
-| Root capabilities | PLANNED | Depends on core-root; also requires a rooted test device this environment does not have |
+| Root capabilities | PARTIAL | `core-root`'s Tool/gate/policy wiring is implemented and tested end-to-end against `core-security`; no real root command has ever executed, since that requires a rooted test device this environment does not have |
 | LLM integration | PARTIAL | The abstraction and the planner adapter are implemented and tested against a fake provider; no concrete provider is implemented, and this environment has no LLM credentials to test one against even if it existed |
 | APK build/install/test pipeline | PARTIAL | `core-build.BuildPipeline` + `core-apk-lifecycle.ApkLifecyclePipeline` orchestration is implemented and tested end-to-end against fakes; neither has a real executor, so nothing has actually been built, installed, or launched on a device — that needs the Android SDK + device/emulator this environment does not have |
 

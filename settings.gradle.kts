@@ -9,8 +9,9 @@ include(":core-build")
 include(":core-tools-android")
 include(":core-shell")
 include(":core-apk-lifecycle")
+include(":core-root")
 
 // The following modules are part of the target architecture (see
 // docs/ARCHITECTURE.md) but do not yet contain implemented code and are
 // intentionally not included in the build to avoid an unbuildable root:
-//   :app, :core-root
+//   :app
