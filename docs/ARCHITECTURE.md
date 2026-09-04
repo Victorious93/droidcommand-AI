@@ -56,8 +56,17 @@ DroidForge AI
 ├── core-apk-lifecycle        Build → install → launch → log → test → result
 │                            (PLANNED, device-dependent)
 │
-├── core-remote               Client for remote LLM/build servers: auth, TLS,
-│                            timeouts, retries (PLANNED)
+├── core-remote               RemoteEndpoint (HTTPS-by-default, path-only
+│                            resolution so a request can never be aimed at
+│                            an unintended host), HttpTransport +
+│                            JdkHttpTransport (a real java.net.http-backed
+│                            implementation, tested against a real local
+│                            HTTP server on loopback), and RemoteClient
+│                            (bearer-token auth, bounded retry reusing
+│                            core-agent's RetryPolicy, 5xx retried / 4xx
+│                            never retried). The one module so far with a
+│                            genuinely working implementation, not only an
+│                            interface plus fakes — see Section 5d.
 │
 ├── core-security             SecurityPolicy, SecurityPolicyEnforcer, and
 │                            SecureToolExecutor: authorizes a tool
@@ -70,14 +79,25 @@ DroidForge AI
 │                            grantedPermissions), so the policy itself
 │                            stays device-agnostic and fully testable.
 │
-└── core-config               Provider/endpoint/model configuration, no
-                             hard-coded secrets (PLANNED)
+└── core-config               ConfigSource/ConfigReader plus LlmConfigLoader
+                             and SecurityPolicyLoader, which build
+                             core-llm's LlmConfig and core-security's
+                             SecurityPolicy from a key/value source. No
+                             secret is ever held as a plain field — an API
+                             key is read from the source fresh on every
+                             authToken() call, not captured at load time.
 ```
 
-`core-agent`, `core-llm`, and `core-security` are implemented so far because
-none has an Android dependency: `core-llm`'s tests use a scripted fake
-provider rather than a live network call, and `core-security`'s root/
-permission checks are injected functions rather than real device queries.
+`core-agent`, `core-llm`, `core-security`, `core-config`, and `core-remote`
+are implemented so far because none has an Android dependency:
+`core-llm`'s tests use a scripted fake provider rather than a live network
+call, `core-security`'s root/permission checks are injected functions
+rather than real device queries, `core-config`'s `EnvConfigSource` wraps
+`System.getenv` behind an injectable function so its tests never read or
+depend on real process environment, and `core-remote`'s network tests talk
+only to a real HTTP server bound to loopback (127.0.0.1) that the test
+itself starts and stops — a genuine round trip, but one that never leaves
+the sandbox and needs no external network access.
 All three build and test honestly in this environment. Every other module
 is scaffolding-only or not yet created — see Section 6.
 
@@ -208,6 +228,80 @@ un-testable here is real root detection and real permission grants on an
 actual Android device — that is `core-root`/`core-tools-android`'s job,
 not this module's, and both remain PLANNED (Section 6).
 
+## 5c. Configuration loading (implemented, device-agnostic)
+
+`core-config` is the seam between raw configuration (environment variables,
+or any other `ConfigSource`) and the typed config objects `core-llm` and
+`core-security` already define. `ConfigReader` gives typed access
+(`require`/`optional`/`optionalInt`/`optionalDouble`/`optionalBoolean`)
+over any `ConfigSource`; a missing required key throws
+`MissingConfigException` rather than producing a half-built config object
+that fails confusingly later.
+
+`LlmConfigLoader.load(source)` builds an `LlmConfig`: `provider` and
+`model` are required, `endpoint`/`temperature`/`maxOutputTokens` are
+optional, and `authToken` is a lambda that reads `DROIDFORGE_LLM_API_KEY`
+from the source fresh on every call — the loader itself never captures the
+key into a field. This is verified directly, not just designed that way in
+prose: a test changes the underlying source's value between two calls to
+the returned config's `authToken()` and asserts each call sees the current
+value, proving nothing was cached at load time.
+
+`SecurityPolicyLoader.load(source, rootAvailable)` builds a
+`SecurityPolicy` from comma-separated permission and auto-approve-level
+lists, defaulting to root disabled, no granted permissions, and only
+`SecurityLevel.NORMAL` auto-approved — the same conservative defaults
+`SecurityPolicy` itself uses. `rootAvailable` is deliberately never sourced
+from configuration (root availability is a device fact, not a setting);
+the loader only threads through whatever function the caller supplies.
+
+`EnvConfigSource` wraps `System.getenv` behind an injectable function
+(defaulting to `System::getenv`), so production code gets real environment
+variables while every test in this module supplies a fake — no test here
+reads or depends on this sandbox's actual process environment.
+
+## 5d. Remote client (implemented — the first module with a real, working implementation)
+
+Every module up to this one has been an interface plus fakes: `LlmProvider`
+has no concrete implementation, `SecurityPolicy`'s root/permission checks
+are injected functions, `core-config`'s sources are env-var/map-backed.
+`core-remote` is different — `JdkHttpTransport` is a real HTTP client
+(`java.net.http.HttpClient`, part of the JDK, no external dependency), and
+it is tested against a real server: `JdkHttpTransportTest` starts an actual
+`com.sun.net.httpserver.HttpServer` bound to `127.0.0.1` on an
+OS-assigned port, sends a real request over a real socket, and asserts on
+the real response — headers included. A second test opens a raw
+`ServerSocket` that accepts the TCP connection but never writes a
+response, to prove the transport's own request timeout actually fires
+rather than hanging.
+
+This caught a real bug before it shipped: the first version compared
+response header names case-sensitively, but HTTP header names are
+case-insensitive by spec and `java.net.http.HttpHeaders.map()` does not
+guarantee a server's exact casing survives into that map. The round-trip
+test against the real server failed with the header coming back `null`
+under the original casing — not a hypothetical, an actual assertion
+failure in this session — and the fix (a case-insensitive
+`TreeMap`) is what ships now.
+
+`RemoteEndpoint` only ever resolves a caller-supplied relative path
+against its own configured `baseUrl` — there is no code path by which a
+caller can aim a request at a different host, so "server identity"
+protection here is structural rather than a runtime allow-list check.
+`RemoteClient` reuses `core-agent`'s `RetryPolicy` rather than
+reimplementing bounded retry, retries a 5xx status or an I/O
+error/timeout, and never retries a 4xx (the request itself was wrong;
+retrying would just repeat the failure). `RemoteClientIntegrationTest`
+proves the retry path for real too: a local server returns 503 twice then
+200, and `RemoteClient` + the real `JdkHttpTransport` recover without any
+test double standing in for the network layer.
+
+What remains PLANNED: TLS certificate/server-identity verification beyond
+"the URL must be HTTPS" (no mutual-TLS or pinning), and there is still no
+concrete `LlmProvider` or build-server client actually built on top of
+`RemoteClient` — this module is the transport, not a wired-up consumer of
+it.
+
 ## 6. Component status (Section 3 naming — "Never fabricate features")
 
 | Component | Status | Evidence |
@@ -229,11 +323,17 @@ not this module's, and both remain PLANNED (Section 6).
 | core-root | PLANNED | Not created |
 | core-build | PLANNED | Not created |
 | core-apk-lifecycle | PLANNED | Not created |
-| core-remote | PLANNED | Not created |
+| core-remote: RemoteEndpoint / HttpTransport / RemoteClient | IMPLEMENTED | `RemoteEndpoint.kt`, `HttpTransport.kt`, `RemoteClient.kt`, unit-tested against a fake transport |
+| core-remote: JdkHttpTransport (real HTTP client) | IMPLEMENTED | `JdkHttpTransport.kt`, tested against a real local `HttpServer` on loopback — a genuine network round trip and a genuine timeout, not mocked |
+| core-remote: TLS identity verification beyond "must be HTTPS" (pinning/mTLS) | PLANNED | Not built |
+| core-remote: a concrete LlmProvider or build-server client using RemoteClient | PLANNED | RemoteClient exists as a transport; nothing in core-llm or core-build consumes it yet |
 | core-security: SecurityPolicy / SecurityPolicyEnforcer | IMPLEMENTED | `SecurityPolicy.kt`, `SecurityPolicyEnforcer.kt`, compiles, unit-tested |
 | core-security: SecureToolExecutor (controlled execution boundary) | IMPLEMENTED | `SecureToolExecutor.kt`, unit-tested incl. "denied tool is never invoked" and "AwaitingApproval before prompting" |
 | core-security: real root detection / real Android permission grants | PLANNED | `rootAvailable`/`grantedPermissions` are injected functions exercised only with test fixtures; depends on core-root / core-tools-android and a real device |
-| core-config | PLANNED | Not created |
+| core-config: ConfigSource / ConfigReader | IMPLEMENTED | `ConfigSource.kt`, `ConfigReader.kt`, compiles, unit-tested |
+| core-config: LlmConfigLoader | IMPLEMENTED | `LlmConfigLoader.kt`, unit-tested incl. that `authToken()` re-reads the source on every call rather than caching |
+| core-config: SecurityPolicyLoader | IMPLEMENTED | `SecurityPolicyLoader.kt`, unit-tested |
+| core-config: a real, deployed configuration source (device settings UI, secure storage) | PLANNED | Only `EnvConfigSource`/`MapConfigSource`/`CompositeConfigSource` exist; no Android-backed source (e.g. EncryptedSharedPreferences) has been built |
 | Pilot Mode (end-to-end) | PARTIAL | `DroidForgeSession.runPilotInstruction` is implemented and tested against fake tools only — no real Android-backed tool exists yet (depends on core-tools-android) |
 | Forge Mode (end-to-end) | PARTIAL | The objective loop itself (planning/tool-selection/execution/observation/bounded iteration) is implemented and tested; it has never run against a real LLM or a real device tool, and core-build (compile step) does not exist |
 | Mode switching (Pilot <-> Forge) | IMPLEMENTED | `DroidForgeSession.switchMode`, unit-tested for the idle case and for rejection during an active task |
