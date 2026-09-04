@@ -2,13 +2,13 @@
 
 An Android AI-agent platform in early development. See
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the target architecture
-and an honest, per-component status (IMPLEMENTED / PLANNED /
+and an honest, per-component status (IMPLEMENTED / PARTIAL / PLANNED /
 CONFIGURATION-DEPENDENT) — this README will be rewritten to describe the
 finished product only once there is a finished product to describe.
 
 ## Current status
 
-Two pure-Kotlin/JVM modules are implemented and tested:
+Three pure-Kotlin/JVM modules are implemented and tested:
 
 - `core-agent` — agent state machine, tool interface/registry/bounded-retry
   executor, conversation context, the `Planner` contract, a bounded Forge
@@ -20,6 +20,14 @@ Two pure-Kotlin/JVM modules are implemented and tested:
   backed by an `LlmProvider`). No concrete provider (Anthropic, an
   OpenAI-compatible endpoint, a local model) is implemented yet — every test
   runs against a scripted fake provider, not a live model.
+- `core-security` — `SecurityPolicy`/`SecurityPolicyEnforcer` decide whether
+  a tool invocation is allowed, needs explicit approval, or is denied
+  (root/permission requirements), and `SecureToolExecutor` enforces that
+  decision before a tool ever runs: a denied tool is never invoked, no
+  matter what an LLM or planner requested. Root/permission checks are
+  injected functions, tested with fixtures — real on-device root detection
+  and Android permission grants remain PLANNED (need `core-root` /
+  `core-tools-android` and a real device).
 
 Everything else described in the architecture doc — the Android app shell,
 device control tools, root execution, a real LLM provider, the Forge

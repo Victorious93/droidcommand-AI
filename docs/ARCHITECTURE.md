@@ -26,10 +26,11 @@ DroidForge AI
 │
 ├── core-agent               Pure Kotlin/JVM. Agent state machine, tool
 │                            registry/executor, bounded retry policy,
-│                            conversation context, Planner contract, and
-│                            the bounded Forge objective loop
-│                            (ObjectiveEngine). No Android dependency —
-│                            testable on any JVM.
+│                            conversation context, Planner contract, the
+│                            bounded Forge objective loop (ObjectiveEngine),
+│                            and DroidForgeSession, which coordinates
+│                            Pilot/Forge mode switching. No Android
+│                            dependency — testable on any JVM.
 │
 ├── core-llm                 Provider-independent chat/tool-call abstraction
 │                            (LlmProvider, LlmRequest/Response, LlmConfig)
@@ -58,18 +59,27 @@ DroidForge AI
 ├── core-remote               Client for remote LLM/build servers: auth, TLS,
 │                            timeouts, retries (PLANNED)
 │
-├── core-security             Permission/root/security-level policy shared by
-│                            every tool (PLANNED)
+├── core-security             SecurityPolicy, SecurityPolicyEnforcer, and
+│                            SecureToolExecutor: authorizes a tool
+│                            invocation (root/permission/confirmation)
+│                            before it ever reaches ToolExecutor — a
+│                            PolicyDecision.Deny means the tool is never
+│                            invoked at all, regardless of what an LLM or
+│                            planner requested. Root/permission checks are
+│                            injected functions (rootAvailable,
+│                            grantedPermissions), so the policy itself
+│                            stays device-agnostic and fully testable.
 │
 └── core-config               Provider/endpoint/model configuration, no
                              hard-coded secrets (PLANNED)
 ```
 
-`core-agent` and `core-llm` are implemented in this pass because neither has
-an Android dependency, and `core-llm`'s tests use a scripted fake provider
-rather than a live network call, so both build and test honestly in this
-environment. Every other module is scaffolding-only or not yet created —
-see Section 6.
+`core-agent`, `core-llm`, and `core-security` are implemented so far because
+none has an Android dependency: `core-llm`'s tests use a scripted fake
+provider rather than a live network call, and `core-security`'s root/
+permission checks are injected functions rather than real device queries.
+All three build and test honestly in this environment. Every other module
+is scaffolding-only or not yet created — see Section 6.
 
 ## 3. Two-mode architecture
 
@@ -165,6 +175,39 @@ of the standard Android device paths exist. A phone would be worse-equipped
 than this sandbox, not better. `core-remote` is the client-side half of that
 architecture; the server half is out of scope for this repository.
 
+## 5b. Security policy (implemented, device-agnostic)
+
+`SecurityPolicy` (`core-security`) is the configuration: `rootEnabled`,
+`rootAvailable` (a function — a real on-device root check when core-root
+exists, a fixture in tests), `grantedPermissions`, and `autoApprove` (which
+`SecurityLevel`s bypass interactive confirmation; only `NORMAL` by default).
+`SecurityPolicyEnforcer.authorize(spec: ToolSpec)` returns `Allow`,
+`RequireApproval(reason)`, or `Deny(reason)` — root and permission checks
+are evaluated first and are hard denials, never downgraded to a mere
+prompt: a `ROOT` tool with a missing permission is denied outright, not
+asked-and-approved-around.
+
+`SecureToolExecutor` wraps `ToolExecutor` with that check: a `Deny` returns
+a `ToolResult.Failure` without the underlying `Tool.execute` ever being
+called — verified directly by a test that asserts a policy-denied tool's
+invocation counter stays at zero. A `RequireApproval` transitions the
+shared `AgentStateMachine` to the previously-unused `AgentState.
+AwaitingApproval` and blocks on an injected `ApprovalPrompt` — this is the
+first code that gives `AwaitingApproval` real behavior; it existed in the
+state machine's sealed hierarchy since Phase 3 but nothing produced it
+until now.
+
+This closes the device-agnostic slice of Phase 7's "ROOT TEST MATRIX":
+root unavailable, root available (then approved), user denies
+authorization, and permission failure are all unit-tested. Command
+failure/timeout/cancellation/invalid-command are unchanged from
+`ToolExecutorTest` — `SecureToolExecutor` delegates to the same
+`ToolExecutor` once a decision is `Allow` or an approval is granted, so it
+inherits those guarantees rather than re-implementing them. What remains
+un-testable here is real root detection and real permission grants on an
+actual Android device — that is `core-root`/`core-tools-android`'s job,
+not this module's, and both remain PLANNED (Section 6).
+
 ## 6. Component status (Section 3 naming — "Never fabricate features")
 
 | Component | Status | Evidence |
@@ -187,7 +230,9 @@ architecture; the server half is out of scope for this repository.
 | core-build | PLANNED | Not created |
 | core-apk-lifecycle | PLANNED | Not created |
 | core-remote | PLANNED | Not created |
-| core-security | PLANNED | Not created |
+| core-security: SecurityPolicy / SecurityPolicyEnforcer | IMPLEMENTED | `SecurityPolicy.kt`, `SecurityPolicyEnforcer.kt`, compiles, unit-tested |
+| core-security: SecureToolExecutor (controlled execution boundary) | IMPLEMENTED | `SecureToolExecutor.kt`, unit-tested incl. "denied tool is never invoked" and "AwaitingApproval before prompting" |
+| core-security: real root detection / real Android permission grants | PLANNED | `rootAvailable`/`grantedPermissions` are injected functions exercised only with test fixtures; depends on core-root / core-tools-android and a real device |
 | core-config | PLANNED | Not created |
 | Pilot Mode (end-to-end) | PARTIAL | `DroidForgeSession.runPilotInstruction` is implemented and tested against fake tools only — no real Android-backed tool exists yet (depends on core-tools-android) |
 | Forge Mode (end-to-end) | PARTIAL | The objective loop itself (planning/tool-selection/execution/observation/bounded iteration) is implemented and tested; it has never run against a real LLM or a real device tool, and core-build (compile step) does not exist |
