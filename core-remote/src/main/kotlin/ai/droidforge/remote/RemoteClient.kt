@@ -5,7 +5,14 @@ import java.io.IOException
 
 sealed class RemoteResult {
     data class Success(val statusCode: Int, val body: String, val headers: Map<String, String>) : RemoteResult()
-    data class Failure(val reason: String, val cause: Throwable? = null) : RemoteResult()
+
+    /**
+     * [statusCode] is null when the failure never reached an HTTP response
+     * (a connection error or timeout) and set to the response's status when
+     * it did, so a caller can tell "the server said no" from "the network
+     * never delivered a response" without re-parsing [reason].
+     */
+    data class Failure(val reason: String, val cause: Throwable? = null, val statusCode: Int? = null) : RemoteResult()
 }
 
 /**
@@ -71,10 +78,10 @@ class RemoteClient(
             Outcome.Success(RemoteResult.Success(response.statusCode, response.body, response.headers))
 
         response.statusCode in 500..599 ->
-            Outcome.Retryable(RemoteResult.Failure("Server error ${response.statusCode}: ${response.body}"))
+            Outcome.Retryable(RemoteResult.Failure("Server error ${response.statusCode}: ${response.body}", statusCode = response.statusCode))
 
         else ->
-            Outcome.Terminal(RemoteResult.Failure("Request failed with status ${response.statusCode}: ${response.body}"))
+            Outcome.Terminal(RemoteResult.Failure("Request failed with status ${response.statusCode}: ${response.body}", statusCode = response.statusCode))
     }
 
     private fun authHeader(): Map<String, String> =

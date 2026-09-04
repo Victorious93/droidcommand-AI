@@ -10,7 +10,7 @@ product to describe.
 
 ## Current status
 
-Ten pure-Kotlin/JVM modules are implemented and tested:
+Twelve pure-Kotlin/JVM modules are implemented and tested:
 
 - `core-agent` — agent state machine, tool interface/registry/bounded-retry
   executor, conversation context, the `Planner` contract, a bounded Forge
@@ -19,9 +19,11 @@ Ten pure-Kotlin/JVM modules are implemented and tested:
   rejects a mode switch attempted while a task is active.
 - `core-llm` — provider-independent LLM request/response/error types, the
   `LlmProvider` interface, and `LlmPlanner` (a `Planner` implementation
-  backed by an `LlmProvider`). No concrete provider (Anthropic, an
-  OpenAI-compatible endpoint, a local model) is implemented yet — every test
-  runs against a scripted fake provider, not a live model.
+  backed by an `LlmProvider`). No OpenAI-compatible endpoint or local model
+  provider is implemented yet, but `core-llm-anthropic` now supplies a real
+  Anthropic-backed one — every `LlmPlanner` test still runs against a
+  scripted fake provider, since that's what proves the planner's own logic
+  in isolation.
 - `core-security` — `SecurityPolicy`/`SecurityPolicyEnforcer` decide whether
   a tool invocation is allowed, needs explicit approval, or is denied
   (root/permission requirements), and `SecureToolExecutor` enforces that
@@ -50,9 +52,32 @@ Ten pure-Kotlin/JVM modules are implemented and tested:
   and `RemoteClient` reuses `core-agent`'s `RetryPolicy` to retry 5xx/I-O
   failures while never retrying a 4xx. `RemoteClientIntegrationTest`
   proves the retry path against a real local server too (503, 503, then
-  200). Still PLANNED: TLS pinning/mTLS beyond "must be HTTPS", and any
-  concrete `LlmProvider` or build-server client actually built on top of
-  this transport.
+  200). Still PLANNED: TLS pinning/mTLS beyond "must be HTTPS", and a
+  build-server client actually built on top of this transport —
+  `core-llm-anthropic` is now the first real consumer, described next.
+- `core-llm-anthropic` — the first real `LlmProvider`: `AnthropicLlmProvider`
+  encodes/decodes Anthropic's actual Messages API JSON shape
+  (`kotlinx.serialization`) over `core-remote`'s real `RemoteClient` and
+  `JdkHttpTransport`, the same "real capability, so build it for real"
+  reasoning that made `core-shell`'s subprocess executor real rather than
+  mocked. The API key is sent as an `x-api-key` header — Anthropic doesn't
+  use `Authorization: Bearer` — read fresh from `LlmConfig.authToken()` on
+  every call and never cached; a missing key fails closed with
+  `LlmError.Authentication` before any request is sent, proven by a test
+  asserting zero bytes reach the server. HTTP status codes map to
+  `LlmError` variants (401/403 → `Authentication`, 429/5xx →
+  `ModelUnavailable`, other non-2xx → `InvalidResponse`), and a malformed
+  response body becomes `LlmError.InvalidResponse` rather than throwing.
+  `AnthropicLlmProviderIntegrationTest` proves all of this against a real
+  local `HttpServer` speaking Anthropic's JSON shape — text responses,
+  tool-use responses (including a nested-object input value flattened to
+  compact JSON text, not dropped), and the `SYSTEM`/`TOOL` role-folding
+  this module does because `Message` carries no `tool_use_id` and
+  `ToolSpec` carries no parameter schema, both documented as explicit,
+  honest simplifications rather than silent gaps. This has never been run
+  against the real `api.anthropic.com` — this environment has no LLM
+  credentials — so the JSON shape is modeled from Anthropic's published
+  API, not verified against a live response.
 - `core-build` — the workspace/build-pipeline foundation for Forge Mode
   (`BuildRequest → WorkspaceManager → BuildPipeline → BuildExecutor →
   BuildResult → Artifact`). `WorkspaceManager` does real, path-secured
@@ -136,9 +161,9 @@ Ten pure-Kotlin/JVM modules are implemented and tested:
   rooted device this environment does not have.
 
 Everything else described in the architecture doc — the Android app shell,
-a real LLM provider, a real build executor, a real device controller, a
-real adb-backed APK lifecycle executor, and a real rooted-device
-executor — is not yet built.
+an OpenAI-compatible or local LLM provider, a real build executor, a real
+device controller, a real adb-backed APK lifecycle executor, and a real
+rooted-device executor — is not yet built.
 
 ```
 ./gradlew test
