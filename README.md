@@ -14,7 +14,7 @@ product to describe.
 
 ## Current status
 
-Fourteen pure-Kotlin/JVM modules are implemented and tested:
+Fifteen pure-Kotlin/JVM modules are implemented and tested:
 
 - `core-agent` — agent state machine, tool interface/registry/bounded-retry
   executor, conversation context, the `Planner` contract, a bounded Forge
@@ -112,10 +112,11 @@ Fourteen pure-Kotlin/JVM modules are implemented and tested:
   means no workspace is ever created on disk. Two real bugs were caught
   and fixed by this module's own tests before shipping (a workspace
   lifecycle gap, and an artifact-path containment check that was missing
-  entirely) — see `docs/CORE_BUILD.md`. No Android or remote
-  `BuildExecutor` exists yet — that needs an Android SDK/AGP or a real
-  build server this environment doesn't have — but `core-build-local` now
-  supplies a real one for JVM/native/generic builds, described next.
+  entirely) — see `docs/CORE_BUILD.md`. No Android-on-device
+  `BuildExecutor` exists yet — that needs an Android SDK/AGP this
+  environment doesn't have — but `core-build-local` and `core-build-remote`
+  now supply real ones for JVM/native/generic builds and for delegating to
+  a remote build server, described next.
 - `core-build-local` — the first real `BuildExecutor`:
   `LocalProcessBuildExecutor` handles `ProjectType.JVM`/`NATIVE`/`GENERIC`
   for real, the same "a plain JVM/OS capability deserves a real
@@ -135,9 +136,27 @@ Fourteen pure-Kotlin/JVM modules are implemented and tested:
   standalone and running the whole way through `core-build.BuildPipeline`
   (real workspace creation, real source import, this executor, the
   pipeline's own artifact validation). What remains PLANNED:
-  `AndroidGradleBuildExecutor` and `RemoteBuildExecutor` — this executor
-  has never built an actual Android APK, since `ProjectType.ANDROID` is
-  exactly what it refuses to attempt.
+  `AndroidGradleBuildExecutor` — this executor has never built an actual
+  Android APK, since `ProjectType.ANDROID` is exactly what it refuses to
+  attempt.
+- `core-build-remote` — a second real `BuildExecutor`: `RemoteBuildExecutor`
+  delegates the actual build to a remote build server over `core-remote`'s
+  `RemoteClient`/`HttpTransport` — sending an HTTP request with the
+  workspace's source archived inside it is a plain JVM/OS capability, the
+  same reasoning that made `core-build-local` and both LLM providers real.
+  Unlike `core-build-local`, it never refuses `ProjectType.ANDROID` — the
+  point of a remote build server is that *it*, not this sandbox, is
+  expected to carry the Android SDK/AGP. It speaks a single synchronous
+  request/response protocol this repository defines itself (there is no
+  vendor API to conform to, unlike Anthropic/OpenAI): the source directory
+  is zipped and base64-encoded into the request, and a returned artifact's
+  bytes are decoded, written to disk, and given a locally recomputed
+  SHA-256 checksum rather than trusting anything the server claims about
+  its own output. A `fileName` that tries to escape the workspace (a path
+  separator or `..` segment) is rejected outright, and an oversized
+  artifact is rejected against `BuildSecurityPolicy.maxArtifactBytes`.
+  Tested against a real local `HttpServer` — never a real build service,
+  since none exists in this environment to call.
 - `core-tools-android` — device-control `Tool`s (tap/swipe/type/pressKey/
   launchApp/findElement/tapElement/getUiTree/listInstalledApps/
   takeScreenshot), a device-agnostic UI-tree domain model
@@ -205,9 +224,10 @@ Fourteen pure-Kotlin/JVM modules are implemented and tested:
   rooted device this environment does not have.
 
 Everything else described in the architecture doc — the Android app shell,
-a local-model-specific LLM provider, an Android or remote build executor, a
-real device controller, a real adb-backed APK lifecycle executor, and a
-real rooted-device executor — is not yet built.
+a local-model-specific LLM provider, an on-device Android build executor
+(`AndroidGradleBuildExecutor`), a real device controller, a real
+adb-backed APK lifecycle executor, and a real rooted-device executor — is
+not yet built.
 
 ```
 ./gradlew test

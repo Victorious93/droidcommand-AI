@@ -13,6 +13,7 @@ include(":core-root")
 include(":core-llm-anthropic")
 include(":core-llm-openai")
 include(":core-build-local")
+include(":core-build-remote")
 
 // The following modules are part of the target architecture (see
 // docs/ARCHITECTURE.md) but do not yet contain implemented code and are

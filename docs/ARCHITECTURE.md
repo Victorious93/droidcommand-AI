@@ -177,6 +177,30 @@ DroidCommand AI
 │                            tools present in this sandbox even without an
 │                            Android SDK.
 │
+├── core-build-remote        RemoteBuildExecutor — a second real
+│                            BuildExecutor, delegating the actual build to
+│                            a remote build server over core-remote's
+│                            RemoteClient/HttpTransport. Sending an HTTP
+│                            request with the workspace's source archived
+│                            inside it is a plain JVM/OS capability, the
+│                            same reasoning that made core-build-local,
+│                            core-shell, and both LLM providers real rather
+│                            than fake. Unlike core-build-local, it never
+│                            refuses ProjectType.ANDROID — the whole point
+│                            of a remote build server is that *it*, not
+│                            this sandbox, is expected to carry the Android
+│                            SDK/AGP. Speaks a single synchronous
+│                            request/response protocol this repository
+│                            defines itself (there is no vendor API to
+│                            conform to, unlike Anthropic/OpenAI): the
+│                            workspace's source directory is zipped and
+│                            base64-encoded into the request body, and a
+│                            returned artifact's bytes are decoded, written
+│                            to disk, and checksummed locally rather than
+│                            trusting anything the server claims about its
+│                            own output. Tested against a real local
+│                            HttpServer, never a real build service.
+│
 ├── core-apk-lifecycle        ApkLifecyclePipeline consumes an already-
 │                            completed core-build.BuildResult (building
 │                            and deploying are separate concerns) and
@@ -226,13 +250,16 @@ DroidCommand AI
 
 `core-agent`, `core-llm`, `core-llm-anthropic`, `core-llm-openai`,
 `core-security`, `core-config`, `core-remote`, `core-build`,
-`core-build-local`, `core-tools-android`, `core-shell`,
+`core-build-local`, `core-build-remote`, `core-tools-android`, `core-shell`,
 `core-apk-lifecycle`, and `core-root` are implemented so far because none
 has a *compile-time* Android dependency (none of this code needs
 `android.jar`): `core-llm-anthropic`'s and `core-llm-openai`'s tests hit a
 real local HTTP server, never a live provider endpoint or a real
 credential, `core-build-local` compiles real Java source with the JDK's
-own `javac` rather than the Android Gradle Plugin, `core-security`'s
+own `javac` rather than the Android Gradle Plugin, `core-build-remote`
+archives a real source directory into a real ZIP and sends it to a real
+local HTTP server rather than any real build service (none exists for it
+to call), `core-security`'s
 root/permission checks are injected functions rather than real device
 queries, `core-config`'s `EnvConfigSource` wraps `System.getenv` behind an
 injectable function so its tests never read or depend on real process
@@ -597,9 +624,70 @@ running that same real `javac` build all the way through
 this executor, and the pipeline's own artifact-containment validation —
 proving the two modules actually compose, not just that each works in
 isolation. What remains PLANNED: `AndroidGradleBuildExecutor` (needs the
-Android SDK/AGP) and `RemoteBuildExecutor` (needs a real build server);
-this executor has never built an actual Android APK, since `ProjectType.ANDROID`
-is exactly what it refuses to attempt.
+Android SDK/AGP); this executor has never built an actual Android APK,
+since `ProjectType.ANDROID` is exactly what it refuses to attempt.
+`RemoteBuildExecutor`, `core-build`'s other documented future
+implementation, is now real too — see 5h.
+
+## 5h. core-build-remote (implemented — a second real BuildExecutor)
+
+`core-build.BuildExecutor`'s own doc comment named `RemoteBuildExecutor` as
+a future implementation since the interface was first written:
+"delegates to a build server over `core-remote`'s `RemoteClient`." That
+future arrived the same way `core-build-local` did — sending an HTTP
+request is a plain JVM/OS capability, so a fake here would have been
+dishonest where a real implementation was reachable.
+
+Unlike `core-llm-anthropic`/`core-llm-openai`, there is no published vendor
+API for "a build server" to conform to — that's this repository's own
+architectural placeholder (Section 5), not a real external service. So
+`RemoteBuildExecutor` speaks a protocol this repository defines and owns
+(`RemoteBuildRequest`/`RemoteBuildResponse` in `RemoteBuildProtocol.kt`):
+a single synchronous `POST /builds` carrying the workspace's source
+directory archived into a ZIP and base64-encoded in the JSON body, and a
+response reporting `SUCCESS`/`FAILURE`, output, and any produced artifacts
+(each as a bare file name plus base64 content). This is deliberately
+simpler than a real CI/build-server API (no build-id polling, no
+asynchronous job queue) — an honest reflection of what is actually
+implemented, not a claim of interoperability with anything real.
+
+Unlike `LocalProcessBuildExecutor`, this executor never refuses
+`ProjectType.ANDROID` outright: the whole point of delegating to a remote
+build server is that *it*, not this sandbox, is expected to carry the
+Android Gradle Plugin and Android SDK. What this executor cannot prove is
+that such a server exists — it has only ever been run against a real local
+test server this repository starts and stops itself, never a real build
+service, since none is reachable from this environment.
+
+A returned artifact's bytes are decoded and written to disk inside the
+workspace (`<workspace>/remote-artifacts/<fileName>`) and given a locally
+recomputed SHA-256 checksum — the server's own claims about its output are
+never trusted blindly, matching `LocalProcessBuildExecutor`'s "no
+fabricated metadata" rule. A `fileName` is external input (it arrived over
+the network), so one containing a path separator or a `..` segment is
+rejected outright as `BuildError.ArtifactInvalid` rather than sanitized —
+the same zip-slip-style defense already applied to declared artifact paths
+in `core-build-local`. An artifact exceeding
+`BuildSecurityPolicy.maxArtifactBytes` is rejected rather than written.
+Server-reported failures map their `errorCode` string to the matching
+`BuildError` variant (falling back to `BuildError.RemoteBuildError`, which
+`core-build`'s error taxonomy already reserved for this), and a malformed
+or non-JSON response body maps to `BuildError.RemoteBuildError` instead of
+throwing. There is no in-flight cancellation once a request has been sent
+— `HttpTransport` exposes no such hook — so `isCancelled` is only checked
+before sending.
+
+`RemoteBuildExecutorIntegrationTest` proves all of this against a real
+local `HttpServer`: a real source directory zipped and sent, decoded and
+verified server-side inside the test's own request handler; a real
+artifact written to disk with a verified checksum; a path-traversal
+`fileName` rejected; an oversized artifact rejected; a server-reported
+`BUILD_FAILED` mapped correctly; a real HTTP 500 mapped to
+`BuildError.RemoteBuildError`; a malformed response body handled without
+throwing; and a pre-set `isCancelled` short-circuiting before any request
+reaches the server. What remains PLANNED: this has never been run against
+a real build service, since none exists in this environment to call, and
+there is still no asynchronous/polling variant of the protocol.
 
 ## 6. Component status (Section 3 naming — "Never fabricate features")
 
@@ -639,9 +727,11 @@ is exactly what it refuses to attempt.
 | core-build: BuildTool + core-security integration | IMPLEMENTED | `BuildToolSecureExecutorIntegrationTest` — a denied build never creates a workspace, verified on disk |
 | core-build: MockBuildExecutor | IMPLEMENTED (explicitly non-real) | Never performs a real build; default outcome is zero artifacts with an output message saying so |
 | core-build: a real BuildExecutor for JVM/NATIVE/GENERIC projects | IMPLEMENTED | `core-build-local.LocalProcessBuildExecutor`, real subprocess execution via `core-shell.ShellExecutor`, tested against a real `javac` invocation; see Section 5g |
-| core-build: a real BuildExecutor for ANDROID projects (AndroidGradleBuildExecutor) / a remote one (RemoteBuildExecutor) | PLANNED | Needs the Android SDK/AGP or a real build server this environment does not have |
+| core-build: a real BuildExecutor delegating to a remote build server (RemoteBuildExecutor) | IMPLEMENTED | `core-build-remote.RemoteBuildExecutor`, real HTTP over `core-remote.RemoteClient`, tested against a real local `HttpServer`; never refuses ANDROID (the remote server is expected to carry the SDK/AGP); see Section 5h |
+| core-build: a real BuildExecutor for ANDROID projects running on-device/on-host (AndroidGradleBuildExecutor) | PLANNED | Needs the Android SDK/AGP this environment does not have |
 | core-build-local: LocalProcessBuildExecutor (real, not mocked) | IMPLEMENTED | Refuses ANDROID outright before spawning anything; command/artifact declarations come entirely from `BuildRequest.metadata`, never guessed; delegates spawning to `core-shell.ShellExecutor`; real SHA-256 checksum + size + workspace-containment validation on every reported artifact |
 | core-build-local: BuildPipeline composition | IMPLEMENTED | `LocalProcessBuildExecutorPipelineIntegrationTest` — a real `javac` build runs end to end through `WorkspaceManager` + `BuildPipeline` + this executor, producing a pipeline-validated artifact |
+| core-build-remote: RemoteBuildExecutor (real, not mocked) | IMPLEMENTED | Never refuses ANDROID; owns a self-defined synchronous request/response protocol (no vendor API exists to conform to); archives the real workspace source directory into a real ZIP; a returned artifact's bytes are decoded, written to disk, and given a locally recomputed SHA-256 checksum rather than trusting the server's own claims; a path-traversal `fileName` or an artifact over `maxArtifactBytes` is rejected; tested against a real local `HttpServer`, never a real build service; see Section 5h |
 | core-apk-lifecycle: domain model (InstallRequest/Result, LaunchResult, LogEntry, TestCaseResult, ApkLifecycleError/Event) | IMPLEMENTED | Compiles, unit-tested |
 | core-apk-lifecycle: ApkLifecyclePipeline | IMPLEMENTED | Unit-tested for every stage's success/failure path, incl. best-effort log collection vs. fatal install/launch/test-harness failures |
 | core-apk-lifecycle: ApkLifecycleTool + core-security integration | IMPLEMENTED | `ApkLifecycleToolSecureExecutorIntegrationTest` — a denied deployment never reaches the executor |
@@ -667,7 +757,7 @@ is exactly what it refuses to attempt.
 | Mode switching (Pilot <-> Forge) | IMPLEMENTED | `DroidCommandSession.switchMode`, unit-tested for the idle case and for rejection during an active task |
 | Root capabilities | PARTIAL | `core-root`'s Tool/gate/policy wiring is implemented and tested end-to-end against `core-security`; no real root command has ever executed, since that requires a rooted test device this environment does not have |
 | LLM integration | PARTIAL | The abstraction, the planner adapter, and two real HTTP-backed `LlmProvider`s (Anthropic-shaped and OpenAI-shaped) are all implemented and tested (each provider against a real local server, not a fake); neither has ever made a live call to a real provider endpoint, since this environment has no LLM credentials |
-| APK build/install/test pipeline | PARTIAL | `core-build.BuildPipeline` now has a real executor for JVM/NATIVE/GENERIC builds (`core-build-local.LocalProcessBuildExecutor`, proven against real `javac`), but nothing Android-specific has actually been built, installed, or launched on a device — `core-apk-lifecycle.ApkLifecyclePipeline` still only has `NullApkLifecycleExecutor`, and an actual APK build needs the Android SDK/AGP this environment does not have |
+| APK build/install/test pipeline | PARTIAL | `core-build.BuildPipeline` now has real executors for JVM/NATIVE/GENERIC builds (`core-build-local.LocalProcessBuildExecutor`, proven against real `javac`) and for delegating to a remote build server (`core-build-remote.RemoteBuildExecutor`, proven against a real local test server) — the latter never refuses `ProjectType.ANDROID`, but has never been run against an actual build service, so no real Android APK has been produced by either executor; `core-apk-lifecycle.ApkLifecyclePipeline` still only has `NullApkLifecycleExecutor`, and installing/launching still needs a connected/emulated device this environment does not have |
 
 ## 7. Environment constraints recorded for this implementation pass
 
