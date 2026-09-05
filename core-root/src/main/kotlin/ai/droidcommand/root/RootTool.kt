@@ -13,13 +13,24 @@ import ai.droidcommand.agent.ToolSpec
  * is true and `rootAvailable()` reports true, and only asks for explicit
  * approval after both of those hold. This module never reimplements that
  * gate; it only supplies the `RootExecutor` the gate protects.
+ *
+ * [grantCapability] is opt-in (null by default, unaffecting existing
+ * callers): when set, `SecureToolExecutor` additionally requires a live
+ * grant for that capability name (e.g. `"root"` or `"ai_root"` to
+ * distinguish an AI-initiated request from a device-owner-initiated one)
+ * before this tool may run at all, on top of the ordinary root/permission
+ * check above.
  */
-class RootTool(private val executor: RootExecutor) : Tool {
+class RootTool(
+    private val executor: RootExecutor,
+    grantCapability: String? = null,
+) : Tool {
     override val spec = ToolSpec(
         name = "run_root_command",
         description = "Runs an allow-listed command with root privileges",
         requiresRoot = true,
         securityLevel = SecurityLevel.ROOT,
+        grantCapability = grantCapability,
     )
 
     override fun execute(input: Map<String, String>): ToolResult {

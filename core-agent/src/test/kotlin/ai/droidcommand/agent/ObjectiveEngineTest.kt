@@ -114,6 +114,22 @@ class ObjectiveEngineTest {
     }
 
     @Test
+    fun `replans instead of failing when the planner names an unknown tool, listing what is actually available`() {
+        val registry = ToolRegistry().apply { register(EngineNoopTool("echo")) }
+        val planner = ScriptedPlanner(
+            mutableListOf(
+                PlannerDecision.InvokeTool("does-not-exist", emptyMap()),
+                PlannerDecision.Complete("done"),
+            ),
+        )
+        val (engine, _, _) = newEngine(planner, registry)
+        val outcome = engine.run("objective")
+
+        assertIs<AgentState.Completed>(outcome.finalState)
+        assertEquals(2, planner.invocations) // the planner got a second chance, it wasn't just failed outright
+    }
+
+    @Test
     fun `honors cancellation before the first iteration`() {
         val (engine, stateMachine, _) = newEngine(AlwaysInvokePlanner("echo"))
         val outcome = engine.run("objective", isCancelled = { true })
