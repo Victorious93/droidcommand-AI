@@ -125,4 +125,48 @@ class CertificatePinnerIntegrationTest {
         assertEquals(pin, pin.lowercase())
         assertEquals(pin, CertificatePinner.sha256SpkiHex(certificate))
     }
+
+    @Test
+    fun `a correct pin completes the handshake even when a configured mTLS trust store alone would reject the same certificate`() {
+        val keyStore = loadKeyStore(generateSelfSignedKeystore())
+        val certificate = keyStore.getCertificate("test") as X509Certificate
+        val correctPin = CertificatePinner.sha256SpkiHex(certificate)
+        val httpsServer = startHttpsServer(keyStore)
+        val emptyTrustStore = KeyStore.getInstance("PKCS12").apply { load(null, null) }
+
+        // certificatePinner and mutualTls are independent, composable configs — pinning
+        // must win for validating the server even though mutualTls's own trust store
+        // (empty here) trusts nothing on its own.
+        val transport = JdkHttpTransport(
+            certificatePinner = CertificatePinner(setOf(correctPin)),
+            mutualTls = MutualTlsConfig(trustStore = emptyTrustStore),
+        )
+        val response = transport.send(HttpRequestSpec(method = "GET", url = "https://127.0.0.1:${httpsServer.address.port}/ping"))
+
+        assertEquals(200, response.statusCode)
+        assertEquals("pong", response.body)
+    }
+
+    @Test
+    fun `a wrong pin still fails the handshake even when a configured mTLS trust store would have trusted the certificate`() {
+        val keyStore = loadKeyStore(generateSelfSignedKeystore())
+        val certificate = keyStore.getCertificate("test") as X509Certificate
+        val httpsServer = startHttpsServer(keyStore)
+        val trustingStore = KeyStore.getInstance("PKCS12").apply {
+            load(null, null)
+            setCertificateEntry("test", certificate)
+        }
+
+        // Pinning takes precedence over mTLS's own trust store, not merely "whichever
+        // succeeds" — a wrong pin must still fail even though mutualTls's trust store
+        // alone would have accepted this exact certificate.
+        val transport = JdkHttpTransport(
+            certificatePinner = CertificatePinner(setOf("0".repeat(64))),
+            mutualTls = MutualTlsConfig(trustStore = trustingStore),
+        )
+
+        assertFailsWith<IOException> {
+            transport.send(HttpRequestSpec(method = "GET", url = "https://127.0.0.1:${httpsServer.address.port}/ping"))
+        }
+    }
 }

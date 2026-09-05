@@ -5,8 +5,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
-private class SessionNoopTool(name: String) : Tool {
-    override val spec = ToolSpec(name = name, description = "no-op")
+private class SessionNoopTool(name: String, allowedModes: Set<AgentMode> = AgentMode.entries.toSet()) : Tool {
+    override val spec = ToolSpec(name = name, description = "no-op", allowedModes = allowedModes)
     override fun execute(input: Map<String, String>) = ToolResult.Success("noop")
 }
 
@@ -138,5 +138,48 @@ class DroidCommandSessionTest {
         // The task is over now, so the switch that was blocked mid-flight can succeed afterward.
         session.switchMode(AgentMode.PILOT)
         assertEquals(AgentMode.PILOT, session.mode)
+    }
+
+    @Test
+    fun `a Forge-only tool cannot be invoked via runPilotInstruction while in Pilot mode`() {
+        val registry = ToolRegistry().apply {
+            register(SessionNoopTool("echo"))
+            register(SessionNoopTool("forge-only", allowedModes = setOf(AgentMode.FORGE)))
+        }
+        val stateMachine = AgentStateMachine()
+        val executor = ToolExecutor(registry, stateMachine, sleep = { })
+        val session = DroidCommandSession(registry, executor, stateMachine)
+
+        val result = session.runPilotInstruction("forge-only", emptyMap())
+        assertIs<ToolResult.Failure>(result)
+    }
+
+    @Test
+    fun `a Pilot-only tool is never offered to the Forge planner`() {
+        val registry = ToolRegistry().apply {
+            register(SessionNoopTool("echo"))
+            register(SessionNoopTool("pilot-only", allowedModes = setOf(AgentMode.PILOT)))
+        }
+        val stateMachine = AgentStateMachine()
+        val executor = ToolExecutor(registry, stateMachine, sleep = { })
+        val session = DroidCommandSession(registry, executor, stateMachine)
+        session.switchMode(AgentMode.FORGE)
+
+        var offeredToolNames: Set<String>? = null
+        val planner = object : Planner {
+            override fun decide(
+                objective: String,
+                context: ConversationContext,
+                availableTools: List<ToolSpec>,
+                lastObservation: ToolResult?,
+            ): PlannerDecision {
+                offeredToolNames = availableTools.map { it.name }.toSet()
+                return PlannerDecision.Complete("done")
+            }
+        }
+
+        session.runForgeObjective("do something", planner)
+
+        assertEquals(setOf("echo"), offeredToolNames)
     }
 }

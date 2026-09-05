@@ -4,8 +4,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-private class NoopTool(name: String) : Tool {
-    override val spec = ToolSpec(name = name, description = "no-op")
+private class NoopTool(name: String, allowedModes: Set<AgentMode> = AgentMode.entries.toSet()) : Tool {
+    override val spec = ToolSpec(name = name, description = "no-op", allowedModes = allowedModes)
     override fun execute(input: Map<String, String>) = ToolResult.Success("noop")
 }
 
@@ -40,5 +40,23 @@ class ToolRegistryTest {
         registry.register(NoopTool("a"))
         registry.register(NoopTool("b"))
         assertEquals(setOf("a", "b"), registry.list().map { it.name }.toSet())
+    }
+
+    @Test
+    fun `unfiltered list includes a mode-restricted tool regardless of its allowedModes`() {
+        val registry = ToolRegistry()
+        registry.register(NoopTool("pilot-only", allowedModes = setOf(AgentMode.PILOT)))
+        assertEquals(setOf("pilot-only"), registry.list().map { it.name }.toSet())
+    }
+
+    @Test
+    fun `filtering by mode excludes a tool not scoped to it`() {
+        val registry = ToolRegistry()
+        registry.register(NoopTool("pilot-only", allowedModes = setOf(AgentMode.PILOT)))
+        registry.register(NoopTool("forge-only", allowedModes = setOf(AgentMode.FORGE)))
+        registry.register(NoopTool("both"))
+
+        assertEquals(setOf("pilot-only", "both"), registry.list(AgentMode.PILOT).map { it.name }.toSet())
+        assertEquals(setOf("forge-only", "both"), registry.list(AgentMode.FORGE).map { it.name }.toSet())
     }
 }

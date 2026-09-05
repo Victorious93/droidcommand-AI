@@ -14,6 +14,21 @@ data class ToolSpec(
     val requiresRoot: Boolean = false,
     val securityLevel: SecurityLevel = SecurityLevel.NORMAL,
     val requiresConfirmation: Boolean = securityLevel != SecurityLevel.NORMAL,
+    /**
+     * Which mode(s) this tool may be offered/invoked under. Defaults to both,
+     * so existing tools are unaffected; a tool that only makes sense in one
+     * mode (e.g. a build/deploy tool that should never be one-shot-invoked
+     * from Pilot) declares that explicitly instead of relying on convention.
+     */
+    val allowedModes: Set<AgentMode> = AgentMode.entries.toSet(),
+    /**
+     * Optional named capability (e.g. "root", "remote_shell") this tool
+     * requires a live grant for, on top of the ordinary security-policy
+     * check. Null (the default) means no grant lifecycle applies — most
+     * tools, including the existing root/shell tools, are unaffected unless
+     * a caller explicitly opts a specific instance into requiring one.
+     */
+    val grantCapability: String? = null,
 )
 
 sealed class ToolResult {

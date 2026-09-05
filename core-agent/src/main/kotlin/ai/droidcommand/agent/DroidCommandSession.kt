@@ -13,6 +13,13 @@ class IllegalModeSwitch(val from: AgentMode, val to: AgentMode, reason: String) 
  * surfaces as "PILOT" or "FORGE" per the two-mode design in
  * docs/ARCHITECTURE.md.
  *
+ * The mode is not only a dispatch-shape switch: both entry points pass the
+ * active [AgentMode] down to [ToolExecutor]/[ObjectiveEngine], which filter
+ * or reject by each [ToolSpec.allowedModes] — a tool scoped to one mode is
+ * never offered to a Forge planner nor invocable via Pilot while the other
+ * mode is active. Most existing tools declare no restriction (available in
+ * both), so this only matters once a tool opts into a narrower scope.
+ *
  * [lock] guards only the [taskActive] test-and-set, not the task execution
  * itself: a mode switch attempted while a task is running must fail
  * immediately, not block until the task finishes, so the lock is never held
@@ -53,7 +60,7 @@ class DroidCommandSession(
             taskActive = true
         }
         try {
-            return executor.run(toolName, input, retryPolicy, isCancelled)
+            return executor.run(toolName, input, retryPolicy, isCancelled, AgentMode.PILOT)
         } finally {
             synchronized(lock) { taskActive = false }
         }
@@ -72,7 +79,7 @@ class DroidCommandSession(
             taskActive = true
         }
         try {
-            val engine = ObjectiveEngine(registry, executor, stateMachine, planner, maxIterations)
+            val engine = ObjectiveEngine(registry, executor, stateMachine, planner, maxIterations, AgentMode.FORGE)
             return engine.run(objective, context, retryPolicy, isCancelled)
         } finally {
             synchronized(lock) { taskActive = false }

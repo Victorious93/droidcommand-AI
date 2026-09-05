@@ -17,6 +17,7 @@ class ObjectiveEngine(
     private val stateMachine: AgentStateMachine,
     private val planner: Planner,
     private val maxIterations: Int = 25,
+    private val mode: AgentMode = AgentMode.FORGE,
 ) {
     init {
         require(maxIterations >= 1) { "maxIterations must be >= 1, got $maxIterations" }
@@ -39,7 +40,7 @@ class ObjectiveEngine(
 
             stateMachine.transition(AgentState.Planning(objective))
             val decision = try {
-                planner.decide(objective, context, registry.list(), lastObservation)
+                planner.decide(objective, context, registry.list(mode), lastObservation)
             } catch (t: Throwable) {
                 val failed = stateMachine.transition(AgentState.Failed(t))
                 return ObjectiveOutcome(failed, iteration)
@@ -60,9 +61,23 @@ class ObjectiveEngine(
                 is PlannerDecision.InvokeTool -> {
                     context.append(Role.ASSISTANT, "Invoking tool '${decision.toolName}' with ${decision.input}")
                     val result = try {
-                        executor.run(decision.toolName, decision.input, retryPolicy, isCancelled)
+                        executor.run(decision.toolName, decision.input, retryPolicy, isCancelled, mode)
                     } catch (c: CancellationRequested) {
                         return ObjectiveOutcome(stateMachine.state, iteration - 1)
+                    } catch (u: UnknownToolException) {
+                        // The planner named a tool that doesn't exist (or isn't offered in this
+                        // mode) despite being handed the real registry — rather than treating
+                        // this as a fatal engine failure, tell it exactly what is actually
+                        // available and let it replan on the next iteration. Bounded by the
+                        // same maxIterations loop, so a planner that keeps inventing tool names
+                        // still terminates rather than looping forever.
+                        val available = registry.list(mode).joinToString { it.name }
+                        val observation = ToolResult.Failure(
+                            "Unknown tool '${decision.toolName}'. Available tools in $mode mode: $available",
+                        )
+                        lastObservation = observation
+                        context.append(Role.TOOL, describe(observation))
+                        continue
                     } catch (t: Throwable) {
                         val failed = stateMachine.transition(AgentState.Failed(t))
                         return ObjectiveOutcome(failed, iteration)

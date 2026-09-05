@@ -177,6 +177,30 @@ DroidCommand AI
 │                            tools present in this sandbox even without an
 │                            Android SDK.
 │
+├── core-build-remote        RemoteBuildExecutor — a second real
+│                            BuildExecutor, delegating the actual build to
+│                            a remote build server over core-remote's
+│                            RemoteClient/HttpTransport. Sending an HTTP
+│                            request with the workspace's source archived
+│                            inside it is a plain JVM/OS capability, the
+│                            same reasoning that made core-build-local,
+│                            core-shell, and both LLM providers real rather
+│                            than fake. Unlike core-build-local, it never
+│                            refuses ProjectType.ANDROID — the whole point
+│                            of a remote build server is that *it*, not
+│                            this sandbox, is expected to carry the Android
+│                            SDK/AGP. Speaks a single synchronous
+│                            request/response protocol this repository
+│                            defines itself (there is no vendor API to
+│                            conform to, unlike Anthropic/OpenAI): the
+│                            workspace's source directory is zipped and
+│                            base64-encoded into the request body, and a
+│                            returned artifact's bytes are decoded, written
+│                            to disk, and checksummed locally rather than
+│                            trusting anything the server claims about its
+│                            own output. Tested against a real local
+│                            HttpServer, never a real build service.
+│
 ├── core-apk-lifecycle        ApkLifecyclePipeline consumes an already-
 │                            completed core-build.BuildResult (building
 │                            and deploying are separate concerns) and
@@ -207,6 +231,15 @@ DroidCommand AI
 │                            pinning to JdkHttpTransport, tested against a
 │                            real TLS handshake with a real
 │                            keytool-generated self-signed certificate.
+│                            MutualTlsConfig separately adds opt-in mutual
+│                            TLS (client certificates) to the same
+│                            transport, tested against a real TLS
+│                            handshake with a real keytool-generated
+│                            private CA and server/client certificate
+│                            chain — the two mechanisms compose (pinning
+│                            wins for validating the server when both are
+│                            configured; mTLS's client certificate is
+│                            still presented).
 │
 ├── core-security             SecurityPolicy, SecurityPolicyEnforcer, and
 │                            SecureToolExecutor: authorizes a tool
@@ -230,13 +263,16 @@ DroidCommand AI
 
 `core-agent`, `core-llm`, `core-llm-anthropic`, `core-llm-openai`,
 `core-security`, `core-config`, `core-remote`, `core-build`,
-`core-build-local`, `core-tools-android`, `core-shell`,
+`core-build-local`, `core-build-remote`, `core-tools-android`, `core-shell`,
 `core-apk-lifecycle`, and `core-root` are implemented so far because none
 has a *compile-time* Android dependency (none of this code needs
 `android.jar`): `core-llm-anthropic`'s and `core-llm-openai`'s tests hit a
 real local HTTP server, never a live provider endpoint or a real
 credential, `core-build-local` compiles real Java source with the JDK's
-own `javac` rather than the Android Gradle Plugin, `core-security`'s
+own `javac` rather than the Android Gradle Plugin, `core-build-remote`
+archives a real source directory into a real ZIP and sends it to a real
+local HTTP server rather than any real build service (none exists for it
+to call), `core-security`'s
 root/permission checks are injected functions rather than real device
 queries, `core-config`'s `EnvConfigSource` wraps `System.getenv` behind an
 injectable function so its tests never read or depend on real process
@@ -464,26 +500,52 @@ proves the retry path for real too: a local server returns 503 twice then
 200, and `RemoteClient` + the real `JdkHttpTransport` recover without any
 test double standing in for the network layer.
 
-`JdkHttpTransport` now also accepts an optional `CertificatePinner`:
-constructed with one or more pinned SHA-256 hashes of a certificate's
-public key (SubjectPublicKeyInfo), it replaces the platform's default CA
-trust manager for that transport instance — the same "pin the key, not the
-CA chain" approach as OkHttp's `CertificatePinner`, for a caller who
-already knows exactly which key a specific configured endpoint must
-present. `CertificatePinnerIntegrationTest` proves this against a real TLS
-handshake: a real self-signed certificate generated with the JDK's own
-`keytool` (the same "reuse a real JDK tool via a real subprocess"
-reasoning `core-build-local` uses for `javac`), a real
-`com.sun.net.httpserver.HttpsServer` presenting it, and a real
+`JdkHttpTransport` accepts two independent, composable optional configs.
+`CertificatePinner`: constructed with one or more pinned SHA-256 hashes of
+a certificate's public key (SubjectPublicKeyInfo), it replaces the
+platform's default CA trust manager for that transport instance — the
+same "pin the key, not the CA chain" approach as OkHttp's
+`CertificatePinner`, for a caller who already knows exactly which key a
+specific configured endpoint must present. `CertificatePinnerIntegrationTest`
+proves this against a real TLS handshake: a real self-signed certificate
+generated with the JDK's own `keytool` (the same "reuse a real JDK tool
+via a real subprocess" reasoning `core-build-local` uses for `javac`), a
+real `com.sun.net.httpserver.HttpsServer` presenting it, and a real
 `JdkHttpTransport` — the correct pin lets the handshake complete, a wrong
 one makes it fail for real (`SSLHandshakeException`, an `IOException`
 subtype), and with no pinner at all the same self-signed certificate is
-correctly rejected by ordinary CA trust, proving pinning is additive
-opt-in behavior, not a change to the unpinned default.
+correctly rejected by ordinary CA trust.
 
-What remains PLANNED: mutual TLS (client certificates), and there is
-still no build-server client built on top of `RemoteClient` —
-`core-llm-anthropic` is now the first consumer (see 5e).
+`MutualTlsConfig`: constructed with a `KeyStore`/password to present a
+client certificate, an optional `KeyStore` to validate the server against
+a private CA (or both). This models the common real-world mTLS shape —
+both sides of a private service (a build or LLM server) presenting
+certificates issued by the same private CA rather than a public one.
+`MutualTlsIntegrationTest` proves this against a real TLS handshake: a
+real private CA and a real server/client certificate chain, all generated
+with the JDK's own `keytool`, and a real `com.sun.net.httpserver.HttpsServer`
+requiring client authentication. A client certificate signed by the
+trusted CA lets the handshake complete for real; presenting no client
+certificate at all against a server that requires one fails the handshake
+for real; and a client with no configured trust store correctly rejects
+the server's private-CA-signed certificate via ordinary platform CA
+trust.
+
+The two compose rather than conflict: `mutualTls`'s client certificate
+(if any) is always presented; for validating the *server*,
+`certificatePinner` takes precedence when both are supplied (a stricter,
+narrower check than trusting a private CA), falling back to
+`mutualTls`'s trust store, then to the platform's ordinary default CA
+trust when neither is configured — proving both are additive opt-in
+behavior, never a change to the plain default. This precedence is tested
+directly, not just asserted in prose: a correct pin lets the handshake
+complete even when the configured `mutualTls` trust store alone would
+reject the same certificate, and a wrong pin still fails the handshake
+even when that trust store alone would have accepted it.
+
+What remains PLANNED: there is still no build-server client built on top
+of `RemoteClient` — `core-llm-anthropic` is now the first consumer (see
+5e).
 
 ## 5e. core-llm-anthropic (implemented — the first real LlmProvider)
 
@@ -617,9 +679,70 @@ running that same real `javac` build all the way through
 this executor, and the pipeline's own artifact-containment validation —
 proving the two modules actually compose, not just that each works in
 isolation. What remains PLANNED: `AndroidGradleBuildExecutor` (needs the
-Android SDK/AGP) and `RemoteBuildExecutor` (needs a real build server);
-this executor has never built an actual Android APK, since `ProjectType.ANDROID`
-is exactly what it refuses to attempt.
+Android SDK/AGP); this executor has never built an actual Android APK,
+since `ProjectType.ANDROID` is exactly what it refuses to attempt.
+`RemoteBuildExecutor`, `core-build`'s other documented future
+implementation, is now real too — see 5h.
+
+## 5h. core-build-remote (implemented — a second real BuildExecutor)
+
+`core-build.BuildExecutor`'s own doc comment named `RemoteBuildExecutor` as
+a future implementation since the interface was first written:
+"delegates to a build server over `core-remote`'s `RemoteClient`." That
+future arrived the same way `core-build-local` did — sending an HTTP
+request is a plain JVM/OS capability, so a fake here would have been
+dishonest where a real implementation was reachable.
+
+Unlike `core-llm-anthropic`/`core-llm-openai`, there is no published vendor
+API for "a build server" to conform to — that's this repository's own
+architectural placeholder (Section 5), not a real external service. So
+`RemoteBuildExecutor` speaks a protocol this repository defines and owns
+(`RemoteBuildRequest`/`RemoteBuildResponse` in `RemoteBuildProtocol.kt`):
+a single synchronous `POST /builds` carrying the workspace's source
+directory archived into a ZIP and base64-encoded in the JSON body, and a
+response reporting `SUCCESS`/`FAILURE`, output, and any produced artifacts
+(each as a bare file name plus base64 content). This is deliberately
+simpler than a real CI/build-server API (no build-id polling, no
+asynchronous job queue) — an honest reflection of what is actually
+implemented, not a claim of interoperability with anything real.
+
+Unlike `LocalProcessBuildExecutor`, this executor never refuses
+`ProjectType.ANDROID` outright: the whole point of delegating to a remote
+build server is that *it*, not this sandbox, is expected to carry the
+Android Gradle Plugin and Android SDK. What this executor cannot prove is
+that such a server exists — it has only ever been run against a real local
+test server this repository starts and stops itself, never a real build
+service, since none is reachable from this environment.
+
+A returned artifact's bytes are decoded and written to disk inside the
+workspace (`<workspace>/remote-artifacts/<fileName>`) and given a locally
+recomputed SHA-256 checksum — the server's own claims about its output are
+never trusted blindly, matching `LocalProcessBuildExecutor`'s "no
+fabricated metadata" rule. A `fileName` is external input (it arrived over
+the network), so one containing a path separator or a `..` segment is
+rejected outright as `BuildError.ArtifactInvalid` rather than sanitized —
+the same zip-slip-style defense already applied to declared artifact paths
+in `core-build-local`. An artifact exceeding
+`BuildSecurityPolicy.maxArtifactBytes` is rejected rather than written.
+Server-reported failures map their `errorCode` string to the matching
+`BuildError` variant (falling back to `BuildError.RemoteBuildError`, which
+`core-build`'s error taxonomy already reserved for this), and a malformed
+or non-JSON response body maps to `BuildError.RemoteBuildError` instead of
+throwing. There is no in-flight cancellation once a request has been sent
+— `HttpTransport` exposes no such hook — so `isCancelled` is only checked
+before sending.
+
+`RemoteBuildExecutorIntegrationTest` proves all of this against a real
+local `HttpServer`: a real source directory zipped and sent, decoded and
+verified server-side inside the test's own request handler; a real
+artifact written to disk with a verified checksum; a path-traversal
+`fileName` rejected; an oversized artifact rejected; a server-reported
+`BUILD_FAILED` mapped correctly; a real HTTP 500 mapped to
+`BuildError.RemoteBuildError`; a malformed response body handled without
+throwing; and a pre-set `isCancelled` short-circuiting before any request
+reaches the server. What remains PLANNED: this has never been run against
+a real build service, since none exists in this environment to call, and
+there is still no asynchronous/polling variant of the protocol.
 
 ## 6. Component status (Section 3 naming — "Never fabricate features")
 
@@ -631,9 +754,10 @@ is exactly what it refuses to attempt.
 | core-agent: ToolExecutor + bounded retry | IMPLEMENTED | `ToolExecutor.kt`, compiles, unit-tested |
 | core-agent: ConversationContext | IMPLEMENTED | `Conversation.kt`, compiles, unit-tested |
 | core-agent: Planner contract | IMPLEMENTED | `Planner.kt` (interface only — see LlmPlanner for the one implementation) |
-| core-agent: ObjectiveEngine (bounded Forge loop) | IMPLEMENTED | `ObjectiveEngine.kt`, compiles, unit-tested incl. the maxIterations bound |
+| core-agent: ObjectiveEngine (bounded Forge loop) | IMPLEMENTED | `ObjectiveEngine.kt`, compiles, unit-tested incl. the maxIterations bound. As of 2026-09-05, a planner naming an unregistered/wrong-mode tool no longer fails the objective outright — it's told what's actually available and replans, still bounded by maxIterations |
+| core-agent: ToolSpec.allowedModes (mode genuinely scopes tool availability) | IMPLEMENTED | Added 2026-09-05 — `ToolExecutor`/`ObjectiveEngine` enforce it; default (both modes) leaves existing tools unaffected |
 | core-agent: DroidCommandSession (Pilot/Forge mode switching) | IMPLEMENTED | `DroidCommandSession.kt`, unit-tested incl. a rejected mode switch attempted mid-task |
-| app (Android shell) | PLANNED | Manifest/Gradle scaffold only, not yet buildable — no Android SDK in this environment (Section 7) |
+| app (Android shell) | PLANNED | No directory, Gradle file, or manifest exists yet — nothing scaffolded, and no Android SDK in this environment either (Section 7). Corrected 2026-09-05: an earlier version of this row implied a manifest/Gradle scaffold already existed on disk; it does not — see `docs/AUDIT_2026-09-05.md`. |
 | core-llm: request/response/error types, LlmProvider interface | IMPLEMENTED | `LlmTypes.kt`, `LlmProvider.kt`, compiles |
 | core-llm: LlmPlanner (Planner adapter) | IMPLEMENTED | `LlmPlanner.kt`, unit-tested, and exercised end-to-end with `ObjectiveEngine` in `ObjectiveEngineIntegrationTest` |
 | core-llm: concrete provider (Anthropic) | IMPLEMENTED | `core-llm-anthropic.AnthropicLlmProvider`, real HTTP + real JSON, tested against a real local `HttpServer`; see Section 5e |
@@ -651,6 +775,7 @@ is exactly what it refuses to attempt.
 | core-root: RootTool + core-security integration | IMPLEMENTED | `RootToolSecureExecutorIntegrationTest` exercises the full root test matrix (root disabled, root unavailable, user denies, approved-and-executed, command failure) against real `SecureToolExecutor`/`SecurityPolicyEnforcer` |
 | core-root: NullRootExecutor | IMPLEMENTED (explicitly non-real) | `isRootAvailable()` truthfully returns false; `execute()` fails explicitly rather than fabricating a successful elevated command |
 | core-root: a real rooted-device RootExecutor | PLANNED | Needs an actual rooted device this environment does not have |
+| core-root: RootTool opt-in grant requirement (e.g. distinguishing AI-initiated `ai_root` from device-owner root) | IMPLEMENTED | Added 2026-09-05 — `RootTool(executor, grantCapability = "ai_root")`; `RootToolGrantIntegrationTest` proves a live single-use grant permits exactly one execution then is spent, and that no grant/no store denies without ever reaching the executor. Opt-in (defaults to `null`, so existing `RootTool(executor)` callers are unaffected) |
 | core-build: domain model (BuildRequest, ProjectType, BuildTarget, ArtifactType, BuildError, BuildResult, BuildEvent) | IMPLEMENTED | Compiles, unit-tested; see docs/CORE_BUILD.md |
 | core-build: WorkspaceManager / WorkspacePathValidator (real filesystem, path security) | IMPLEMENTED | Real java.nio.file operations, unit-tested incl. traversal/absolute-escape/symlink-adjacent cleanup containment |
 | core-build: BuildPipeline (orchestrator) | IMPLEMENTED | Unit-tested for every stage's success/failure path, cancellation, and a simulated timeout via a fake clock |
@@ -659,9 +784,11 @@ is exactly what it refuses to attempt.
 | core-build: BuildTool + core-security integration | IMPLEMENTED | `BuildToolSecureExecutorIntegrationTest` — a denied build never creates a workspace, verified on disk |
 | core-build: MockBuildExecutor | IMPLEMENTED (explicitly non-real) | Never performs a real build; default outcome is zero artifacts with an output message saying so |
 | core-build: a real BuildExecutor for JVM/NATIVE/GENERIC projects | IMPLEMENTED | `core-build-local.LocalProcessBuildExecutor`, real subprocess execution via `core-shell.ShellExecutor`, tested against a real `javac` invocation; see Section 5g |
-| core-build: a real BuildExecutor for ANDROID projects (AndroidGradleBuildExecutor) / a remote one (RemoteBuildExecutor) | PLANNED | Needs the Android SDK/AGP or a real build server this environment does not have |
+| core-build: a real BuildExecutor delegating to a remote build server (RemoteBuildExecutor) | IMPLEMENTED | `core-build-remote.RemoteBuildExecutor`, real HTTP over `core-remote.RemoteClient`, tested against a real local `HttpServer`; never refuses ANDROID (the remote server is expected to carry the SDK/AGP); see Section 5h |
+| core-build: a real BuildExecutor for ANDROID projects running on-device/on-host (AndroidGradleBuildExecutor) | PLANNED | Needs the Android SDK/AGP this environment does not have |
 | core-build-local: LocalProcessBuildExecutor (real, not mocked) | IMPLEMENTED | Refuses ANDROID outright before spawning anything; command/artifact declarations come entirely from `BuildRequest.metadata`, never guessed; delegates spawning to `core-shell.ShellExecutor`; real SHA-256 checksum + size + workspace-containment validation on every reported artifact |
 | core-build-local: BuildPipeline composition | IMPLEMENTED | `LocalProcessBuildExecutorPipelineIntegrationTest` — a real `javac` build runs end to end through `WorkspaceManager` + `BuildPipeline` + this executor, producing a pipeline-validated artifact |
+| core-build-remote: RemoteBuildExecutor (real, not mocked) | IMPLEMENTED | Never refuses ANDROID; owns a self-defined synchronous request/response protocol (no vendor API exists to conform to); archives the real workspace source directory into a real ZIP; a returned artifact's bytes are decoded, written to disk, and given a locally recomputed SHA-256 checksum rather than trusting the server's own claims; a path-traversal `fileName` or an artifact over `maxArtifactBytes` is rejected; tested against a real local `HttpServer`, never a real build service; see Section 5h |
 | core-apk-lifecycle: domain model (InstallRequest/Result, LaunchResult, LogEntry, TestCaseResult, ApkLifecycleError/Event) | IMPLEMENTED | Compiles, unit-tested |
 | core-apk-lifecycle: ApkLifecyclePipeline | IMPLEMENTED | Unit-tested for every stage's success/failure path, incl. best-effort log collection vs. fatal install/launch/test-harness failures |
 | core-apk-lifecycle: ApkLifecycleTool + core-security integration | IMPLEMENTED | `ApkLifecycleToolSecureExecutorIntegrationTest` — a denied deployment never reaches the executor |
@@ -670,25 +797,28 @@ is exactly what it refuses to attempt.
 | core-remote: RemoteEndpoint / HttpTransport / RemoteClient | IMPLEMENTED | `RemoteEndpoint.kt`, `HttpTransport.kt`, `RemoteClient.kt`, unit-tested against a fake transport |
 | core-remote: JdkHttpTransport (real HTTP client) | IMPLEMENTED | `JdkHttpTransport.kt`, tested against a real local `HttpServer` on loopback — a genuine network round trip and a genuine timeout, not mocked |
 | core-remote: certificate pinning (CertificatePinner) | IMPLEMENTED | `CertificatePinner.kt`, wired into `JdkHttpTransport`'s optional constructor param; tested against a real TLS handshake with a real `keytool`-generated self-signed certificate |
-| core-remote: mutual TLS (client certificates) | PLANNED | Not built |
+| core-remote: mutual TLS (client certificates, MutualTlsConfig) | IMPLEMENTED | `MutualTlsConfig.kt`, wired into `JdkHttpTransport`'s optional constructor param, composable with `CertificatePinner` (pinning wins for server validation when both are configured); tested against a real TLS handshake with a real `keytool`-generated private CA and server/client certificate chain |
 | core-remote: a concrete LlmProvider using RemoteClient | IMPLEMENTED | `core-llm-anthropic.AnthropicLlmProvider` consumes `RemoteClient`/`HttpTransport` directly; no build-server client on top of `RemoteClient` exists yet |
 | core-llm-anthropic: AnthropicRequest/AnthropicResponse JSON mapping | IMPLEMENTED | `AnthropicMessagesApi.kt`, kotlinx.serialization, unit-tested against a real local server's real JSON |
 | core-llm-anthropic: AnthropicLlmProvider (real HTTP LlmProvider) | IMPLEMENTED (real, not mocked) | Real request encoding/response parsing over `RemoteClient`; x-api-key auth read fresh per call, never cached; status-code -> LlmError mapping (401/403 Authentication, 429/5xx ModelUnavailable, other non-2xx InvalidResponse); tested against a real local `HttpServer`, never api.anthropic.com |
 | core-llm-openai: OpenAiChatRequest/OpenAiChatResponse JSON mapping | IMPLEMENTED | `OpenAiChatApi.kt`, kotlinx.serialization, unit-tested against a real local server's real JSON |
 | core-llm-openai: OpenAiLlmProvider (real HTTP LlmProvider) | IMPLEMENTED (real, not mocked) | Real request encoding/response parsing over `RemoteClient`, reusing its built-in bearer-token auth; status-code -> LlmError mapping identical to core-llm-anthropic; tested against a real local `HttpServer`, never api.openai.com or a self-hosted server |
 | core-security: SecurityPolicy / SecurityPolicyEnforcer | IMPLEMENTED | `SecurityPolicy.kt`, `SecurityPolicyEnforcer.kt`, compiles, unit-tested |
-| core-security: SecureToolExecutor (controlled execution boundary) | IMPLEMENTED | `SecureToolExecutor.kt`, unit-tested incl. "denied tool is never invoked" and "AwaitingApproval before prompting" |
+| core-security: SecureToolExecutor (controlled execution boundary) | IMPLEMENTED | `SecureToolExecutor.kt`, unit-tested incl. "denied tool is never invoked" and "AwaitingApproval before prompting". As of 2026-09-05, also enforces an optional grant lifecycle and audit-log fail-closed behavior (both additive, default off) |
 | core-security: real root detection / real Android permission grants | PLANNED | `rootAvailable`/`grantedPermissions` are injected functions, now exercised end-to-end by `core-root.RootToolSecureExecutorIntegrationTest` — but still only against fixtures, not a real device |
+| core-security: Grant / GrantStore (authorization-grant lifecycle: issue, single-use consumption only on success, expiry, revocation) | IMPLEMENTED | Added 2026-09-05, `Grant.kt`/`GrantStore.kt`; `InMemoryGrantStore` fails closed at capacity (refuses a new grant rather than evicting an older one). Deliberately avoids DroidPilot's own documented single-use-grant bug (PHASE_3_BUGS.md P3-01) by consuming only after the delegate call actually succeeds, never merely once every gate passes |
+| core-security: AuditLog (security-relevant decision trail) | IMPLEMENTED | Added 2026-09-05, `AuditLog.kt`; `InMemoryAuditLog` fails closed at capacity; `SecureToolExecutor` denies a SENSITIVE/ROOT invocation it cannot record rather than running it unaudited. Persistent (cross-process) audit storage remains PLANNED — this is in-memory only, matching `ConversationContext`'s current scope |
+| core-security/core-root: AI_ROOT-style initiator-scoped permission category (ROADMAP-051) | PARTIAL | The grant-capability mechanism (above) supports naming a distinct capability like `"ai_root"`, but nothing yet supplies or checks an actual "who initiated this" field the way DroidPilot's `AuthorizationManager` does — the plumbing exists, the initiator-distinction policy itself does not yet |
 | core-config: ConfigSource / ConfigReader | IMPLEMENTED | `ConfigSource.kt`, `ConfigReader.kt`, compiles, unit-tested |
 | core-config: LlmConfigLoader | IMPLEMENTED | `LlmConfigLoader.kt`, unit-tested incl. that `authToken()` re-reads the source on every call rather than caching |
 | core-config: SecurityPolicyLoader | IMPLEMENTED | `SecurityPolicyLoader.kt`, unit-tested |
 | core-config: a real, deployed configuration source (device settings UI, secure storage) | PLANNED | Only `EnvConfigSource`/`MapConfigSource`/`CompositeConfigSource` exist; no Android-backed source (e.g. EncryptedSharedPreferences) has been built |
 | Pilot Mode (end-to-end) | PARTIAL | `DroidCommandSession.runPilotInstruction` is implemented and tested against `core-tools-android`'s real `Tool` wrappers, but every one of them is backed by `NullDeviceController` — no real Android-backed `DeviceController` exists yet |
 | Forge Mode (end-to-end) | PARTIAL | The objective loop itself (planning/tool-selection/execution/observation/bounded iteration) is implemented and tested; it has never run against a real LLM or a real device tool; core-build's pipeline/workspace scaffolding now exists but has no real BuildExecutor to actually compile anything |
-| Mode switching (Pilot <-> Forge) | IMPLEMENTED | `DroidCommandSession.switchMode`, unit-tested for the idle case and for rejection during an active task |
+| Mode switching (Pilot <-> Forge) | IMPLEMENTED | `DroidCommandSession.switchMode`, unit-tested for the idle case and for rejection during an active task. Mode also now genuinely scopes tool availability: `ToolSpec.allowedModes` (default: both) is enforced by `ToolExecutor.run` and filters what `ObjectiveEngine` offers its planner — a mode-restricted tool is neither invocable via the other mode's Pilot call nor ever presented to the other mode's planner. Added 2026-09-05 to close a gap `docs/AUDIT_2026-09-05.md` found: previously mode was a dispatch-shape/task-lifecycle switch only, with no capability difference. |
 | Root capabilities | PARTIAL | `core-root`'s Tool/gate/policy wiring is implemented and tested end-to-end against `core-security`; no real root command has ever executed, since that requires a rooted test device this environment does not have |
 | LLM integration | PARTIAL | The abstraction, the planner adapter, and two real HTTP-backed `LlmProvider`s (Anthropic-shaped and OpenAI-shaped) are all implemented and tested (each provider against a real local server, not a fake); neither has ever made a live call to a real provider endpoint, since this environment has no LLM credentials |
-| APK build/install/test pipeline | PARTIAL | `core-build.BuildPipeline` now has a real executor for JVM/NATIVE/GENERIC builds (`core-build-local.LocalProcessBuildExecutor`, proven against real `javac`), but nothing Android-specific has actually been built, installed, or launched on a device — `core-apk-lifecycle.ApkLifecyclePipeline` still only has `NullApkLifecycleExecutor`, and an actual APK build needs the Android SDK/AGP this environment does not have |
+| APK build/install/test pipeline | PARTIAL | `core-build.BuildPipeline` now has real executors for JVM/NATIVE/GENERIC builds (`core-build-local.LocalProcessBuildExecutor`, proven against real `javac`) and for delegating to a remote build server (`core-build-remote.RemoteBuildExecutor`, proven against a real local test server) — the latter never refuses `ProjectType.ANDROID`, but has never been run against an actual build service, so no real Android APK has been produced by either executor; `core-apk-lifecycle.ApkLifecyclePipeline` still only has `NullApkLifecycleExecutor`, and installing/launching still needs a connected/emulated device this environment does not have |
 
 ## 7. Environment constraints recorded for this implementation pass
 
