@@ -27,10 +27,21 @@ jobs:
       - name: Build and run all module tests
         run: ./gradlew test --continue
 
+      - name: Kotlin lint (ktlint)
+        run: ./gradlew ktlintCheck --continue
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
           path: "**/build/reports/tests/test"
+          if-no-files-found: ignore
+
+      - name: Upload ktlint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ktlint-reports
+          path: "**/build/reports/ktlint"
           if-no-files-found: ignore

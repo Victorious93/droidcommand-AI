@@ -125,7 +125,10 @@ class SecureToolExecutorTest {
         val (secure, tool, _, _) = newHarness(
             spec,
             SecurityPolicy(autoApprove = setOf(SecurityLevel.NORMAL, SecurityLevel.SENSITIVE)),
-            approvalPrompt = ApprovalPrompt { promptCalls++; true },
+            approvalPrompt = ApprovalPrompt {
+                promptCalls++
+                true
+            },
         )
 
         val result = secure.run("delete-app", emptyMap())

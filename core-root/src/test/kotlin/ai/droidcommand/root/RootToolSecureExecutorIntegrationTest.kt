@@ -5,9 +5,9 @@ import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.security.ApprovalPrompt
+import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
-import ai.droidcommand.security.SecureToolExecutor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -51,7 +51,10 @@ class RootToolSecureExecutorIntegrationTest {
         val result = secure(
             executor,
             SecurityPolicy(rootEnabled = false, rootAvailable = { true }),
-            ApprovalPrompt { promptCalls++; true },
+            ApprovalPrompt {
+                promptCalls++
+                true
+            },
         ).run("run_root_command", mapOf("executable" to "id"))
 
         assertIs<ToolResult.Failure>(result)
@@ -68,7 +71,10 @@ class RootToolSecureExecutorIntegrationTest {
         val result = secure(
             executor,
             SecurityPolicy(rootEnabled = true, rootAvailable = { executor.isRootAvailable() }),
-            ApprovalPrompt { promptCalls++; true },
+            ApprovalPrompt {
+                promptCalls++
+                true
+            },
         ).run("run_root_command", mapOf("executable" to "id"))
 
         assertIs<ToolResult.Failure>(result)

@@ -27,7 +27,10 @@ class MockBuildExecutorTest {
     @Test
     fun `respects cancellation and never invokes the outcome lambda`() {
         var invoked = false
-        val executor = MockBuildExecutor { invoked = true; BuildExecutionResult.Success(0, "should not happen", emptyList()) }
+        val executor = MockBuildExecutor {
+            invoked = true
+            BuildExecutionResult.Success(0, "should not happen", emptyList())
+        }
         val result = assertIs<BuildExecutionResult.Failure>(executor.execute(fakeContext(), isCancelled = { true }))
         assertEquals(false, invoked)
         assertEquals("CANCELLED", result.error.code)
@@ -37,7 +40,10 @@ class MockBuildExecutorTest {
     fun `a custom outcome lambda receives the given context`() {
         var receivedContext: BuildContext? = null
         val context = fakeContext()
-        val executor = MockBuildExecutor { ctx -> receivedContext = ctx; BuildExecutionResult.Success(0, "custom", emptyList()) }
+        val executor = MockBuildExecutor { ctx ->
+            receivedContext = ctx
+            BuildExecutionResult.Success(0, "custom", emptyList())
+        }
         executor.execute(context)
         assertEquals(context, receivedContext)
     }

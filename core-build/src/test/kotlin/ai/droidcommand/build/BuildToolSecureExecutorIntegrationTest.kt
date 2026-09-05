@@ -6,9 +6,9 @@ import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.security.ApprovalPrompt
+import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
-import ai.droidcommand.security.SecureToolExecutor
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -73,9 +73,12 @@ class BuildToolSecureExecutorIntegrationTest {
     @Test
     fun `the build tool is SENSITIVE and requires confirmation`() {
         val spec = BuildTool(
-            BuildPipeline(WorkspaceManager(listOf(root)), MockBuildExecutor(), object : BuildEnvironmentDetector {
-                override fun check(tool: EnvironmentTool) = ToolCheckResult(tool, ToolAvailability.AVAILABLE)
-            }),
+            BuildPipeline(
+                WorkspaceManager(listOf(root)), MockBuildExecutor(),
+                object : BuildEnvironmentDetector {
+                    override fun check(tool: EnvironmentTool) = ToolCheckResult(tool, ToolAvailability.AVAILABLE)
+                },
+            ),
         ) { BuildRequest(sourceLocation = SourceLocation.LocalDirectory("."), projectType = ProjectType.JVM, target = BuildTarget.DEBUG) }.spec
 
         assertEquals(SecurityLevel.SENSITIVE, spec.securityLevel)

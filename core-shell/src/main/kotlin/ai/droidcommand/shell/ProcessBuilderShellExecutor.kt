@@ -49,8 +49,14 @@ class ProcessBuilderShellExecutor(private val policy: ShellSecurityPolicy) : She
 
         val stdout = StringBuilder()
         val stderr = StringBuilder()
-        val stdoutThread = Thread { drain(process.inputStream, stdout, command.maxOutputBytes) }.apply { isDaemon = true; start() }
-        val stderrThread = Thread { drain(process.errorStream, stderr, command.maxOutputBytes) }.apply { isDaemon = true; start() }
+        val stdoutThread = Thread { drain(process.inputStream, stdout, command.maxOutputBytes) }.apply {
+            isDaemon = true
+            start()
+        }
+        val stderrThread = Thread { drain(process.errorStream, stderr, command.maxOutputBytes) }.apply {
+            isDaemon = true
+            start()
+        }
 
         while (!process.waitFor(POLL_INTERVAL_MILLIS, java.util.concurrent.TimeUnit.MILLISECONDS)) {
             if (isCancelled()) {

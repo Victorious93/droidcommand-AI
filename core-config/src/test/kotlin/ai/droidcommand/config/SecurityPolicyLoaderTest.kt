@@ -47,7 +47,10 @@ class SecurityPolicyLoaderTest {
     @Test
     fun `rootAvailable is passed through unchanged, never read from configuration`() {
         var calls = 0
-        val rootAvailable = { calls++; true }
+        val rootAvailable = {
+            calls++
+            true
+        }
         val policy = SecurityPolicyLoader.load(MapConfigSource(emptyMap()), rootAvailable = rootAvailable)
 
         assertEquals(0, calls) // not called during loading itself
