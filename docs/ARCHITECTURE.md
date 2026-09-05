@@ -227,6 +227,11 @@ DroidCommand AI
 │                            never retried). The one module so far with a
 │                            genuinely working implementation, not only an
 │                            interface plus fakes — see Section 5d.
+│                            MutualTlsConfig adds opt-in mutual TLS
+│                            (client certificates) to JdkHttpTransport,
+│                            tested against a real TLS handshake with a
+│                            real keytool-generated private CA and
+│                            server/client certificate chain.
 │
 ├── core-security             SecurityPolicy, SecurityPolicyEnforcer, and
 │                            SecureToolExecutor: authorizes a tool
@@ -487,10 +492,30 @@ proves the retry path for real too: a local server returns 503 twice then
 200, and `RemoteClient` + the real `JdkHttpTransport` recover without any
 test double standing in for the network layer.
 
-What remains PLANNED: TLS certificate/server-identity verification beyond
-"the URL must be HTTPS" (no mutual-TLS or pinning), and there is still no
-build-server client built on top of `RemoteClient` — `core-llm-anthropic`
-is now the first consumer (see 5e).
+`JdkHttpTransport` also accepts an optional `MutualTlsConfig`: constructed
+with a `KeyStore`/password to present a client certificate, an optional
+`KeyStore` to validate the server against a private CA (or both), it
+replaces the platform's default `SSLContext` for that transport instance.
+This models the common real-world mTLS shape — both sides of a private
+service (a build or LLM server) presenting certificates issued by the
+same private CA rather than a public one — deliberately, not as an
+artificial test-only setup. `MutualTlsIntegrationTest` proves this against
+a real TLS handshake: a real private CA and a real server/client
+certificate chain, all generated with the JDK's own `keytool`, and a real
+`com.sun.net.httpserver.HttpsServer` requiring client authentication. A
+client certificate signed by the trusted CA lets the handshake complete
+for real; presenting no client certificate at all against a server that
+requires one fails the handshake for real; and a client with no configured
+trust store correctly rejects the server's private-CA-signed certificate
+via ordinary platform CA trust, proving mTLS support composes with the
+existing default rather than silently replacing it everywhere.
+
+What remains PLANNED: there is still no build-server client built on top
+of `RemoteClient` — `core-llm-anthropic` is now the first consumer (see
+5e) — and certificate pinning (trusting a peer by a specific public-key
+hash rather than by presenting a client certificate or the ordinary CA
+chain) is a separate, narrower trust mechanism from mTLS that has not
+been built in this module yet.
 
 ## 5e. core-llm-anthropic (implemented — the first real LlmProvider)
 
@@ -739,7 +764,8 @@ there is still no asynchronous/polling variant of the protocol.
 | core-apk-lifecycle: a real adb-backed ApkLifecycleExecutor | PLANNED | Needs a connected/emulated Android device this environment does not have |
 | core-remote: RemoteEndpoint / HttpTransport / RemoteClient | IMPLEMENTED | `RemoteEndpoint.kt`, `HttpTransport.kt`, `RemoteClient.kt`, unit-tested against a fake transport |
 | core-remote: JdkHttpTransport (real HTTP client) | IMPLEMENTED | `JdkHttpTransport.kt`, tested against a real local `HttpServer` on loopback — a genuine network round trip and a genuine timeout, not mocked |
-| core-remote: TLS identity verification beyond "must be HTTPS" (pinning/mTLS) | PLANNED | Not built |
+| core-remote: mutual TLS (client certificates) | IMPLEMENTED | `MutualTlsConfig.kt`, wired into `JdkHttpTransport`'s optional constructor param; tested against a real TLS handshake with a real `keytool`-generated private CA and server/client certificate chain |
+| core-remote: certificate pinning | PLANNED | Not built in this module yet (tracked separately from mTLS) |
 | core-remote: a concrete LlmProvider using RemoteClient | IMPLEMENTED | `core-llm-anthropic.AnthropicLlmProvider` consumes `RemoteClient`/`HttpTransport` directly; no build-server client on top of `RemoteClient` exists yet |
 | core-llm-anthropic: AnthropicRequest/AnthropicResponse JSON mapping | IMPLEMENTED | `AnthropicMessagesApi.kt`, kotlinx.serialization, unit-tested against a real local server's real JSON |
 | core-llm-anthropic: AnthropicLlmProvider (real HTTP LlmProvider) | IMPLEMENTED (real, not mocked) | Real request encoding/response parsing over `RemoteClient`; x-api-key auth read fresh per call, never cached; status-code -> LlmError mapping (401/403 Authentication, 429/5xx ModelUnavailable, other non-2xx InvalidResponse); tested against a real local `HttpServer`, never api.anthropic.com |
