@@ -1,0 +1,26 @@
+root = true
+
+[*.{kt,kts}]
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = off
+
+# ROADMAP-119: ktlint's "official" ruleset is a wrapping/line-length style
+# opinion, not a correctness check. This codebase's existing style favors
+# long, thorough KDoc/doc-comment prose and single-line multi-argument
+# calls where they still read clearly — deliberately, not accidentally.
+# Reformatting the entire repository to ktlint's default wrapping opinion
+# would produce a huge, purely-cosmetic diff for what should be a small
+# gap (no Kotlin lint configured at all). Disabling only the wrapping/
+# line-length/blank-line rules below keeps the substantive checks (unused
+# imports, no wildcard imports, trailing whitespace, final newline,
+# consistent indentation, standard bracing) enforced without fighting an
+# already-deliberate style.
+ktlint_standard_argument-list-wrapping = disabled
+ktlint_standard_parameter-list-wrapping = disabled
+ktlint_standard_multiline-expression-wrapping = disabled
+ktlint_standard_string-template-indent = disabled
+ktlint_standard_function-signature = disabled
+ktlint_standard_blank-line-before-declaration = disabled

@@ -11,7 +11,10 @@ class ApkLifecycleToolTest {
         var pipelineRan = false
         val executor = ScriptedApkLifecycleExecutor()
         val pipeline = ApkLifecyclePipeline(executor)
-        val tool = ApkLifecycleTool(pipeline) { pipelineRan = true; buildSuccess() }
+        val tool = ApkLifecycleTool(pipeline) {
+            pipelineRan = true
+            buildSuccess()
+        }
 
         val result = tool.execute(emptyMap())
 

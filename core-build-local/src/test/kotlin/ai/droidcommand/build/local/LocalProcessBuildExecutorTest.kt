@@ -76,7 +76,10 @@ class LocalProcessBuildExecutorTest {
     @Test
     fun `ANDROID projectType is refused outright without ever invoking the shell executor`() {
         var shellCalls = 0
-        val scriptedShell = ShellExecutor { _, _ -> shellCalls++; ShellExecutionResult.Success(0, "", "", 0) }
+        val scriptedShell = ShellExecutor { _, _ ->
+            shellCalls++
+            ShellExecutionResult.Success(0, "", "", 0)
+        }
         val executor = LocalProcessBuildExecutor(scriptedShell)
 
         val context = BuildContext(request(projectType = ProjectType.ANDROID, metadata = mapOf("command.executable" to "javac")), workspace(), sourceDir.toString())
@@ -90,7 +93,10 @@ class LocalProcessBuildExecutorTest {
     @Test
     fun `a missing command_executable fails without invoking the shell executor`() {
         var shellCalls = 0
-        val scriptedShell = ShellExecutor { _, _ -> shellCalls++; ShellExecutionResult.Success(0, "", "", 0) }
+        val scriptedShell = ShellExecutor { _, _ ->
+            shellCalls++
+            ShellExecutionResult.Success(0, "", "", 0)
+        }
         val executor = LocalProcessBuildExecutor(scriptedShell)
 
         val context = BuildContext(request(), workspace(), sourceDir.toString())

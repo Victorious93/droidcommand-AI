@@ -33,7 +33,10 @@ class ConfigSourceTest {
     @Test
     fun `EnvConfigSource delegates to the injected environment function`() {
         var lookedUp: String? = null
-        val source = EnvConfigSource { key -> lookedUp = key; "fake-value" }
+        val source = EnvConfigSource { key ->
+            lookedUp = key
+            "fake-value"
+        }
         val result = source.get("SOME_VAR")
         assertEquals("SOME_VAR", lookedUp)
         assertEquals("fake-value", result)
