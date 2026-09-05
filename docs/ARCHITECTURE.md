@@ -203,6 +203,10 @@ DroidForge AI
 │                            never retried). The one module so far with a
 │                            genuinely working implementation, not only an
 │                            interface plus fakes — see Section 5d.
+│                            CertificatePinner adds opt-in certificate
+│                            pinning to JdkHttpTransport, tested against a
+│                            real TLS handshake with a real
+│                            keytool-generated self-signed certificate.
 │
 ├── core-security             SecurityPolicy, SecurityPolicyEnforcer, and
 │                            SecureToolExecutor: authorizes a tool
@@ -460,10 +464,26 @@ proves the retry path for real too: a local server returns 503 twice then
 200, and `RemoteClient` + the real `JdkHttpTransport` recover without any
 test double standing in for the network layer.
 
-What remains PLANNED: TLS certificate/server-identity verification beyond
-"the URL must be HTTPS" (no mutual-TLS or pinning), and there is still no
-build-server client built on top of `RemoteClient` — `core-llm-anthropic`
-is now the first consumer (see 5e).
+`JdkHttpTransport` now also accepts an optional `CertificatePinner`:
+constructed with one or more pinned SHA-256 hashes of a certificate's
+public key (SubjectPublicKeyInfo), it replaces the platform's default CA
+trust manager for that transport instance — the same "pin the key, not the
+CA chain" approach as OkHttp's `CertificatePinner`, for a caller who
+already knows exactly which key a specific configured endpoint must
+present. `CertificatePinnerIntegrationTest` proves this against a real TLS
+handshake: a real self-signed certificate generated with the JDK's own
+`keytool` (the same "reuse a real JDK tool via a real subprocess"
+reasoning `core-build-local` uses for `javac`), a real
+`com.sun.net.httpserver.HttpsServer` presenting it, and a real
+`JdkHttpTransport` — the correct pin lets the handshake complete, a wrong
+one makes it fail for real (`SSLHandshakeException`, an `IOException`
+subtype), and with no pinner at all the same self-signed certificate is
+correctly rejected by ordinary CA trust, proving pinning is additive
+opt-in behavior, not a change to the unpinned default.
+
+What remains PLANNED: mutual TLS (client certificates), and there is
+still no build-server client built on top of `RemoteClient` —
+`core-llm-anthropic` is now the first consumer (see 5e).
 
 ## 5e. core-llm-anthropic (implemented — the first real LlmProvider)
 
@@ -649,7 +669,8 @@ is exactly what it refuses to attempt.
 | core-apk-lifecycle: a real adb-backed ApkLifecycleExecutor | PLANNED | Needs a connected/emulated Android device this environment does not have |
 | core-remote: RemoteEndpoint / HttpTransport / RemoteClient | IMPLEMENTED | `RemoteEndpoint.kt`, `HttpTransport.kt`, `RemoteClient.kt`, unit-tested against a fake transport |
 | core-remote: JdkHttpTransport (real HTTP client) | IMPLEMENTED | `JdkHttpTransport.kt`, tested against a real local `HttpServer` on loopback — a genuine network round trip and a genuine timeout, not mocked |
-| core-remote: TLS identity verification beyond "must be HTTPS" (pinning/mTLS) | PLANNED | Not built |
+| core-remote: certificate pinning (CertificatePinner) | IMPLEMENTED | `CertificatePinner.kt`, wired into `JdkHttpTransport`'s optional constructor param; tested against a real TLS handshake with a real `keytool`-generated self-signed certificate |
+| core-remote: mutual TLS (client certificates) | PLANNED | Not built |
 | core-remote: a concrete LlmProvider using RemoteClient | IMPLEMENTED | `core-llm-anthropic.AnthropicLlmProvider` consumes `RemoteClient`/`HttpTransport` directly; no build-server client on top of `RemoteClient` exists yet |
 | core-llm-anthropic: AnthropicRequest/AnthropicResponse JSON mapping | IMPLEMENTED | `AnthropicMessagesApi.kt`, kotlinx.serialization, unit-tested against a real local server's real JSON |
 | core-llm-anthropic: AnthropicLlmProvider (real HTTP LlmProvider) | IMPLEMENTED (real, not mocked) | Real request encoding/response parsing over `RemoteClient`; x-api-key auth read fresh per call, never cached; status-code -> LlmError mapping (401/403 Authentication, 429/5xx ModelUnavailable, other non-2xx InvalidResponse); tested against a real local `HttpServer`, never api.anthropic.com |
