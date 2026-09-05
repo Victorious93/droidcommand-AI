@@ -10,7 +10,7 @@ product to describe.
 
 ## Current status
 
-Thirteen pure-Kotlin/JVM modules are implemented and tested:
+Fourteen pure-Kotlin/JVM modules are implemented and tested:
 
 - `core-agent` — agent state machine, tool interface/registry/bounded-retry
   executor, conversation context, the `Planner` contract, a bounded Forge
@@ -108,9 +108,32 @@ Thirteen pure-Kotlin/JVM modules are implemented and tested:
   means no workspace is ever created on disk. Two real bugs were caught
   and fixed by this module's own tests before shipping (a workspace
   lifecycle gap, and an artifact-path containment check that was missing
-  entirely) — see `docs/CORE_BUILD.md`. No real `BuildExecutor`
-  (Android/local-process/remote) exists yet — that needs an Android SDK,
-  JDK, Gradle, and/or a real build server this environment doesn't have.
+  entirely) — see `docs/CORE_BUILD.md`. No Android or remote
+  `BuildExecutor` exists yet — that needs an Android SDK/AGP or a real
+  build server this environment doesn't have — but `core-build-local` now
+  supplies a real one for JVM/native/generic builds, described next.
+- `core-build-local` — the first real `BuildExecutor`:
+  `LocalProcessBuildExecutor` handles `ProjectType.JVM`/`NATIVE`/`GENERIC`
+  for real, the same "a plain JVM/OS capability deserves a real
+  implementation" reasoning that made `core-shell`'s subprocess executor
+  and both LLM providers real rather than mocked. `ProjectType.ANDROID` is
+  refused outright, before any process is spawned — that needs the Android
+  Gradle Plugin/SDK this executor doesn't provide. It never invents a
+  build command from `ProjectType`: the command and any expected artifact
+  paths come entirely from `BuildRequest.metadata`, so it never guesses at
+  "likely" outputs. The actual process spawn is delegated to
+  `core-shell`'s `ShellExecutor` rather than reimplementing
+  `ProcessBuilder` handling, so the same fail-closed executable allow-list
+  applies. Every reported artifact gets a real SHA-256 checksum and size,
+  and is checked for real existence and containment inside the workspace
+  root before being trusted. Tested against a real `javac` invocation —
+  compiling real Java source into a real, checksummed `.class` file — both
+  standalone and running the whole way through `core-build.BuildPipeline`
+  (real workspace creation, real source import, this executor, the
+  pipeline's own artifact validation). What remains PLANNED:
+  `AndroidGradleBuildExecutor` and `RemoteBuildExecutor` — this executor
+  has never built an actual Android APK, since `ProjectType.ANDROID` is
+  exactly what it refuses to attempt.
 - `core-tools-android` — device-control `Tool`s (tap/swipe/type/pressKey/
   launchApp/findElement/tapElement/getUiTree/listInstalledApps/
   takeScreenshot), a device-agnostic UI-tree domain model
@@ -178,9 +201,9 @@ Thirteen pure-Kotlin/JVM modules are implemented and tested:
   rooted device this environment does not have.
 
 Everything else described in the architecture doc — the Android app shell,
-a local-model-specific LLM provider, a real build executor, a real device
-controller, a real adb-backed APK lifecycle executor, and a real
-rooted-device executor — is not yet built.
+a local-model-specific LLM provider, an Android or remote build executor, a
+real device controller, a real adb-backed APK lifecycle executor, and a
+real rooted-device executor — is not yet built.
 
 ```
 ./gradlew test
