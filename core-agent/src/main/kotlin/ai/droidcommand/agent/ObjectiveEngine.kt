@@ -40,7 +40,7 @@ class ObjectiveEngine(
 
             stateMachine.transition(AgentState.Planning(objective))
             val decision = try {
-                planner.decide(objective, context, registry.list(mode), lastObservation)
+                planner.decide(objective, context, registry.list(mode, Initiator.AI), lastObservation)
             } catch (t: Throwable) {
                 val failed = stateMachine.transition(AgentState.Failed(t))
                 return ObjectiveOutcome(failed, iteration)
@@ -61,7 +61,7 @@ class ObjectiveEngine(
                 is PlannerDecision.InvokeTool -> {
                     context.append(Role.ASSISTANT, "Invoking tool '${decision.toolName}' with ${decision.input}")
                     val result = try {
-                        executor.run(decision.toolName, decision.input, retryPolicy, isCancelled, mode)
+                        executor.run(decision.toolName, decision.input, retryPolicy, isCancelled, mode, Initiator.AI)
                     } catch (c: CancellationRequested) {
                         return ObjectiveOutcome(stateMachine.state, iteration - 1)
                     } catch (u: UnknownToolException) {
@@ -71,7 +71,7 @@ class ObjectiveEngine(
                         // available and let it replan on the next iteration. Bounded by the
                         // same maxIterations loop, so a planner that keeps inventing tool names
                         // still terminates rather than looping forever.
-                        val available = registry.list(mode).joinToString { it.name }
+                        val available = registry.list(mode, Initiator.AI).joinToString { it.name }
                         val observation = ToolResult.Failure(
                             "Unknown tool '${decision.toolName}'. Available tools in $mode mode: $available",
                         )

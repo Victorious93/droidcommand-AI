@@ -20,6 +20,12 @@ class IllegalModeSwitch(val from: AgentMode, val to: AgentMode, reason: String) 
  * mode is active. Most existing tools declare no restriction (available in
  * both), so this only matters once a tool opts into a narrower scope.
  *
+ * The same shape applies to [Initiator]: Pilot Mode dispatches the
+ * [Initiator.DEVICE_OWNER]-declared instruction a person gave directly,
+ * while Forge Mode's [ObjectiveEngine] always plans and acts as
+ * [Initiator.AI] — so a tool scoped via [ToolSpec.requiredInitiator] to one
+ * of them is never reachable from the other entry point either.
+ *
  * [lock] guards only the [taskActive] test-and-set, not the task execution
  * itself: a mode switch attempted while a task is running must fail
  * immediately, not block until the task finishes, so the lock is never held
@@ -54,13 +60,14 @@ class DroidCommandSession(
         input: Map<String, String>,
         retryPolicy: RetryPolicy = RetryPolicy(),
         isCancelled: () -> Boolean = { false },
+        initiator: Initiator = Initiator.DEVICE_OWNER,
     ): ToolResult {
         synchronized(lock) {
             check(mode == AgentMode.PILOT) { "runPilotInstruction called while in $mode mode" }
             taskActive = true
         }
         try {
-            return executor.run(toolName, input, retryPolicy, isCancelled, AgentMode.PILOT)
+            return executor.run(toolName, input, retryPolicy, isCancelled, AgentMode.PILOT, initiator)
         } finally {
             synchronized(lock) { taskActive = false }
         }

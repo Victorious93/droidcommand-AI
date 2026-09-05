@@ -2,6 +2,7 @@ package ai.droidcommand.security
 
 import ai.droidcommand.agent.AgentState
 import ai.droidcommand.agent.AgentStateMachine
+import ai.droidcommand.agent.Initiator
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolExecutor
@@ -284,5 +285,87 @@ class SecureToolExecutorTest {
 
         val result = secure.run("echo", emptyMap())
         assertIs<ToolResult.Success>(result)
+    }
+
+    @Test
+    fun `denies an initiator-restricted tool invoked by a disallowed initiator, without ever calling it`() {
+        val spec = ToolSpec(
+            name = "wipe-device",
+            description = "d",
+            securityLevel = SecurityLevel.ROOT,
+            requiresRoot = true,
+            requiredInitiator = setOf(Initiator.DEVICE_OWNER),
+        )
+        val (secure, tool, _, _) = newHarness(
+            spec,
+            SecurityPolicy(rootEnabled = true, rootAvailable = { true }, autoApprove = setOf(SecurityLevel.ROOT)),
+        )
+
+        val result = secure.run("wipe-device", emptyMap(), initiator = Initiator.AI)
+
+        assertIs<ToolResult.Failure>(result)
+        assertTrue(result.reason.contains("requires initiator"))
+        assertEquals(0, tool.invocations)
+    }
+
+    @Test
+    fun `an initiator check is enforced before any grant check, and never invokes the tool`() {
+        val spec = ToolSpec(
+            name = "wipe-device",
+            description = "d",
+            securityLevel = SecurityLevel.SENSITIVE,
+            grantCapability = "root",
+            requiredInitiator = setOf(Initiator.DEVICE_OWNER),
+        )
+        val tool = CountingTool(spec)
+        val registry = ToolRegistry().apply { register(tool) }
+        val stateMachine = AgentStateMachine()
+        val delegate = ToolExecutor(registry, stateMachine, sleep = { })
+        // No grant store configured at all — if the initiator check didn't run first, this
+        // would fail for "no grant store configured" instead of the initiator mismatch.
+        val secure = SecureToolExecutor(
+            registry,
+            delegate,
+            stateMachine,
+            SecurityPolicyEnforcer(SecurityPolicy(autoApprove = setOf(SecurityLevel.SENSITIVE))),
+            ApprovalPrompt { true },
+        )
+
+        val result = secure.run("wipe-device", emptyMap(), initiator = Initiator.AI)
+
+        assertIs<ToolResult.Failure>(result)
+        assertTrue(result.reason.contains("requires initiator"))
+        assertEquals(0, tool.invocations)
+    }
+
+    @Test
+    fun `permits an initiator-restricted tool invoked by an allowed initiator`() {
+        val spec = ToolSpec(
+            name = "wipe-device",
+            description = "d",
+            securityLevel = SecurityLevel.ROOT,
+            requiresRoot = true,
+            requiredInitiator = setOf(Initiator.DEVICE_OWNER),
+        )
+        val (secure, tool, _, _) = newHarness(
+            spec,
+            SecurityPolicy(rootEnabled = true, rootAvailable = { true }, autoApprove = setOf(SecurityLevel.ROOT)),
+        )
+
+        val result = secure.run("wipe-device", emptyMap(), initiator = Initiator.DEVICE_OWNER)
+
+        assertIs<ToolResult.Success>(result)
+        assertEquals(1, tool.invocations)
+    }
+
+    @Test
+    fun `unrestricted default (AI) still runs a tool with no requiredInitiator`() {
+        val spec = ToolSpec(name = "echo2", description = "d")
+        val (secure, tool, _, _) = newHarness(spec, SecurityPolicy())
+
+        val result = secure.run("echo2", emptyMap())
+
+        assertIs<ToolResult.Success>(result)
+        assertEquals(1, tool.invocations)
     }
 }

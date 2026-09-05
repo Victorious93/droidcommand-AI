@@ -28,11 +28,17 @@ class ToolExecutor(
         retryPolicy: RetryPolicy = RetryPolicy(),
         isCancelled: () -> Boolean = { false },
         mode: AgentMode? = null,
+        initiator: Initiator? = null,
     ): ToolResult {
         val tool = registry.get(toolName)
 
         if (mode != null && mode !in tool.spec.allowedModes) {
             return ToolResult.Failure("Tool '$toolName' is not available in $mode mode")
+        }
+
+        val requiredInitiator = tool.spec.requiredInitiator
+        if (initiator != null && requiredInitiator != null && initiator !in requiredInitiator) {
+            return ToolResult.Failure("Tool '$toolName' requires initiator in $requiredInitiator, but was invoked as $initiator")
         }
 
         var lastResult: ToolResult = ToolResult.Failure("Tool never invoked")

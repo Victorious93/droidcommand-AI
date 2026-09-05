@@ -20,7 +20,14 @@ class ToolRegistry {
      * includes [mode] when one is given. A planner is only ever handed the
      * filtered list for its own mode, so it cannot select a tool the current
      * mode doesn't offer in the first place.
+     *
+     * When [initiator] is given, a tool whose [ToolSpec.requiredInitiator]
+     * doesn't include it is filtered out the same way — in particular,
+     * [ObjectiveEngine] always plans as [Initiator.AI], so a
+     * `DEVICE_OWNER`/`REMOTE`-restricted tool is never even offered to the
+     * planner, let alone selectable, from an AI-driven objective.
      */
-    fun list(mode: AgentMode? = null): List<ToolSpec> =
+    fun list(mode: AgentMode? = null, initiator: Initiator? = null): List<ToolSpec> =
         tools.values.map { it.spec }.filter { mode == null || mode in it.allowedModes }
+            .filter { initiator == null || it.requiredInitiator == null || initiator in it.requiredInitiator!! }
 }
