@@ -365,6 +365,21 @@ verified directly, not just claimed: `ObjectiveEngineTest`'s
 "never exceeds maxIterations" case runs a planner that always requests a
 tool and asserts the tool was invoked exactly `maxIterations` times, no more.
 
+A planner naming a tool that isn't registered (a hallucinated or stale
+tool name) is treated as a recoverable planning mistake, not a fatal
+engine error: `ObjectiveEngine` catches `ToolRegistry.UnknownToolException`
+specifically and reports it back as an ordinary failed observation
+("Unknown tool '...'. Available tools: ...") rather than aborting the
+whole objective into `AgentState.Failed`. The next `planner.decide()` call
+already receives the real `registry.list(mode)` contents on every
+iteration, so the planner has everything it needs to pick a valid tool
+name on its next attempt — this closes a gap the requirements audit
+(`docs/AUDIT_2026-09-05.md`, OD-001) identified by comparing against
+OpenDroid's re-evaluation engine, which re-prompts with the real tool
+allowlist on exactly this failure rather than giving up. A planner that
+keeps repeating the same unknown tool name still only terminates via the
+ordinary `maxIterations` bound, never earlier and never later.
+
 `core-llm` defines the provider-independent side: `LlmRequest`/`LlmResponse`/
 `LlmError`, and `LlmProvider`, an interface with no implementation yet.
 `LlmConfig.authToken` is a function (`() -> String?`), not a stored string,
@@ -724,7 +739,7 @@ there is still no asynchronous/polling variant of the protocol.
 | core-agent: ToolExecutor + bounded retry | IMPLEMENTED | `ToolExecutor.kt`, compiles, unit-tested |
 | core-agent: ConversationContext | IMPLEMENTED | `Conversation.kt`, compiles, unit-tested |
 | core-agent: Planner contract | IMPLEMENTED | `Planner.kt` (interface only — see LlmPlanner for the one implementation) |
-| core-agent: ObjectiveEngine (bounded Forge loop) | IMPLEMENTED | `ObjectiveEngine.kt`, compiles, unit-tested incl. the maxIterations bound |
+| core-agent: ObjectiveEngine (bounded Forge loop) | IMPLEMENTED | `ObjectiveEngine.kt`, compiles, unit-tested incl. the maxIterations bound and recovery from a planner naming an unregistered tool (reported back as a failed observation, not a fatal abort — closes OD-001 from `docs/AUDIT_2026-09-05.md`) |
 | core-agent: DroidCommandSession (Pilot/Forge mode switching) | IMPLEMENTED | `DroidCommandSession.kt`, unit-tested incl. a rejected mode switch attempted mid-task |
 | app (Android shell) | PLANNED | No directory, Gradle file, or manifest exists yet — nothing scaffolded, and no Android SDK in this environment either (Section 7). Corrected 2026-09-05: an earlier version of this row implied a manifest/Gradle scaffold already existed on disk; it does not — see `docs/AUDIT_2026-09-05.md`. |
 | core-llm: request/response/error types, LlmProvider interface | IMPLEMENTED | `LlmTypes.kt`, `LlmProvider.kt`, compiles |

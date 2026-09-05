@@ -64,6 +64,15 @@ class ObjectiveEngine(
                         executor.run(decision.toolName, decision.input, retryPolicy, isCancelled, mode)
                     } catch (c: CancellationRequested) {
                         return ObjectiveOutcome(stateMachine.state, iteration - 1)
+                    } catch (e: UnknownToolException) {
+                        // A planner naming a tool that doesn't exist (a hallucinated or
+                        // stale tool name) is a recoverable planning mistake, not a fatal
+                        // engine error — report it as an ordinary failed observation so
+                        // the next planner.decide() call sees it, alongside the real
+                        // registry.list(mode) it is already handed every iteration, and
+                        // can pick a real tool name instead. Aborting the whole objective
+                        // over one bad name would be far too strict.
+                        ToolResult.Failure("Unknown tool '${decision.toolName}'. Available tools: ${registry.list(mode).joinToString { it.name }}")
                     } catch (t: Throwable) {
                         val failed = stateMachine.transition(AgentState.Failed(t))
                         return ObjectiveOutcome(failed, iteration)
