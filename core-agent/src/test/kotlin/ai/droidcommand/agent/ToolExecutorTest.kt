@@ -41,6 +41,16 @@ private class ForgeOnlyTool : Tool {
     }
 }
 
+private class OwnerOnlyTool : Tool {
+    override val spec = ToolSpec(name = "owner-only", description = "scoped to the device owner", requiredInitiator = setOf(Initiator.DEVICE_OWNER))
+    var invocations = 0
+        private set
+    override fun execute(input: Map<String, String>): ToolResult {
+        invocations++
+        return ToolResult.Success("ran")
+    }
+}
+
 class ToolExecutorTest {
     @Test
     fun `succeeds without retry when the tool succeeds first try`() {
@@ -131,6 +141,38 @@ class ToolExecutorTest {
         val registry = ToolRegistry().apply { register(tool) }
         val executor = ToolExecutor(registry, AgentStateMachine(), sleep = { })
         val result = executor.run("forge-only", emptyMap(), mode = AgentMode.FORGE)
+        assertIs<ToolResult.Success>(result)
+        assertEquals(1, tool.invocations)
+    }
+
+    @Test
+    fun `no initiator filter (default) executes an initiator-restricted tool`() {
+        val tool = OwnerOnlyTool()
+        val registry = ToolRegistry().apply { register(tool) }
+        val executor = ToolExecutor(registry, AgentStateMachine(), sleep = { })
+        val result = executor.run("owner-only", emptyMap())
+        assertIs<ToolResult.Success>(result)
+        assertEquals(1, tool.invocations)
+    }
+
+    @Test
+    fun `rejects invoking a tool from an initiator it does not permit, without ever calling it`() {
+        val tool = OwnerOnlyTool()
+        val registry = ToolRegistry().apply { register(tool) }
+        val machine = AgentStateMachine()
+        val executor = ToolExecutor(registry, machine, sleep = { })
+        val result = executor.run("owner-only", emptyMap(), initiator = Initiator.AI)
+        assertIs<ToolResult.Failure>(result)
+        assertEquals(0, tool.invocations)
+        assertEquals(AgentState.Idle, machine.state)
+    }
+
+    @Test
+    fun `permits invoking a tool from an initiator it does allow`() {
+        val tool = OwnerOnlyTool()
+        val registry = ToolRegistry().apply { register(tool) }
+        val executor = ToolExecutor(registry, AgentStateMachine(), sleep = { })
+        val result = executor.run("owner-only", emptyMap(), initiator = Initiator.DEVICE_OWNER)
         assertIs<ToolResult.Success>(result)
         assertEquals(1, tool.invocations)
     }

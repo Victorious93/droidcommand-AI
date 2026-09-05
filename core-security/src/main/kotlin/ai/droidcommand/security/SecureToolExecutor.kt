@@ -2,6 +2,7 @@ package ai.droidcommand.security
 
 import ai.droidcommand.agent.AgentState
 import ai.droidcommand.agent.AgentStateMachine
+import ai.droidcommand.agent.Initiator
 import ai.droidcommand.agent.RetryPolicy
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.ToolExecutor
@@ -25,6 +26,15 @@ import ai.droidcommand.agent.ToolResult
  * passed, so a failed attempt never burns a single-use grant). When
  * [auditLog] is configured, a sensitive/root-level invocation that cannot be
  * recorded is denied rather than run unaudited.
+ *
+ * When a [ToolSpec][ai.droidcommand.agent.ToolSpec] declares
+ * [ai.droidcommand.agent.ToolSpec.requiredInitiator], the caller-declared
+ * [Initiator] passed to [run] must be one of them or the call is denied
+ * before the tool (or any grant check) ever runs. As documented on
+ * [Initiator] itself, this is a policy boundary — a self-declared value the
+ * caller supplies, not something cryptographically verified against a
+ * hostile peer — the same honestly-scoped guarantee DroidPilot's `AI_ROOT`
+ * gate makes for its own equivalent field.
  */
 class SecureToolExecutor(
     private val registry: ToolRegistry,
@@ -41,6 +51,7 @@ class SecureToolExecutor(
         retryPolicy: RetryPolicy = RetryPolicy(),
         isCancelled: () -> Boolean = { false },
         grantId: String? = null,
+        initiator: Initiator = Initiator.AI,
     ): ToolResult {
         val spec = registry.get(toolName).spec
 
@@ -49,6 +60,14 @@ class SecureToolExecutor(
             val result = ToolResult.Failure(reason)
             stateMachine.transition(AgentState.Observing(toolName, result))
             return result
+        }
+
+        val requiredInitiator = spec.requiredInitiator
+        if (requiredInitiator != null && initiator !in requiredInitiator) {
+            return deny(
+                "Tool '$toolName' requires initiator in $requiredInitiator, but was invoked as $initiator",
+                AuditEventType.INITIATOR_DENIED,
+            )
         }
 
         when (val decision = enforcer.authorize(spec)) {

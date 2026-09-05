@@ -6,6 +6,23 @@ enum class SecurityLevel {
     ROOT,
 }
 
+/**
+ * Who is asking a tool to run — self-declared by the caller invoking
+ * [ai.droidcommand.security.SecureToolExecutor], the same way DroidPilot's
+ * `AI_ROOT` gate works. This is a **policy** distinction, not a
+ * cryptographic one: nothing here proves a [REMOTE] or [DEVICE_OWNER] claim
+ * against a hostile peer who could simply pass a different value, exactly
+ * as DroidPilot's own design documents for its equivalent field. Its value
+ * is narrowing what an AI-planned action may do by default (e.g. a tool
+ * scoped to [DEVICE_OWNER] can never be selected by the agent's own
+ * planner loop), not resisting a compromised or malicious caller.
+ */
+enum class Initiator {
+    AI,
+    DEVICE_OWNER,
+    REMOTE,
+}
+
 /** Declarative permission/root/security metadata a tool must publish before it can be registered. */
 data class ToolSpec(
     val name: String,
@@ -29,6 +46,15 @@ data class ToolSpec(
      * a caller explicitly opts a specific instance into requiring one.
      */
     val grantCapability: String? = null,
+    /**
+     * Optional set of [Initiator]s permitted to invoke this tool (e.g. an
+     * `AI_ROOT`/`REMOTE_ROOT`/`REMOTE_SHELL`-style category). Null (the
+     * default) means no restriction, so existing tools are unaffected.
+     * Checked by [ai.droidcommand.security.SecureToolExecutor] against the
+     * initiator the caller declares — see [Initiator]'s own doc for why
+     * this is a policy boundary, not a cryptographic one.
+     */
+    val requiredInitiator: Set<Initiator>? = null,
 )
 
 sealed class ToolResult {
