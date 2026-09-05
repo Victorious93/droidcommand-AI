@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/logo.jpg" alt="DroidForge AI logo" width="200">
+</p>
+
 # DroidForge AI
 
 An Android AI-agent platform in early development. See
