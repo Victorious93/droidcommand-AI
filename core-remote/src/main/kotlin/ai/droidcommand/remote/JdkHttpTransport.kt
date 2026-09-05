@@ -13,21 +13,31 @@ import javax.net.ssl.SSLContext
  * dependency required. A blocking call: [send] returns once the response
  * arrives or throws [java.io.IOException] (including a timeout, which the
  * JDK surfaces as [java.net.http.HttpTimeoutException], an IOException
- * subtype, and a TLS handshake failure — e.g. an unpresented or untrusted
- * mutual-TLS client certificate — surfaced as
+ * subtype, and a TLS handshake failure — e.g. a pinning mismatch or an
+ * unpresented/untrusted mutual-TLS client certificate — surfaced as
  * [javax.net.ssl.SSLHandshakeException], also an IOException subtype) once
  * [HttpRequestSpec.requestTimeoutMillis] elapses or the handshake fails.
  *
- * [mutualTls], when supplied, configures this instance's TLS handshake per
- * [MutualTlsConfig] — presenting a client certificate, trusting the server
- * against a private CA, or both. Omitted, every connection uses the
- * platform's ordinary default `SSLContext` with no client certificate.
+ * [certificatePinner] and [mutualTls] are independent, composable trust/
+ * identity mechanisms: [mutualTls] can supply a client certificate to
+ * present ([MutualTlsConfig.keyManagers]) regardless of which trust
+ * mechanism is in effect. For validating the *server*, [certificatePinner]
+ * takes precedence when both are supplied — pinning a specific key is a
+ * stricter, narrower check than trusting a private CA — falling back to
+ * [MutualTlsConfig.trustManagers] when only mTLS configures one, and to
+ * the platform's ordinary default CA trust when neither does. Supplying
+ * neither leaves every connection on the platform's ordinary default
+ * `SSLContext` with no client certificate, exactly as before either
+ * mechanism existed.
  */
-class JdkHttpTransport(private val mutualTls: MutualTlsConfig? = null) : HttpTransport {
+class JdkHttpTransport(
+    private val certificatePinner: CertificatePinner? = null,
+    private val mutualTls: MutualTlsConfig? = null,
+) : HttpTransport {
     override fun send(request: HttpRequestSpec): HttpResponseSpec {
         val client = HttpClient.newBuilder()
             .connectTimeout(Duration.ofMillis(request.connectTimeoutMillis))
-            .apply { mutualTls?.let { sslContext(mutualTlsSslContext(it)) } }
+            .apply { if (certificatePinner != null || mutualTls != null) sslContext(buildSslContext()) }
             .build()
 
         val bodyPublisher = if (request.body != null) {
@@ -52,8 +62,12 @@ class JdkHttpTransport(private val mutualTls: MutualTlsConfig? = null) : HttpTra
         return HttpResponseSpec(response.statusCode(), headers, response.body())
     }
 
-    private fun mutualTlsSslContext(config: MutualTlsConfig): SSLContext =
-        SSLContext.getInstance("TLS").apply {
-            init(config.keyManagers(), config.trustManagers(), SecureRandom())
+    private fun buildSslContext(): SSLContext {
+        val keyManagers = mutualTls?.keyManagers()
+        val trustManagers = certificatePinner?.let { arrayOf<javax.net.ssl.TrustManager>(it.trustManager()) }
+            ?: mutualTls?.trustManagers()
+        return SSLContext.getInstance("TLS").apply {
+            init(keyManagers, trustManagers, SecureRandom())
         }
+    }
 }
