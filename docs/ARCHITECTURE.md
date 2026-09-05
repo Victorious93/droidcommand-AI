@@ -1,4 +1,4 @@
-# DroidForge AI — Architecture Blueprint (Phase 2)
+# DroidCommand AI — Architecture Blueprint (Phase 2)
 
 Status: DRAFT. Reflects the design adopted for implementation; components are
 individually classified IMPLEMENTED / PARTIAL / PLANNED / CONFIGURATION-DEPENDENT
@@ -20,7 +20,7 @@ regression) but means every capability below starts from PLANNED.
 ## 2. Module tree
 
 ```
-DroidForge AI
+DroidCommand AI
 │
 ├── app                      Android application module (UI shell, DI wiring)
 │
@@ -28,7 +28,7 @@ DroidForge AI
 │                            registry/executor, bounded retry policy,
 │                            conversation context, Planner contract, the
 │                            bounded Forge objective loop (ObjectiveEngine),
-│                            and DroidForgeSession, which coordinates
+│                            and DroidCommandSession, which coordinates
 │                            Pilot/Forge mode switching. No Android
 │                            dependency — testable on any JVM.
 │
@@ -265,7 +265,7 @@ scaffolding-only or not yet created — see Section 6.
 ## 3. Two-mode architecture
 
 ```
-                    DROIDFORGE AI
+                    DROIDCOMMAND AI
                          │
               ┌──────────┴──────────┐
               │                     │
@@ -294,7 +294,7 @@ loop (UNDERSTAND → PLAN → SELECT TOOLS → EXECUTE → OBSERVE → VALIDATE 
 DIAGNOSE → FIX → REBUILD → RETEST → ITERATE → COMPLETE). The active mode must
 be surfaced in the UI at all times (UI itself: PLANNED, Phase 15).
 
-`DroidForgeSession` (`core-agent`) is the mode coordinator: it exposes
+`DroidCommandSession` (`core-agent`) is the mode coordinator: it exposes
 `mode: AgentMode` (`PILOT`/`FORGE`), `runPilotInstruction(...)`, and
 `runForgeObjective(...)`, and it is the single place a mode switch is
 rejected while a task is active. A switch attempted mid-task throws
@@ -404,7 +404,7 @@ that fails confusingly later.
 
 `LlmConfigLoader.load(source)` builds an `LlmConfig`: `provider` and
 `model` are required, `endpoint`/`temperature`/`maxOutputTokens` are
-optional, and `authToken` is a lambda that reads `DROIDFORGE_LLM_API_KEY`
+optional, and `authToken` is a lambda that reads `DROIDCOMMAND_LLM_API_KEY`
 from the source fresh on every call — the loader itself never captures the
 key into a field. This is verified directly, not just designed that way in
 prose: a test changes the underlying source's value between two calls to
@@ -612,7 +612,7 @@ is exactly what it refuses to attempt.
 | core-agent: ConversationContext | IMPLEMENTED | `Conversation.kt`, compiles, unit-tested |
 | core-agent: Planner contract | IMPLEMENTED | `Planner.kt` (interface only — see LlmPlanner for the one implementation) |
 | core-agent: ObjectiveEngine (bounded Forge loop) | IMPLEMENTED | `ObjectiveEngine.kt`, compiles, unit-tested incl. the maxIterations bound |
-| core-agent: DroidForgeSession (Pilot/Forge mode switching) | IMPLEMENTED | `DroidForgeSession.kt`, unit-tested incl. a rejected mode switch attempted mid-task |
+| core-agent: DroidCommandSession (Pilot/Forge mode switching) | IMPLEMENTED | `DroidCommandSession.kt`, unit-tested incl. a rejected mode switch attempted mid-task |
 | app (Android shell) | PLANNED | Manifest/Gradle scaffold only, not yet buildable — no Android SDK in this environment (Section 7) |
 | core-llm: request/response/error types, LlmProvider interface | IMPLEMENTED | `LlmTypes.kt`, `LlmProvider.kt`, compiles |
 | core-llm: LlmPlanner (Planner adapter) | IMPLEMENTED | `LlmPlanner.kt`, unit-tested, and exercised end-to-end with `ObjectiveEngine` in `ObjectiveEngineIntegrationTest` |
@@ -662,9 +662,9 @@ is exactly what it refuses to attempt.
 | core-config: LlmConfigLoader | IMPLEMENTED | `LlmConfigLoader.kt`, unit-tested incl. that `authToken()` re-reads the source on every call rather than caching |
 | core-config: SecurityPolicyLoader | IMPLEMENTED | `SecurityPolicyLoader.kt`, unit-tested |
 | core-config: a real, deployed configuration source (device settings UI, secure storage) | PLANNED | Only `EnvConfigSource`/`MapConfigSource`/`CompositeConfigSource` exist; no Android-backed source (e.g. EncryptedSharedPreferences) has been built |
-| Pilot Mode (end-to-end) | PARTIAL | `DroidForgeSession.runPilotInstruction` is implemented and tested against `core-tools-android`'s real `Tool` wrappers, but every one of them is backed by `NullDeviceController` — no real Android-backed `DeviceController` exists yet |
+| Pilot Mode (end-to-end) | PARTIAL | `DroidCommandSession.runPilotInstruction` is implemented and tested against `core-tools-android`'s real `Tool` wrappers, but every one of them is backed by `NullDeviceController` — no real Android-backed `DeviceController` exists yet |
 | Forge Mode (end-to-end) | PARTIAL | The objective loop itself (planning/tool-selection/execution/observation/bounded iteration) is implemented and tested; it has never run against a real LLM or a real device tool; core-build's pipeline/workspace scaffolding now exists but has no real BuildExecutor to actually compile anything |
-| Mode switching (Pilot <-> Forge) | IMPLEMENTED | `DroidForgeSession.switchMode`, unit-tested for the idle case and for rejection during an active task |
+| Mode switching (Pilot <-> Forge) | IMPLEMENTED | `DroidCommandSession.switchMode`, unit-tested for the idle case and for rejection during an active task |
 | Root capabilities | PARTIAL | `core-root`'s Tool/gate/policy wiring is implemented and tested end-to-end against `core-security`; no real root command has ever executed, since that requires a rooted test device this environment does not have |
 | LLM integration | PARTIAL | The abstraction, the planner adapter, and two real HTTP-backed `LlmProvider`s (Anthropic-shaped and OpenAI-shaped) are all implemented and tested (each provider against a real local server, not a fake); neither has ever made a live call to a real provider endpoint, since this environment has no LLM credentials |
 | APK build/install/test pipeline | PARTIAL | `core-build.BuildPipeline` now has a real executor for JVM/NATIVE/GENERIC builds (`core-build-local.LocalProcessBuildExecutor`, proven against real `javac`), but nothing Android-specific has actually been built, installed, or launched on a device — `core-apk-lifecycle.ApkLifecyclePipeline` still only has `NullApkLifecycleExecutor`, and an actual APK build needs the Android SDK/AGP this environment does not have |
