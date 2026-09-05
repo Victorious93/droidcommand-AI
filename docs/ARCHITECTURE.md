@@ -142,14 +142,40 @@ DroidForge AI
 │                            BuildPipeline, SystemBuildEnvironmentDetector,
 │                            and DryRunPlanner are real, working
 │                            implementations against real java.nio.file
-│                            operations — not fakes. MockBuildExecutor is
-│                            the only BuildExecutor (never performs a real
-│                            build; see docs/CORE_BUILD.md). No
-│                            AndroidGradleBuildExecutor/
-│                            LocalProcessBuildExecutor/RemoteBuildExecutor
-│                            exists yet (PLANNED — needs Android SDK/JDK/
-│                            Gradle or a real build server this
-│                            environment does not have).
+│                            operations — not fakes. MockBuildExecutor
+│                            never performs a real build (see
+│                            docs/CORE_BUILD.md). No AndroidGradleBuildExecutor/
+│                            RemoteBuildExecutor exists yet (PLANNED — the
+│                            former needs the Android SDK/AGP this
+│                            environment does not have; the latter needs a
+│                            real build server). core-build-local now
+│                            supplies the third: a real
+│                            LocalProcessBuildExecutor for
+│                            ProjectType.JVM/NATIVE/GENERIC builds.
+│
+├── core-build-local          LocalProcessBuildExecutor — a real
+│                            BuildExecutor, not a fake, for
+│                            ProjectType.JVM/NATIVE/GENERIC: spawning a
+│                            build command is a plain JVM/OS capability,
+│                            not an Android-only one, so a real
+│                            implementation was the honest choice here too
+│                            (same reasoning as core-shell/
+│                            core-llm-anthropic/core-llm-openai).
+│                            ProjectType.ANDROID is refused outright — that
+│                            needs the Android Gradle Plugin/SDK this
+│                            executor does not provide. Delegates the
+│                            actual process spawn to core-shell's
+│                            ShellExecutor rather than reimplementing
+│                            ProcessBuilder handling, and never invents a
+│                            build command from ProjectType — the command
+│                            and any expected artifact paths come entirely
+│                            from BuildRequest.metadata, so it never
+│                            guesses at "likely" build outputs. Tested
+│                            against a real `javac` invocation (and, via
+│                            BuildPipeline, a real end-to-end workspace →
+│                            compile → checksummed-artifact run) — the JDK
+│                            tools present in this sandbox even without an
+│                            Android SDK.
 │
 ├── core-apk-lifecycle        ApkLifecyclePipeline consumes an already-
 │                            completed core-build.BuildResult (building
@@ -200,11 +226,13 @@ DroidForge AI
 
 `core-agent`, `core-llm`, `core-llm-anthropic`, `core-llm-openai`,
 `core-security`, `core-config`, `core-remote`, `core-build`,
-`core-tools-android`, `core-shell`, `core-apk-lifecycle`, and `core-root`
-are implemented so far because none has a *compile-time* Android dependency
-(none of this code needs `android.jar`): `core-llm-anthropic`'s and
-`core-llm-openai`'s tests hit a real local HTTP server, never a live
-provider endpoint or a real credential, `core-security`'s
+`core-build-local`, `core-tools-android`, `core-shell`,
+`core-apk-lifecycle`, and `core-root` are implemented so far because none
+has a *compile-time* Android dependency (none of this code needs
+`android.jar`): `core-llm-anthropic`'s and `core-llm-openai`'s tests hit a
+real local HTTP server, never a live provider endpoint or a real
+credential, `core-build-local` compiles real Java source with the JDK's
+own `javac` rather than the Android Gradle Plugin, `core-security`'s
 root/permission checks are injected functions rather than real device
 queries, `core-config`'s `EnvConfigSource` wraps `System.getenv` behind an
 injectable function so its tests never read or depend on real process
@@ -523,6 +551,56 @@ mapping. What remains PLANNED: this has never been run against a real
 OpenAI account or a real self-hosted server — the JSON shape is modeled
 from OpenAI's published API, not verified against a live response.
 
+## 5g. core-build-local (implemented — the first real BuildExecutor)
+
+`core-build.BuildExecutor` existed with only `MockBuildExecutor` — an
+explicitly non-real stand-in — since `core-build` was first built.
+`LocalProcessBuildExecutor` closes that for `ProjectType.JVM`/`NATIVE`/
+`GENERIC`, the same "a plain JVM/OS capability deserves a real
+implementation" reasoning already applied to `core-shell`'s subprocess
+executor and both LLM providers. `ProjectType.ANDROID` is refused outright
+with `BuildError.ExecutorUnavailable` — that needs the Android Gradle
+Plugin and Android SDK, which neither this executor nor this environment
+provides, and the refusal happens before any process is spawned.
+
+It never invents a build command from `ProjectType`: the actual command
+comes entirely from `BuildRequest.metadata` (`command.executable`,
+optionally `command.args`), and any artifact paths to collect afterward
+come from `metadata["artifact.paths"]` — this executor does not scan the
+workspace guessing at "likely" outputs, since that would be fabricating
+structure the caller never declared. The actual process spawn is
+delegated to `core-shell`'s `ShellExecutor` rather than reimplementing
+`ProcessBuilder` handling — a command outside `ShellSecurityPolicy`'s
+fail-closed allow-list never runs, exactly as it wouldn't for
+`core-shell`'s own tool.
+
+A produced artifact is validated for real before being reported: resolved
+against `BuildContext.sourceDir`, checked for containment inside the
+workspace root (failing as `BuildError.ArtifactInvalid` if a declared path
+tries to escape it), checked to actually exist (`BuildError.ArtifactNotFound`
+if the build didn't produce it), and given a real SHA-256 checksum and
+file size — no fabricated metadata. One known imprecision, documented in
+code: `BuildContext` carries no pipeline-level `buildId` (only
+`BuildPipeline` generates one, after the executor returns), so
+`Artifact.buildId` here is the workspace id instead — the closest
+correlated id available, not a stand-in for the real build id that ends
+up in `BuildResult.Success`.
+
+`LocalProcessBuildExecutorTest` proves all of this against a real `javac`
+invocation — not a scripted fake — compiling real Java source into a real
+`.class` file with a real, verifiable checksum, a real non-zero exit code
+surfacing as `BuildError.BuildFailed` with real stderr, and the containment/
+existence checks above triggering for real.
+`LocalProcessBuildExecutorPipelineIntegrationTest` goes one level up,
+running that same real `javac` build all the way through
+`core-build.BuildPipeline` — real workspace creation, real source import,
+this executor, and the pipeline's own artifact-containment validation —
+proving the two modules actually compose, not just that each works in
+isolation. What remains PLANNED: `AndroidGradleBuildExecutor` (needs the
+Android SDK/AGP) and `RemoteBuildExecutor` (needs a real build server);
+this executor has never built an actual Android APK, since `ProjectType.ANDROID`
+is exactly what it refuses to attempt.
+
 ## 6. Component status (Section 3 naming — "Never fabricate features")
 
 | Component | Status | Evidence |
@@ -560,7 +638,10 @@ from OpenAI's published API, not verified against a live response.
 | core-build: DryRunPlanner | IMPLEMENTED | Unit-tested incl. "performs no filesystem mutation" |
 | core-build: BuildTool + core-security integration | IMPLEMENTED | `BuildToolSecureExecutorIntegrationTest` — a denied build never creates a workspace, verified on disk |
 | core-build: MockBuildExecutor | IMPLEMENTED (explicitly non-real) | Never performs a real build; default outcome is zero artifacts with an output message saying so |
-| core-build: a real BuildExecutor (AndroidGradleBuildExecutor / LocalProcessBuildExecutor / RemoteBuildExecutor) | PLANNED | Needs Android SDK/JDK/Gradle or a real build server this environment does not have |
+| core-build: a real BuildExecutor for JVM/NATIVE/GENERIC projects | IMPLEMENTED | `core-build-local.LocalProcessBuildExecutor`, real subprocess execution via `core-shell.ShellExecutor`, tested against a real `javac` invocation; see Section 5g |
+| core-build: a real BuildExecutor for ANDROID projects (AndroidGradleBuildExecutor) / a remote one (RemoteBuildExecutor) | PLANNED | Needs the Android SDK/AGP or a real build server this environment does not have |
+| core-build-local: LocalProcessBuildExecutor (real, not mocked) | IMPLEMENTED | Refuses ANDROID outright before spawning anything; command/artifact declarations come entirely from `BuildRequest.metadata`, never guessed; delegates spawning to `core-shell.ShellExecutor`; real SHA-256 checksum + size + workspace-containment validation on every reported artifact |
+| core-build-local: BuildPipeline composition | IMPLEMENTED | `LocalProcessBuildExecutorPipelineIntegrationTest` — a real `javac` build runs end to end through `WorkspaceManager` + `BuildPipeline` + this executor, producing a pipeline-validated artifact |
 | core-apk-lifecycle: domain model (InstallRequest/Result, LaunchResult, LogEntry, TestCaseResult, ApkLifecycleError/Event) | IMPLEMENTED | Compiles, unit-tested |
 | core-apk-lifecycle: ApkLifecyclePipeline | IMPLEMENTED | Unit-tested for every stage's success/failure path, incl. best-effort log collection vs. fatal install/launch/test-harness failures |
 | core-apk-lifecycle: ApkLifecycleTool + core-security integration | IMPLEMENTED | `ApkLifecycleToolSecureExecutorIntegrationTest` — a denied deployment never reaches the executor |
@@ -586,7 +667,7 @@ from OpenAI's published API, not verified against a live response.
 | Mode switching (Pilot <-> Forge) | IMPLEMENTED | `DroidForgeSession.switchMode`, unit-tested for the idle case and for rejection during an active task |
 | Root capabilities | PARTIAL | `core-root`'s Tool/gate/policy wiring is implemented and tested end-to-end against `core-security`; no real root command has ever executed, since that requires a rooted test device this environment does not have |
 | LLM integration | PARTIAL | The abstraction, the planner adapter, and two real HTTP-backed `LlmProvider`s (Anthropic-shaped and OpenAI-shaped) are all implemented and tested (each provider against a real local server, not a fake); neither has ever made a live call to a real provider endpoint, since this environment has no LLM credentials |
-| APK build/install/test pipeline | PARTIAL | `core-build.BuildPipeline` + `core-apk-lifecycle.ApkLifecyclePipeline` orchestration is implemented and tested end-to-end against fakes; neither has a real executor, so nothing has actually been built, installed, or launched on a device — that needs the Android SDK + device/emulator this environment does not have |
+| APK build/install/test pipeline | PARTIAL | `core-build.BuildPipeline` now has a real executor for JVM/NATIVE/GENERIC builds (`core-build-local.LocalProcessBuildExecutor`, proven against real `javac`), but nothing Android-specific has actually been built, installed, or launched on a device — `core-apk-lifecycle.ApkLifecyclePipeline` still only has `NullApkLifecycleExecutor`, and an actual APK build needs the Android SDK/AGP this environment does not have |
 
 ## 7. Environment constraints recorded for this implementation pass
 
