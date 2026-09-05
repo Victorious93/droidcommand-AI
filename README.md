@@ -1,4 +1,8 @@
-# DroidForge AI
+<p align="center">
+  <img src="docs/images/logo.jpg" alt="DroidCommand AI logo" width="200">
+</p>
+
+# DroidCommand AI
 
 An Android AI-agent platform in early development. See
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the target architecture
@@ -14,7 +18,7 @@ Fourteen pure-Kotlin/JVM modules are implemented and tested:
 
 - `core-agent` — agent state machine, tool interface/registry/bounded-retry
   executor, conversation context, the `Planner` contract, a bounded Forge
-  objective loop (`ObjectiveEngine`), and `DroidForgeSession`, which
+  objective loop (`ObjectiveEngine`), and `DroidCommandSession`, which
   coordinates Pilot Mode and Forge Mode over that shared infrastructure and
   rejects a mode switch attempted while a task is active.
 - `core-llm` — provider-independent LLM request/response/error types, the
