@@ -26,17 +26,21 @@ sealed class BuildExecutionResult {
  * never spawns a process or invokes a compiler — that is deliberately left
  * to an implementation of this interface, so the core layer stays usable
  * in a headless environment with no Android SDK, JDK build toolchain, or
- * device. Future implementations (none exist in this repository yet):
+ * device. Implementations:
  *
- * - `AndroidGradleBuildExecutor` — invokes the Android Gradle Plugin.
- * - `LocalProcessBuildExecutor` — runs an arbitrary local build command.
- * - `RemoteBuildExecutor` — delegates to a build server over
- *   `core-remote`'s `RemoteClient`, consuming the same [BuildContext] /
+ * - `core-build-local.LocalProcessBuildExecutor` — runs an arbitrary local
+ *   build command (JVM/NATIVE/GENERIC; refuses ANDROID).
+ * - `core-build-remote.RemoteBuildExecutor` — delegates to a build server
+ *   over `core-remote`'s `RemoteClient`, consuming the same [BuildContext] /
  *   [BuildExecutionResult] contract so the agent never needs to know
- *   whether a build ran locally or remotely.
+ *   whether a build ran locally or remotely; never refuses ANDROID, since
+ *   the remote server (not this sandbox) is expected to have the Android
+ *   SDK/AGP.
+ * - `AndroidGradleBuildExecutor` — invokes the Android Gradle Plugin
+ *   directly on-device/on-host; still PLANNED (needs the Android SDK/AGP).
  *
- * [MockBuildExecutor] is the only implementation in this phase, and it
- * never performs a real build.
+ * [MockBuildExecutor] is also still present and never performs a real
+ * build.
  */
 interface BuildExecutor {
     fun execute(context: BuildContext, isCancelled: () -> Boolean = { false }): BuildExecutionResult
