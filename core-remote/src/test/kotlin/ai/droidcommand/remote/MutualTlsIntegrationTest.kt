@@ -128,7 +128,7 @@ class MutualTlsIntegrationTest {
         val httpsServer = startServerRequiringClientAuth(loadKeyStore(pki.serverKeyStorePath), loadKeyStore(pki.trustStorePath))
 
         val transport = JdkHttpTransport(
-            MutualTlsConfig(
+            mutualTls = MutualTlsConfig(
                 keyStore = loadKeyStore(pki.clientKeyStorePath),
                 keyPassword = "changeit".toCharArray(),
                 trustStore = loadKeyStore(pki.trustStorePath),
@@ -147,7 +147,7 @@ class MutualTlsIntegrationTest {
         val httpsServer = startServerRequiringClientAuth(loadKeyStore(pki.serverKeyStorePath), loadKeyStore(pki.trustStorePath))
 
         // Trusts the server (via the CA) but presents no client identity at all.
-        val transport = JdkHttpTransport(MutualTlsConfig(trustStore = loadKeyStore(pki.trustStorePath)))
+        val transport = JdkHttpTransport(mutualTls = MutualTlsConfig(trustStore = loadKeyStore(pki.trustStorePath)))
 
         assertFailsWith<IOException> {
             transport.send(HttpRequestSpec(method = "GET", url = "https://127.0.0.1:${httpsServer.address.port}/ping"))
@@ -161,7 +161,7 @@ class MutualTlsIntegrationTest {
 
         // Presents a valid client certificate but never told to trust the private CA that signed the server's certificate.
         val transport = JdkHttpTransport(
-            MutualTlsConfig(keyStore = loadKeyStore(pki.clientKeyStorePath), keyPassword = "changeit".toCharArray()),
+            mutualTls = MutualTlsConfig(keyStore = loadKeyStore(pki.clientKeyStorePath), keyPassword = "changeit".toCharArray()),
         )
 
         assertFailsWith<IOException> {
