@@ -21,6 +21,14 @@ data class ToolSpec(
      * from Pilot) declares that explicitly instead of relying on convention.
      */
     val allowedModes: Set<AgentMode> = AgentMode.entries.toSet(),
+    /**
+     * Optional named capability (e.g. "root", "remote_shell") this tool
+     * requires a live grant for, on top of the ordinary security-policy
+     * check. Null (the default) means no grant lifecycle applies — most
+     * tools, including the existing root/shell tools, are unaffected unless
+     * a caller explicitly opts a specific instance into requiring one.
+     */
+    val grantCapability: String? = null,
 )
 
 sealed class ToolResult {
