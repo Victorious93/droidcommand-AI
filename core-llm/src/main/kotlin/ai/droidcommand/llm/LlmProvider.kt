@@ -16,11 +16,12 @@ class LlmConfig(
 )
 
 /**
- * Provider-independent chat/tool-call abstraction. No implementation of
- * this interface exists yet in this repository — see
- * docs/ARCHITECTURE.md, "LLM integration: PLANNED". [ai.droidcommand.agent]
- * has no dependency on this module, so the agent core stays testable and
- * usable without ever linking against a concrete provider.
+ * Provider-independent chat/tool-call abstraction. Real implementations
+ * live in `core-llm-anthropic` and `core-llm-openai`; [ModelRouter] in this
+ * module composes any number of them behind the same interface.
+ * [ai.droidcommand.agent] has no dependency on this module, so the agent
+ * core stays testable and usable without ever linking against a concrete
+ * provider.
  */
 interface LlmProvider {
     val config: LlmConfig
