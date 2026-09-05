@@ -27,8 +27,13 @@ class ToolExecutor(
         input: Map<String, String>,
         retryPolicy: RetryPolicy = RetryPolicy(),
         isCancelled: () -> Boolean = { false },
+        mode: AgentMode? = null,
     ): ToolResult {
         val tool = registry.get(toolName)
+
+        if (mode != null && mode !in tool.spec.allowedModes) {
+            return ToolResult.Failure("Tool '$toolName' is not available in $mode mode")
+        }
 
         var lastResult: ToolResult = ToolResult.Failure("Tool never invoked")
         for (attempt in 1..retryPolicy.maxAttempts) {

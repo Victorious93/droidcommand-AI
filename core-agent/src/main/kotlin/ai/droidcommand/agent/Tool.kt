@@ -14,6 +14,13 @@ data class ToolSpec(
     val requiresRoot: Boolean = false,
     val securityLevel: SecurityLevel = SecurityLevel.NORMAL,
     val requiresConfirmation: Boolean = securityLevel != SecurityLevel.NORMAL,
+    /**
+     * Which mode(s) this tool may be offered/invoked under. Defaults to both,
+     * so existing tools are unaffected; a tool that only makes sense in one
+     * mode (e.g. a build/deploy tool that should never be one-shot-invoked
+     * from Pilot) declares that explicitly instead of relying on convention.
+     */
+    val allowedModes: Set<AgentMode> = AgentMode.entries.toSet(),
 )
 
 sealed class ToolResult {

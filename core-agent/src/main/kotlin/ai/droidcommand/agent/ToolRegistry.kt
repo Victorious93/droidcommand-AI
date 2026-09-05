@@ -15,5 +15,12 @@ class ToolRegistry {
 
     fun get(name: String): Tool = tools[name] ?: throw UnknownToolException(name)
 
-    fun list(): List<ToolSpec> = tools.values.map { it.spec }
+    /**
+     * All registered tool specs, or only those whose [ToolSpec.allowedModes]
+     * includes [mode] when one is given. A planner is only ever handed the
+     * filtered list for its own mode, so it cannot select a tool the current
+     * mode doesn't offer in the first place.
+     */
+    fun list(mode: AgentMode? = null): List<ToolSpec> =
+        tools.values.map { it.spec }.filter { mode == null || mode in it.allowedModes }
 }

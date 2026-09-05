@@ -31,6 +31,16 @@ private class ThrowingTool : Tool {
     override fun execute(input: Map<String, String>): ToolResult = throw RuntimeException("kaboom")
 }
 
+private class ForgeOnlyTool : Tool {
+    override val spec = ToolSpec(name = "forge-only", description = "scoped to Forge", allowedModes = setOf(AgentMode.FORGE))
+    var invocations = 0
+        private set
+    override fun execute(input: Map<String, String>): ToolResult {
+        invocations++
+        return ToolResult.Success("ran")
+    }
+}
+
 class ToolExecutorTest {
     @Test
     fun `succeeds without retry when the tool succeeds first try`() {
@@ -91,5 +101,37 @@ class ToolExecutorTest {
             executor.run("nope", emptyMap())
         }
         assertEquals(AgentState.Idle, machine.state)
+    }
+
+    @Test
+    fun `no mode filter (default) executes a mode-restricted tool`() {
+        val tool = ForgeOnlyTool()
+        val registry = ToolRegistry().apply { register(tool) }
+        val executor = ToolExecutor(registry, AgentStateMachine(), sleep = { })
+        val result = executor.run("forge-only", emptyMap())
+        assertIs<ToolResult.Success>(result)
+        assertEquals(1, tool.invocations)
+    }
+
+    @Test
+    fun `rejects invoking a tool outside its allowed mode, without ever calling it`() {
+        val tool = ForgeOnlyTool()
+        val registry = ToolRegistry().apply { register(tool) }
+        val machine = AgentStateMachine()
+        val executor = ToolExecutor(registry, machine, sleep = { })
+        val result = executor.run("forge-only", emptyMap(), mode = AgentMode.PILOT)
+        assertIs<ToolResult.Failure>(result)
+        assertEquals(0, tool.invocations)
+        assertEquals(AgentState.Idle, machine.state) // rejected before any ExecutingTool transition
+    }
+
+    @Test
+    fun `permits invoking a tool inside its allowed mode`() {
+        val tool = ForgeOnlyTool()
+        val registry = ToolRegistry().apply { register(tool) }
+        val executor = ToolExecutor(registry, AgentStateMachine(), sleep = { })
+        val result = executor.run("forge-only", emptyMap(), mode = AgentMode.FORGE)
+        assertIs<ToolResult.Success>(result)
+        assertEquals(1, tool.invocations)
     }
 }
