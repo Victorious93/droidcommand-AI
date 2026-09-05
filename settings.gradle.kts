@@ -1,4 +1,4 @@
-rootProject.name = "DroidForge-AI"
+rootProject.name = "DroidCommand-AI"
 
 include(":core-agent")
 include(":core-llm")
