@@ -39,3 +39,15 @@ sealed class DeviceInfoResult {
     data class Success(val info: DeviceInfo) : DeviceInfoResult()
     data class Failure(val reason: String) : DeviceInfoResult()
 }
+
+data class FileEntry(val name: String, val path: String, val isDirectory: Boolean, val sizeBytes: Long? = null)
+
+sealed class FileReadResult {
+    data class Success(val content: String) : FileReadResult()
+    data class Failure(val reason: String) : FileReadResult()
+}
+
+sealed class FileListResult {
+    data class Success(val entries: List<FileEntry>) : FileListResult()
+    data class Failure(val reason: String) : FileListResult()
+}

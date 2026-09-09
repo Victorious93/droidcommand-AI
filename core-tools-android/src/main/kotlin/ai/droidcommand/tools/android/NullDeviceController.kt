@@ -22,4 +22,10 @@ class NullDeviceController : DeviceController {
     override fun listInstalledApps() = InstalledAppsResult.Failure("Cannot list installed apps: no real device is connected (NullDeviceController)")
     override fun takeScreenshot() = ScreenshotResult.Failure("Cannot take a screenshot: no real device is connected (NullDeviceController)")
     override fun getDeviceInfo() = DeviceInfoResult.Failure("Cannot read device info: no real device is connected (NullDeviceController)")
+    override fun readFile(path: String) = FileReadResult.Failure("Cannot read file '$path': no real device is connected (NullDeviceController)")
+    override fun writeFile(path: String, content: String, append: Boolean) = failure("write file '$path'")
+    override fun moveFile(fromPath: String, toPath: String) = failure("move file '$fromPath' to '$toPath'")
+    override fun copyFile(fromPath: String, toPath: String) = failure("copy file '$fromPath' to '$toPath'")
+    override fun deleteFile(path: String) = failure("delete file '$path'")
+    override fun listDirectory(path: String) = FileListResult.Failure("Cannot list directory '$path': no real device is connected (NullDeviceController)")
 }

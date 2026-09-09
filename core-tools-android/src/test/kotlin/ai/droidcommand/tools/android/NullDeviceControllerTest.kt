@@ -38,4 +38,24 @@ class NullDeviceControllerTest {
         assertIs<ScreenshotResult.Failure>(device.takeScreenshot())
         assertIs<DeviceInfoResult.Failure>(device.getDeviceInfo())
     }
+
+    @Test
+    fun `readFile fails, explicitly, rather than fabricating content`() {
+        val result = assertIs<FileReadResult.Failure>(device.readFile("/sdcard/note.txt"))
+        assertTrue(result.reason.contains("no real device"))
+    }
+
+    @Test
+    fun `writeFile, moveFile, copyFile, and deleteFile all fail explicitly`() {
+        assertIs<DeviceActionResult.Failure>(device.writeFile("/a", "content", append = false))
+        assertIs<DeviceActionResult.Failure>(device.moveFile("/a", "/b"))
+        assertIs<DeviceActionResult.Failure>(device.copyFile("/a", "/b"))
+        assertIs<DeviceActionResult.Failure>(device.deleteFile("/a"))
+    }
+
+    @Test
+    fun `listDirectory fails rather than returning a fabricated empty listing`() {
+        val result = assertIs<FileListResult.Failure>(device.listDirectory("/sdcard"))
+        assertTrue(result.reason.contains("no real device"))
+    }
 }
