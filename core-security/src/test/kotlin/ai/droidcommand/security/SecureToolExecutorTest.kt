@@ -3,6 +3,9 @@ package ai.droidcommand.security
 import ai.droidcommand.agent.AgentState
 import ai.droidcommand.agent.AgentStateMachine
 import ai.droidcommand.agent.Initiator
+import ai.droidcommand.agent.LogEvent
+import ai.droidcommand.agent.LogLevel
+import ai.droidcommand.agent.Logger
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolExecutor
@@ -13,6 +16,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+
+private class RecordingSecureLogger : Logger {
+    val events = mutableListOf<LogEvent>()
+    override fun log(event: LogEvent) {
+        events += event
+    }
+}
 
 private class CountingTool(override val spec: ToolSpec) : Tool {
     var invocations = 0
@@ -370,5 +380,75 @@ class SecureToolExecutorTest {
 
         assertIs<ToolResult.Success>(result)
         assertEquals(1, tool.invocations)
+    }
+
+    @Test
+    fun `with no logger given, nothing is logged and behavior is unchanged`() {
+        val spec = ToolSpec(name = "echo3", description = "d")
+        val (secure, tool, _, _) = newHarness(spec, SecurityPolicy())
+
+        val result = secure.run("echo3", emptyMap())
+
+        assertIs<ToolResult.Success>(result)
+        assertEquals(1, tool.invocations)
+    }
+
+    @Test
+    fun `logs secure_tool_result at INFO for a successful invocation`() {
+        val spec = ToolSpec(name = "echo4", description = "d")
+        val tool = CountingTool(spec)
+        val registry = ToolRegistry().apply { register(tool) }
+        val stateMachine = AgentStateMachine()
+        val delegate = ToolExecutor(registry, stateMachine, sleep = { })
+        val logger = RecordingSecureLogger()
+        val secure = SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(SecurityPolicy()), ApprovalPrompt { true }, logger = logger)
+
+        secure.run("echo4", emptyMap())
+
+        val event = logger.events.single { it.message == "secure_tool_result" }
+        assertEquals(LogLevel.INFO, event.level)
+        assertEquals("Success", event.fields["outcome"])
+    }
+
+    @Test
+    fun `logs secure_tool_denied at WARN when a policy denies the tool`() {
+        val spec = ToolSpec(name = "rm", description = "d", requiresRoot = true, securityLevel = SecurityLevel.ROOT)
+        val tool = CountingTool(spec)
+        val registry = ToolRegistry().apply { register(tool) }
+        val stateMachine = AgentStateMachine()
+        val delegate = ToolExecutor(registry, stateMachine, sleep = { })
+        val logger = RecordingSecureLogger()
+        val secure = SecureToolExecutor(
+            registry,
+            delegate,
+            stateMachine,
+            SecurityPolicyEnforcer(SecurityPolicy(rootEnabled = true, rootAvailable = { false })),
+            ApprovalPrompt { true },
+            logger = logger,
+        )
+
+        val result = secure.run("rm", emptyMap())
+
+        assertIs<ToolResult.Failure>(result)
+        val event = logger.events.single { it.message == "secure_tool_denied" }
+        assertEquals(LogLevel.WARN, event.level)
+        assertEquals("ACCESS_DENIED", event.fields["auditType"])
+    }
+
+    @Test
+    fun `logs secure_tool_denied at WARN when an initiator check fails`() {
+        val spec = ToolSpec(name = "wipe-device3", description = "d", requiredInitiator = setOf(Initiator.DEVICE_OWNER))
+        val tool = CountingTool(spec)
+        val registry = ToolRegistry().apply { register(tool) }
+        val stateMachine = AgentStateMachine()
+        val delegate = ToolExecutor(registry, stateMachine, sleep = { })
+        val logger = RecordingSecureLogger()
+        val secure = SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(SecurityPolicy()), ApprovalPrompt { true }, logger = logger)
+
+        secure.run("wipe-device3", emptyMap(), initiator = Initiator.AI)
+
+        val event = logger.events.single { it.message == "secure_tool_denied" }
+        assertEquals(LogLevel.WARN, event.level)
+        assertEquals("INITIATOR_DENIED", event.fields["auditType"])
     }
 }
