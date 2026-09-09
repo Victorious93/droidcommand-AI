@@ -71,4 +71,16 @@ class NullDeviceControllerTest {
         assertIs<ClipboardReadResult.Failure>(device.getClipboardText())
         assertIs<DeviceActionResult.Failure>(device.setClipboardText("x"))
     }
+
+    @Test
+    fun `sendSms and makeCall fail explicitly`() {
+        assertIs<DeviceActionResult.Failure>(device.sendSms("555-0100", "hi"))
+        assertIs<DeviceActionResult.Failure>(device.makeCall("555-0100"))
+    }
+
+    @Test
+    fun `listContacts fails rather than returning a fabricated empty list`() {
+        val result = assertIs<ContactsResult.Failure>(device.listContacts())
+        assertTrue(result.reason.contains("no real device"))
+    }
 }

@@ -59,6 +59,18 @@ private class EngineUnexpectedTool(name: String) : Tool {
     override fun execute(input: Map<String, String>) = ToolResult.Unexpected("unrecognized device state")
 }
 
+private class EngineFailingTool(name: String) : Tool {
+    override val spec = ToolSpec(name = name, description = "always fails")
+    override fun execute(input: Map<String, String>) = ToolResult.Failure("nope")
+}
+
+private class RecordingLogger : Logger {
+    val events = mutableListOf<LogEvent>()
+    override fun log(event: LogEvent) {
+        events += event
+    }
+}
+
 private fun newEngine(planner: Planner, registry: ToolRegistry = ToolRegistry(), maxIterations: Int = 25): Triple<ObjectiveEngine, AgentStateMachine, ToolRegistry> {
     val stateMachine = AgentStateMachine()
     val executor = ToolExecutor(registry, stateMachine, sleep = { })
@@ -185,6 +197,74 @@ class ObjectiveEngineTest {
         assertIs<AgentState.Completed>(outcome.finalState)
         val toolMessage = context.messages.single { it.role == Role.TOOL }
         assertEquals("UNEXPECTED: unrecognized device state", toolMessage.content)
+    }
+
+    @Test
+    fun `with no logger given, nothing is logged and behavior is unchanged`() {
+        val registry = ToolRegistry().apply { register(EngineNoopTool("echo")) }
+        val planner = ScriptedPlanner(
+            mutableListOf(
+                PlannerDecision.InvokeTool("echo", emptyMap()),
+                PlannerDecision.Complete("done"),
+            ),
+        )
+        val (engine, _, _) = newEngine(planner, registry)
+        val outcome = engine.run("do the thing")
+        assertIs<AgentState.Completed>(outcome.finalState)
+    }
+
+    @Test
+    fun `logs objective_started, tool_result, and objective_completed when a logger is given`() {
+        val registry = ToolRegistry().apply { register(EngineNoopTool("echo")) }
+        val planner = ScriptedPlanner(
+            mutableListOf(
+                PlannerDecision.InvokeTool("echo", emptyMap()),
+                PlannerDecision.Complete("done"),
+            ),
+        )
+        val stateMachine = AgentStateMachine()
+        val executor = ToolExecutor(registry, stateMachine, sleep = { })
+        val logger = RecordingLogger()
+        val engine = ObjectiveEngine(registry, executor, stateMachine, planner, logger = logger)
+
+        engine.run("do the thing")
+
+        val messages = logger.events.map { it.message }
+        assertEquals(listOf("objective_started", "tool_result", "objective_completed"), messages)
+        assertEquals(LogLevel.INFO, logger.events.single { it.message == "tool_result" }.level)
+    }
+
+    @Test
+    fun `logs a Failure tool result at ERROR level`() {
+        val registry = ToolRegistry().apply { register(EngineFailingTool("fails")) }
+        val planner = ScriptedPlanner(
+            mutableListOf(
+                PlannerDecision.InvokeTool("fails", emptyMap()),
+                PlannerDecision.Complete("done"),
+            ),
+        )
+        val stateMachine = AgentStateMachine()
+        val executor = ToolExecutor(registry, stateMachine, sleep = { })
+        val logger = RecordingLogger()
+        val engine = ObjectiveEngine(registry, executor, stateMachine, planner, logger = logger)
+
+        engine.run("do the thing")
+
+        assertEquals(LogLevel.ERROR, logger.events.single { it.message == "tool_result" }.level)
+    }
+
+    @Test
+    fun `logs objective_aborted when the planner aborts`() {
+        val stateMachine = AgentStateMachine()
+        val executor = ToolExecutor(ToolRegistry(), stateMachine, sleep = { })
+        val logger = RecordingLogger()
+        val engine = ObjectiveEngine(ToolRegistry(), executor, stateMachine, ScriptedPlanner(mutableListOf(PlannerDecision.Abort("policy blocked this"))), logger = logger)
+
+        engine.run("objective")
+
+        val aborted = logger.events.single { it.message == "objective_aborted" }
+        assertEquals(LogLevel.WARN, aborted.level)
+        assertEquals("policy blocked this", aborted.fields["reason"])
     }
 
     @Test
