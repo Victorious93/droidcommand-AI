@@ -11,6 +11,12 @@ internal class ScriptedDeviceController(
     private val installedAppsResult: InstalledAppsResult = InstalledAppsResult.Failure("not scripted"),
     private val screenshotResult: ScreenshotResult = ScreenshotResult.Failure("not scripted"),
     private val deviceInfoResult: DeviceInfoResult = DeviceInfoResult.Failure("not scripted"),
+    private val readFileResult: FileReadResult = FileReadResult.Failure("not scripted"),
+    private val writeFileResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val moveFileResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val copyFileResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val deleteFileResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val listDirectoryResult: FileListResult = FileListResult.Failure("not scripted"),
 ) : DeviceController {
     var tapCalls = mutableListOf<Pair<Int, Int>>()
         private set
@@ -23,6 +29,18 @@ internal class ScriptedDeviceController(
     var launchAppCalls = mutableListOf<String>()
         private set
     var getUiTreeCalls = 0
+        private set
+    var readFileCalls = mutableListOf<String>()
+        private set
+    var writeFileCalls = mutableListOf<Triple<String, String, Boolean>>()
+        private set
+    var moveFileCalls = mutableListOf<Pair<String, String>>()
+        private set
+    var copyFileCalls = mutableListOf<Pair<String, String>>()
+        private set
+    var deleteFileCalls = mutableListOf<String>()
+        private set
+    var listDirectoryCalls = mutableListOf<String>()
         private set
 
     override fun getUiTree(): UiTreeResult {
@@ -58,4 +76,34 @@ internal class ScriptedDeviceController(
     override fun listInstalledApps(): InstalledAppsResult = installedAppsResult
     override fun takeScreenshot(): ScreenshotResult = screenshotResult
     override fun getDeviceInfo(): DeviceInfoResult = deviceInfoResult
+
+    override fun readFile(path: String): FileReadResult {
+        readFileCalls += path
+        return readFileResult
+    }
+
+    override fun writeFile(path: String, content: String, append: Boolean): DeviceActionResult {
+        writeFileCalls += Triple(path, content, append)
+        return writeFileResult
+    }
+
+    override fun moveFile(fromPath: String, toPath: String): DeviceActionResult {
+        moveFileCalls += fromPath to toPath
+        return moveFileResult
+    }
+
+    override fun copyFile(fromPath: String, toPath: String): DeviceActionResult {
+        copyFileCalls += fromPath to toPath
+        return copyFileResult
+    }
+
+    override fun deleteFile(path: String): DeviceActionResult {
+        deleteFileCalls += path
+        return deleteFileResult
+    }
+
+    override fun listDirectory(path: String): FileListResult {
+        listDirectoryCalls += path
+        return listDirectoryResult
+    }
 }

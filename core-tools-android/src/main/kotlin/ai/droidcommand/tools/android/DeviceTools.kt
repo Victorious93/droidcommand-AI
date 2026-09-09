@@ -11,7 +11,7 @@ private fun Map<String, String>.intOrFail(key: String): Result<Int> {
     return Result.success(value)
 }
 
-private fun toToolResult(action: DeviceActionResult): ToolResult = when (action) {
+internal fun toToolResult(action: DeviceActionResult): ToolResult = when (action) {
     is DeviceActionResult.Success -> ToolResult.Success(action.message)
     is DeviceActionResult.Failure -> ToolResult.Failure(action.reason, action.cause)
 }

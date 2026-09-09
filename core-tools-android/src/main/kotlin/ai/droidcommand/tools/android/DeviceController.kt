@@ -25,4 +25,10 @@ interface DeviceController {
     fun listInstalledApps(): InstalledAppsResult
     fun takeScreenshot(): ScreenshotResult
     fun getDeviceInfo(): DeviceInfoResult
+    fun readFile(path: String): FileReadResult
+    fun writeFile(path: String, content: String, append: Boolean): DeviceActionResult
+    fun moveFile(fromPath: String, toPath: String): DeviceActionResult
+    fun copyFile(fromPath: String, toPath: String): DeviceActionResult
+    fun deleteFile(path: String): DeviceActionResult
+    fun listDirectory(path: String): FileListResult
 }
