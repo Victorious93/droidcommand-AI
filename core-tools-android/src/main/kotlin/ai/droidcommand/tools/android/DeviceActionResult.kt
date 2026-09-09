@@ -51,3 +51,31 @@ sealed class FileListResult {
     data class Success(val entries: List<FileEntry>) : FileListResult()
     data class Failure(val reason: String) : FileListResult()
 }
+
+data class BatteryStatus(val levelPercent: Int, val isCharging: Boolean)
+
+sealed class BatteryStatusResult {
+    data class Success(val status: BatteryStatus) : BatteryStatusResult()
+    data class Failure(val reason: String) : BatteryStatusResult()
+}
+
+enum class NetworkType { WIFI, CELLULAR, ETHERNET, NONE }
+
+data class NetworkState(val type: NetworkType, val isConnected: Boolean)
+
+sealed class NetworkStateResult {
+    data class Success(val state: NetworkState) : NetworkStateResult()
+    data class Failure(val reason: String) : NetworkStateResult()
+}
+
+data class StorageInfo(val totalBytes: Long, val freeBytes: Long)
+
+sealed class StorageInfoResult {
+    data class Success(val info: StorageInfo) : StorageInfoResult()
+    data class Failure(val reason: String) : StorageInfoResult()
+}
+
+sealed class ClipboardReadResult {
+    data class Success(val text: String) : ClipboardReadResult()
+    data class Failure(val reason: String) : ClipboardReadResult()
+}

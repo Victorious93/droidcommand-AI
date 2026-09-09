@@ -58,4 +58,17 @@ class NullDeviceControllerTest {
         val result = assertIs<FileListResult.Failure>(device.listDirectory("/sdcard"))
         assertTrue(result.reason.contains("no real device"))
     }
+
+    @Test
+    fun `getBatteryStatus, getNetworkState, and getStorageInfo all fail explicitly`() {
+        assertIs<BatteryStatusResult.Failure>(device.getBatteryStatus())
+        assertIs<NetworkStateResult.Failure>(device.getNetworkState())
+        assertIs<StorageInfoResult.Failure>(device.getStorageInfo())
+    }
+
+    @Test
+    fun `getClipboardText and setClipboardText fail explicitly`() {
+        assertIs<ClipboardReadResult.Failure>(device.getClipboardText())
+        assertIs<DeviceActionResult.Failure>(device.setClipboardText("x"))
+    }
 }

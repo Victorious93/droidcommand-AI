@@ -17,6 +17,11 @@ internal class ScriptedDeviceController(
     private val copyFileResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
     private val deleteFileResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
     private val listDirectoryResult: FileListResult = FileListResult.Failure("not scripted"),
+    private val batteryStatusResult: BatteryStatusResult = BatteryStatusResult.Failure("not scripted"),
+    private val networkStateResult: NetworkStateResult = NetworkStateResult.Failure("not scripted"),
+    private val storageInfoResult: StorageInfoResult = StorageInfoResult.Failure("not scripted"),
+    private val clipboardReadResult: ClipboardReadResult = ClipboardReadResult.Failure("not scripted"),
+    private val setClipboardResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
 ) : DeviceController {
     var tapCalls = mutableListOf<Pair<Int, Int>>()
         private set
@@ -41,6 +46,8 @@ internal class ScriptedDeviceController(
     var deleteFileCalls = mutableListOf<String>()
         private set
     var listDirectoryCalls = mutableListOf<String>()
+        private set
+    var setClipboardCalls = mutableListOf<String>()
         private set
 
     override fun getUiTree(): UiTreeResult {
@@ -105,5 +112,15 @@ internal class ScriptedDeviceController(
     override fun listDirectory(path: String): FileListResult {
         listDirectoryCalls += path
         return listDirectoryResult
+    }
+
+    override fun getBatteryStatus(): BatteryStatusResult = batteryStatusResult
+    override fun getNetworkState(): NetworkStateResult = networkStateResult
+    override fun getStorageInfo(): StorageInfoResult = storageInfoResult
+    override fun getClipboardText(): ClipboardReadResult = clipboardReadResult
+
+    override fun setClipboardText(text: String): DeviceActionResult {
+        setClipboardCalls += text
+        return setClipboardResult
     }
 }
