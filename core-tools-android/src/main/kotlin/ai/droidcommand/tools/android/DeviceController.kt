@@ -43,4 +43,8 @@ interface DeviceController {
     fun setAlarm(hour: Int, minute: Int, label: String?): DeviceActionResult
     fun setTimer(durationSeconds: Long, label: String?): DeviceActionResult
     fun setReminder(text: String, dueEpochMillis: Long): DeviceActionResult
+    fun mediaPlayPause(): DeviceActionResult
+    fun mediaNext(): DeviceActionResult
+    fun mediaPrevious(): DeviceActionResult
+    fun setVolume(levelPercent: Int): DeviceActionResult
 }

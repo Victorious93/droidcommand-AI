@@ -29,6 +29,10 @@ internal class ScriptedDeviceController(
     private val setAlarmResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
     private val setTimerResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
     private val setReminderResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val mediaPlayPauseResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val mediaNextResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val mediaPreviousResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val setVolumeResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
 ) : DeviceController {
     var tapCalls = mutableListOf<Pair<Int, Int>>()
         private set
@@ -67,6 +71,14 @@ internal class ScriptedDeviceController(
     var setTimerCalls = mutableListOf<Pair<Long, String?>>()
         private set
     var setReminderCalls = mutableListOf<Pair<String, Long>>()
+        private set
+    var mediaPlayPauseCalls = 0
+        private set
+    var mediaNextCalls = 0
+        private set
+    var mediaPreviousCalls = 0
+        private set
+    var setVolumeCalls = mutableListOf<Int>()
         private set
 
     override fun getUiTree(): UiTreeResult {
@@ -173,5 +185,25 @@ internal class ScriptedDeviceController(
     override fun setReminder(text: String, dueEpochMillis: Long): DeviceActionResult {
         setReminderCalls += text to dueEpochMillis
         return setReminderResult
+    }
+
+    override fun mediaPlayPause(): DeviceActionResult {
+        mediaPlayPauseCalls++
+        return mediaPlayPauseResult
+    }
+
+    override fun mediaNext(): DeviceActionResult {
+        mediaNextCalls++
+        return mediaNextResult
+    }
+
+    override fun mediaPrevious(): DeviceActionResult {
+        mediaPreviousCalls++
+        return mediaPreviousResult
+    }
+
+    override fun setVolume(levelPercent: Int): DeviceActionResult {
+        setVolumeCalls += levelPercent
+        return setVolumeResult
     }
 }
