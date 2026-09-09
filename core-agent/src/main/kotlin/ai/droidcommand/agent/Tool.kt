@@ -59,6 +59,26 @@ data class ToolSpec(
 
 sealed class ToolResult {
     data class Success(val output: String) : ToolResult()
+
+    /**
+     * The tool ran and produced a genuine result, but only part of what was
+     * asked was actually accomplished (e.g. 3 of 5 items processed before
+     * stopping). Distinct from [Failure] so a caller doesn't have to treat a
+     * partially-done action as either a full success or a total loss — the
+     * planner sees [reason] and can decide whether the remainder needs a
+     * follow-up action.
+     */
+    data class Partial(val output: String, val reason: String) : ToolResult()
+
+    /**
+     * The tool ran and returned a real result, but one that doesn't fit the
+     * success/partial/failure shape the caller anticipated (e.g. a device or
+     * service state the tool has no established interpretation for).
+     * Reported explicitly rather than forced into [Success] or [Failure],
+     * where that ambiguity would otherwise be silently lost.
+     */
+    data class Unexpected(val description: String, val raw: String? = null) : ToolResult()
+
     data class Failure(val reason: String, val cause: Throwable? = null) : ToolResult()
 }
 

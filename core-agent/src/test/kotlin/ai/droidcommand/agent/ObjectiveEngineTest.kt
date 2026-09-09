@@ -49,6 +49,16 @@ private class EngineNoopTool(name: String) : Tool {
     override fun execute(input: Map<String, String>) = ToolResult.Success("noop")
 }
 
+private class EnginePartialTool(name: String) : Tool {
+    override val spec = ToolSpec(name = name, description = "always returns Partial")
+    override fun execute(input: Map<String, String>) = ToolResult.Partial("2 of 4 done", "hit a limit")
+}
+
+private class EngineUnexpectedTool(name: String) : Tool {
+    override val spec = ToolSpec(name = name, description = "always returns Unexpected")
+    override fun execute(input: Map<String, String>) = ToolResult.Unexpected("unrecognized device state")
+}
+
 private fun newEngine(planner: Planner, registry: ToolRegistry = ToolRegistry(), maxIterations: Int = 25): Triple<ObjectiveEngine, AgentStateMachine, ToolRegistry> {
     val stateMachine = AgentStateMachine()
     val executor = ToolExecutor(registry, stateMachine, sleep = { })
@@ -127,6 +137,54 @@ class ObjectiveEngineTest {
 
         assertIs<AgentState.Completed>(outcome.finalState)
         assertEquals(2, planner.invocations) // the planner got a second chance, it wasn't just failed outright
+    }
+
+    @Test
+    fun `a Partial tool result does not fail the objective and is surfaced to the planner`() {
+        val registry = ToolRegistry().apply { register(EnginePartialTool("partial")) }
+        val planner = ScriptedPlanner(
+            mutableListOf(
+                PlannerDecision.InvokeTool("partial", emptyMap()),
+                PlannerDecision.Complete("done"),
+            ),
+        )
+        val (engine, _, _) = newEngine(planner, registry)
+        val outcome = engine.run("do the thing", context = ConversationContext())
+        assertIs<AgentState.Completed>(outcome.finalState)
+        assertEquals(2, planner.invocations)
+    }
+
+    @Test
+    fun `a Partial tool result is described distinctly in the conversation context`() {
+        val registry = ToolRegistry().apply { register(EnginePartialTool("partial")) }
+        val planner = ScriptedPlanner(
+            mutableListOf(
+                PlannerDecision.InvokeTool("partial", emptyMap()),
+                PlannerDecision.Complete("done"),
+            ),
+        )
+        val (engine, _, _) = newEngine(planner, registry)
+        val context = ConversationContext()
+        engine.run("do the thing", context = context)
+        val toolMessage = context.messages.single { it.role == Role.TOOL }
+        assertEquals("PARTIAL: 2 of 4 done (hit a limit)", toolMessage.content)
+    }
+
+    @Test
+    fun `an Unexpected tool result does not fail the objective and is described distinctly`() {
+        val registry = ToolRegistry().apply { register(EngineUnexpectedTool("unexpected")) }
+        val planner = ScriptedPlanner(
+            mutableListOf(
+                PlannerDecision.InvokeTool("unexpected", emptyMap()),
+                PlannerDecision.Complete("done"),
+            ),
+        )
+        val (engine, _, _) = newEngine(planner, registry)
+        val context = ConversationContext()
+        val outcome = engine.run("do the thing", context = context)
+        assertIs<AgentState.Completed>(outcome.finalState)
+        val toolMessage = context.messages.single { it.role == Role.TOOL }
+        assertEquals("UNEXPECTED: unrecognized device state", toolMessage.content)
     }
 
     @Test
