@@ -96,6 +96,8 @@ class ObjectiveEngine(
 
     private fun describe(result: ToolResult): String = when (result) {
         is ToolResult.Success -> result.output
+        is ToolResult.Partial -> "PARTIAL: ${result.output} (${result.reason})"
+        is ToolResult.Unexpected -> "UNEXPECTED: ${result.description}"
         is ToolResult.Failure -> "ERROR: ${result.reason}"
     }
 }

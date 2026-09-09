@@ -56,10 +56,14 @@ class ToolExecutor(
             }
             stateMachine.transition(AgentState.Observing(toolName, lastResult))
 
-            if (lastResult is ToolResult.Success) return lastResult
+            // Only a Failure is retried: Partial/Unexpected are real results the
+            // tool stands behind, just not a clean success — retrying blindly
+            // wouldn't necessarily improve them, so that judgment is left to the
+            // planner/caller instead of this executor.
+            if (lastResult !is ToolResult.Failure) return lastResult
 
             if (attempt < retryPolicy.maxAttempts) {
-                stateMachine.transition(AgentState.Recovering((lastResult as ToolResult.Failure).cause ?: RuntimeException(lastResult.reason), attempt))
+                stateMachine.transition(AgentState.Recovering(lastResult.cause ?: RuntimeException(lastResult.reason), attempt))
                 sleep(retryPolicy.backoff(attempt))
             }
         }

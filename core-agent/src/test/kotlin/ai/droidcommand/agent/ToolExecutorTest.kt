@@ -31,6 +31,26 @@ private class ThrowingTool : Tool {
     override fun execute(input: Map<String, String>): ToolResult = throw RuntimeException("kaboom")
 }
 
+private class PartialTool : Tool {
+    override val spec = ToolSpec(name = "partial", description = "always returns a Partial result")
+    var invocations = 0
+        private set
+    override fun execute(input: Map<String, String>): ToolResult {
+        invocations++
+        return ToolResult.Partial("3 of 5 items processed", "ran out of time")
+    }
+}
+
+private class UnexpectedTool : Tool {
+    override val spec = ToolSpec(name = "unexpected", description = "always returns an Unexpected result")
+    var invocations = 0
+        private set
+    override fun execute(input: Map<String, String>): ToolResult {
+        invocations++
+        return ToolResult.Unexpected("device reported an unrecognized state", raw = "state=7")
+    }
+}
+
 private class ForgeOnlyTool : Tool {
     override val spec = ToolSpec(name = "forge-only", description = "scoped to Forge", allowedModes = setOf(AgentMode.FORGE))
     var invocations = 0
@@ -175,5 +195,31 @@ class ToolExecutorTest {
         val result = executor.run("owner-only", emptyMap(), initiator = Initiator.DEVICE_OWNER)
         assertIs<ToolResult.Success>(result)
         assertEquals(1, tool.invocations)
+    }
+
+    @Test
+    fun `a Partial result is returned immediately, without retrying`() {
+        val tool = PartialTool()
+        val registry = ToolRegistry().apply { register(tool) }
+        var sleeps = 0
+        val executor = ToolExecutor(registry, AgentStateMachine(), sleep = { sleeps++ })
+        val result = executor.run("partial", emptyMap(), retryPolicy = RetryPolicy(maxAttempts = 5))
+        assertIs<ToolResult.Partial>(result)
+        assertEquals("3 of 5 items processed", result.output)
+        assertEquals(1, tool.invocations)
+        assertEquals(0, sleeps)
+    }
+
+    @Test
+    fun `an Unexpected result is returned immediately, without retrying`() {
+        val tool = UnexpectedTool()
+        val registry = ToolRegistry().apply { register(tool) }
+        var sleeps = 0
+        val executor = ToolExecutor(registry, AgentStateMachine(), sleep = { sleeps++ })
+        val result = executor.run("unexpected", emptyMap(), retryPolicy = RetryPolicy(maxAttempts = 5))
+        assertIs<ToolResult.Unexpected>(result)
+        assertEquals("device reported an unrecognized state", result.description)
+        assertEquals(1, tool.invocations)
+        assertEquals(0, sleeps)
     }
 }
