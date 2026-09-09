@@ -36,4 +36,7 @@ interface DeviceController {
     fun getStorageInfo(): StorageInfoResult
     fun getClipboardText(): ClipboardReadResult
     fun setClipboardText(text: String): DeviceActionResult
+    fun sendSms(phoneNumber: String, message: String): DeviceActionResult
+    fun makeCall(phoneNumber: String): DeviceActionResult
+    fun listContacts(): ContactsResult
 }

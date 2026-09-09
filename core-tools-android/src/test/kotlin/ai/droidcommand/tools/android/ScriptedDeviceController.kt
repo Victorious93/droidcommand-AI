@@ -22,6 +22,9 @@ internal class ScriptedDeviceController(
     private val storageInfoResult: StorageInfoResult = StorageInfoResult.Failure("not scripted"),
     private val clipboardReadResult: ClipboardReadResult = ClipboardReadResult.Failure("not scripted"),
     private val setClipboardResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val sendSmsResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val makeCallResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val contactsResult: ContactsResult = ContactsResult.Failure("not scripted"),
 ) : DeviceController {
     var tapCalls = mutableListOf<Pair<Int, Int>>()
         private set
@@ -48,6 +51,10 @@ internal class ScriptedDeviceController(
     var listDirectoryCalls = mutableListOf<String>()
         private set
     var setClipboardCalls = mutableListOf<String>()
+        private set
+    var sendSmsCalls = mutableListOf<Pair<String, String>>()
+        private set
+    var makeCallCalls = mutableListOf<String>()
         private set
 
     override fun getUiTree(): UiTreeResult {
@@ -123,4 +130,16 @@ internal class ScriptedDeviceController(
         setClipboardCalls += text
         return setClipboardResult
     }
+
+    override fun sendSms(phoneNumber: String, message: String): DeviceActionResult {
+        sendSmsCalls += phoneNumber to message
+        return sendSmsResult
+    }
+
+    override fun makeCall(phoneNumber: String): DeviceActionResult {
+        makeCallCalls += phoneNumber
+        return makeCallResult
+    }
+
+    override fun listContacts(): ContactsResult = contactsResult
 }

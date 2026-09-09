@@ -79,3 +79,10 @@ sealed class ClipboardReadResult {
     data class Success(val text: String) : ClipboardReadResult()
     data class Failure(val reason: String) : ClipboardReadResult()
 }
+
+data class ContactEntry(val name: String, val phoneNumbers: List<String>)
+
+sealed class ContactsResult {
+    data class Success(val contacts: List<ContactEntry>) : ContactsResult()
+    data class Failure(val reason: String) : ContactsResult()
+}

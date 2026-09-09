@@ -33,4 +33,7 @@ class NullDeviceController : DeviceController {
     override fun getStorageInfo() = StorageInfoResult.Failure("Cannot read storage info: no real device is connected (NullDeviceController)")
     override fun getClipboardText() = ClipboardReadResult.Failure("Cannot read the clipboard: no real device is connected (NullDeviceController)")
     override fun setClipboardText(text: String) = failure("set clipboard text")
+    override fun sendSms(phoneNumber: String, message: String) = failure("send SMS to '$phoneNumber'")
+    override fun makeCall(phoneNumber: String) = failure("call '$phoneNumber'")
+    override fun listContacts() = ContactsResult.Failure("Cannot list contacts: no real device is connected (NullDeviceController)")
 }
