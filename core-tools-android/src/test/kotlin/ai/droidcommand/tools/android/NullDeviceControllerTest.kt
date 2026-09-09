@@ -99,4 +99,9 @@ class NullDeviceControllerTest {
         assertIs<DeviceActionResult.Failure>(device.mediaPrevious())
         assertIs<DeviceActionResult.Failure>(device.setVolume(50))
     }
+
+    @Test
+    fun `launchNavigation fails explicitly`() {
+        assertIs<DeviceActionResult.Failure>(device.launchNavigation("Central Park", NavigationMode.DRIVING))
+    }
 }

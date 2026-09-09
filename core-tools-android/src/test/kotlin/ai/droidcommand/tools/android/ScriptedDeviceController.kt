@@ -33,6 +33,7 @@ internal class ScriptedDeviceController(
     private val mediaNextResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
     private val mediaPreviousResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
     private val setVolumeResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val launchNavigationResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
 ) : DeviceController {
     var tapCalls = mutableListOf<Pair<Int, Int>>()
         private set
@@ -79,6 +80,8 @@ internal class ScriptedDeviceController(
     var mediaPreviousCalls = 0
         private set
     var setVolumeCalls = mutableListOf<Int>()
+        private set
+    var launchNavigationCalls = mutableListOf<Pair<String, NavigationMode>>()
         private set
 
     override fun getUiTree(): UiTreeResult {
@@ -205,5 +208,10 @@ internal class ScriptedDeviceController(
     override fun setVolume(levelPercent: Int): DeviceActionResult {
         setVolumeCalls += levelPercent
         return setVolumeResult
+    }
+
+    override fun launchNavigation(destination: String, mode: NavigationMode): DeviceActionResult {
+        launchNavigationCalls += destination to mode
+        return launchNavigationResult
     }
 }
