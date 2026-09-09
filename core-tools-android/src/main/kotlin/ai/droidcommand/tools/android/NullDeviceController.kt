@@ -44,4 +44,5 @@ class NullDeviceController : DeviceController {
     override fun mediaNext() = failure("skip to the next media track")
     override fun mediaPrevious() = failure("skip to the previous media track")
     override fun setVolume(levelPercent: Int) = failure("set volume to $levelPercent%")
+    override fun launchNavigation(destination: String, mode: NavigationMode) = failure("launch navigation to '$destination' ($mode)")
 }

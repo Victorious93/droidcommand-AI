@@ -86,3 +86,5 @@ sealed class ContactsResult {
     data class Success(val contacts: List<ContactEntry>) : ContactsResult()
     data class Failure(val reason: String) : ContactsResult()
 }
+
+enum class NavigationMode { DRIVING, WALKING, BICYCLING, TRANSIT }

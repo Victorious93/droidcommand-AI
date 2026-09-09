@@ -47,4 +47,5 @@ interface DeviceController {
     fun mediaNext(): DeviceActionResult
     fun mediaPrevious(): DeviceActionResult
     fun setVolume(levelPercent: Int): DeviceActionResult
+    fun launchNavigation(destination: String, mode: NavigationMode): DeviceActionResult
 }
