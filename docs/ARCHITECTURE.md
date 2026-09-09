@@ -723,6 +723,7 @@ there is still no asynchronous/polling variant of the protocol.
 | core-agent: ToolRegistry | IMPLEMENTED | `ToolRegistry.kt`, compiles, unit-tested |
 | core-agent: ToolExecutor + bounded retry | IMPLEMENTED | `ToolExecutor.kt`, compiles, unit-tested |
 | core-agent: ConversationContext | IMPLEMENTED | `Conversation.kt`, compiles, unit-tested |
+| core-agent: ConversationContext token budgeting (ROADMAP-057) | IMPLEMENTED | Added 2026-09-09 — optional `maxTokens` constructor param (default `null` = unbounded, so every existing caller is unaffected); `estimateTokens` is an honest ~4-chars/token heuristic (core-agent has no LLM dependency to ask for a real count), documented as such rather than passed off as exact. An append that pushes the estimate over budget evicts the oldest messages first, never the system prompt and never the message just appended |
 | core-agent: Planner contract | IMPLEMENTED | `Planner.kt` (interface only — see LlmPlanner for the one implementation) |
 | core-agent: ObjectiveEngine (bounded Forge loop) | IMPLEMENTED | `ObjectiveEngine.kt`, compiles, unit-tested incl. the maxIterations bound. As of 2026-09-05, a planner naming an unregistered/wrong-mode tool no longer fails the objective outright — it's told what's actually available and replans, still bounded by maxIterations |
 | core-agent: ToolSpec.allowedModes (mode genuinely scopes tool availability) | IMPLEMENTED | Added 2026-09-05 — `ToolExecutor`/`ObjectiveEngine` enforce it; default (both modes) leaves existing tools unaffected |
