@@ -9,9 +9,8 @@ repositories {
 
 dependencies {
     implementation(project(":core-agent"))
-    implementation(project(":core-build"))
-    implementation(project(":core-remote"))
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    implementation("io.modelcontextprotocol:kotlin-sdk-server:0.15.0")
+    testImplementation("io.modelcontextprotocol:kotlin-sdk-client:0.15.0")
     testImplementation(kotlin("test"))
 }
 

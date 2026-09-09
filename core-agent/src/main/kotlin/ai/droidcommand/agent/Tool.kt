@@ -83,6 +83,20 @@ sealed class ToolResult {
 }
 
 /**
+ * A single human-readable line describing any [ToolResult], used to feed a
+ * [ObjectiveEngine]'s conversation context and, identically, an MCP
+ * tool-call response's text content (`core-mcp`) — one shared format rather
+ * than two call sites independently deciding how to phrase the same four
+ * outcome shapes.
+ */
+fun ToolResult.describe(): String = when (this) {
+    is ToolResult.Success -> output
+    is ToolResult.Partial -> "PARTIAL: $output ($reason)"
+    is ToolResult.Unexpected -> "UNEXPECTED: $description"
+    is ToolResult.Failure -> "ERROR: $reason"
+}
+
+/**
  * A tool is the only unit of capability the agent can invoke — Pilot Mode
  * invokes one directly, Forge Mode's planner invokes a sequence of them.
  * Adding a tool means implementing this interface and registering it; it

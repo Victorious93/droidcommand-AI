@@ -93,7 +93,7 @@ class ObjectiveEngine(
                             "Unknown tool '${decision.toolName}'. Available tools in $mode mode: $available",
                         )
                         lastObservation = observation
-                        context.append(Role.TOOL, describe(observation))
+                        context.append(Role.TOOL, observation.describe())
                         continue
                     } catch (t: Throwable) {
                         logger.error("tool_threw", mapOf("iteration" to iteration.toString(), "tool" to decision.toolName), cause = t)
@@ -108,7 +108,7 @@ class ObjectiveEngine(
                         ),
                     )
                     lastObservation = result
-                    context.append(Role.TOOL, describe(result))
+                    context.append(Role.TOOL, result.describe())
                 }
             }
         }
@@ -118,13 +118,6 @@ class ObjectiveEngine(
             AgentState.Failed(RuntimeException("Objective did not complete within $maxIterations iterations")),
         )
         return ObjectiveOutcome(failed, maxIterations)
-    }
-
-    private fun describe(result: ToolResult): String = when (result) {
-        is ToolResult.Success -> result.output
-        is ToolResult.Partial -> "PARTIAL: ${result.output} (${result.reason})"
-        is ToolResult.Unexpected -> "UNEXPECTED: ${result.description}"
-        is ToolResult.Failure -> "ERROR: ${result.reason}"
     }
 
     private fun levelFor(result: ToolResult): LogLevel = when (result) {
