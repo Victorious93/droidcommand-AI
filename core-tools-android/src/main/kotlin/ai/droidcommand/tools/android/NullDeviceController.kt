@@ -36,4 +36,8 @@ class NullDeviceController : DeviceController {
     override fun sendSms(phoneNumber: String, message: String) = failure("send SMS to '$phoneNumber'")
     override fun makeCall(phoneNumber: String) = failure("call '$phoneNumber'")
     override fun listContacts() = ContactsResult.Failure("Cannot list contacts: no real device is connected (NullDeviceController)")
+    override fun createCalendarEvent(title: String, startEpochMillis: Long, endEpochMillis: Long) = failure("create calendar event '$title'")
+    override fun setAlarm(hour: Int, minute: Int, label: String?) = failure("set alarm for $hour:$minute")
+    override fun setTimer(durationSeconds: Long, label: String?) = failure("set a $durationSeconds-second timer")
+    override fun setReminder(text: String, dueEpochMillis: Long) = failure("set reminder '$text'")
 }

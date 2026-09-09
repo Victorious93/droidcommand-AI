@@ -25,6 +25,10 @@ internal class ScriptedDeviceController(
     private val sendSmsResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
     private val makeCallResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
     private val contactsResult: ContactsResult = ContactsResult.Failure("not scripted"),
+    private val createCalendarEventResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val setAlarmResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val setTimerResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val setReminderResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
 ) : DeviceController {
     var tapCalls = mutableListOf<Pair<Int, Int>>()
         private set
@@ -55,6 +59,14 @@ internal class ScriptedDeviceController(
     var sendSmsCalls = mutableListOf<Pair<String, String>>()
         private set
     var makeCallCalls = mutableListOf<String>()
+        private set
+    var createCalendarEventCalls = mutableListOf<Triple<String, Long, Long>>()
+        private set
+    var setAlarmCalls = mutableListOf<Triple<Int, Int, String?>>()
+        private set
+    var setTimerCalls = mutableListOf<Pair<Long, String?>>()
+        private set
+    var setReminderCalls = mutableListOf<Pair<String, Long>>()
         private set
 
     override fun getUiTree(): UiTreeResult {
@@ -142,4 +154,24 @@ internal class ScriptedDeviceController(
     }
 
     override fun listContacts(): ContactsResult = contactsResult
+
+    override fun createCalendarEvent(title: String, startEpochMillis: Long, endEpochMillis: Long): DeviceActionResult {
+        createCalendarEventCalls += Triple(title, startEpochMillis, endEpochMillis)
+        return createCalendarEventResult
+    }
+
+    override fun setAlarm(hour: Int, minute: Int, label: String?): DeviceActionResult {
+        setAlarmCalls += Triple(hour, minute, label)
+        return setAlarmResult
+    }
+
+    override fun setTimer(durationSeconds: Long, label: String?): DeviceActionResult {
+        setTimerCalls += durationSeconds to label
+        return setTimerResult
+    }
+
+    override fun setReminder(text: String, dueEpochMillis: Long): DeviceActionResult {
+        setReminderCalls += text to dueEpochMillis
+        return setReminderResult
+    }
 }
