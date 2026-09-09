@@ -83,4 +83,20 @@ class NullDeviceControllerTest {
         val result = assertIs<ContactsResult.Failure>(device.listContacts())
         assertTrue(result.reason.contains("no real device"))
     }
+
+    @Test
+    fun `createCalendarEvent, setAlarm, setTimer, and setReminder all fail explicitly`() {
+        assertIs<DeviceActionResult.Failure>(device.createCalendarEvent("Standup", 1000, 2000))
+        assertIs<DeviceActionResult.Failure>(device.setAlarm(7, 30, "wake up"))
+        assertIs<DeviceActionResult.Failure>(device.setTimer(90, "tea"))
+        assertIs<DeviceActionResult.Failure>(device.setReminder("call mom", 5000))
+    }
+
+    @Test
+    fun `mediaPlayPause, mediaNext, mediaPrevious, and setVolume all fail explicitly`() {
+        assertIs<DeviceActionResult.Failure>(device.mediaPlayPause())
+        assertIs<DeviceActionResult.Failure>(device.mediaNext())
+        assertIs<DeviceActionResult.Failure>(device.mediaPrevious())
+        assertIs<DeviceActionResult.Failure>(device.setVolume(50))
+    }
 }
