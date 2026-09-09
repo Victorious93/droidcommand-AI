@@ -19,6 +19,15 @@ data class ObjectiveOutcome(val finalState: AgentState, val iterations: Int)
  * direct [ToolExecutor]/`core-security`'s `SecureToolExecutor` calls are
  * not wired to a logger yet — that remains a follow-up, not silently
  * assumed to be covered by this constructor.
+ *
+ * [analyzer] defaults to `null` (ROADMAP-064) — every existing caller that
+ * doesn't pass one sees no behavior change; [run] skips straight to
+ * planning exactly as before. When an [ObjectiveAnalyzer] is supplied, its
+ * [ObjectiveAnalysis] is computed once, before the first planning
+ * iteration, and appended to [context] so every planning call afterward
+ * sees the same structured decomposition a human reading the objective
+ * would — not merely a conceptual step, but one the planner's actual input
+ * changes because of.
  */
 class ObjectiveEngine(
     private val registry: ToolRegistry,
@@ -28,6 +37,7 @@ class ObjectiveEngine(
     private val maxIterations: Int = 25,
     private val mode: AgentMode = AgentMode.FORGE,
     private val logger: Logger = NoOpLogger,
+    private val analyzer: ObjectiveAnalyzer? = null,
 ) {
     init {
         require(maxIterations >= 1) { "maxIterations must be >= 1, got $maxIterations" }
@@ -41,6 +51,28 @@ class ObjectiveEngine(
     ): ObjectiveOutcome {
         logger.info("objective_started", mapOf("mode" to mode.name))
         context.append(Role.USER, objective)
+
+        if (analyzer != null) {
+            val analysis = try {
+                analyzer.analyze(objective)
+            } catch (t: Throwable) {
+                logger.error("objective_analysis_threw", emptyMap(), cause = t)
+                val failed = stateMachine.transition(AgentState.Failed(t))
+                return ObjectiveOutcome(failed, 0)
+            }
+            logger.info(
+                "objective_analyzed",
+                mapOf(
+                    "requirements" to analysis.requirements.size.toString(),
+                    "constraints" to analysis.constraints.size.toString(),
+                    "dependencies" to analysis.dependencies.size.toString(),
+                    "tasks" to analysis.tasks.size.toString(),
+                    "verificationCriteria" to analysis.verificationCriteria.size.toString(),
+                ),
+            )
+            context.append(Role.ASSISTANT, describe(analysis))
+        }
+
         var lastObservation: ToolResult? = null
 
         for (iteration in 1..maxIterations) {
@@ -125,6 +157,20 @@ class ObjectiveEngine(
         is ToolResult.Partial -> "PARTIAL: ${result.output} (${result.reason})"
         is ToolResult.Unexpected -> "UNEXPECTED: ${result.description}"
         is ToolResult.Failure -> "ERROR: ${result.reason}"
+    }
+
+    private fun describe(analysis: ObjectiveAnalysis): String {
+        fun section(title: String, items: List<String>) =
+            if (items.isEmpty()) null else "$title:\n" + items.joinToString("\n") { "- $it" }
+
+        val sections = listOfNotNull(
+            section("Requirements", analysis.requirements),
+            section("Constraints", analysis.constraints),
+            section("Dependencies", analysis.dependencies),
+            section("Tasks", analysis.tasks),
+            section("Verification criteria", analysis.verificationCriteria),
+        )
+        return "Objective analysis:\n" + sections.joinToString("\n\n").ifEmpty { "(nothing identified)" }
     }
 
     private fun levelFor(result: ToolResult): LogLevel = when (result) {

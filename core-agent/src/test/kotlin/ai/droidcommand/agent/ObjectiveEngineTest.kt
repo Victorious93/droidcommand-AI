@@ -64,6 +64,24 @@ private class EngineFailingTool(name: String) : Tool {
     override fun execute(input: Map<String, String>) = ToolResult.Failure("nope")
 }
 
+private class CapturingPlanner : Planner {
+    val contextsSeen = mutableListOf<ConversationContext>()
+
+    override fun decide(
+        objective: String,
+        context: ConversationContext,
+        availableTools: List<ToolSpec>,
+        lastObservation: ToolResult?,
+    ): PlannerDecision {
+        contextsSeen += context
+        return PlannerDecision.Complete("done")
+    }
+}
+
+private class ThrowingAnalyzer : ObjectiveAnalyzer {
+    override fun analyze(objective: String): ObjectiveAnalysis = throw RuntimeException("analysis exploded")
+}
+
 private class RecordingLogger : Logger {
     val events = mutableListOf<LogEvent>()
     override fun log(event: LogEvent) {
@@ -274,5 +292,69 @@ class ObjectiveEngineTest {
         assertIs<AgentState.Cancelled>(outcome.finalState)
         assertEquals(0, outcome.iterations)
         assertEquals(stateMachine.state, outcome.finalState)
+    }
+
+    @Test
+    fun `with no analyzer given, no analysis is added to the context`() {
+        val planner = CapturingPlanner()
+        val stateMachine = AgentStateMachine()
+        val executor = ToolExecutor(ToolRegistry(), stateMachine, sleep = { })
+        val engine = ObjectiveEngine(ToolRegistry(), executor, stateMachine, planner)
+        val context = ConversationContext()
+
+        engine.run("objective", context = context)
+
+        assertEquals(true, context.messages.none { it.content.contains("Objective analysis") })
+    }
+
+    @Test
+    fun `an analyzer's analysis is appended to the context before the first planning call`() {
+        val planner = CapturingPlanner()
+        val stateMachine = AgentStateMachine()
+        val executor = ToolExecutor(ToolRegistry(), stateMachine, sleep = { })
+        val analyzer = ObjectiveAnalyzer {
+            ObjectiveAnalysis(requirements = listOf("do the thing"), tasks = listOf("step 1", "step 2"))
+        }
+        val engine = ObjectiveEngine(ToolRegistry(), executor, stateMachine, planner, analyzer = analyzer)
+        val context = ConversationContext()
+
+        engine.run("objective", context = context)
+
+        val analysisMessage = context.messages.single { it.content.startsWith("Objective analysis:") }
+        assertEquals(true, analysisMessage.content.contains("Requirements:\n- do the thing"))
+        assertEquals(true, analysisMessage.content.contains("Tasks:\n- step 1\n- step 2"))
+        assertEquals(false, analysisMessage.content.contains("Constraints:"))
+        // The planner's very first call already saw the analysis in context.
+        assertEquals(true, planner.contextsSeen.first().messages.any { it.content.startsWith("Objective analysis:") })
+    }
+
+    @Test
+    fun `logs objective_analyzed with counts per category`() {
+        val planner = CapturingPlanner()
+        val stateMachine = AgentStateMachine()
+        val executor = ToolExecutor(ToolRegistry(), stateMachine, sleep = { })
+        val analyzer = ObjectiveAnalyzer { ObjectiveAnalysis(requirements = listOf("a", "b"), tasks = listOf("c")) }
+        val logger = RecordingLogger()
+        val engine = ObjectiveEngine(ToolRegistry(), executor, stateMachine, planner, logger = logger, analyzer = analyzer)
+
+        engine.run("objective")
+
+        val event = logger.events.single { it.message == "objective_analyzed" }
+        assertEquals("2", event.fields["requirements"])
+        assertEquals("1", event.fields["tasks"])
+        assertEquals("0", event.fields["constraints"])
+    }
+
+    @Test
+    fun `fails the objective when the analyzer throws, without ever calling the planner`() {
+        val planner = CapturingPlanner()
+        val stateMachine = AgentStateMachine()
+        val executor = ToolExecutor(ToolRegistry(), stateMachine, sleep = { })
+        val engine = ObjectiveEngine(ToolRegistry(), executor, stateMachine, planner, analyzer = ThrowingAnalyzer())
+
+        val outcome = engine.run("objective")
+
+        assertIs<AgentState.Failed>(outcome.finalState)
+        assertEquals(0, planner.contextsSeen.size)
     }
 }
