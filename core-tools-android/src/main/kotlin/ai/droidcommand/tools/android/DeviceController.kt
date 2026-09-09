@@ -31,4 +31,9 @@ interface DeviceController {
     fun copyFile(fromPath: String, toPath: String): DeviceActionResult
     fun deleteFile(path: String): DeviceActionResult
     fun listDirectory(path: String): FileListResult
+    fun getBatteryStatus(): BatteryStatusResult
+    fun getNetworkState(): NetworkStateResult
+    fun getStorageInfo(): StorageInfoResult
+    fun getClipboardText(): ClipboardReadResult
+    fun setClipboardText(text: String): DeviceActionResult
 }

@@ -28,4 +28,9 @@ class NullDeviceController : DeviceController {
     override fun copyFile(fromPath: String, toPath: String) = failure("copy file '$fromPath' to '$toPath'")
     override fun deleteFile(path: String) = failure("delete file '$path'")
     override fun listDirectory(path: String) = FileListResult.Failure("Cannot list directory '$path': no real device is connected (NullDeviceController)")
+    override fun getBatteryStatus() = BatteryStatusResult.Failure("Cannot read battery status: no real device is connected (NullDeviceController)")
+    override fun getNetworkState() = NetworkStateResult.Failure("Cannot read network state: no real device is connected (NullDeviceController)")
+    override fun getStorageInfo() = StorageInfoResult.Failure("Cannot read storage info: no real device is connected (NullDeviceController)")
+    override fun getClipboardText() = ClipboardReadResult.Failure("Cannot read the clipboard: no real device is connected (NullDeviceController)")
+    override fun setClipboardText(text: String) = failure("set clipboard text")
 }
