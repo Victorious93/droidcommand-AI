@@ -96,3 +96,27 @@ class TakeScreenshotTool(private val device: DeviceController) : Tool {
         is ScreenshotResult.Failure -> ToolResult.Failure(result.reason)
     }
 }
+
+/**
+ * The `Tool` wrapper `DeviceController.getDeviceInfo` was missing since it
+ * was first added (flagged in the audit's Tenth addendum rather than left
+ * silently unnoticed) — the interface method and `DeviceInfoResult` already
+ * existed, only the wrapper exposing it as an invocable tool did not.
+ */
+class GetDeviceInfoTool(private val device: DeviceController) : Tool {
+    override val spec = ToolSpec(name = "get_device_info", description = "Reads device info: manufacturer, model, OS version, and screen size")
+
+    override fun execute(input: Map<String, String>): ToolResult = when (val result = device.getDeviceInfo()) {
+        is DeviceInfoResult.Success -> {
+            val info = result.info
+            val parts = listOfNotNull(
+                info.manufacturer,
+                info.model,
+                info.osVersion?.let { "OS $it" },
+                if (info.screenWidthPx != null && info.screenHeightPx != null) "${info.screenWidthPx}x${info.screenHeightPx}" else null,
+            )
+            ToolResult.Success(parts.joinToString(", ").ifEmpty { "no device info available" })
+        }
+        is DeviceInfoResult.Failure -> ToolResult.Failure(result.reason)
+    }
+}
