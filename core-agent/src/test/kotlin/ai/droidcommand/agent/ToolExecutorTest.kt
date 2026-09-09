@@ -71,6 +71,13 @@ private class OwnerOnlyTool : Tool {
     }
 }
 
+private class ToolExecutorRecordingLogger : Logger {
+    val events = mutableListOf<LogEvent>()
+    override fun log(event: LogEvent) {
+        events += event
+    }
+}
+
 class ToolExecutorTest {
     @Test
     fun `succeeds without retry when the tool succeeds first try`() {
@@ -221,5 +228,69 @@ class ToolExecutorTest {
         assertEquals("device reported an unrecognized state", result.description)
         assertEquals(1, tool.invocations)
         assertEquals(0, sleeps)
+    }
+
+    @Test
+    fun `with no logger given, nothing is logged and behavior is unchanged`() {
+        val registry = ToolRegistry().apply { register(FlakyTool(failuresBeforeSuccess = 0)) }
+        val executor = ToolExecutor(registry, AgentStateMachine(), sleep = { })
+        val result = executor.run("flaky", emptyMap())
+        assertIs<ToolResult.Success>(result)
+    }
+
+    @Test
+    fun `logs a tool_result event at INFO for a Success`() {
+        val registry = ToolRegistry().apply { register(FlakyTool(failuresBeforeSuccess = 0)) }
+        val logger = ToolExecutorRecordingLogger()
+        val executor = ToolExecutor(registry, AgentStateMachine(), sleep = { }, logger = logger)
+        executor.run("flaky", emptyMap())
+        val event = logger.events.single { it.message == "tool_result" }
+        assertEquals(LogLevel.INFO, event.level)
+        assertEquals("Success", event.fields["outcome"])
+    }
+
+    @Test
+    fun `logs a tool_result event at ERROR for a Failure`() {
+        val registry = ToolRegistry().apply { register(AlwaysFailsTool()) }
+        val logger = ToolExecutorRecordingLogger()
+        val executor = ToolExecutor(registry, AgentStateMachine(), sleep = { }, logger = logger)
+        executor.run("always-fails", emptyMap())
+        val event = logger.events.single { it.message == "tool_result" }
+        assertEquals(LogLevel.ERROR, event.level)
+    }
+
+    @Test
+    fun `logs tool_mode_rejected when a tool is rejected for its mode`() {
+        val tool = ForgeOnlyTool()
+        val registry = ToolRegistry().apply { register(tool) }
+        val logger = ToolExecutorRecordingLogger()
+        val executor = ToolExecutor(registry, AgentStateMachine(), sleep = { }, logger = logger)
+        executor.run("forge-only", emptyMap(), mode = AgentMode.PILOT)
+        val event = logger.events.single { it.message == "tool_mode_rejected" }
+        assertEquals(LogLevel.WARN, event.level)
+        assertEquals("PILOT", event.fields["mode"])
+    }
+
+    @Test
+    fun `logs tool_initiator_rejected when a tool is rejected for its initiator`() {
+        val tool = OwnerOnlyTool()
+        val registry = ToolRegistry().apply { register(tool) }
+        val logger = ToolExecutorRecordingLogger()
+        val executor = ToolExecutor(registry, AgentStateMachine(), sleep = { }, logger = logger)
+        executor.run("owner-only", emptyMap(), initiator = Initiator.AI)
+        val event = logger.events.single { it.message == "tool_initiator_rejected" }
+        assertEquals(LogLevel.WARN, event.level)
+    }
+
+    @Test
+    fun `logs tool_cancelled when cancelled before an attempt`() {
+        val registry = ToolRegistry().apply { register(AlwaysFailsTool()) }
+        val logger = ToolExecutorRecordingLogger()
+        val executor = ToolExecutor(registry, AgentStateMachine(), sleep = { }, logger = logger)
+        assertFailsWith<CancellationRequested> {
+            executor.run("always-fails", emptyMap(), isCancelled = { true })
+        }
+        val event = logger.events.single { it.message == "tool_cancelled" }
+        assertEquals(LogLevel.WARN, event.level)
     }
 }
