@@ -137,4 +137,26 @@ class DeviceToolsTest {
         val device = ScriptedDeviceController(screenshotResult = ScreenshotResult.Failure("no device"))
         assertIs<ToolResult.Failure>(TakeScreenshotTool(device).execute(emptyMap()))
     }
+
+    @Test
+    fun `GetDeviceInfoTool reports the available fields`() {
+        val device = ScriptedDeviceController(
+            deviceInfoResult = DeviceInfoResult.Success(DeviceInfo(manufacturer = "Acme", model = "Pixel-ish", osVersion = "14", screenWidthPx = 1080, screenHeightPx = 2400)),
+        )
+        val result = assertIs<ToolResult.Success>(GetDeviceInfoTool(device).execute(emptyMap()))
+        assertEquals("Acme, Pixel-ish, OS 14, 1080x2400", result.output)
+    }
+
+    @Test
+    fun `GetDeviceInfoTool omits null fields rather than fabricating them`() {
+        val device = ScriptedDeviceController(deviceInfoResult = DeviceInfoResult.Success(DeviceInfo(manufacturer = "Acme")))
+        val result = assertIs<ToolResult.Success>(GetDeviceInfoTool(device).execute(emptyMap()))
+        assertEquals("Acme", result.output)
+    }
+
+    @Test
+    fun `GetDeviceInfoTool surfaces a device failure`() {
+        val device = ScriptedDeviceController(deviceInfoResult = DeviceInfoResult.Failure("no device"))
+        assertIs<ToolResult.Failure>(GetDeviceInfoTool(device).execute(emptyMap()))
+    }
 }
