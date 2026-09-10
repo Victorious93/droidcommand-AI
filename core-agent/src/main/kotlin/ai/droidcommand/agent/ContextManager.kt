@@ -13,6 +13,15 @@ package ai.droidcommand.agent
  *
  * [mandatory] kinds are never dropped for budget, even if they alone exceed
  * it — see [DefaultContextManager.buildContext].
+ *
+ * [FILES] (added for CAP-003, P0.3) sits between [SUMMARY] and
+ * [CONVERSATION], matching P0.3's own stated position for "Local Files" in
+ * its local-context-first chain. P0.3's chain otherwise re-describes P0.1's
+ * context-retrieval priority with one real conflict against it (placing
+ * conversation history above knowledge/summaries rather than below) — that
+ * conflict is not applied here; P0.2's explicit numbered list, which this
+ * enum's order was already built and tested against, remains authoritative
+ * for everything except this one new, unclaimed addition.
  */
 enum class ContextKind(val mandatory: Boolean = false) {
     TASK(mandatory = true),
@@ -25,6 +34,7 @@ enum class ContextKind(val mandatory: Boolean = false) {
     PERSONA,
     KNOWLEDGE,
     SUMMARY,
+    FILES,
     CONVERSATION,
 }
 

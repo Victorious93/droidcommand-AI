@@ -44,6 +44,19 @@ class ContextManagerTest {
     }
 
     @Test
+    fun `FILES sits between SUMMARY and CONVERSATION, matching CAP-003's P0-3 chain position`() {
+        val manager = DefaultContextManager()
+        manager.registerProvider(ContextKind.CONVERSATION) { ContextContribution(ContextKind.CONVERSATION, "conv", "history") }
+        manager.registerProvider(ContextKind.FILES) { ContextContribution(ContextKind.FILES, "files", "listing") }
+        manager.registerProvider(ContextKind.SUMMARY) { ContextContribution(ContextKind.SUMMARY, "summary", "tl;dr") }
+
+        val snapshot = manager.buildContext(task, tokenBudget = 1000)
+        val kindsInOrder = snapshot.included.map { it.kind }
+
+        assertEquals(listOf(ContextKind.TASK, ContextKind.SUMMARY, ContextKind.FILES, ContextKind.CONVERSATION), kindsInOrder)
+    }
+
+    @Test
     fun `low-priority contributions are omitted once the budget is exhausted`() {
         val manager = DefaultContextManager()
         val bigConversation = "x".repeat(4000) // ~1000 estimated tokens
