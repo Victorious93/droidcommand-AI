@@ -91,6 +91,39 @@ data class ContextInspection(
     val lastSnapshot: ContextSnapshot?,
 )
 
+/** The result of [allocateByPriority]: [contributions] partitioned by whether they fit [Allocation]'s budget, and the tokens actually used. */
+internal data class Allocation(
+    val included: List<ContextContribution>,
+    val omitted: List<ContextContribution>,
+    val used: Int,
+)
+
+/**
+ * The shared greedy/priority allocation algorithm behind both
+ * [DefaultContextManager.buildContext] and `DefaultTokenBudgetManager.allocateTokens`
+ * (CAP-002): walks [contributions] in the order given (already priority-ordered
+ * by the caller) and greedily includes each one while it fits [tokenBudget],
+ * except [ContextKind.mandatory] contributions, which are always included even
+ * if they alone exceed it — the same "never evict the thing that would
+ * silence the current turn" rule [ConversationContext.append] already applies
+ * to its own just-appended message.
+ */
+internal fun allocateByPriority(contributions: List<ContextContribution>, tokenBudget: Int): Allocation {
+    val included = mutableListOf<ContextContribution>()
+    val omitted = mutableListOf<ContextContribution>()
+    var used = 0
+    for (contribution in contributions) {
+        val fits = contribution.kind.mandatory || used + contribution.estimatedTokens <= tokenBudget
+        if (fits) {
+            included += contribution
+            used += contribution.estimatedTokens
+        } else {
+            omitted += contribution
+        }
+    }
+    return Allocation(included, omitted, used)
+}
+
 /**
  * Aggregates context from registered [ContextProvider]s into one prioritized
  * [ContextSnapshot] within a token budget (CAP-001, P0.1).
@@ -180,26 +213,15 @@ class DefaultContextManager : ContextManager {
             }
         }
 
-        val included = mutableListOf<ContextContribution>()
-        val omitted = mutableListOf<ContextContribution>()
-        var used = 0
-        for (contribution in allContributions) {
-            val fits = contribution.kind.mandatory || used + contribution.estimatedTokens <= tokenBudget
-            if (fits) {
-                included += contribution
-                used += contribution.estimatedTokens
-            } else {
-                omitted += contribution
-            }
-        }
+        val allocation = allocateByPriority(allContributions, tokenBudget)
 
         val snapshot = ContextSnapshot(
             task = task,
-            included = included,
-            omitted = omitted,
+            included = allocation.included,
+            omitted = allocation.omitted,
             tokenBudget = tokenBudget,
-            tokenBudgetUsed = used,
-            tokenBudgetRemaining = (tokenBudget - used).coerceAtLeast(0),
+            tokenBudgetUsed = allocation.used,
+            tokenBudgetRemaining = (tokenBudget - allocation.used).coerceAtLeast(0),
         )
         lastSnapshot = snapshot
         return snapshot
