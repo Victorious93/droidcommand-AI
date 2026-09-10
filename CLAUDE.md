@@ -20,6 +20,23 @@ re-verifying something.
 - **`docs/ARCHITECTURE.md`** — per-component implementation status, kept in
   sync with the audit.
 - **`docs/CORE_BUILD.md`** — the build/workspace pipeline specifically.
+- **`docs/CAPABILITY_ROADMAP_PROMPT.md`** — the project owner's master
+  priority & architecture roadmap, stored verbatim. This is the previously
+  unrecovered `CAP-###` prompt referenced below under "Still open" (now
+  supplied). It defines the target architecture — Context Manager, Token
+  Budget Manager, AI Provider Abstraction, Persona/Style System,
+  Conversation Import, Knowledge Graph (P0); Capability Registry, Policy
+  Engine, Execution Router, Secrets Vault, Approval Flow, Provider/Adapter
+  architecture (P1); universal Android/root/Shizuku/Termux execution (P2);
+  WireGuard/Headscale/remote device control (P3); Docker/container-aware
+  execution (P4); VNC/X11/remote desktop (P5); Proxmox/infrastructure
+  control (P6); and a future provider ecosystem (P7) — plus the
+  non-negotiable development rules, verification requirements, and strict
+  dependency-ordered build sequence (P0 → P1 → P2 before P3–P7) that govern
+  how it's all built. It has not yet been reconciled against
+  `docs/AUDIT_2026-09-05.md`'s `ROADMAP-###` items or folded into that
+  audit as `CAP-###` rows — that reconciliation is still open work (see
+  below), not done as part of adding this file.
 
 ## What's already been verified (don't re-derive)
 
@@ -62,8 +79,15 @@ checkout -B <branch> origin/main`) rather than stacking on stale history.
 
 ## Still open
 
-- A separate "capability/verification prompt" (`CAP-###` in the audit's
-  vocabulary) was described by the project owner as pasted earlier in a
-  different chat thread and was never recovered — Claude Code sessions
-  have no cross-session memory. If the owner supplies it, audit it the same
-  way and fold it into `docs/AUDIT_2026-09-05.md`.
+- The `CAP-###` capability/verification prompt has now been supplied and is
+  stored verbatim at `docs/CAPABILITY_ROADMAP_PROMPT.md` (see above). It has
+  **not** yet been audited against the current codebase or folded into
+  `docs/AUDIT_2026-09-05.md` as `CAP-###` rows — that three-way reconciliation
+  (roadmap vs. `ROADMAP-###` items already tracked vs. actual code) is the
+  next piece of unclaimed work. Do it the same way the original audit was
+  done: for each P0–P7 section, determine whether it's already covered by an
+  existing `ROADMAP-###` item, partially covered, or genuinely new; assign
+  `CAP-###` IDs to the new/uncovered ones; mark real status
+  (VERIFIED IMPLEMENTED / PARTIAL / STUB / MISSING / BLOCKED) without
+  inflating; and append the result as a dated addendum rather than rewriting
+  existing audit entries.
