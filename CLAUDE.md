@@ -102,3 +102,16 @@ checkout -B <branch> origin/main`) rather than stacking on stale history.
   defines. Scope it via Plan Mode before implementing (matching the
   `TaskGraph`/`ObjectiveAnalyzer` precedent in the audit's addenda), not
   speculatively.
+- **Magisk support** (2026-09-10, out of band from the CAP-001 recommendation
+  above, by explicit owner request) is done for what this JVM-only
+  environment can actually build and verify: `core-root.RootProvider`
+  (generic abstraction, extends `RootExecutor`) + `MagiskProvider` (real
+  detection/execution) + `NullRootProvider`, wired into the existing
+  `SecureToolExecutor`/`SecurityPolicyEnforcer`/`GrantStore`/`AuditLog`
+  stack unchanged. See `docs/AUDIT_2026-09-05.md`'s "Magisk support" addendum
+  for the full record. Real on-device Magisk/root behavior is
+  `IMPLEMENTED — NOT RUNTIME VERIFIED` (no rooted device in this
+  environment); Magisk module management, `ExecutionRouter`/`CapabilityManager`
+  integration, and Terminal/UI display were deliberately not built since
+  none of those exist yet in this repository — don't mistake their absence
+  for an oversight.

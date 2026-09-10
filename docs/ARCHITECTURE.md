@@ -134,7 +134,15 @@ DroidCommand AI
 │                            successful elevated command. A real
 │                            rooted-device executor (PLANNED) needs an
 │                            actual rooted device this environment does
-│                            not have.
+│                            not have. RootProvider (added 2026-09-10)
+│                            extends RootExecutor with provider identity/
+│                            health/capability reporting; MagiskProvider is
+│                            a real implementation (real process-based
+│                            detection, cached root-shell probing, real
+│                            su-backed execution with injection-safe
+│                            quoting) — real on-device verification stays
+│                            IMPLEMENTED — NOT RUNTIME VERIFIED, same as
+│                            every other real executor in this module.
 │
 ├── core-build               BuildRequest -> WorkspaceManager -> BuildPipeline
 │                            -> BuildExecutor -> BuildResult -> Artifact.
@@ -780,6 +788,8 @@ there is still no asynchronous/polling variant of the protocol.
 | core-root: NullRootExecutor | IMPLEMENTED (explicitly non-real) | `isRootAvailable()` truthfully returns false; `execute()` fails explicitly rather than fabricating a successful elevated command |
 | core-root: a real rooted-device RootExecutor | PLANNED | Needs an actual rooted device this environment does not have |
 | core-root: RootTool opt-in grant requirement (e.g. distinguishing AI-initiated `ai_root` from device-owner root) | IMPLEMENTED | Added 2026-09-05 — `RootTool(executor, grantCapability = "ai_root")`; `RootToolGrantIntegrationTest` proves a live single-use grant permits exactly one execution then is spent, and that no grant/no store denies without ever reaching the executor. Opt-in (defaults to `null`, so existing `RootTool(executor)` callers are unaffected) |
+| core-root: `RootProvider` (generic root abstraction) + `NullRootProvider` | IMPLEMENTED | Added 2026-09-10 — `RootProvider` extends `RootExecutor` (adds `info`/`isAuthorized()`/`getPrivilegeLevel()`/`checkHealth()`/`getCapabilities()` on top of the existing `isRootAvailable()`/`execute()` contract, so every `RootProvider` plugs into `PolicyEnforcingRootExecutor`/`RootTool`/`SecurityPolicy.rootAvailable` with zero adapter code). `NullRootProvider` is the explicit-failure default, matching the `Null*` convention |
+| core-root: `MagiskProvider` | IMPLEMENTED (real detection/execution logic; real on-device Magisk verification IMPLEMENTED — NOT RUNTIME VERIFIED, no rooted device/Magisk install in this environment) | Added 2026-09-10 — real `ProcessBuilder`-backed detection: `isMagiskInstalled()` (marker file/dir presence OR a `magisk` executable that actually starts — presence only, never treated as proof root is functional, per this addition's own governing rule), `getMagiskVersion()` (parses real `magisk -v` output), a cached (60s TTL, DP-011's already-recommended cadence) root-shell probe (`su -c "id -u"`, accepts only exact `0`) backing `isRootAvailable()`/`isAuthorized()`/`getPrivilegeLevel()`, `checkHealth(probeShell)` (defaults to a passive, non-probing check — a caller must opt in to actually spawning `su`, since that can trigger a real Magisk authorization prompt on a device), and real privileged command execution via `su -c` with every argument individually shell-quoted (`shellQuote`, proven injection-safe by `MagiskProviderTest`). Module list/inspect/enable/disable/install/remove are deliberately NOT implemented — cannot be verified without a real Magisk install, so none are stubbed. Tested against real, controlled fixtures (temp-dir marker files, real fake `su`/`magisk` shell scripts spawned as real subprocesses) — 26 new tests (`NullRootProviderTest`, `MagiskProviderTest`, `MagiskProviderSecureExecutorIntegrationTest`, the last proving the real `MagiskProvider` — not a scripted double — flows through the existing `SecureToolExecutor`/`SecurityPolicyEnforcer` gate unchanged). ExecutionRouter integration, Built-in Terminal integration, and UI are correctly not built — no `ExecutionRouter`/UI exists anywhere in this repository yet (see `docs/AUDIT_2026-09-05.md`'s CAP-011/CAP-012/CAP-020 rows) |
 | core-build: domain model (BuildRequest, ProjectType, BuildTarget, ArtifactType, BuildError, BuildResult, BuildEvent) | IMPLEMENTED | Compiles, unit-tested; see docs/CORE_BUILD.md |
 | core-build: WorkspaceManager / WorkspacePathValidator (real filesystem, path security) | IMPLEMENTED | Real java.nio.file operations, unit-tested incl. traversal/absolute-escape/symlink-adjacent cleanup containment |
 | core-build: BuildPipeline (orchestrator) | IMPLEMENTED | Unit-tested for every stage's success/failure path, cancellation, and a simulated timeout via a fake clock |
