@@ -58,7 +58,7 @@ class RootToolSecureExecutorIntegrationTest {
         ).run("run_root_command", mapOf("executable" to "id"))
 
         assertIs<ToolResult.Failure>(result)
-        assertTrue((result as ToolResult.Failure).reason.contains("disabled"))
+        assertTrue(result.reason.contains("disabled"))
         assertEquals(0, promptCalls)
         assertEquals(0, executor.executeCalls)
     }
@@ -78,7 +78,7 @@ class RootToolSecureExecutorIntegrationTest {
         ).run("run_root_command", mapOf("executable" to "id"))
 
         assertIs<ToolResult.Failure>(result)
-        assertTrue((result as ToolResult.Failure).reason.contains("unavailable"))
+        assertTrue(result.reason.contains("unavailable"))
         assertEquals(0, promptCalls)
         assertEquals(0, executor.executeCalls)
     }
@@ -94,7 +94,7 @@ class RootToolSecureExecutorIntegrationTest {
         ).run("run_root_command", mapOf("executable" to "id"))
 
         assertIs<ToolResult.Failure>(result)
-        assertTrue((result as ToolResult.Failure).reason.contains("denied"))
+        assertTrue(result.reason.contains("denied"))
         assertEquals(0, executor.executeCalls)
     }
 
@@ -123,6 +123,6 @@ class RootToolSecureExecutorIntegrationTest {
         ).run("run_root_command", mapOf("executable" to "rm"))
 
         assertIs<ToolResult.Failure>(result)
-        assertEquals("permission denied by SELinux", (result as ToolResult.Failure).reason)
+        assertEquals("permission denied by SELinux", result.reason)
     }
 }

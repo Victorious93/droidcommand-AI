@@ -45,7 +45,7 @@ class ShellToolSecureExecutorIntegrationTest {
             .run("run_shell_command", mapOf("executable" to "touch", "args" to marker.path))
 
         assertIs<ToolResult.Failure>(result)
-        assertTrue((result as ToolResult.Failure).reason.contains("denied"))
+        assertTrue(result.reason.contains("denied"))
         assertTrue(!marker.exists())
     }
 

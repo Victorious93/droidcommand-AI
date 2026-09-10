@@ -37,7 +37,7 @@ class ApkLifecycleToolSecureExecutorIntegrationTest {
         val result = secure(executor, ApprovalPrompt { false }).run("deploy_and_launch", mapOf("packageName" to "com.example.app"))
 
         assertIs<ToolResult.Failure>(result)
-        assertTrue((result as ToolResult.Failure).reason.contains("denied"))
+        assertTrue(result.reason.contains("denied"))
         assertEquals(0, executor.installCalls.size)
     }
 
