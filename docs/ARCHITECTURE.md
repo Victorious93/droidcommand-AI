@@ -244,13 +244,25 @@ DroidCommand AI
 │                            grantedPermissions), so the policy itself
 │                            stays device-agnostic and fully testable.
 │
-└── core-config               ConfigSource/ConfigReader plus LlmConfigLoader
-                             and SecurityPolicyLoader, which build
-                             core-llm's LlmConfig and core-security's
-                             SecurityPolicy from a key/value source. No
-                             secret is ever held as a plain field — an API
-                             key is read from the source fresh on every
-                             authToken() call, not captured at load time.
+├── core-config               ConfigSource/ConfigReader plus LlmConfigLoader
+│                            and SecurityPolicyLoader, which build
+│                            core-llm's LlmConfig and core-security's
+│                            SecurityPolicy from a key/value source. No
+│                            secret is ever held as a plain field — an API
+│                            key is read from the source fresh on every
+│                            authToken() call, not captured at load time.
+│
+└── core-mcp                  McpToolServer — exposes core-agent's
+                             ToolRegistry over the real, official Kotlin MCP
+                             SDK (io.modelcontextprotocol:kotlin-sdk-server),
+                             closing ROADMAP-123/DP-001. Introducing this
+                             module is why every module's Kotlin version
+                             moved from 2.0.21 to 2.4.10 project-wide as of
+                             2026-09-09 — the SDK's published metadata isn't
+                             readable by 2.0.21, and Gradle resolves one
+                             Kotlin plugin version for the whole build, not
+                             one per module (see the addendum in
+                             docs/AUDIT_2026-09-05.md for the full story).
 ```
 
 `core-agent`, `core-llm`, `core-llm-anthropic`, `core-llm-openai`,
@@ -802,11 +814,13 @@ there is still no asynchronous/polling variant of the protocol.
 | Root capabilities | PARTIAL | `core-root`'s Tool/gate/policy wiring is implemented and tested end-to-end against `core-security`; no real root command has ever executed, since that requires a rooted test device this environment does not have |
 | LLM integration | PARTIAL | The abstraction, the planner adapter, and two real HTTP-backed `LlmProvider`s (Anthropic-shaped and OpenAI-shaped) are all implemented and tested (each provider against a real local server, not a fake); neither has ever made a live call to a real provider endpoint, since this environment has no LLM credentials |
 | APK build/install/test pipeline | PARTIAL | `core-build.BuildPipeline` now has real executors for JVM/NATIVE/GENERIC builds (`core-build-local.LocalProcessBuildExecutor`, proven against real `javac`) and for delegating to a remote build server (`core-build-remote.RemoteBuildExecutor`, proven against a real local test server) — the latter never refuses `ProjectType.ANDROID`, but has never been run against an actual build service, so no real Android APK has been produced by either executor; `core-apk-lifecycle.ApkLifecyclePipeline` still only has `NullApkLifecycleExecutor`, and installing/launching still needs a connected/emulated device this environment does not have |
+| MCP integration (ROADMAP-123 / DP-001) | IMPLEMENTED | Added 2026-09-09 — `core-mcp.McpToolServer` wraps a `core-agent.ToolRegistry`/`ToolExecutor` and exposes every tool available to a fixed `mode`/`initiator` (default `Initiator.REMOTE`, the existing initiator-scoping category for an external caller) as a real MCP tool, using the official `io.modelcontextprotocol:kotlin-sdk-server` SDK rather than a hand-rolled protocol implementation. `runStdio()` runs it over real process stdin/stdout via `StdioServerTransport`. Proven end to end by `McpToolServerTest`, which drives a real `Client`/`Server` handshake over that same `StdioServerTransport`/`StdioClientTransport` pair wired through in-process pipes (not a mock, and deliberately not the SDK's own `ChannelTransport` test helper — that class is `@ExperimentalMcpApi` and was verified, directly, to race on a `tools/call` round trip under this SDK version): `tools/list` correctness (name/description/permissive input schema, and that an `Initiator.DEVICE_OWNER`-scoped tool is invisible to a `REMOTE`-scoped server), `tools/call` for all four `ToolResult` variants mapped through the same `describe()` this codebase already uses for `ObjectiveEngine`'s conversation context, and argument mapping (JSON string/number primitives arrive as strings; a nested array argument is dropped rather than guessed at, since `ToolSpec` has no parameter schema to say what shape it should take). Adding this dependency required bumping the whole repository's Kotlin toolchain from 2.0.21 to 2.4.10 (Section 7b) — every other module's own status above is unaffected, confirmed by the full suite passing unchanged after the bump. |
 
 ## 7. Environment constraints recorded for this implementation pass
 
 Verified 2026-09-04 in this sandboxed session:
-- JDK 21.0.10, Gradle 8.14.3, Kotlin 2.0.21 toolchain: present.
+- JDK 21.0.10, Gradle 8.14.3, Kotlin 2.0.21 toolchain: present (see Section
+  7b for the later project-wide bump to 2.4.10).
 - `ANDROID_HOME`/`ANDROID_SDK_ROOT`: unset. No `adb`, `emulator`, `sdkmanager`,
   `avdmanager` on PATH. No `~/Android/Sdk` or `/opt/android-sdk`.
 - Network reachability to `dl.google.com` and `maven.google.com` confirmed
@@ -815,6 +829,36 @@ Verified 2026-09-04 in this sandboxed session:
   install or launch an APK on regardless of SDK presence.
 - No LLM provider credentials configured in this environment.
 - No root-capable Android device attached.
+
+## 7b. Kotlin toolchain: 2.0.21 -> 2.4.10 project-wide (2026-09-09)
+
+Every module's `kotlin("jvm")`/`kotlin("plugin.serialization")` plugin
+version moved from 2.0.21 to 2.4.10, root `build.gradle.kts` included. This
+was required, not optional, to add `core-mcp`:
+
+- `io.modelcontextprotocol:kotlin-sdk-server:0.15.0` (and its transitive
+  `kotlinx-io`/`kotlinx-serialization`/Ktor jars) is published with Kotlin
+  metadata newer than a 2.0.21 compiler can read — verified directly:
+  `compileKotlin` against it under 2.0.21 fails with "Module was compiled
+  with an incompatible version of Kotlin" across more than a dozen
+  transitive jars, not just one.
+- Gradle resolves a single version of a given plugin ID for the whole
+  build; `core-mcp` cannot privately pin its own newer Kotlin version while
+  every other module stays on 2.0.21 — attempting that fails with "the
+  plugin is already on the classpath with a different version," confirmed
+  directly as well.
+- 2.4.10 was chosen (not a guess) because it's the exact Kotlin version the
+  SDK's own samples (e.g. `samples/weather-stdio-server`) pin against this
+  same SDK release, per its committed `gradle/libs.versions.toml`.
+
+Verified safe: the full `./gradlew test --continue` (58 tasks, all 15
+modules) and `./gradlew ktlintCheck` both passed unchanged after the bump,
+before `core-mcp`'s own code was even written — i.e., the version change
+alone regressed nothing. The bump did surface a small number of new,
+harmless compiler warnings in existing modules ("Unnecessary non-null
+assertion", "No cast needed") from 2.4.10's improved smart-casting;
+left as-is (warnings, not failures, and out of scope for this change) but
+worth a cheap cleanup pass in a future session.
 
 These are session facts, not permanent project constraints — a developer
 machine or CI runner with the Android SDK and a connected/emulated device
