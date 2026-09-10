@@ -14,10 +14,10 @@ class InvalidConversationId(id: String) : IllegalArgumentException(
 )
 
 @Serializable
-private data class MessageDto(val role: String, val content: String)
+internal data class MessageDto(val role: String, val content: String)
 
 @Serializable
-private data class ConversationDto(
+internal data class ConversationDto(
     @SerialName("system_prompt") val systemPrompt: String? = null,
     @SerialName("max_tokens") val maxTokens: Int? = null,
     val messages: List<MessageDto>,
