@@ -41,7 +41,7 @@ class DeviceToolSecureExecutorIntegrationTest {
         val result = secure(device, ApprovalPrompt { false }).run("tap", mapOf("x" to "1", "y" to "2"))
 
         assertIs<ToolResult.Failure>(result)
-        assertTrue((result as ToolResult.Failure).reason.contains("denied"))
+        assertTrue(result.reason.contains("denied"))
         assertEquals(0, device.tapCalls.size)
     }
 

@@ -93,7 +93,7 @@ class BuildToolSecureExecutorIntegrationTest {
         val result = secure.run("build_project", emptyMap())
 
         assertIs<ToolResult.Failure>(result)
-        assertTrue((result as ToolResult.Failure).reason.contains("denied"))
+        assertTrue(result.reason.contains("denied"))
         val after = Files.list(root).use { it.count() }
         assertEquals(before, after)
     }

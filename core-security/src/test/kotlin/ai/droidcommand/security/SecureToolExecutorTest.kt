@@ -89,7 +89,7 @@ class SecureToolExecutorTest {
         val result = secure.run("delete-app", emptyMap())
 
         assertIs<ToolResult.Failure>(result)
-        assertTrue((result as ToolResult.Failure).reason.contains("denied"))
+        assertTrue(result.reason.contains("denied"))
         assertEquals(0, tool.invocations)
     }
 

@@ -29,5 +29,5 @@ class ToolRegistry {
      */
     fun list(mode: AgentMode? = null, initiator: Initiator? = null): List<ToolSpec> =
         tools.values.map { it.spec }.filter { mode == null || mode in it.allowedModes }
-            .filter { initiator == null || it.requiredInitiator == null || initiator in it.requiredInitiator!! }
+            .filter { initiator == null || it.requiredInitiator == null || initiator in it.requiredInitiator }
 }
