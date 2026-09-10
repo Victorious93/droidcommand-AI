@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm") version "2.4.10"
+    kotlin("plugin.serialization") version "2.4.10"
 }
 
 repositories {
@@ -10,6 +11,7 @@ dependencies {
     implementation(project(":core-agent"))
     implementation(project(":core-security"))
     implementation(project(":core-config"))
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation(kotlin("test"))
 }
 
