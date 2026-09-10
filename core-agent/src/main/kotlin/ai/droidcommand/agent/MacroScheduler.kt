@@ -10,14 +10,21 @@ package ai.droidcommand.agent
  * scheduled run without having to reschedule.
  *
  * **Concurrency note:** each firing runs [executor] on [scheduler]'s own
- * background thread. [ToolExecutor]'s [AgentStateMachine] is a single
- * mutable `state` field with no locking of its own — safe for one task at a
- * time, which is what [DroidCommandSession] enforces for Pilot/Forge, but
- * not safe if a scheduled firing here and a live Pilot/Forge task drive the
- * *same* [ToolExecutor] concurrently. Give a [MacroScheduler] a
- * [ToolExecutor] (and therefore [MacroExecutor]) bound to its own
- * [AgentStateMachine], separate from any session actively used for
- * Pilot/Forge, until/unless that state machine is made concurrency-safe.
+ * background thread. [ToolExecutor]'s [AgentStateMachine] is now safe
+ * against cross-thread visibility and race conditions in its own right
+ * (its `state` is `@Volatile` and `transition` is `synchronized`), so a
+ * scheduled firing here and a live Pilot/Forge task driving the *same*
+ * [ToolExecutor] concurrently can no longer corrupt or lose a transition.
+ * That is not the same as being *correct* to share: the two are unrelated
+ * logical tasks, and their transitions would still interleave into a
+ * single, meaningless sequence on one [AgentStateMachine] instance — a
+ * macro firing mid-Pilot-instruction could flip the state to
+ * [AgentState.ExecutingTool] for the macro's step while Pilot's own
+ * `Observing`/`Completed` sequence is still in flight, or vice versa. Give
+ * a [MacroScheduler] a [ToolExecutor] (and therefore [MacroExecutor])
+ * bound to its own [AgentStateMachine], separate from any session actively
+ * used for Pilot/Forge, so each independent task still gets its own
+ * coherent lifecycle.
  */
 class MacroScheduler(
     private val store: MacroStore,
