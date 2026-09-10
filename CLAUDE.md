@@ -33,14 +33,21 @@ re-verifying something.
   control (P6); and a future provider ecosystem (P7) — plus the
   non-negotiable development rules, verification requirements, and strict
   dependency-ordered build sequence (P0 → P1 → P2 before P3–P7) that govern
-  how it's all built. It has not yet been reconciled against
-  `docs/AUDIT_2026-09-05.md`'s `ROADMAP-###` items or folded into that
-  audit as `CAP-###` rows — that reconciliation is still open work (see
-  below), not done as part of adding this file.
+  how it's all built. **Reconciled** against `docs/AUDIT_2026-09-05.md`'s
+  `ROADMAP-###` matrix as `CAP-001` through `CAP-036` in that document's §8
+  addenda (the "CAP-### reconciliation" entry, 2026-09-10) — read that entry
+  for per-item status; almost everything in P1–P7 is MISSING or PARTIAL
+  (only root/Android device-control and the LLM-provider/remote-transport
+  layers have any real code backing them), and the entry's own priority
+  recommendation is `CAP-001` (Context Manager) as the correct next build
+  target, per the roadmap's own P0-first dependency-ordering rule.
 
 ## What's already been verified (don't re-derive)
 
-- This is a 14-module pure-Kotlin/JVM Gradle project. No Android SDK, no
+- This is a 15-module pure-Kotlin/JVM Gradle project (confirmed directly
+  against `settings.gradle.kts`; `core-mcp` was added after the "14-module"
+  figure was first written elsewhere in this repo's docs — don't trust an
+  older module count without checking `settings.gradle.kts`). No Android SDK, no
   device, no root, no LLM credentials, no MCP client exist in most build
   environments this project runs in — everything downstream of those
   (device control, root execution, live LLM calls, real builds/APKs) is
@@ -79,15 +86,19 @@ checkout -B <branch> origin/main`) rather than stacking on stale history.
 
 ## Still open
 
-- The `CAP-###` capability/verification prompt has now been supplied and is
-  stored verbatim at `docs/CAPABILITY_ROADMAP_PROMPT.md` (see above). It has
-  **not** yet been audited against the current codebase or folded into
-  `docs/AUDIT_2026-09-05.md` as `CAP-###` rows — that three-way reconciliation
-  (roadmap vs. `ROADMAP-###` items already tracked vs. actual code) is the
-  next piece of unclaimed work. Do it the same way the original audit was
-  done: for each P0–P7 section, determine whether it's already covered by an
-  existing `ROADMAP-###` item, partially covered, or genuinely new; assign
-  `CAP-###` IDs to the new/uncovered ones; mark real status
-  (VERIFIED IMPLEMENTED / PARTIAL / STUB / MISSING / BLOCKED) without
-  inflating; and append the result as a dated addendum rather than rewriting
-  existing audit entries.
+- The `CAP-###` reconciliation is done (see above) — don't re-run it from
+  scratch. What it found: the codebase has real, tested building blocks that
+  *overlap* several `CAP-###` items (`ConversationContext`'s token budget,
+  `ModelRouter`, `KnowledgeStore`, the `PolicyDecision`/`ApprovalPrompt`
+  approval flow, `core-root`/`core-tools-android`'s provider-shaped modules),
+  but none of P0's seven items is actually VERIFIED IMPLEMENTED as specified,
+  and P1–P7 are almost entirely MISSING (no capability registry, no
+  execution-target abstraction/router, no Shizuku/Termux/Docker/WireGuard/
+  Headscale/VNC/X11/Proxmox provider of any kind). The next concrete step,
+  per the reconciliation's own priority call and the roadmap's explicit
+  "build P0 first, don't parallelize" rule, is **CAP-001 (Context Manager)**
+  — everything else in P0 (`CAP-002` token budgeting, `CAP-003`
+  local-context-first) explicitly depends on the `ContextSnapshot` shape it
+  defines. Scope it via Plan Mode before implementing (matching the
+  `TaskGraph`/`ObjectiveAnalyzer` precedent in the audit's addenda), not
+  speculatively.
