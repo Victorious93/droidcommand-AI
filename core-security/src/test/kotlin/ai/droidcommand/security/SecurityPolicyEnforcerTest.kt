@@ -1,5 +1,6 @@
 package ai.droidcommand.security
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.ToolSpec
 import kotlin.test.Test
@@ -79,5 +80,46 @@ class SecurityPolicyEnforcerTest {
         )
         // Root is denied outright, never downgraded to a mere approval prompt.
         assertIs<PolicyDecision.Deny>(enforcer.authorize(spec))
+    }
+
+    @Test
+    fun `a CONTAINER-category tool is denied when root is disabled, treated as root-equivalent`() {
+        val enforcer = SecurityPolicyEnforcer(SecurityPolicy(rootEnabled = false))
+        val spec = ToolSpec(name = "docker-exec", description = "d", requiredPermissionCategories = setOf(PermissionCategory.CONTAINER))
+        val decision = assertIs<PolicyDecision.Deny>(enforcer.authorize(spec))
+        assertTrue(decision.reason.contains("disabled"))
+    }
+
+    @Test
+    fun `a CONTAINER-category tool is denied when root is enabled but unavailable`() {
+        val enforcer = SecurityPolicyEnforcer(SecurityPolicy(rootEnabled = true, rootAvailable = { false }))
+        val spec = ToolSpec(name = "docker-exec", description = "d", requiredPermissionCategories = setOf(PermissionCategory.CONTAINER))
+        val decision = assertIs<PolicyDecision.Deny>(enforcer.authorize(spec))
+        assertTrue(decision.reason.contains("unavailable"))
+    }
+
+    @Test
+    fun `a ROOT-category tool is denied the same way as a CONTAINER-category one`() {
+        val enforcer = SecurityPolicyEnforcer(SecurityPolicy(rootEnabled = false))
+        val spec = ToolSpec(name = "root-shell", description = "d", requiredPermissionCategories = setOf(PermissionCategory.ROOT))
+        assertIs<PolicyDecision.Deny>(enforcer.authorize(spec))
+    }
+
+    @Test
+    fun `non-root-equivalent permission categories never trigger the root gate`() {
+        val enforcer = SecurityPolicyEnforcer(SecurityPolicy(rootEnabled = false))
+        val spec = ToolSpec(
+            name = "view-status",
+            description = "d",
+            requiredPermissionCategories = setOf(PermissionCategory.VIEW, PermissionCategory.AUTOMATION),
+        )
+        assertEquals(PolicyDecision.Allow, enforcer.authorize(spec))
+    }
+
+    @Test
+    fun `a CONTAINER-category tool passes the root gate once root is enabled and available`() {
+        val enforcer = SecurityPolicyEnforcer(SecurityPolicy(rootEnabled = true, rootAvailable = { true }))
+        val spec = ToolSpec(name = "docker-exec", description = "d", requiredPermissionCategories = setOf(PermissionCategory.CONTAINER))
+        assertEquals(PolicyDecision.Allow, enforcer.authorize(spec))
     }
 }

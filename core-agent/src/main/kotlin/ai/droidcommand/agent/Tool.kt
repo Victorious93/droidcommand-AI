@@ -55,6 +55,18 @@ data class ToolSpec(
      * this is a policy boundary, not a cryptographic one.
      */
     val requiredInitiator: Set<Initiator>? = null,
+    /**
+     * Optional set of [PermissionCategory] domains this tool touches
+     * (CAP-010, P1.2) — orthogonal to [securityLevel] (a risk *level*,
+     * not a permission *domain*), and not unified with it in this slice.
+     * Empty by default, so every existing tool is unaffected.
+     * [ai.droidcommand.security.SecurityPolicyEnforcer.authorize] treats
+     * [PermissionCategory.ROOT]/[PermissionCategory.CONTAINER] here as
+     * root-equivalent, exactly like [requiresRoot] — the roadmap prompt's
+     * own CRITICAL rule that container/Docker socket access must never be
+     * presented as a lesser, peer permission.
+     */
+    val requiredPermissionCategories: Set<PermissionCategory> = emptySet(),
 )
 
 sealed class ToolResult {

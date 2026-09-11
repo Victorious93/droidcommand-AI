@@ -1,5 +1,6 @@
 package ai.droidcommand.security
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.ToolSpec
 
 sealed class PolicyDecision {
@@ -17,12 +18,22 @@ sealed class PolicyDecision {
  */
 class SecurityPolicyEnforcer(private val policy: SecurityPolicy) {
     fun authorize(spec: ToolSpec): PolicyDecision {
-        if (spec.requiresRoot) {
+        /**
+         * CAP-010 (P1.2)'s own CRITICAL rule: "Docker/container socket
+         * access is root-equivalent. Never present CONTAINER as a peer
+         * permission to VIEW/AUTOMATION." [PermissionCategory.CONTAINER]
+         * (and [PermissionCategory.ROOT], the category naming root
+         * directly) therefore gate exactly like [ToolSpec.requiresRoot] —
+         * the same hard deny, never a lesser check.
+         */
+        val requiresRootEquivalent = spec.requiresRoot ||
+            spec.requiredPermissionCategories.any { it == PermissionCategory.ROOT || it == PermissionCategory.CONTAINER }
+        if (requiresRootEquivalent) {
             if (!policy.rootEnabled) {
-                return PolicyDecision.Deny("Tool '${spec.name}' requires root, but root is disabled for this session")
+                return PolicyDecision.Deny("Tool '${spec.name}' requires root (or a root-equivalent permission), but root is disabled for this session")
             }
             if (!policy.rootAvailable()) {
-                return PolicyDecision.Deny("Tool '${spec.name}' requires root, but root is unavailable on this device")
+                return PolicyDecision.Deny("Tool '${spec.name}' requires root (or a root-equivalent permission), but root is unavailable on this device")
             }
         }
 
