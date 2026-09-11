@@ -172,3 +172,46 @@ class KnowledgeContextProviderTest {
         assertEquals(null, provider.provide(null))
     }
 }
+
+class PersonaContextProviderTest {
+    private fun persona(enabled: Boolean) = Persona(
+        id = "p1",
+        name = "Test Persona",
+        category = PersonaCategory.CUSTOM,
+        sourceConversations = listOf("chat-1"),
+        styleCharacteristics = StyleProfile(
+            tone = "warm",
+            vocabulary = VocabProfile("simple"),
+            sentenceStructure = StructureProfile("short", "minimal"),
+            formality = Formality.CASUAL,
+            verbosity = Verbosity.CONCISE,
+            humor = HumorProfile(false),
+            responseStructure = "bullet points",
+        ),
+        contextContribution = "Write warmly and concisely.",
+        version = "1",
+        enabled = enabled,
+    )
+
+    @Test
+    fun `an enabled active persona contributes its context contribution`() {
+        val provider = PersonaContextProvider { persona(enabled = true) }
+
+        val contribution = provider.provide(null)!!
+
+        assertEquals(ContextKind.PERSONA, contribution.kind)
+        assertEquals("Write warmly and concisely.", contribution.content)
+    }
+
+    @Test
+    fun `a disabled active persona contributes nothing`() {
+        val provider = PersonaContextProvider { persona(enabled = false) }
+        assertEquals(null, provider.provide(null))
+    }
+
+    @Test
+    fun `no active persona contributes nothing`() {
+        val provider = PersonaContextProvider { null }
+        assertEquals(null, provider.provide(null))
+    }
+}
