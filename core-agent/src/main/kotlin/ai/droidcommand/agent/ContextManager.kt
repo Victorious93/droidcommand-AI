@@ -279,3 +279,27 @@ class PersonaContextProvider(private val activePersona: () -> Persona?) : Contex
         return ContextContribution(ContextKind.PERSONA, "persona:${persona.id}", persona.contextContribution)
     }
 }
+
+/**
+ * Formats [entities] as one [ContextKind.KNOWLEDGE] contribution via
+ * [query] rather than a [KnowledgeGraph] plus fixed traversal parameters
+ * directly: **deciding what to retrieve from the graph for a given task is
+ * the same LLM-shaped policy decision [KnowledgeContextProvider]'s own doc
+ * comment already keeps out of `core-agent`** — this provider stays a
+ * mechanical formatter, and a caller supplies the query (typically
+ * `{ task -> graph.traverse(someStartId, maxDepth) }`).
+ *
+ * Registered under the same [ContextKind.KNOWLEDGE] slot [KnowledgeContextProvider]
+ * already uses — that kind is documented (CAP-001) as covering P0.3's
+ * "Local Knowledge Graph" priority-order entry, and multiple providers can
+ * already coexist under one [ContextKind]; the flat store and the typed
+ * graph are two independent, real sources feeding the same slot, not a
+ * replacement of one by the other.
+ */
+class GraphContextProvider(private val query: (Task?) -> List<Entity>) : ContextProvider {
+    override fun provide(task: Task?): ContextContribution? {
+        val entities = query(task)
+        val formatted = formatGraphContext(entities) ?: return null
+        return ContextContribution(ContextKind.KNOWLEDGE, "knowledge-graph", formatted)
+    }
+}
