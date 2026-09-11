@@ -9,6 +9,7 @@ repositories {
 dependencies {
     implementation(project(":core-agent"))
     implementation(project(":core-shell"))
+    implementation(project(":core-security"))
     testImplementation(kotlin("test"))
 }
 
