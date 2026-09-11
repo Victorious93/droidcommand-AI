@@ -215,3 +215,23 @@ class PersonaContextProviderTest {
         assertEquals(null, provider.provide(null))
     }
 }
+
+class GraphContextProviderTest {
+    @Test
+    fun `formats entities returned by the query function`() {
+        val graph = InMemoryKnowledgeGraph()
+        graph.addEntity(Entity("d1", EntityType.DEVICE, "Pixel 9"))
+        val provider = GraphContextProvider { graph.entitiesByType(EntityType.DEVICE) }
+
+        val contribution = provider.provide(null)!!
+
+        assertEquals(ContextKind.KNOWLEDGE, contribution.kind)
+        assertTrue(contribution.content.contains("Pixel 9"))
+    }
+
+    @Test
+    fun `an empty query result contributes nothing`() {
+        val provider = GraphContextProvider { emptyList() }
+        assertEquals(null, provider.provide(null))
+    }
+}

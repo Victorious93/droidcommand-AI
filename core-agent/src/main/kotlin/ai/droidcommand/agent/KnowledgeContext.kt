@@ -20,3 +20,21 @@ fun formatKnowledgeContext(entries: List<KnowledgeEntry>, heading: String = "Rel
     }
     return "$heading\n$lines"
 }
+
+/**
+ * Formats [entities] as a single block of text, the [Entity]/[KnowledgeGraph]
+ * counterpart to [formatKnowledgeContext] — same "return null for an empty
+ * list rather than a wasted placeholder" convention.
+ */
+fun formatGraphContext(entities: List<Entity>, heading: String = "Related knowledge graph entities:"): String? {
+    if (entities.isEmpty()) return null
+    val lines = entities.joinToString("\n") { entity ->
+        val propertySuffix = if (entity.properties.isEmpty()) {
+            ""
+        } else {
+            " {${entity.properties.entries.sortedBy { it.key }.joinToString(", ") { "${it.key}=${it.value}" }}}"
+        }
+        "- [${entity.type}] ${entity.label}$propertySuffix"
+    }
+    return "$heading\n$lines"
+}
