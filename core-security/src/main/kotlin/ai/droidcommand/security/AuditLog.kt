@@ -10,6 +10,7 @@ enum class AuditEventType {
     GRANT_REVOKED,
     GRANT_DENIED,
     INITIATOR_DENIED,
+    SECRET_ACCESSED,
 }
 
 data class AuditEvent(
