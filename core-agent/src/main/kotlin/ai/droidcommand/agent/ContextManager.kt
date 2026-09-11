@@ -260,3 +260,22 @@ class KnowledgeContextProvider(private val query: (Task?) -> List<KnowledgeEntry
         return ContextContribution(ContextKind.KNOWLEDGE, "knowledge", formatted)
     }
 }
+
+/**
+ * Formats the currently active [Persona]'s [Persona.contextContribution] as
+ * one [ContextKind.PERSONA] contribution — closing the gap the CAP-001
+ * addendum named ("`PERSONA` kind exists with zero adapters shipped").
+ * Takes an [activePersona] supplier rather than a [PersonaStore] plus a
+ * fixed id directly: **deciding which persona is active is the same
+ * caller-policy decision [KnowledgeContextProvider]'s own doc comment
+ * already keeps out of `core-agent`** — this provider stays a mechanical
+ * formatter. A disabled persona (or no persona at all) contributes nothing,
+ * the same "return null, not an empty placeholder" convention every other
+ * [ContextProvider] here already follows.
+ */
+class PersonaContextProvider(private val activePersona: () -> Persona?) : ContextProvider {
+    override fun provide(task: Task?): ContextContribution? {
+        val persona = activePersona()?.takeIf { it.enabled } ?: return null
+        return ContextContribution(ContextKind.PERSONA, "persona:${persona.id}", persona.contextContribution)
+    }
+}
