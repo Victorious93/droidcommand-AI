@@ -1,8 +1,8 @@
 package ai.droidcommand.security
 
-import ai.droidcommand.agent.CapabilityRegistry
 import ai.droidcommand.agent.ExecutionRequest
 import ai.droidcommand.agent.ExecutionResponse
+import ai.droidcommand.agent.ToolCapabilityRegistry
 import ai.droidcommand.agent.checkCapabilityAvailability
 import java.util.UUID
 
@@ -32,7 +32,7 @@ import java.util.UUID
  * P1.2 (Policy & Permission Engine extension), not fabricated here.
  */
 class AgentRouterGateway(
-    private val registry: CapabilityRegistry,
+    private val registry: ToolCapabilityRegistry,
     private val enforcer: SecurityPolicyEnforcer,
     private val requestIdGenerator: () -> String = { UUID.randomUUID().toString() },
 ) {

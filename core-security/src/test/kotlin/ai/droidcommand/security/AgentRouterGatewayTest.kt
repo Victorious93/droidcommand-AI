@@ -4,7 +4,7 @@ import ai.droidcommand.agent.CapabilityId
 import ai.droidcommand.agent.ExecutionRequest
 import ai.droidcommand.agent.ExecutionResponse
 import ai.droidcommand.agent.ExecutionTargetType
-import ai.droidcommand.agent.InMemoryCapabilityRegistry
+import ai.droidcommand.agent.InMemoryToolCapabilityRegistry
 import ai.droidcommand.agent.RegisteredCapability
 import ai.droidcommand.agent.RiskTier
 import ai.droidcommand.agent.SecurityLevel
@@ -38,7 +38,7 @@ class AgentRouterGatewayTest {
 
     @Test
     fun `an unregistered capability short-circuits to CapabilityUnavailable without calling the enforcer`() {
-        val gateway = AgentRouterGateway(InMemoryCapabilityRegistry(), SecurityPolicyEnforcer(policyThatMustNotBeConsulted()))
+        val gateway = AgentRouterGateway(InMemoryToolCapabilityRegistry(), SecurityPolicyEnforcer(policyThatMustNotBeConsulted()))
 
         val result = gateway.route(request("nope"))
 
@@ -48,7 +48,7 @@ class AgentRouterGatewayTest {
     @Test
     fun `a mismatched target type short-circuits to CapabilityUnavailable without calling the enforcer or executing the tool`() {
         val tool = NoopTool("shell.echo", securityLevel = SecurityLevel.ROOT, requiresRoot = true)
-        val registry = InMemoryCapabilityRegistry().apply {
+        val registry = InMemoryToolCapabilityRegistry().apply {
             register(RegisteredCapability(CapabilityId("shell.echo"), ExecutionTargetType.LOCAL_PC, tool))
         }
         val gateway = AgentRouterGateway(registry, SecurityPolicyEnforcer(policyThatMustNotBeConsulted()))
@@ -61,7 +61,7 @@ class AgentRouterGatewayTest {
 
     @Test
     fun `a NORMAL tool auto-approved by policy returns null, not a fabricated Success`() {
-        val registry = InMemoryCapabilityRegistry().apply {
+        val registry = InMemoryToolCapabilityRegistry().apply {
             register(RegisteredCapability(CapabilityId("shell.echo"), ExecutionTargetType.LOCAL_PC, NoopTool("shell.echo")))
         }
         val gateway = AgentRouterGateway(registry, SecurityPolicyEnforcer(SecurityPolicy()))
@@ -71,7 +71,7 @@ class AgentRouterGatewayTest {
 
     @Test
     fun `a SENSITIVE tool requires approval, carrying the request's own riskTier and a generated requestId`() {
-        val registry = InMemoryCapabilityRegistry().apply {
+        val registry = InMemoryToolCapabilityRegistry().apply {
             register(
                 RegisteredCapability(
                     CapabilityId("device.uninstall"),
@@ -91,7 +91,7 @@ class AgentRouterGatewayTest {
 
     @Test
     fun `a root-required tool under a policy with root disabled is Denied with the enforcer's real reason`() {
-        val registry = InMemoryCapabilityRegistry().apply {
+        val registry = InMemoryToolCapabilityRegistry().apply {
             register(
                 RegisteredCapability(
                     CapabilityId("root.rm"),
@@ -110,7 +110,7 @@ class AgentRouterGatewayTest {
 
     @Test
     fun `a custom requestIdGenerator is honored instead of the default UUID one`() {
-        val registry = InMemoryCapabilityRegistry().apply {
+        val registry = InMemoryToolCapabilityRegistry().apply {
             register(
                 RegisteredCapability(
                     CapabilityId("device.uninstall"),

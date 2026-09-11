@@ -47,10 +47,10 @@ class CapabilityIdTest {
     }
 }
 
-class InMemoryCapabilityRegistryTest {
+class InMemoryToolCapabilityRegistryTest {
     @Test
     fun `registers and retrieves a capability by id`() {
-        val registry = InMemoryCapabilityRegistry()
+        val registry = InMemoryToolCapabilityRegistry()
         val cap = capability("shell.echo")
 
         registry.register(cap)
@@ -60,12 +60,12 @@ class InMemoryCapabilityRegistryTest {
 
     @Test
     fun `lookup of an unregistered id returns null`() {
-        assertNull(InMemoryCapabilityRegistry().lookup(CapabilityId("nope")))
+        assertNull(InMemoryToolCapabilityRegistry().lookup(CapabilityId("nope")))
     }
 
     @Test
     fun `rejects duplicate registration`() {
-        val registry = InMemoryCapabilityRegistry()
+        val registry = InMemoryToolCapabilityRegistry()
         registry.register(capability("shell.echo"))
 
         assertFailsWith<DuplicateCapabilityException> { registry.register(capability("shell.echo")) }
@@ -73,7 +73,7 @@ class InMemoryCapabilityRegistryTest {
 
     @Test
     fun `list returns every registered id, sorted`() {
-        val registry = InMemoryCapabilityRegistry()
+        val registry = InMemoryToolCapabilityRegistry()
         registry.register(capability("zeta"))
         registry.register(capability("alpha"))
 
@@ -84,7 +84,7 @@ class InMemoryCapabilityRegistryTest {
 class CheckCapabilityAvailabilityTest {
     @Test
     fun `an unregistered capability is reported unavailable`() {
-        val registry = InMemoryCapabilityRegistry()
+        val registry = InMemoryToolCapabilityRegistry()
 
         val result = checkCapabilityAvailability(request("nope"), registry)
 
@@ -95,7 +95,7 @@ class CheckCapabilityAvailabilityTest {
 
     @Test
     fun `a registered capability requested for a different target type is reported unavailable`() {
-        val registry = InMemoryCapabilityRegistry()
+        val registry = InMemoryToolCapabilityRegistry()
         registry.register(capability("shell.echo", ExecutionTargetType.LOCAL_PC))
 
         val result = checkCapabilityAvailability(request("shell.echo", ExecutionTargetType.ANDROID), registry)
@@ -107,7 +107,7 @@ class CheckCapabilityAvailabilityTest {
 
     @Test
     fun `a registered capability matching the requested target type is available`() {
-        val registry = InMemoryCapabilityRegistry()
+        val registry = InMemoryToolCapabilityRegistry()
         registry.register(capability("shell.echo", ExecutionTargetType.LOCAL_PC))
 
         assertNull(checkCapabilityAvailability(request("shell.echo", ExecutionTargetType.LOCAL_PC), registry))

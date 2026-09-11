@@ -73,9 +73,19 @@ class DuplicateCapabilityException(id: CapabilityId) : IllegalArgumentException(
  * **deliberately minimal, id-membership only, not P1.1's separate,
  * richer 11-state re-verification lifecycle** (`AVAILABLE`/`ENABLED`/
  * `DISABLED`/`REQUIRES_ROOT`/etc.), which is real, larger, not-yet-scoped
- * future work. Mirrors [ToolRegistry]'s exact registration pattern.
+ * future work — see `core-agent.CapabilityRegistry` (P1.1) for that.
+ * Mirrors [ToolRegistry]'s exact registration pattern.
+ *
+ * **Named `ToolCapabilityRegistry`, not `CapabilityRegistry`:** P1.0's own
+ * "Required types" block never actually named a registry type — this type
+ * was this codebase's own invention to satisfy P1.0's prose. P1.1's spec
+ * *does* define a type literally named `CapabilityRegistry`, with a
+ * materially different (`CapabilityMetadata`-based, not `Tool`-based)
+ * shape — renamed here so that name stays free for the source prompt's
+ * own authoritative definition rather than being silently shadowed by
+ * this earlier, simpler invention.
  */
-interface CapabilityRegistry {
+interface ToolCapabilityRegistry {
     fun register(capability: RegisteredCapability)
 
     fun lookup(id: CapabilityId): RegisteredCapability?
@@ -83,8 +93,8 @@ interface CapabilityRegistry {
     fun list(): List<CapabilityId>
 }
 
-/** The real, immediately usable [CapabilityRegistry] — does not survive a process restart. */
-class InMemoryCapabilityRegistry : CapabilityRegistry {
+/** The real, immediately usable [ToolCapabilityRegistry] — does not survive a process restart. */
+class InMemoryToolCapabilityRegistry : ToolCapabilityRegistry {
     private val capabilities = mutableMapOf<String, RegisteredCapability>()
     private val lock = Any()
 
@@ -107,7 +117,7 @@ class InMemoryCapabilityRegistry : CapabilityRegistry {
  * registered for the requested [ExecutionRequest.targetType] — otherwise
  * a real [ExecutionResponse.CapabilityUnavailable] naming exactly why.
  */
-fun checkCapabilityAvailability(request: ExecutionRequest, registry: CapabilityRegistry): ExecutionResponse.CapabilityUnavailable? {
+fun checkCapabilityAvailability(request: ExecutionRequest, registry: ToolCapabilityRegistry): ExecutionResponse.CapabilityUnavailable? {
     val capability = registry.lookup(request.capabilityId)
         ?: return ExecutionResponse.CapabilityUnavailable(request.capabilityId, "capability is not registered in the live registry")
 
