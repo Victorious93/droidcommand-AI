@@ -44,14 +44,17 @@ re-verifying something.
 
 ## What's already been verified (don't re-derive)
 
-- This is a 16-module pure-Kotlin/JVM Gradle project (confirmed directly
-  against `settings.gradle.kts`; `core-mcp` and, later, `core-integration-tests`
+- This is a 17-module pure-Kotlin/JVM Gradle project (confirmed directly
+  against `settings.gradle.kts`; `core-mcp`, `core-integration-tests`
   (a test-only module with no `src/main`, holding cross-module integration
   tests that need two sibling modules together — e.g. `core-shell` and
-  `core-root`, neither of which depends on the other) were each added after
-  an earlier module-count figure was first written elsewhere in this repo's
-  docs — don't trust an older module count without checking
-  `settings.gradle.kts`). No Android SDK, no
+  `core-root`, neither of which depends on the other), and, most recently,
+  `core-llm-factory` (2026-09-12 — the provider-construction factory
+  closing the second half of "config-driven multi-provider construction";
+  `core-config.MultiLlmConfigLoader` had already closed the config-loading
+  half) were each added after an earlier module-count figure was first
+  written elsewhere in this repo's docs — don't trust an older module count
+  without checking `settings.gradle.kts`). No Android SDK, no
   device, no root, no LLM credentials, no MCP client exist in most build
   environments this project runs in — everything downstream of those
   (device control, root execution, live LLM calls, real builds/APKs) is
@@ -107,11 +110,21 @@ checkout -B <branch> origin/main`) rather than stacking on stale history.
   (e.g. no LLM-based task-complexity classifier, no latency/resource-aware
   provider selection) — read the specific addendum entry for the item you're
   touching before assuming it's either complete or untouched. One concrete,
-  device-free follow-up remained open across five separate addenda before
-  being closed: config-driven multi-provider construction
-  (`core-config.MultiLlmConfigLoader`, closing the config-loading half;
-  the provider-construction-factory half remains open, named in that same
-  addendum, since it needs a currently-nonexistent assembly-root module).
+  device-free follow-up is now fully closed: config-driven multi-provider
+  construction (`core-config.MultiLlmConfigLoader` closed the config-loading
+  half; `core-llm-factory.LlmProviderFactory`, 2026-09-12, closed the
+  provider-construction half, in a new 17th module — not built into an
+  existing one, per that addendum's own dependency-shape reasoning).
+  `LlmProviderFactory.createSelector`/`createModelRouter`/`createPlanner`
+  (same-day follow-ups, 2026-09-12) now compose that all the way into a
+  real `Planner` — the exact type `core-agent`'s `ObjectiveEngine`/
+  `DroidCommandSession.runForgeObjective` take as a parameter — from a
+  `ConfigSource`, proven end to end against a real `DroidCommandSession`
+  in `LlmProviderFactoryPlannerIntegrationTest` (`core-agent` itself was
+  correctly left unchanged: `Planner` was already the seam). What remains
+  is only an actual entrypoint (`app` module or a future CLI) to call
+  `createPlanner` from — not a gap in the composition itself, and gated on
+  the same missing UI/entrypoint every other end-to-end path here is.
   Beyond that, everything remaining is **P2–P7** — universal Android/root/
   Shizuku/Termux execution, WireGuard/Headscale remote control, Docker,
   VNC/X11, Proxmox, and the future provider ecosystem — all correctly gated
