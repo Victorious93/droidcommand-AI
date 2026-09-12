@@ -10,10 +10,12 @@ sealed class PolicyDecision {
 
 /**
  * Decides, from a [ToolSpec]'s declared requirements alone, whether an
- * invocation may proceed. Order matters: root and permission checks are
- * hard [PolicyDecision.Deny]s evaluated before confirmation, so a tool
- * missing a required permission is denied outright rather than merely
- * prompted for approval.
+ * invocation may proceed. Order matters: root, permission, and permission-
+ * category checks are hard [PolicyDecision.Deny]s evaluated before
+ * confirmation, so a tool missing a required permission (or declaring a
+ * [ToolSpec.permissionCategory] the policy doesn't grant) is denied outright
+ * rather than merely prompted for approval. A null [ToolSpec.permissionCategory]
+ * (every tool that hasn't opted in) skips the category check entirely.
  */
 class SecurityPolicyEnforcer(private val policy: SecurityPolicy) {
     fun authorize(spec: ToolSpec): PolicyDecision {
@@ -30,6 +32,13 @@ class SecurityPolicyEnforcer(private val policy: SecurityPolicy) {
         if (missingPermissions.isNotEmpty()) {
             return PolicyDecision.Deny(
                 "Tool '${spec.name}' is missing required permission(s): ${missingPermissions.sorted().joinToString()}",
+            )
+        }
+
+        val category = spec.permissionCategory
+        if (category != null && !policy.isCategoryGranted(category)) {
+            return PolicyDecision.Deny(
+                "Tool '${spec.name}' requires permission category $category, which is not granted",
             )
         }
 

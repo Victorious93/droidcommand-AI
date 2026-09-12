@@ -1,5 +1,6 @@
 package ai.droidcommand.security
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 
 /**

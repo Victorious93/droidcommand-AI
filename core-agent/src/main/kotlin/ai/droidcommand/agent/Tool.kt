@@ -55,6 +55,17 @@ data class ToolSpec(
      * this is a policy boundary, not a cryptographic one.
      */
     val requiredInitiator: Set<Initiator>? = null,
+    /**
+     * Optional [PermissionCategory] (CAP-010, P1.2) this tool belongs to, on
+     * top of the flat [requiredPermissions] strings. Null (the default)
+     * means no category check applies, so every existing tool definition is
+     * unaffected. When set, [ai.droidcommand.security.SecurityPolicyEnforcer.authorize]
+     * denies the tool unless the category is granted under the policy's
+     * `SecurityPolicy.isCategoryGranted` — which, for [ROOT_EQUIVALENT_CATEGORIES],
+     * additionally requires root to be enabled and available, exactly like
+     * [requiresRoot] does for [PermissionCategory.ROOT] itself.
+     */
+    val permissionCategory: PermissionCategory? = null,
 )
 
 sealed class ToolResult {
