@@ -1,5 +1,6 @@
 package ai.droidcommand.security
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.ToolSpec
 import kotlin.test.Test
@@ -65,6 +66,63 @@ class SecurityPolicyEnforcerTest {
         val enforcer = SecurityPolicyEnforcer(SecurityPolicy(autoApprove = setOf(SecurityLevel.NORMAL, SecurityLevel.SENSITIVE)))
         val spec = ToolSpec(name = "delete-app", description = "d", securityLevel = SecurityLevel.SENSITIVE)
         assertEquals(PolicyDecision.Allow, enforcer.authorize(spec))
+    }
+
+    @Test
+    fun `a tool with no permissionCategory is unaffected by grantedCategories`() {
+        val enforcer = SecurityPolicyEnforcer(SecurityPolicy(grantedCategories = emptySet()))
+        val spec = ToolSpec(name = "echo", description = "d")
+        assertEquals(PolicyDecision.Allow, enforcer.authorize(spec))
+    }
+
+    @Test
+    fun `denies a tool whose permissionCategory is not granted`() {
+        val enforcer = SecurityPolicyEnforcer(SecurityPolicy(grantedCategories = emptySet()))
+        val spec = ToolSpec(name = "list-files", description = "d", permissionCategory = PermissionCategory.FILES)
+        val decision = assertIs<PolicyDecision.Deny>(enforcer.authorize(spec))
+        assertTrue(decision.reason.contains("FILES"))
+    }
+
+    @Test
+    fun `allows a tool whose permissionCategory is granted`() {
+        val enforcer = SecurityPolicyEnforcer(SecurityPolicy(grantedCategories = setOf(PermissionCategory.FILES)))
+        val spec = ToolSpec(name = "list-files", description = "d", permissionCategory = PermissionCategory.FILES)
+        assertEquals(PolicyDecision.Allow, enforcer.authorize(spec))
+    }
+
+    @Test
+    fun `denies a CONTAINER-category tool even when listed in grantedCategories if root is disabled`() {
+        val enforcer = SecurityPolicyEnforcer(
+            SecurityPolicy(rootEnabled = false, grantedCategories = setOf(PermissionCategory.CONTAINER)),
+        )
+        val spec = ToolSpec(name = "docker-exec", description = "d", permissionCategory = PermissionCategory.CONTAINER)
+        assertIs<PolicyDecision.Deny>(enforcer.authorize(spec))
+    }
+
+    @Test
+    fun `allows a CONTAINER-category tool when granted and root is enabled and available`() {
+        val enforcer = SecurityPolicyEnforcer(
+            SecurityPolicy(
+                rootEnabled = true,
+                rootAvailable = { true },
+                grantedCategories = setOf(PermissionCategory.CONTAINER),
+            ),
+        )
+        val spec = ToolSpec(name = "docker-exec", description = "d", permissionCategory = PermissionCategory.CONTAINER)
+        assertEquals(PolicyDecision.Allow, enforcer.authorize(spec))
+    }
+
+    @Test
+    fun `permission category is checked before confirmation`() {
+        val enforcer = SecurityPolicyEnforcer(SecurityPolicy(grantedCategories = emptySet()))
+        val spec = ToolSpec(
+            name = "delete-app",
+            description = "d",
+            securityLevel = SecurityLevel.SENSITIVE,
+            permissionCategory = PermissionCategory.FILES,
+        )
+        // A missing category is a hard denial, never downgraded to a mere approval prompt.
+        assertIs<PolicyDecision.Deny>(enforcer.authorize(spec))
     }
 
     @Test
