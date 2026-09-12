@@ -7,14 +7,19 @@ class IllegalModeSwitch(val from: AgentMode, val to: AgentMode, reason: String) 
 
 /**
  * Coordinates Pilot Mode (a single direct [Tool] invocation) and Forge Mode
- * (an [ObjectiveEngine] loop) over the same [ToolRegistry] / [ToolExecutor] /
+ * (an [ObjectiveEngine] loop) over the same [ToolRegistry] / [ToolRunner] /
  * [AgentStateMachine], and is the single place that guards a mode switch
  * against corrupting a task that is still running. [mode] is the value a UI
  * surfaces as "PILOT" or "FORGE" per the two-mode design in
  * docs/ARCHITECTURE.md.
  *
+ * [executor] is typed as [ToolRunner], not the concrete [ToolExecutor], so a
+ * caller that needs `SENSITIVE`/`ROOT` tools gated by policy/approval/grant/
+ * audit can supply `core-security.SecureToolExecutor` instead — both
+ * implement the same `run(...)` contract.
+ *
  * The mode is not only a dispatch-shape switch: both entry points pass the
- * active [AgentMode] down to [ToolExecutor]/[ObjectiveEngine], which filter
+ * active [AgentMode] down to [ToolRunner]/[ObjectiveEngine], which filter
  * or reject by each [ToolSpec.allowedModes] — a tool scoped to one mode is
  * never offered to a Forge planner nor invocable via Pilot while the other
  * mode is active. Most existing tools declare no restriction (available in
@@ -29,12 +34,12 @@ class IllegalModeSwitch(val from: AgentMode, val to: AgentMode, reason: String) 
  * [lock] guards only the [taskActive] test-and-set, not the task execution
  * itself: a mode switch attempted while a task is running must fail
  * immediately, not block until the task finishes, so the lock is never held
- * across a (potentially long-running) [ToolExecutor.run] or
+ * across a (potentially long-running) [ToolRunner.run] or
  * [ObjectiveEngine.run] call.
  */
 class DroidCommandSession(
     private val registry: ToolRegistry,
-    private val executor: ToolExecutor,
+    private val executor: ToolRunner,
     private val stateMachine: AgentStateMachine,
 ) {
     private val lock = Any()

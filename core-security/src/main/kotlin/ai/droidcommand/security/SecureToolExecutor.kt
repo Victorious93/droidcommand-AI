@@ -1,5 +1,6 @@
 package ai.droidcommand.security
 
+import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.AgentState
 import ai.droidcommand.agent.AgentStateMachine
 import ai.droidcommand.agent.Initiator
@@ -12,6 +13,7 @@ import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
+import ai.droidcommand.agent.ToolRunner
 
 /**
  * Wraps [ToolExecutor] with a [SecurityPolicyEnforcer] check that runs
@@ -40,6 +42,15 @@ import ai.droidcommand.agent.ToolResult
  * hostile peer — the same honestly-scoped guarantee DroidPilot's `AI_ROOT`
  * gate makes for its own equivalent field.
  *
+ * Implements [ToolRunner] so a caller (e.g. `core-agent.DroidCommandSession`)
+ * can hold this class or the plain [ToolExecutor] behind the same field. A
+ * non-null [AgentMode] passed to [run] is checked against
+ * [ai.droidcommand.agent.ToolSpec.allowedModes] before any policy/approval/
+ * grant/audit step runs — a tool not offered in the requested mode is denied
+ * outright, never merely prompted for approval — and is also forwarded to
+ * the [delegate] call, so [ToolExecutor]'s own identical check runs a second
+ * time as a harmless backstop.
+ *
  * [logger] defaults to [NoOpLogger] (ROADMAP-014) — every existing caller
  * that doesn't pass one is unaffected. It is deliberately distinct from
  * [auditLog]: the audit log is a fail-closed, capacity-bounded *security
@@ -58,16 +69,18 @@ class SecureToolExecutor(
     private val grantStore: GrantStore? = null,
     private val auditLog: AuditLog? = null,
     private val logger: Logger = NoOpLogger,
-) {
-    fun run(
+) : ToolRunner {
+    override fun run(
         toolName: String,
         input: Map<String, String>,
-        retryPolicy: RetryPolicy = RetryPolicy(),
-        isCancelled: () -> Boolean = { false },
-        grantId: String? = null,
-        initiator: Initiator = Initiator.AI,
+        retryPolicy: RetryPolicy,
+        isCancelled: () -> Boolean,
+        mode: AgentMode?,
+        initiator: Initiator?,
+        grantId: String?,
     ): ToolResult {
         val spec = registry.get(toolName).spec
+        val effectiveInitiator = initiator ?: Initiator.AI
 
         fun deny(reason: String, auditType: AuditEventType): ToolResult.Failure {
             auditLog?.record(AuditEvent(auditType, toolName, reason))
@@ -77,10 +90,14 @@ class SecureToolExecutor(
             return result
         }
 
+        if (mode != null && mode !in spec.allowedModes) {
+            return deny("Tool '$toolName' is not available in $mode mode", AuditEventType.MODE_DENIED)
+        }
+
         val requiredInitiator = spec.requiredInitiator
-        if (requiredInitiator != null && initiator !in requiredInitiator) {
+        if (requiredInitiator != null && effectiveInitiator !in requiredInitiator) {
             return deny(
-                "Tool '$toolName' requires initiator in $requiredInitiator, but was invoked as $initiator",
+                "Tool '$toolName' requires initiator in $requiredInitiator, but was invoked as $effectiveInitiator",
                 AuditEventType.INITIATOR_DENIED,
             )
         }
@@ -117,7 +134,7 @@ class SecureToolExecutor(
             }
         }
 
-        val result = delegate.run(toolName, input, retryPolicy, isCancelled)
+        val result = delegate.run(toolName, input, retryPolicy, isCancelled, mode, effectiveInitiator)
         logger.log(
             LogEvent(
                 levelFor(result),
