@@ -5,6 +5,7 @@ import ai.droidcommand.config.MapConfigSource
 import ai.droidcommand.remote.HttpRequestSpec
 import ai.droidcommand.remote.HttpResponseSpec
 import ai.droidcommand.remote.HttpTransport
+import ai.droidcommand.security.ApprovalPrompt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -30,10 +31,37 @@ private fun anthropicSource() = MapConfigSource(
 
 class MainTest {
     @Test
-    fun `buildSession registers the echo tool`() {
+    fun `buildSession registers the echo tool alongside the real gated tools`() {
         val cliSession = buildSession()
         val specs = cliSession.registry.list()
-        assertEquals(listOf("echo"), specs.map { it.name })
+        assertEquals(
+            listOf("echo", "run_shell_command", "run_root_command", "build_project"),
+            specs.map { it.name },
+        )
+    }
+
+    @Test
+    fun `pilot run_shell_command fails cleanly when no executable is allow-listed, even when approved`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("run_shell_command", "executable=echo"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot run_shell_command is denied and never reaches the executor when approval is refused`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { false }), listOf("run_shell_command", "executable=echo"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot run_root_command is denied outright regardless of the approval prompt's answer`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("run_root_command", "executable=id"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot build_project fails cleanly and touches no filesystem when approval is refused`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { false }), listOf("build_project"))
+        assertEquals(1, exitCode)
     }
 
     @Test

@@ -12,6 +12,10 @@ dependencies {
     implementation(project(":core-config"))
     implementation(project(":core-remote"))
     implementation(project(":core-llm-factory"))
+    implementation(project(":core-security"))
+    implementation(project(":core-shell"))
+    implementation(project(":core-root"))
+    implementation(project(":core-build"))
     testImplementation(kotlin("test"))
 }
 
