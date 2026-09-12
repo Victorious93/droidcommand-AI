@@ -115,13 +115,16 @@ checkout -B <branch> origin/main`) rather than stacking on stale history.
   half; `core-llm-factory.LlmProviderFactory`, 2026-09-12, closed the
   provider-construction half, in a new 17th module — not built into an
   existing one, per that addendum's own dependency-shape reasoning).
-  `LlmProviderFactory.createSelector`/`createModelRouter` (same-day
-  follow-up, 2026-09-12) now compose that all the way into real
-  `AiProviderSelector`/`ModelRouter` instances from a `ConfigSource` — but
-  neither is wired into an actual running caller yet (`ObjectiveEngine`,
-  `DroidCommandSession`, or a future CLI/app entrypoint); that's real,
-  separate, currently-unclaimed follow-up work, still gated on the same
-  missing UI/entrypoint every other end-to-end path in this repository is.
+  `LlmProviderFactory.createSelector`/`createModelRouter`/`createPlanner`
+  (same-day follow-ups, 2026-09-12) now compose that all the way into a
+  real `Planner` — the exact type `core-agent`'s `ObjectiveEngine`/
+  `DroidCommandSession.runForgeObjective` take as a parameter — from a
+  `ConfigSource`, proven end to end against a real `DroidCommandSession`
+  in `LlmProviderFactoryPlannerIntegrationTest` (`core-agent` itself was
+  correctly left unchanged: `Planner` was already the seam). What remains
+  is only an actual entrypoint (`app` module or a future CLI) to call
+  `createPlanner` from — not a gap in the composition itself, and gated on
+  the same missing UI/entrypoint every other end-to-end path here is.
   Beyond that, everything remaining is **P2–P7** — universal Android/root/
   Shizuku/Termux execution, WireGuard/Headscale remote control, Docker,
   VNC/X11, Proxmox, and the future provider ecosystem — all correctly gated

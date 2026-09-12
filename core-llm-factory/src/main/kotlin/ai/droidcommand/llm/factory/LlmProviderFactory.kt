@@ -1,11 +1,13 @@
 package ai.droidcommand.llm.factory
 
+import ai.droidcommand.agent.Planner
 import ai.droidcommand.agent.TokenBudgetManager
 import ai.droidcommand.config.ConfigSource
 import ai.droidcommand.config.ConfiguredLlmProvider
 import ai.droidcommand.config.MultiLlmConfigLoader
 import ai.droidcommand.llm.AiProviderSelector
 import ai.droidcommand.llm.DefaultAiProviderSelector
+import ai.droidcommand.llm.LlmPlanner
 import ai.droidcommand.llm.LocalFirstOrdering
 import ai.droidcommand.llm.ModelRouter
 import ai.droidcommand.llm.RegisteredProvider
@@ -47,6 +49,10 @@ class UnknownLlmProviderException(message: String) : IllegalStateException(messa
  * [ai.droidcommand.llm.AiProviderSelector]/[ai.droidcommand.llm.ModelRouter],
  * the two real consumers of a [ai.droidcommand.llm.RegisteredProvider] list
  * that already existed in this codebase before this module did.
+ * [createPlanner] (same day, one more step) wraps [createModelRouter]'s
+ * result in a real [ai.droidcommand.llm.LlmPlanner], producing the concrete
+ * [Planner] `core-agent`'s `ObjectiveEngine`/`DroidCommandSession` actually
+ * take as a parameter — without `core-agent` gaining any new dependency.
  */
 object LlmProviderFactory {
     /**
@@ -116,4 +122,25 @@ object LlmProviderFactory {
      */
     fun createModelRouter(source: ConfigSource, transport: HttpTransport): ModelRouter =
         ModelRouter(LocalFirstOrdering.order(load(source, transport)))
+
+    /**
+     * [createModelRouter]s [source] and wraps the result in a real
+     * [LlmPlanner] — the concrete [Planner] `core-agent`'s
+     * [ai.droidcommand.agent.ObjectiveEngine]/
+     * [ai.droidcommand.agent.DroidCommandSession.runForgeObjective] actually
+     * take. `core-agent` (where both of those live) depends on none of
+     * `core-llm`/`core-config`/`core-remote`/`core-llm-anthropic`/
+     * `core-llm-openai` and must not gain such a dependency — confirmed
+     * again for this function, same as every other check in this file's own
+     * history. [Planner] is exactly the seam that already lets a caller hand
+     * either of them a real LLM-backed planner without `core-agent` ever
+     * knowing a concrete provider exists (`ObjectiveEngineIntegrationTest`,
+     * `core-llm`, already proves this composition by hand with a scripted
+     * [ai.droidcommand.llm.LlmProvider]). [createPlanner] is that
+     * composition's other end: a [ConfigSource] straight through to a
+     * ready-to-pass-in [Planner], with no new type and no change to
+     * `core-agent` needed or made.
+     */
+    fun createPlanner(source: ConfigSource, transport: HttpTransport): Planner =
+        LlmPlanner(createModelRouter(source, transport))
 }
