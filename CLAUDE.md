@@ -114,11 +114,14 @@ checkout -B <branch> origin/main`) rather than stacking on stale history.
   construction (`core-config.MultiLlmConfigLoader` closed the config-loading
   half; `core-llm-factory.LlmProviderFactory`, 2026-09-12, closed the
   provider-construction half, in a new 17th module — not built into an
-  existing one, per that addendum's own dependency-shape reasoning). Neither
-  is wired into a real caller yet (`AiProviderSelector`/`ModelRouter`
-  construction, or a future CLI/app entrypoint) — that's real, separate,
-  currently-unclaimed follow-up work, not done speculatively in the same
-  slice that built the factory itself.
+  existing one, per that addendum's own dependency-shape reasoning).
+  `LlmProviderFactory.createSelector`/`createModelRouter` (same-day
+  follow-up, 2026-09-12) now compose that all the way into real
+  `AiProviderSelector`/`ModelRouter` instances from a `ConfigSource` — but
+  neither is wired into an actual running caller yet (`ObjectiveEngine`,
+  `DroidCommandSession`, or a future CLI/app entrypoint); that's real,
+  separate, currently-unclaimed follow-up work, still gated on the same
+  missing UI/entrypoint every other end-to-end path in this repository is.
   Beyond that, everything remaining is **P2–P7** — universal Android/root/
   Shizuku/Termux execution, WireGuard/Headscale remote control, Docker,
   VNC/X11, Proxmox, and the future provider ecosystem — all correctly gated
