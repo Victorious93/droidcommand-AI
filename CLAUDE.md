@@ -44,10 +44,14 @@ re-verifying something.
 
 ## What's already been verified (don't re-derive)
 
-- This is a 15-module pure-Kotlin/JVM Gradle project (confirmed directly
-  against `settings.gradle.kts`; `core-mcp` was added after the "14-module"
-  figure was first written elsewhere in this repo's docs — don't trust an
-  older module count without checking `settings.gradle.kts`). No Android SDK, no
+- This is a 16-module pure-Kotlin/JVM Gradle project (confirmed directly
+  against `settings.gradle.kts`; `core-mcp` and, later, `core-integration-tests`
+  (a test-only module with no `src/main`, holding cross-module integration
+  tests that need two sibling modules together — e.g. `core-shell` and
+  `core-root`, neither of which depends on the other) were each added after
+  an earlier module-count figure was first written elsewhere in this repo's
+  docs — don't trust an older module count without checking
+  `settings.gradle.kts`). No Android SDK, no
   device, no root, no LLM credentials, no MCP client exist in most build
   environments this project runs in — everything downstream of those
   (device control, root execution, live LLM calls, real builds/APKs) is
