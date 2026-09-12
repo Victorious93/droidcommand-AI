@@ -62,7 +62,17 @@ re-verifying something.
   device, no root, no LLM credentials, no MCP client exist in most build
   environments this project runs in — everything downstream of those
   (device control, root execution, live LLM calls, real builds/APKs) is
-  correctly marked PLANNED/BLOCKED in the audit, not faked.
+  correctly marked PLANNED/BLOCKED in the audit, not faked. **This is a
+  per-machine/per-session fact, not a permanent one — check `adb devices`
+  before assuming it still holds.** On 2026-09-12, a real Android device
+  (rooted via Magisk) was connected over USB/`adb` to the machine one
+  session ran on, and `core-root.AdbRootExecutor` was built and actually
+  runtime-verified against it — the first real device/root this project has
+  ever had. See `docs/AUDIT_2026-09-05.md`'s "AdbRootExecutor" addendum for
+  the full record, including what real-device work still remains open
+  (an adb-backed `core-tools-android.DeviceController`, an adb-backed
+  `core-apk-lifecycle` executor, Shizuku). Don't assume a device is present
+  by default; don't assume one never will be either.
 - The codebase is unusually honest: every intentional non-real
   implementation (`MockBuildExecutor`, `Null*Executor`, `Null*Controller`)
   is self-documented as such in its own code. If you find something that
@@ -131,14 +141,15 @@ checkout -B <branch> origin/main`) rather than stacking on stale history.
   `EnvConfigSource`/`JdkHttpTransport` instances and dispatches Pilot
   instructions/Forge objectives against a real `DroidCommandSession` —
   see `docs/ARCHITECTURE.md`'s `cli` row and this same-day audit addendum
-  for the full record, including its one deliberately-scoped-out
-  follow-up (no `SENSITIVE`/`ROOT` tool — `ShellTool`/`RootTool`/etc. —
-  is registered yet, since `DroidCommandSession`/`ObjectiveEngine` only
-  accept a plain `ToolExecutor`, not `core-security.SecureToolExecutor`;
-  wiring one in without that gate would bypass the approval/audit layer
-  those tools are designed to run behind). The Android `:app` module
-  itself remains PLANNED, unchanged, still gated on an Android SDK/device
-  this environment does not have.
+  for the full record. **That one deliberately-scoped-out follow-up is now
+  also closed:** `core-agent.ToolRunner` (a later 2026-09-12 addendum) let
+  `DroidCommandSession`/`ObjectiveEngine` accept `core-security.SecureToolExecutor`
+  in place of the plain `ToolExecutor`, and a same-day follow-up wired `cli`
+  to build a real `SecureToolExecutor` and register `ShellTool`/`RootTool`/
+  `BuildTool` behind it, each denied-by-default until explicitly configured
+  or approved — see those two addenda for the full record. The Android
+  `:app` module itself remains PLANNED, unchanged, still gated on an
+  Android SDK/UI this environment does not have.
   Beyond that, everything remaining is **P2–P7** — universal Android/root/
   Shizuku/Termux execution, WireGuard/Headscale remote control, Docker,
   VNC/X11, Proxmox, and the future provider ecosystem — all correctly gated
@@ -152,9 +163,14 @@ checkout -B <branch> origin/main`) rather than stacking on stale history.
   detection/execution) + `NullRootProvider`, wired into the existing
   `SecureToolExecutor`/`SecurityPolicyEnforcer`/`GrantStore`/`AuditLog`
   stack unchanged. See `docs/AUDIT_2026-09-05.md`'s "Magisk support" addendum
-  for the full record. Real on-device Magisk/root behavior is
-  `IMPLEMENTED — NOT RUNTIME VERIFIED` (no rooted device in this
-  environment); Magisk module management, `ExecutionRouter`/`CapabilityManager`
-  integration, and Terminal/UI display were deliberately not built since
-  none of those exist yet in this repository — don't mistake their absence
-  for an oversight.
+  for the full record. Real on-device Magisk/root behavior (the
+  JVM-runs-*on*-the-device topology `MagiskProvider` itself assumes) remains
+  `IMPLEMENTED — NOT RUNTIME VERIFIED` — that would need a JDK/Termux
+  installed on a real phone, which no session has done. The *other* real
+  topology — a PC driving a rooted phone over USB/`adb` — **is** now
+  `IMPLEMENTED — RUNTIME VERIFIED`, via `core-root.AdbRootExecutor`
+  (2026-09-12); see the note above and `docs/AUDIT_2026-09-05.md`'s
+  "AdbRootExecutor" addendum. Magisk module management,
+  `ExecutionRouter`/`CapabilityManager` integration, and Terminal/UI display
+  were deliberately not built since none of those exist yet in this
+  repository — don't mistake their absence for an oversight.
