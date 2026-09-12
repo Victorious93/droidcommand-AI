@@ -94,7 +94,7 @@ interface PersonaStore {
     fun delete(id: String): Boolean
 }
 
-/** A real, immediately usable [PersonaStore] — but, like [InMemoryKnowledgeStore], it does not survive a process restart. A `JsonFilePersonaStore` is named future work, not built in this slice. */
+/** A real, immediately usable [PersonaStore] — but, like [InMemoryKnowledgeStore], it does not survive a process restart. [JsonFilePersonaStore] is the persistent alternative. */
 class InMemoryPersonaStore : PersonaStore {
     private val personas = mutableMapOf<String, Persona>()
     private val lock = Any()
