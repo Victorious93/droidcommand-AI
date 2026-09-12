@@ -4,15 +4,39 @@ import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.AgentState
 import ai.droidcommand.agent.AgentStateMachine
 import ai.droidcommand.agent.DroidCommandSession
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.describe
+import ai.droidcommand.build.BuildEnvironmentDetector
+import ai.droidcommand.build.BuildPipeline
+import ai.droidcommand.build.BuildRequest
+import ai.droidcommand.build.BuildSecurityPolicy
+import ai.droidcommand.build.BuildTarget
+import ai.droidcommand.build.BuildTool
+import ai.droidcommand.build.EnvironmentTool
+import ai.droidcommand.build.MockBuildExecutor
+import ai.droidcommand.build.ProjectType
+import ai.droidcommand.build.SourceLocation
+import ai.droidcommand.build.ToolAvailability
+import ai.droidcommand.build.ToolCheckResult
+import ai.droidcommand.build.WorkspaceManager
 import ai.droidcommand.config.ConfigSource
 import ai.droidcommand.config.EnvConfigSource
 import ai.droidcommand.llm.factory.LlmProviderFactory
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.remote.JdkHttpTransport
+import ai.droidcommand.root.NullRootExecutor
+import ai.droidcommand.root.RootTool
+import ai.droidcommand.security.ApprovalPrompt
+import ai.droidcommand.security.SecureToolExecutor
+import ai.droidcommand.security.SecurityPolicy
+import ai.droidcommand.security.SecurityPolicyEnforcer
+import ai.droidcommand.shell.ProcessBuilderShellExecutor
+import ai.droidcommand.shell.ShellSecurityPolicy
+import ai.droidcommand.shell.ShellTool
+import java.nio.file.Path
 import kotlin.system.exitProcess
 
 /**
@@ -61,11 +85,76 @@ fun main(args: Array<String>) {
 /** Wraps the [ToolRegistry] alongside the session so callers (`main`, tests) can inspect it without a second constructor. */
 class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
 
-internal fun buildSession(): CliSession {
-    val registry = ToolRegistry().apply { register(EchoTool()) }
+/**
+ * [approvalPrompt] defaults to the real, interactive [ConsoleApprovalPrompt] but is
+ * caller-injectable, mirroring [runForge]'s `configSource`/`transport` parameters, so tests can
+ * supply a scripted prompt instead of blocking on real stdin.
+ *
+ * `run_shell_command`/`run_root_command`/`build_project` are now registered alongside [EchoTool] —
+ * each is `SENSITIVE`/`ROOT`, so unlike `EchoTool` (`NORMAL`, auto-approved), all three go through
+ * [SecureToolExecutor]'s real policy/approval gate before ever reaching their executor. Every one
+ * is denied-by-default until explicitly configured or approved: `run_shell_command` has an empty
+ * allowed-executable list unless `DROIDCOMMAND_CLI_SHELL_ALLOWED_EXECUTABLES` is set;
+ * `run_root_command` is denied outright ([SecurityPolicy.rootEnabled] is `false` and
+ * [PermissionCategory.ROOT] is not granted) regardless of the approval prompt's answer, since this
+ * environment has no real root executor ([NullRootExecutor] fails cleanly either way);
+ * `build_project` uses [MockBuildExecutor] — an honest, non-executing placeholder, the same
+ * `EchoTool`-style "no real capability behind this yet" framing, not a real compiler/Gradle
+ * invocation. No [ai.droidcommand.security.GrantStore]/[ai.droidcommand.security.AuditLog] is
+ * wired: neither tool declares a `grantCapability`, and this CLI is one command per process
+ * invocation with no persistence across runs, so an in-memory audit log nobody ever reads back
+ * would be inert plumbing — a named follow-up, not silently added.
+ */
+internal fun buildSession(approvalPrompt: ApprovalPrompt = ConsoleApprovalPrompt): CliSession {
+    val registry = ToolRegistry().apply {
+        register(EchoTool())
+        register(ShellTool(ProcessBuilderShellExecutor(shellSecurityPolicy())))
+        register(RootTool(NullRootExecutor()))
+        register(BuildTool(buildPipeline(), ::buildRequestFromInput))
+    }
     val stateMachine = AgentStateMachine()
-    val executor = ToolExecutor(registry, stateMachine)
-    return CliSession(DroidCommandSession(registry, executor, stateMachine), registry)
+    val delegate = ToolExecutor(registry, stateMachine)
+    val policy = SecurityPolicy(grantedCategories = setOf(PermissionCategory.TERMINAL))
+    val secure = SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(policy), approvalPrompt)
+    return CliSession(DroidCommandSession(registry, secure, stateMachine), registry)
+}
+
+/**
+ * Fail-closed by default (empty [ShellSecurityPolicy.allowedExecutables]), matching that type's own
+ * documented default — an operator opts specific executables in via
+ * `DROIDCOMMAND_CLI_SHELL_ALLOWED_EXECUTABLES` (comma-separated) rather than this CLI inventing an
+ * arbitrary "safe commands" allowlist on their behalf. [ShellSecurityPolicy.allowedWorkingDirectories]
+ * is fixed to the process's own working directory, matching [buildPipeline]'s identical choice.
+ */
+private fun shellSecurityPolicy() = ShellSecurityPolicy(
+    allowedExecutables = System.getenv("DROIDCOMMAND_CLI_SHELL_ALLOWED_EXECUTABLES")
+        ?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }?.toSet() ?: emptySet(),
+    allowedWorkingDirectories = listOf(System.getProperty("user.dir")),
+)
+
+/**
+ * Workspace root defaults to the process's current working directory, matching this module's own
+ * "no CLI-specific config file, use what the environment already gives you" precedent
+ * ([EnvConfigSource]). [MockBuildExecutor] is the real, already-shipped honest placeholder — no
+ * real compiler/Gradle invocation is wired in this slice.
+ */
+private fun buildPipeline() = BuildPipeline(
+    WorkspaceManager(listOf(Path.of(System.getProperty("user.dir")))),
+    MockBuildExecutor(),
+    object : BuildEnvironmentDetector {
+        override fun check(tool: EnvironmentTool) = ToolCheckResult(tool, ToolAvailability.AVAILABLE)
+    },
+)
+
+/** [BuildRequest.securityConstraints.allowedWorkspaceRoots][BuildSecurityPolicy.allowedWorkspaceRoots] must match [buildPipeline]'s [WorkspaceManager.authorizedRoots] exactly (as strings), or every request is denied with `SecurityDenied` regardless of approval. */
+private fun buildRequestFromInput(input: Map<String, String>): BuildRequest {
+    val root = System.getProperty("user.dir")
+    return BuildRequest(
+        sourceLocation = SourceLocation.LocalDirectory(input["sourceDir"] ?: root),
+        projectType = input["projectType"]?.let { ProjectType.valueOf(it.uppercase()) } ?: ProjectType.JVM,
+        target = input["target"]?.let { BuildTarget.valueOf(it.uppercase()) } ?: BuildTarget.DEBUG,
+        securityConstraints = BuildSecurityPolicy(allowedWorkspaceRoots = listOf(root)),
+    )
 }
 
 internal fun printUsage() {
