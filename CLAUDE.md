@@ -44,15 +44,19 @@ re-verifying something.
 
 ## What's already been verified (don't re-derive)
 
-- This is a 17-module pure-Kotlin/JVM Gradle project (confirmed directly
+- This is an 18-module pure-Kotlin/JVM Gradle project (confirmed directly
   against `settings.gradle.kts`; `core-mcp`, `core-integration-tests`
   (a test-only module with no `src/main`, holding cross-module integration
   tests that need two sibling modules together — e.g. `core-shell` and
-  `core-root`, neither of which depends on the other), and, most recently,
-  `core-llm-factory` (2026-09-12 — the provider-construction factory
-  closing the second half of "config-driven multi-provider construction";
-  `core-config.MultiLlmConfigLoader` had already closed the config-loading
-  half) were each added after an earlier module-count figure was first
+  `core-root`, neither of which depends on the other), `core-llm-factory`
+  (2026-09-12 — the provider-construction factory closing the second half
+  of "config-driven multi-provider construction"; `core-config.MultiLlmConfigLoader`
+  had already closed the config-loading half), and, most recently, `cli`
+  (2026-09-12 — the device-free CLI entrypoint that dispatches Pilot
+  instructions/Forge objectives through a real `DroidCommandSession`,
+  built with `LlmProviderFactory.createPlanner`; distinct from the
+  still-PLANNED Android `:app` module, which this environment has no SDK
+  to build) were each added after an earlier module-count figure was first
   written elsewhere in this repo's docs — don't trust an older module count
   without checking `settings.gradle.kts`). No Android SDK, no
   device, no root, no LLM credentials, no MCP client exist in most build
@@ -121,10 +125,20 @@ checkout -B <branch> origin/main`) rather than stacking on stale history.
   `DroidCommandSession.runForgeObjective` take as a parameter — from a
   `ConfigSource`, proven end to end against a real `DroidCommandSession`
   in `LlmProviderFactoryPlannerIntegrationTest` (`core-agent` itself was
-  correctly left unchanged: `Planner` was already the seam). What remains
-  is only an actual entrypoint (`app` module or a future CLI) to call
-  `createPlanner` from — not a gap in the composition itself, and gated on
-  the same missing UI/entrypoint every other end-to-end path here is.
+  correctly left unchanged: `Planner` was already the seam). **That
+  remaining entrypoint gap is now closed too, device-free half only:**
+  the new `cli` module (2026-09-12) calls `createPlanner` from real
+  `EnvConfigSource`/`JdkHttpTransport` instances and dispatches Pilot
+  instructions/Forge objectives against a real `DroidCommandSession` —
+  see `docs/ARCHITECTURE.md`'s `cli` row and this same-day audit addendum
+  for the full record, including its one deliberately-scoped-out
+  follow-up (no `SENSITIVE`/`ROOT` tool — `ShellTool`/`RootTool`/etc. —
+  is registered yet, since `DroidCommandSession`/`ObjectiveEngine` only
+  accept a plain `ToolExecutor`, not `core-security.SecureToolExecutor`;
+  wiring one in without that gate would bypass the approval/audit layer
+  those tools are designed to run behind). The Android `:app` module
+  itself remains PLANNED, unchanged, still gated on an Android SDK/device
+  this environment does not have.
   Beyond that, everything remaining is **P2–P7** — universal Android/root/
   Shizuku/Termux execution, WireGuard/Headscale remote control, Docker,
   VNC/X11, Proxmox, and the future provider ecosystem — all correctly gated
