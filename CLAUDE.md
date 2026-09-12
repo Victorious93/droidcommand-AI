@@ -91,21 +91,33 @@ checkout -B <branch> origin/main`) rather than stacking on stale history.
 ## Still open
 
 - The `CAP-###` reconciliation is done (see above) — don't re-run it from
-  scratch. What it found: the codebase has real, tested building blocks that
-  *overlap* several `CAP-###` items (`ConversationContext`'s token budget,
-  `ModelRouter`, `KnowledgeStore`, the `PolicyDecision`/`ApprovalPrompt`
-  approval flow, `core-root`/`core-tools-android`'s provider-shaped modules),
-  but none of P0's seven items is actually VERIFIED IMPLEMENTED as specified,
-  and P1–P7 are almost entirely MISSING (no capability registry, no
-  execution-target abstraction/router, no Shizuku/Termux/Docker/WireGuard/
-  Headscale/VNC/X11/Proxmox provider of any kind). The next concrete step,
-  per the reconciliation's own priority call and the roadmap's explicit
-  "build P0 first, don't parallelize" rule, is **CAP-001 (Context Manager)**
-  — everything else in P0 (`CAP-002` token budgeting, `CAP-003`
-  local-context-first) explicitly depends on the `ContextSnapshot` shape it
-  defines. Scope it via Plan Mode before implementing (matching the
-  `TaskGraph`/`ObjectiveAnalyzer` precedent in the audit's addenda), not
-  speculatively.
+  scratch. It originally found none of P0's seven items VERIFIED IMPLEMENTED
+  and recommended CAP-001 (Context Manager) as the next step — **that
+  recommendation is now stale and has been fully acted on.** Per
+  `docs/AUDIT_2026-09-05.md`'s own addenda trail (read the bottom of that
+  file, not this bullet, for the current picture — this note is a pointer,
+  not a substitute): **P0 (CAP-001 through CAP-007) and P1 (CAP-008 through
+  CAP-014) are both now fully IMPLEMENTED, each at an honestly-scoped first-
+  slice level** (`ContextManager`/`ContextSnapshot`, `TokenBudgetManager`,
+  local-first provider ordering, `AiProviderSelector`, Persona/Conversation
+  Import/Knowledge Graph, the Capability Manager/Policy Engine/Execution
+  Router/Target stack, Secrets Vault, Approval Flow — every one scoped via
+  Plan Mode before implementing, per that precedent, not speculatively).
+  Every one of those first slices names its own real, honestly-stated gaps
+  (e.g. no LLM-based task-complexity classifier, no latency/resource-aware
+  provider selection) — read the specific addendum entry for the item you're
+  touching before assuming it's either complete or untouched. One concrete,
+  device-free follow-up remained open across five separate addenda before
+  being closed: config-driven multi-provider construction
+  (`core-config.MultiLlmConfigLoader`, closing the config-loading half;
+  the provider-construction-factory half remains open, named in that same
+  addendum, since it needs a currently-nonexistent assembly-root module).
+  Beyond that, everything remaining is **P2–P7** — universal Android/root/
+  Shizuku/Termux execution, WireGuard/Headscale remote control, Docker,
+  VNC/X11, Proxmox, and the future provider ecosystem — all correctly gated
+  behind real device/root/Shizuku/Termux/Docker/Proxmox/VNC/X11/WireGuard/
+  Headscale/SSH environments and a UI (`app` module) this JVM-only
+  environment does not have.
 - **Magisk support** (2026-09-10, out of band from the CAP-001 recommendation
   above, by explicit owner request) is done for what this JVM-only
   environment can actually build and verify: `core-root.RootProvider`
