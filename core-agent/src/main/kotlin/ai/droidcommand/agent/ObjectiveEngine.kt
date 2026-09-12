@@ -6,10 +6,16 @@ data class ObjectiveOutcome(val finalState: AgentState, val iterations: Int)
  * Runs the Forge Mode loop (UNDERSTAND -> PLAN -> SELECT TOOLS -> EXECUTE ->
  * OBSERVE -> VALIDATE -> RECOVER -> COMPLETE) by repeatedly asking a
  * [Planner] for the next step and, when it selects a tool, running it
- * through [ToolExecutor]. [maxIterations] is the agent-safety bound: a
+ * through [ToolRunner]. [maxIterations] is the agent-safety bound: a
  * planner that never returns [PlannerDecision.Complete] or
  * [PlannerDecision.Abort] cannot loop forever — the engine gives up and
  * terminates in [AgentState.Failed] instead.
+ *
+ * [executor] is typed as [ToolRunner], not the concrete [ToolExecutor], so a
+ * caller can supply `core-security.SecureToolExecutor` instead when an
+ * LLM-driven planner (not a human) should not be able to invoke a
+ * `SENSITIVE`/`ROOT` tool without going through policy/approval/grant/audit
+ * gating first.
  *
  * [logger] defaults to [NoOpLogger] (ROADMAP-014) — every existing caller
  * that doesn't pass one sees no behavior change. When a real [Logger] is
@@ -22,7 +28,7 @@ data class ObjectiveOutcome(val finalState: AgentState, val iterations: Int)
  */
 class ObjectiveEngine(
     private val registry: ToolRegistry,
-    private val executor: ToolExecutor,
+    private val executor: ToolRunner,
     private val stateMachine: AgentStateMachine,
     private val planner: Planner,
     private val maxIterations: Int = 25,

@@ -1,5 +1,6 @@
 package ai.droidcommand.security
 
+import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.AgentState
 import ai.droidcommand.agent.AgentStateMachine
 import ai.droidcommand.agent.Initiator
@@ -433,6 +434,79 @@ class SecureToolExecutorTest {
         val event = logger.events.single { it.message == "secure_tool_denied" }
         assertEquals(LogLevel.WARN, event.level)
         assertEquals("ACCESS_DENIED", event.fields["auditType"])
+    }
+
+    @Test
+    fun `denies a tool not allowed in the requested mode without ever prompting for approval`() {
+        val spec = ToolSpec(
+            name = "forge-only",
+            description = "d",
+            securityLevel = SecurityLevel.SENSITIVE,
+            allowedModes = setOf(AgentMode.FORGE),
+        )
+        var promptCalls = 0
+        val (secure, tool, _, _) = newHarness(
+            spec,
+            SecurityPolicy(),
+            approvalPrompt = ApprovalPrompt {
+                promptCalls++
+                true
+            },
+        )
+
+        val result = secure.run("forge-only", emptyMap(), mode = AgentMode.PILOT)
+
+        assertIs<ToolResult.Failure>(result)
+        assertTrue(result.reason.contains("not available in PILOT mode"))
+        assertEquals(0, promptCalls)
+        assertEquals(0, tool.invocations)
+    }
+
+    @Test
+    fun `runs a tool when the requested mode is one of its allowed modes`() {
+        val spec = ToolSpec(
+            name = "forge-only2",
+            description = "d",
+            allowedModes = setOf(AgentMode.FORGE),
+        )
+        val (secure, tool, _, _) = newHarness(spec, SecurityPolicy())
+
+        val result = secure.run("forge-only2", emptyMap(), mode = AgentMode.FORGE)
+
+        assertIs<ToolResult.Success>(result)
+        assertEquals(1, tool.invocations)
+    }
+
+    @Test
+    fun `a null mode is unaffected by an allowedModes restriction`() {
+        val spec = ToolSpec(
+            name = "forge-only3",
+            description = "d",
+            allowedModes = setOf(AgentMode.FORGE),
+        )
+        val (secure, tool, _, _) = newHarness(spec, SecurityPolicy())
+
+        val result = secure.run("forge-only3", emptyMap())
+
+        assertIs<ToolResult.Success>(result)
+        assertEquals(1, tool.invocations)
+    }
+
+    @Test
+    fun `logs secure_tool_denied at WARN when a mode check fails`() {
+        val spec = ToolSpec(name = "forge-only4", description = "d", allowedModes = setOf(AgentMode.FORGE))
+        val tool = CountingTool(spec)
+        val registry = ToolRegistry().apply { register(tool) }
+        val stateMachine = AgentStateMachine()
+        val delegate = ToolExecutor(registry, stateMachine, sleep = { })
+        val logger = RecordingSecureLogger()
+        val secure = SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(SecurityPolicy()), ApprovalPrompt { true }, logger = logger)
+
+        secure.run("forge-only4", emptyMap(), mode = AgentMode.PILOT)
+
+        val event = logger.events.single { it.message == "secure_tool_denied" }
+        assertEquals(LogLevel.WARN, event.level)
+        assertEquals("MODE_DENIED", event.fields["auditType"])
     }
 
     @Test

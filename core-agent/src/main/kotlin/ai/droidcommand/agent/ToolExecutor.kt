@@ -23,20 +23,26 @@ class CancellationRequested(reason: String) : RuntimeException(reason)
  * for Forge Mode), so wiring it here — the follow-up [ObjectiveEngine]'s
  * own doc comment named — gives Pilot Mode the same operational visibility
  * Forge Mode already has.
+ *
+ * Implements [ToolRunner] so a caller (e.g. [DroidCommandSession]) can hold
+ * either this class or `core-security.SecureToolExecutor` behind the same
+ * field without knowing which. [grantId] is accepted for that interface's
+ * sake and ignored here — grant-gating is `SecureToolExecutor`'s concern.
  */
 class ToolExecutor(
     private val registry: ToolRegistry,
     private val stateMachine: AgentStateMachine,
     private val sleep: (Long) -> Unit = { Thread.sleep(it) },
     private val logger: Logger = NoOpLogger,
-) {
-    fun run(
+) : ToolRunner {
+    override fun run(
         toolName: String,
         input: Map<String, String>,
-        retryPolicy: RetryPolicy = RetryPolicy(),
-        isCancelled: () -> Boolean = { false },
-        mode: AgentMode? = null,
-        initiator: Initiator? = null,
+        retryPolicy: RetryPolicy,
+        isCancelled: () -> Boolean,
+        mode: AgentMode?,
+        initiator: Initiator?,
+        grantId: String?,
     ): ToolResult {
         val tool = registry.get(toolName)
 
