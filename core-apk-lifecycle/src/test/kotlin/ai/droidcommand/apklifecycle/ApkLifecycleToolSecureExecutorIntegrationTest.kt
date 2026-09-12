@@ -1,6 +1,7 @@
 package ai.droidcommand.apklifecycle
 
 import ai.droidcommand.agent.AgentStateMachine
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
@@ -21,13 +22,15 @@ class ApkLifecycleToolSecureExecutorIntegrationTest {
         val registry = ToolRegistry().apply { register(tool) }
         val stateMachine = AgentStateMachine()
         val delegate = ToolExecutor(registry, stateMachine, sleep = { })
-        return SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(SecurityPolicy()), approvalPrompt)
+        val policy = SecurityPolicy(grantedCategories = setOf(PermissionCategory.DEVICE_CONTROL))
+        return SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(policy), approvalPrompt)
     }
 
     @Test
-    fun `deploy_and_launch is SENSITIVE and requires confirmation`() {
+    fun `deploy_and_launch is SENSITIVE, DEVICE_CONTROL, and requires confirmation`() {
         val tool = ApkLifecycleTool(ApkLifecyclePipeline(ScriptedApkLifecycleExecutor())) { buildSuccess() }
         assertEquals(SecurityLevel.SENSITIVE, tool.spec.securityLevel)
+        assertEquals(PermissionCategory.DEVICE_CONTROL, tool.spec.permissionCategory)
         assertTrue(tool.spec.requiresConfirmation)
     }
 

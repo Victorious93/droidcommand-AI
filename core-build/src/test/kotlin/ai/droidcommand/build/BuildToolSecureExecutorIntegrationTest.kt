@@ -1,6 +1,7 @@
 package ai.droidcommand.build
 
 import ai.droidcommand.agent.AgentStateMachine
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
@@ -66,12 +67,13 @@ class BuildToolSecureExecutorIntegrationTest {
         val registry = ToolRegistry().apply { register(buildTool()) }
         val stateMachine = AgentStateMachine()
         val delegate = ToolExecutor(registry, stateMachine, sleep = { })
-        val secure = SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(SecurityPolicy()), approvalPrompt)
+        val policy = SecurityPolicy(grantedCategories = setOf(PermissionCategory.TERMINAL))
+        val secure = SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(policy), approvalPrompt)
         return Triple(secure, stateMachine, registry)
     }
 
     @Test
-    fun `the build tool is SENSITIVE and requires confirmation`() {
+    fun `the build tool is SENSITIVE, TERMINAL, and requires confirmation`() {
         val spec = BuildTool(
             BuildPipeline(
                 WorkspaceManager(listOf(root)), MockBuildExecutor(),
@@ -82,6 +84,7 @@ class BuildToolSecureExecutorIntegrationTest {
         ) { BuildRequest(sourceLocation = SourceLocation.LocalDirectory("."), projectType = ProjectType.JVM, target = BuildTarget.DEBUG) }.spec
 
         assertEquals(SecurityLevel.SENSITIVE, spec.securityLevel)
+        assertEquals(PermissionCategory.TERMINAL, spec.permissionCategory)
         assertTrue(spec.requiresConfirmation)
     }
 

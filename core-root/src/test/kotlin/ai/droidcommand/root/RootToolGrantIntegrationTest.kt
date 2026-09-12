@@ -1,6 +1,7 @@
 package ai.droidcommand.root
 
 import ai.droidcommand.agent.AgentStateMachine
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
@@ -46,7 +47,9 @@ class RootToolGrantIntegrationTest {
             registry,
             delegate,
             stateMachine,
-            SecurityPolicyEnforcer(SecurityPolicy(rootEnabled = true, rootAvailable = { true })),
+            SecurityPolicyEnforcer(
+                SecurityPolicy(rootEnabled = true, rootAvailable = { true }, grantedCategories = setOf(PermissionCategory.ROOT)),
+            ),
             ApprovalPrompt { true },
             grantStore = grantStore,
         )
@@ -68,7 +71,9 @@ class RootToolGrantIntegrationTest {
             registry,
             delegate,
             stateMachine,
-            SecurityPolicyEnforcer(SecurityPolicy(rootEnabled = true, rootAvailable = { true })),
+            SecurityPolicyEnforcer(
+                SecurityPolicy(rootEnabled = true, rootAvailable = { true }, grantedCategories = setOf(PermissionCategory.ROOT)),
+            ),
             ApprovalPrompt { true },
             grantStore = grantStore,
         )

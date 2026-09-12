@@ -1,5 +1,6 @@
 package ai.droidcommand.tools.android
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
@@ -14,7 +15,12 @@ import ai.droidcommand.agent.ToolSpec
  * reported.
  */
 class TapElementTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "tap_element", description = "Finds a UI element by selector and taps its center", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "tap_element",
+        description = "Finds a UI element by selector and taps its center",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.AUTOMATION,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val selector = parseSelector(input).getOrElse { return ToolResult.Failure(it.message ?: "invalid selector") }

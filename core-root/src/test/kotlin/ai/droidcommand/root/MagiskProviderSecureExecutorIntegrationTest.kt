@@ -1,6 +1,7 @@
 package ai.droidcommand.root
 
 import ai.droidcommand.agent.AgentStateMachine
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
@@ -103,7 +104,7 @@ class MagiskProviderSecureExecutorIntegrationTest {
 
         val result = secure(
             provider,
-            SecurityPolicy(rootEnabled = true, rootAvailable = provider::isRootAvailable),
+            SecurityPolicy(rootEnabled = true, rootAvailable = provider::isRootAvailable, grantedCategories = setOf(PermissionCategory.ROOT)),
             ApprovalPrompt { true },
             auditLog = auditLog,
         ).run("run_root_command", mapOf("executable" to "echo", "args" to "hello"))

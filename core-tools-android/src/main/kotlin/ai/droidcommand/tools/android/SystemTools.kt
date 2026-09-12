@@ -1,5 +1,6 @@
 package ai.droidcommand.tools.android
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
@@ -21,7 +22,11 @@ import ai.droidcommand.agent.ToolSpec
  * be used to inject content into whatever the user pastes into next.
  */
 class GetBatteryStatusTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "get_battery_status", description = "Reads the device's battery level and charging state")
+    override val spec = ToolSpec(
+        name = "get_battery_status",
+        description = "Reads the device's battery level and charging state",
+        permissionCategory = PermissionCategory.VIEW,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult = when (val result = device.getBatteryStatus()) {
         is BatteryStatusResult.Success -> ToolResult.Success(
@@ -32,7 +37,11 @@ class GetBatteryStatusTool(private val device: DeviceController) : Tool {
 }
 
 class GetNetworkStateTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "get_network_state", description = "Reads the device's current network connectivity")
+    override val spec = ToolSpec(
+        name = "get_network_state",
+        description = "Reads the device's current network connectivity",
+        permissionCategory = PermissionCategory.NETWORK,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult = when (val result = device.getNetworkState()) {
         is NetworkStateResult.Success -> ToolResult.Success(
@@ -43,7 +52,11 @@ class GetNetworkStateTool(private val device: DeviceController) : Tool {
 }
 
 class GetStorageInfoTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "get_storage_info", description = "Reads the device's total and free storage")
+    override val spec = ToolSpec(
+        name = "get_storage_info",
+        description = "Reads the device's total and free storage",
+        permissionCategory = PermissionCategory.VIEW,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult = when (val result = device.getStorageInfo()) {
         is StorageInfoResult.Success -> ToolResult.Success("${result.info.freeBytes} free of ${result.info.totalBytes} bytes")
@@ -52,7 +65,12 @@ class GetStorageInfoTool(private val device: DeviceController) : Tool {
 }
 
 class GetClipboardTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "get_clipboard", description = "Reads the device's current clipboard text", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "get_clipboard",
+        description = "Reads the device's current clipboard text",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.VIEW,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult = when (val result = device.getClipboardText()) {
         is ClipboardReadResult.Success -> ToolResult.Success(result.text)
@@ -61,7 +79,12 @@ class GetClipboardTool(private val device: DeviceController) : Tool {
 }
 
 class SetClipboardTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "set_clipboard", description = "Sets the device's clipboard text", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "set_clipboard",
+        description = "Sets the device's clipboard text",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.DEVICE_CONTROL,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val text = input["text"] ?: return ToolResult.Failure("Missing required input 'text'")

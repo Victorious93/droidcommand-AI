@@ -1,5 +1,6 @@
 package ai.droidcommand.shell
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
@@ -16,7 +17,12 @@ import ai.droidcommand.agent.ToolSpec
  * generic one), `workingDirectory` (optional).
  */
 class ShellTool(private val executor: ShellExecutor) : Tool {
-    override val spec = ToolSpec(name = "run_shell_command", description = "Runs an allow-listed shell command", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "run_shell_command",
+        description = "Runs an allow-listed shell command",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.TERMINAL,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val executable = input["executable"] ?: return ToolResult.Failure("Missing required input 'executable'")

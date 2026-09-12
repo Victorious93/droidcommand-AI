@@ -1,5 +1,6 @@
 package ai.droidcommand.tools.android
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
@@ -17,7 +18,12 @@ internal fun toToolResult(action: DeviceActionResult): ToolResult = when (action
 }
 
 class TapTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "tap", description = "Taps the screen at the given coordinates", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "tap",
+        description = "Taps the screen at the given coordinates",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.AUTOMATION,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val x = input.intOrFail("x").getOrElse { return ToolResult.Failure(it.message ?: "invalid input") }
@@ -27,7 +33,12 @@ class TapTool(private val device: DeviceController) : Tool {
 }
 
 class SwipeTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "swipe", description = "Swipes from one point to another", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "swipe",
+        description = "Swipes from one point to another",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.AUTOMATION,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val startX = input.intOrFail("startX").getOrElse { return ToolResult.Failure(it.message ?: "invalid input") }
@@ -40,7 +51,12 @@ class SwipeTool(private val device: DeviceController) : Tool {
 }
 
 class TypeTextTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "type_text", description = "Types text into the currently focused field", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "type_text",
+        description = "Types text into the currently focused field",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.AUTOMATION,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val text = input["text"] ?: return ToolResult.Failure("Missing required input 'text'")
@@ -49,7 +65,12 @@ class TypeTextTool(private val device: DeviceController) : Tool {
 }
 
 class PressKeyTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "press_key", description = "Presses a device key (BACK, HOME, ENTER, ...)", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "press_key",
+        description = "Presses a device key (BACK, HOME, ENTER, ...)",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.AUTOMATION,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val raw = input["key"] ?: return ToolResult.Failure("Missing required input 'key'")
@@ -60,7 +81,12 @@ class PressKeyTool(private val device: DeviceController) : Tool {
 }
 
 class LaunchAppTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "launch_app", description = "Launches an installed app by package name", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "launch_app",
+        description = "Launches an installed app by package name",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.DEVICE_CONTROL,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val packageName = input["packageName"] ?: return ToolResult.Failure("Missing required input 'packageName'")
@@ -69,7 +95,7 @@ class LaunchAppTool(private val device: DeviceController) : Tool {
 }
 
 class ListInstalledAppsTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "list_installed_apps", description = "Lists installed apps")
+    override val spec = ToolSpec(name = "list_installed_apps", description = "Lists installed apps", permissionCategory = PermissionCategory.VIEW)
 
     override fun execute(input: Map<String, String>): ToolResult = when (val result = device.listInstalledApps()) {
         is InstalledAppsResult.Success -> ToolResult.Success(
@@ -80,7 +106,7 @@ class ListInstalledAppsTool(private val device: DeviceController) : Tool {
 }
 
 class GetUiTreeTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "get_ui_tree", description = "Reads the current screen's accessibility/UI tree")
+    override val spec = ToolSpec(name = "get_ui_tree", description = "Reads the current screen's accessibility/UI tree", permissionCategory = PermissionCategory.VIEW)
 
     override fun execute(input: Map<String, String>): ToolResult = when (val result = device.getUiTree()) {
         is UiTreeResult.Success -> ToolResult.Success(renderUiTree(result.tree))
@@ -89,7 +115,7 @@ class GetUiTreeTool(private val device: DeviceController) : Tool {
 }
 
 class TakeScreenshotTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "take_screenshot", description = "Captures a screenshot of the current screen")
+    override val spec = ToolSpec(name = "take_screenshot", description = "Captures a screenshot of the current screen", permissionCategory = PermissionCategory.VIEW)
 
     override fun execute(input: Map<String, String>): ToolResult = when (val result = device.takeScreenshot()) {
         is ScreenshotResult.Success -> ToolResult.Success("Screenshot saved to ${result.path} (${result.widthPx}x${result.heightPx}, ${result.sizeBytes} bytes)")
@@ -104,7 +130,11 @@ class TakeScreenshotTool(private val device: DeviceController) : Tool {
  * existed, only the wrapper exposing it as an invocable tool did not.
  */
 class GetDeviceInfoTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "get_device_info", description = "Reads device info: manufacturer, model, OS version, and screen size")
+    override val spec = ToolSpec(
+        name = "get_device_info",
+        description = "Reads device info: manufacturer, model, OS version, and screen size",
+        permissionCategory = PermissionCategory.VIEW,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult = when (val result = device.getDeviceInfo()) {
         is DeviceInfoResult.Success -> {

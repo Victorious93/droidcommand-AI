@@ -1,5 +1,6 @@
 package ai.droidcommand.root
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
@@ -31,6 +32,7 @@ class RootTool(
         requiresRoot = true,
         securityLevel = SecurityLevel.ROOT,
         grantCapability = grantCapability,
+        permissionCategory = PermissionCategory.ROOT,
     )
 
     override fun execute(input: Map<String, String>): ToolResult {

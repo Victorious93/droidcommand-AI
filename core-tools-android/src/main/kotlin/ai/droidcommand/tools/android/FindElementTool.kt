@@ -1,11 +1,16 @@
 package ai.droidcommand.tools.android
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolSpec
 
 class FindElementTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "find_element", description = "Finds UI element(s) on the current screen matching a selector")
+    override val spec = ToolSpec(
+        name = "find_element",
+        description = "Finds UI element(s) on the current screen matching a selector",
+        permissionCategory = PermissionCategory.VIEW,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val selector = parseSelector(input).getOrElse { return ToolResult.Failure(it.message ?: "invalid selector") }

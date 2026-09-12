@@ -1,6 +1,7 @@
 package ai.droidcommand.shell
 
 import ai.droidcommand.agent.AgentStateMachine
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
@@ -25,13 +26,15 @@ class ShellToolSecureExecutorIntegrationTest {
         val registry = ToolRegistry().apply { register(ShellTool(executor)) }
         val stateMachine = AgentStateMachine()
         val delegate = ToolExecutor(registry, stateMachine, sleep = { })
-        return SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(SecurityPolicy()), approvalPrompt)
+        val policy = SecurityPolicy(grantedCategories = setOf(PermissionCategory.TERMINAL))
+        return SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(policy), approvalPrompt)
     }
 
     @Test
-    fun `run_shell_command is SENSITIVE and requires confirmation`() {
+    fun `run_shell_command is SENSITIVE, TERMINAL, and requires confirmation`() {
         val spec = ShellTool(ProcessBuilderShellExecutor(ShellSecurityPolicy())).spec
         assertEquals(SecurityLevel.SENSITIVE, spec.securityLevel)
+        assertEquals(PermissionCategory.TERMINAL, spec.permissionCategory)
         assertTrue(spec.requiresConfirmation)
     }
 

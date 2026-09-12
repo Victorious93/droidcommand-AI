@@ -1,6 +1,7 @@
 package ai.droidcommand.tools.android
 
 import ai.droidcommand.agent.AgentStateMachine
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
@@ -25,13 +26,15 @@ class DeviceToolSecureExecutorIntegrationTest {
         val registry = ToolRegistry().apply { register(TapTool(device)) }
         val stateMachine = AgentStateMachine()
         val delegate = ToolExecutor(registry, stateMachine, sleep = { })
-        return SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(SecurityPolicy()), approvalPrompt)
+        val policy = SecurityPolicy(grantedCategories = setOf(PermissionCategory.AUTOMATION))
+        return SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(policy), approvalPrompt)
     }
 
     @Test
-    fun `tap is SENSITIVE and requires confirmation`() {
+    fun `tap is SENSITIVE, AUTOMATION, and requires confirmation`() {
         val spec = TapTool(ScriptedDeviceController()).spec
         assertEquals(SecurityLevel.SENSITIVE, spec.securityLevel)
+        assertEquals(PermissionCategory.AUTOMATION, spec.permissionCategory)
         assertTrue(spec.requiresConfirmation)
     }
 
