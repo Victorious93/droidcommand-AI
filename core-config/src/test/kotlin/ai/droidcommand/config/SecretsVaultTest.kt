@@ -3,6 +3,7 @@ package ai.droidcommand.config
 import ai.droidcommand.security.AuditEvent
 import ai.droidcommand.security.AuditEventType
 import ai.droidcommand.security.AuditLog
+import ai.droidcommand.security.CapabilityId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -53,12 +54,12 @@ class SecretsVaultTest {
     @Test
     fun `listSecretIds returns only ids registered under that capability`() {
         val vault = InMemorySecretsVault()
-        vault.putSecret("token-a", "a", capabilityId = "termux.package_manager")
-        vault.putSecret("token-b", "b", capabilityId = "termux.package_manager")
-        vault.putSecret("token-c", "c", capabilityId = "remote.ssh")
+        vault.putSecret("token-a", "a", capabilityId = CapabilityId("termux.package_manager"))
+        vault.putSecret("token-b", "b", capabilityId = CapabilityId("termux.package_manager"))
+        vault.putSecret("token-c", "c", capabilityId = CapabilityId("remote.ssh"))
         vault.putSecret("token-unscoped", "u")
 
-        val ids = vault.listSecretIds("termux.package_manager")
+        val ids = vault.listSecretIds(CapabilityId("termux.package_manager"))
 
         assertEquals(setOf("token-a", "token-b"), ids.toSet())
     }
@@ -68,14 +69,14 @@ class SecretsVaultTest {
         val vault = InMemorySecretsVault()
         vault.putSecret("token-unscoped", "u")
 
-        assertEquals(emptyList(), vault.listSecretIds("termux.package_manager"))
+        assertEquals(emptyList(), vault.listSecretIds(CapabilityId("termux.package_manager")))
     }
 
     @Test
     fun `getSecret logs secret use naming the id and capability, never the value`() {
         val auditLog = RecordingAuditLog()
         val vault = InMemorySecretsVault(auditLog)
-        vault.putSecret("termux-api-token", "s3cr3t-value", capabilityId = "termux.package_manager")
+        vault.putSecret("termux-api-token", "s3cr3t-value", capabilityId = CapabilityId("termux.package_manager"))
 
         vault.getSecret("termux-api-token")
 

@@ -2,14 +2,12 @@ package ai.droidcommand.security
 
 /**
  * CAP-008, P1.0. The request/response contract between the LLM agent and the
- * (still-MISSING, CAP-012) execution router. Only the contract types are
- * defined here — no router, no capability registry, no target dispatch;
- * those are CAP-009/CAP-011/CAP-012's own, separately-gated work. This is
- * the "load-bearing type" the CAP-013/CAP-014 entries in
- * `docs/AUDIT_2026-09-05.md` already anticipated: [ApprovalRequest]'s
- * `targetType`/`capabilityId` and [ai.droidcommand.config.SecretsVault]'s
- * `capabilityId` parameter are plain [String] today precisely because this
- * type didn't exist yet.
+ * execution router ([ExecutionRouter], CAP-012). This was the "load-bearing
+ * type" the CAP-013/CAP-014 entries in `docs/AUDIT_2026-09-05.md`
+ * anticipated: [ApprovalRequest]'s `targetType`/`capabilityId` and
+ * [ai.droidcommand.config.SecretsVault]'s `capabilityId` parameter were
+ * plain [String] stand-ins until this type existed — both have since been
+ * migrated to consume the real [CapabilityId]/[ExecutionTargetType].
  *
  * Namespace-qualified capability identifier (e.g. `android.notifications.read`).
  */
