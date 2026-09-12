@@ -1,5 +1,6 @@
 package ai.droidcommand.tools.android
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
@@ -15,7 +16,12 @@ import ai.droidcommand.agent.ToolSpec
  * already treat with caution — real names and phone numbers, not metadata.
  */
 class SendSmsTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "send_sms", description = "Sends an SMS message to a phone number", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "send_sms",
+        description = "Sends an SMS message to a phone number",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.DEVICE_CONTROL,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val phoneNumber = input["phoneNumber"] ?: return ToolResult.Failure("Missing required input 'phoneNumber'")
@@ -25,7 +31,12 @@ class SendSmsTool(private val device: DeviceController) : Tool {
 }
 
 class MakeCallTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "make_call", description = "Places a phone call to a phone number", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "make_call",
+        description = "Places a phone call to a phone number",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.DEVICE_CONTROL,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val phoneNumber = input["phoneNumber"] ?: return ToolResult.Failure("Missing required input 'phoneNumber'")
@@ -34,7 +45,12 @@ class MakeCallTool(private val device: DeviceController) : Tool {
 }
 
 class ListContactsTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "list_contacts", description = "Lists the device's contacts", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "list_contacts",
+        description = "Lists the device's contacts",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.VIEW,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult = when (val result = device.listContacts()) {
         is ContactsResult.Success -> ToolResult.Success(

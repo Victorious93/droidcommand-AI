@@ -1,5 +1,6 @@
 package ai.droidcommand.tools.android
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
@@ -14,7 +15,12 @@ import ai.droidcommand.agent.ToolSpec
  * prompt's "delete authorized files" phrasing.
  */
 class ReadFileTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "read_file", description = "Reads the contents of a file on the device", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "read_file",
+        description = "Reads the contents of a file on the device",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.FILES,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val path = input["path"] ?: return ToolResult.Failure("Missing required input 'path'")
@@ -26,7 +32,12 @@ class ReadFileTool(private val device: DeviceController) : Tool {
 }
 
 class WriteFileTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "write_file", description = "Writes text content to a file on the device, optionally appending", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "write_file",
+        description = "Writes text content to a file on the device, optionally appending",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.FILES,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val path = input["path"] ?: return ToolResult.Failure("Missing required input 'path'")
@@ -37,7 +48,12 @@ class WriteFileTool(private val device: DeviceController) : Tool {
 }
 
 class MoveFileTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "move_file", description = "Moves or renames a file on the device", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "move_file",
+        description = "Moves or renames a file on the device",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.FILES,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val fromPath = input["fromPath"] ?: return ToolResult.Failure("Missing required input 'fromPath'")
@@ -47,7 +63,12 @@ class MoveFileTool(private val device: DeviceController) : Tool {
 }
 
 class CopyFileTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "copy_file", description = "Copies a file on the device", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "copy_file",
+        description = "Copies a file on the device",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.FILES,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val fromPath = input["fromPath"] ?: return ToolResult.Failure("Missing required input 'fromPath'")
@@ -57,7 +78,12 @@ class CopyFileTool(private val device: DeviceController) : Tool {
 }
 
 class DeleteFileTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "delete_file", description = "Deletes an authorized file on the device", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "delete_file",
+        description = "Deletes an authorized file on the device",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.FILES,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val path = input["path"] ?: return ToolResult.Failure("Missing required input 'path'")
@@ -66,7 +92,7 @@ class DeleteFileTool(private val device: DeviceController) : Tool {
 }
 
 class ListDirectoryTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "list_directory", description = "Lists the contents of a directory on the device")
+    override val spec = ToolSpec(name = "list_directory", description = "Lists the contents of a directory on the device", permissionCategory = PermissionCategory.FILES)
 
     override fun execute(input: Map<String, String>): ToolResult {
         val path = input["path"] ?: return ToolResult.Failure("Missing required input 'path'")

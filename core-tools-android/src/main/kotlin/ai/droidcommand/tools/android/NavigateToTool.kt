@@ -1,5 +1,6 @@
 package ai.droidcommand.tools.android
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
@@ -14,7 +15,12 @@ import ai.droidcommand.agent.ToolSpec
  * destination), not a read.
  */
 class NavigateToTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "navigate_to", description = "Launches navigation to a destination via the device's navigation app", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "navigate_to",
+        description = "Launches navigation to a destination via the device's navigation app",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.DEVICE_CONTROL,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val destination = input["destination"] ?: return ToolResult.Failure("Missing required input 'destination'")

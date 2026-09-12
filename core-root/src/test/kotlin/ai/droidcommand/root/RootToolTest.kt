@@ -1,5 +1,6 @@
 package ai.droidcommand.root
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.ToolResult
 import kotlin.test.Test
@@ -25,6 +26,7 @@ class RootToolTest {
         val spec = RootTool(NullRootExecutor()).spec
         assertTrue(spec.requiresRoot)
         assertEquals(SecurityLevel.ROOT, spec.securityLevel)
+        assertEquals(PermissionCategory.ROOT, spec.permissionCategory)
     }
 
     @Test

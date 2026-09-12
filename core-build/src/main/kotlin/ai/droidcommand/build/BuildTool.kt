@@ -1,5 +1,6 @@
 package ai.droidcommand.build
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
@@ -16,6 +17,13 @@ import ai.droidcommand.agent.ToolSpec
  * sensitive tool; this class does not reimplement approval logic.
  * [requestFactory] maps raw tool input to a [BuildRequest] without this
  * module hard-coding a specific input schema.
+ *
+ * [ai.droidcommand.agent.PermissionCategory.TERMINAL] (CAP-010): no
+ * dedicated "build" category exists in the roadmap prompt's 13-value
+ * taxonomy, and a build ultimately reaches a real executor
+ * (`core-build-local.LocalProcessBuildExecutor`) that spawns an external
+ * compiler process — the same execution shape [ai.droidcommand.shell.ShellTool]
+ * is categorized under, not a distinct kind of capability.
  */
 class BuildTool(
     private val pipeline: BuildPipeline,
@@ -25,6 +33,7 @@ class BuildTool(
         name = "build_project",
         description = "Builds a project through the DroidCommand build pipeline",
         securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.TERMINAL,
     )
 
     override fun execute(input: Map<String, String>): ToolResult {

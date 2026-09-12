@@ -1,6 +1,7 @@
 package ai.droidcommand.root
 
 import ai.droidcommand.agent.AgentStateMachine
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
@@ -89,7 +90,7 @@ class RootToolSecureExecutorIntegrationTest {
 
         val result = secure(
             executor,
-            SecurityPolicy(rootEnabled = true, rootAvailable = { true }),
+            SecurityPolicy(rootEnabled = true, rootAvailable = { true }, grantedCategories = setOf(PermissionCategory.ROOT)),
             ApprovalPrompt { false },
         ).run("run_root_command", mapOf("executable" to "id"))
 
@@ -104,7 +105,7 @@ class RootToolSecureExecutorIntegrationTest {
 
         val result = secure(
             executor,
-            SecurityPolicy(rootEnabled = true, rootAvailable = { true }),
+            SecurityPolicy(rootEnabled = true, rootAvailable = { true }, grantedCategories = setOf(PermissionCategory.ROOT)),
             ApprovalPrompt { true },
         ).run("run_root_command", mapOf("executable" to "id"))
 
@@ -118,7 +119,7 @@ class RootToolSecureExecutorIntegrationTest {
 
         val result = secure(
             executor,
-            SecurityPolicy(rootEnabled = true, rootAvailable = { true }),
+            SecurityPolicy(rootEnabled = true, rootAvailable = { true }, grantedCategories = setOf(PermissionCategory.ROOT)),
             ApprovalPrompt { true },
         ).run("run_root_command", mapOf("executable" to "rm"))
 

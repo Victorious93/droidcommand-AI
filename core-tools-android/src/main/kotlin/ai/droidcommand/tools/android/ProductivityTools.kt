@@ -1,5 +1,6 @@
 package ai.droidcommand.tools.android
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
@@ -15,7 +16,12 @@ import ai.droidcommand.agent.ToolSpec
  * already apply, not [SecurityLevel.NORMAL] like a read-only query.
  */
 class CreateCalendarEventTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "create_calendar_event", description = "Creates a calendar event", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "create_calendar_event",
+        description = "Creates a calendar event",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.DEVICE_CONTROL,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val title = input["title"] ?: return ToolResult.Failure("Missing required input 'title'")
@@ -26,7 +32,12 @@ class CreateCalendarEventTool(private val device: DeviceController) : Tool {
 }
 
 class SetAlarmTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "set_alarm", description = "Sets a device alarm for a given time of day", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "set_alarm",
+        description = "Sets a device alarm for a given time of day",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.DEVICE_CONTROL,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val hour = input["hour"]?.toIntOrNull() ?: return ToolResult.Failure("Missing or invalid required input 'hour'")
@@ -36,7 +47,12 @@ class SetAlarmTool(private val device: DeviceController) : Tool {
 }
 
 class SetTimerTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "set_timer", description = "Sets a countdown timer", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "set_timer",
+        description = "Sets a countdown timer",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.DEVICE_CONTROL,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val durationSeconds = input["durationSeconds"]?.toLongOrNull() ?: return ToolResult.Failure("Missing or invalid required input 'durationSeconds'")
@@ -45,7 +61,12 @@ class SetTimerTool(private val device: DeviceController) : Tool {
 }
 
 class SetReminderTool(private val device: DeviceController) : Tool {
-    override val spec = ToolSpec(name = "set_reminder", description = "Sets a reminder due at a given time", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "set_reminder",
+        description = "Sets a reminder due at a given time",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.DEVICE_CONTROL,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val text = input["text"] ?: return ToolResult.Failure("Missing required input 'text'")

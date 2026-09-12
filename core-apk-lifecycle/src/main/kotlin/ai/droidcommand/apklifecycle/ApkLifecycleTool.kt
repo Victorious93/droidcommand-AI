@@ -1,5 +1,6 @@
 package ai.droidcommand.apklifecycle
 
+import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
@@ -18,7 +19,12 @@ class ApkLifecycleTool(
     private val pipeline: ApkLifecyclePipeline,
     private val buildResultProvider: () -> BuildResult,
 ) : Tool {
-    override val spec = ToolSpec(name = "deploy_and_launch", description = "Installs and launches a built app on a device", securityLevel = SecurityLevel.SENSITIVE)
+    override val spec = ToolSpec(
+        name = "deploy_and_launch",
+        description = "Installs and launches a built app on a device",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.DEVICE_CONTROL,
+    )
 
     override fun execute(input: Map<String, String>): ToolResult {
         val packageName = input["packageName"] ?: return ToolResult.Failure("Missing required input 'packageName'")
