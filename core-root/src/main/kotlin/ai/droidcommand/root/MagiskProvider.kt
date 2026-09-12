@@ -144,11 +144,24 @@ class MagiskProvider(
      * requires — see [shellQuote]'s doc comment; [MagiskProviderTest]
      * proves an argument containing shell metacharacters is passed through
      * literally rather than interpreted.
+     *
+     * [RootCommand.workingDirectory]/[RootCommand.environment] are applied
+     * to the outer `su` process this method starts, exactly like
+     * `ProcessBuilderShellExecutor` applies `ShellCommand`'s equivalent
+     * fields — see [RootCommand]'s own doc comment for the honest caveat
+     * that `su` itself decides whether either survives the elevation.
      */
     override fun execute(command: RootCommand, isCancelled: () -> Boolean): RootExecutionResult {
         val quotedCommand = (listOf(command.executable) + command.args).joinToString(" ") { shellQuote(it) }
         val startedAt = System.currentTimeMillis()
-        return when (val result = runProcess(listOf(suExecutable, "-c", quotedCommand), command.timeoutMillis, isCancelled)) {
+        val result = runProcess(
+            listOf(suExecutable, "-c", quotedCommand),
+            command.timeoutMillis,
+            isCancelled,
+            workingDirectory = command.workingDirectory,
+            environment = command.environment,
+        )
+        return when (result) {
             is ProcessRunResult.Ran -> RootExecutionResult.Success(
                 exitCode = result.exitCode,
                 stdout = result.stdout,

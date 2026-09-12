@@ -304,4 +304,46 @@ class MagiskProviderTest {
         assertEquals("$maliciousArg\n", result.stdout)
         assertFalse(injectionMarker.exists(), "a crafted argument must never be interpreted as a second command")
     }
+
+    // --- RootCommand.workingDirectory / environment (widened alongside ShellCommand) ---
+
+    @Test
+    fun `a workingDirectory is applied to the real su process, and inherited by the command it runs`() {
+        val suPath = writeScript("su", suScriptAvailable())
+        val provider = MagiskProvider(suExecutable = suPath)
+        val workDir = File(tempDir, "workdir").apply { mkdir() }
+
+        val result = provider.execute(RootCommand(executable = "pwd", workingDirectory = workDir.absolutePath))
+
+        assertIs<RootExecutionResult.Success>(result)
+        assertEquals(workDir.canonicalPath, result.stdout.trim())
+    }
+
+    @Test
+    fun `environment variables are visible to the real command that actually runs`() {
+        val suPath = writeScript("su", suScriptAvailable())
+        val provider = MagiskProvider(suExecutable = suPath)
+
+        val result = provider.execute(
+            RootCommand(
+                executable = "sh",
+                args = listOf("-c", "echo \$ROOT_COMMAND_WIDEN_TEST"),
+                environment = mapOf("ROOT_COMMAND_WIDEN_TEST" to "hello-from-env"),
+            ),
+        )
+
+        assertIs<RootExecutionResult.Success>(result)
+        assertEquals("hello-from-env\n", result.stdout)
+    }
+
+    @Test
+    fun `defaults leave workingDirectory null and environment empty, matching the process's own cwd and no extra vars`() {
+        val suPath = writeScript("su", suScriptAvailable())
+        val provider = MagiskProvider(suExecutable = suPath)
+
+        val result = provider.execute(RootCommand(executable = "pwd"))
+
+        assertIs<RootExecutionResult.Success>(result)
+        assertEquals(File(".").canonicalPath, result.stdout.trim())
+    }
 }

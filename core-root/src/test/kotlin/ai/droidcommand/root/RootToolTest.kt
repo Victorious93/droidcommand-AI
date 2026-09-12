@@ -58,6 +58,20 @@ class RootToolTest {
     }
 
     @Test
+    fun `passes workingDirectory through when provided, mirroring ShellTool`() {
+        val executor = ToolScriptedRootExecutor(RootExecutionResult.Success(0, "", "", 0))
+        RootTool(executor).execute(mapOf("executable" to "pwd", "workingDirectory" to "/data/local/tmp"))
+        assertEquals("/data/local/tmp", executor.lastCommand?.workingDirectory)
+    }
+
+    @Test
+    fun `workingDirectory defaults to null when not provided`() {
+        val executor = ToolScriptedRootExecutor(RootExecutionResult.Success(0, "", "", 0))
+        RootTool(executor).execute(mapOf("executable" to "id"))
+        assertEquals(null, executor.lastCommand?.workingDirectory)
+    }
+
+    @Test
     fun `surfaces an executor-level failure directly`() {
         val executor = ToolScriptedRootExecutor(RootExecutionResult.Failure("no real rooted device"))
         val result = assertIs<ToolResult.Failure>(RootTool(executor).execute(mapOf("executable" to "id")))

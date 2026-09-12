@@ -21,16 +21,11 @@ import ai.droidcommand.security.ExecutionTargetType
  * the type describes the execution *environment* this capability belongs
  * to, not the JVM mechanics underneath it.
  *
- * **Honest, explicit limitation, not a silent behavior change:**
- * [RootCommand] has no `workingDirectory`/`environment` fields at all
- * (unlike `core-shell.ShellCommand`), so this target cannot honor a
- * caller-supplied [workingDir]/[env] the way [LocalProcessExecutionTarget]
- * can — rather than silently ignoring them (which could surprise a caller
- * relying on a working-directory containment expectation), [execute]
- * fails explicitly with a clear reason when either is non-null, without
- * ever invoking [executor]. Widening [RootCommand] itself to carry them is
- * real follow-up work, not done here since it would ripple through every
- * existing [RootExecutor] implementation and test.
+ * A caller-supplied [workingDir]/[env] is honored the same way
+ * [LocalProcessExecutionTarget] honors them — [RootCommand] now carries
+ * both fields (`docs/AUDIT_2026-09-05.md`'s "widen RootCommand" addendum),
+ * so this target no longer needs to refuse them outright the way an
+ * earlier version of this class did.
  */
 class RootExecutionTarget(
     override val id: String,
@@ -51,14 +46,14 @@ class RootExecutionTarget(
         if (argv.isEmpty()) {
             return failure("argv must contain at least one element (the executable)")
         }
-        if (workingDir != null) {
-            return failure("RootExecutionTarget does not support a working directory override: RootCommand has no such field")
-        }
-        if (env != null) {
-            return failure("RootExecutionTarget does not support environment variables: RootCommand has no such field")
-        }
 
-        val command = RootCommand(executable = argv.first(), args = argv.drop(1), timeoutMillis = timeoutMs)
+        val command = RootCommand(
+            executable = argv.first(),
+            args = argv.drop(1),
+            workingDirectory = workingDir,
+            environment = env ?: emptyMap(),
+            timeoutMillis = timeoutMs,
+        )
 
         return when (val result = executor.execute(command)) {
             is RootExecutionResult.Success -> ExecutionResult(

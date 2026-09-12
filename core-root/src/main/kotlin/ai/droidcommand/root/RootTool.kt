@@ -21,6 +21,11 @@ import ai.droidcommand.agent.ToolSpec
  * distinguish an AI-initiated request from a device-owner-initiated one)
  * before this tool may run at all, on top of the ordinary root/permission
  * check above.
+ *
+ * Input: `executable` (required), `args` (optional, space-separated — see
+ * `core-shell.ShellTool`'s identical caveat about arguments containing
+ * spaces), `workingDirectory` (optional, mirroring `ShellTool`'s own input,
+ * now that [RootCommand] carries a `workingDirectory` field to receive it).
  */
 class RootTool(
     private val executor: RootExecutor,
@@ -38,8 +43,11 @@ class RootTool(
     override fun execute(input: Map<String, String>): ToolResult {
         val executable = input["executable"] ?: return ToolResult.Failure("Missing required input 'executable'")
         val args = input["args"]?.split(" ")?.filter { it.isNotEmpty() } ?: emptyList()
+        val workingDirectory = input["workingDirectory"]
 
-        return when (val result = executor.execute(RootCommand(executable = executable, args = args))) {
+        val command = RootCommand(executable = executable, args = args, workingDirectory = workingDirectory)
+
+        return when (val result = executor.execute(command)) {
             is RootExecutionResult.Success -> if (result.exitCode == 0) {
                 ToolResult.Success(result.stdout)
             } else {
