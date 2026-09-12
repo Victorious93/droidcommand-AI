@@ -20,21 +20,21 @@ enum class RiskTier {
 
 /**
  * A request for explicit authorization of one operation. `targetType` and
- * `capabilityId` are plain [String] here rather than the roadmap prompt's
- * own `ExecutionTargetType`/`CapabilityId` types: both belong to the
- * Execution Target Abstraction and Capability Registry (CAP-008/CAP-009/
- * CAP-011, P1.0/P1.1/P1.3), all still MISSING per the CAP-### reconciliation
- * — the same "thinner than specified" approach [SecretsVault]'s own doc
- * comment already takes for the identical gap, rather than inventing whole
- * registry/router types this request shape has no other user for yet.
+ * `capabilityId` are now the real [ExecutionTargetType]/[CapabilityId]
+ * types (CAP-008, P1.0) — originally shipped as plain [String] stand-ins
+ * while those types were still MISSING per the CAP-### reconciliation, the
+ * same gap [ai.droidcommand.config.SecretsVault]'s own doc comment
+ * documented for its identical `capabilityId` parameter. `toolId` stays
+ * [String]: it identifies a [ai.droidcommand.agent.Tool], a distinct
+ * concept CAP-008 doesn't define a type for.
  */
 data class ApprovalRequest(
     val requestId: String,
     val operationDescription: String,
     val riskTier: RiskTier,
-    val targetType: String,
+    val targetType: ExecutionTargetType,
     val toolId: String,
-    val capabilityId: String,
+    val capabilityId: CapabilityId,
     val timeoutMs: Long = 60_000,
 )
 

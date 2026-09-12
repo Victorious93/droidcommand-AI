@@ -23,9 +23,9 @@ private fun request(
     requestId = "req-1",
     operationDescription = "delete everything",
     riskTier = riskTier,
-    targetType = "local_process",
+    targetType = ExecutionTargetType.LOCAL_PC,
     toolId = "rm",
-    capabilityId = "root",
+    capabilityId = CapabilityId("root"),
     timeoutMs = timeoutMs,
 )
 

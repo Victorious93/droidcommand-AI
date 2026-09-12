@@ -12,10 +12,19 @@ import ai.droidcommand.agent.SecurityLevel
  * [SecurityLevel.SENSITIVE] or [SecurityLevel.ROOT] tool always requires
  * explicit approval unless a caller deliberately widens this set, matching
  * "never give the LLM unrestricted root merely because root is available."
+ *
+ * [grantedCategories] (CAP-010, P1.2) is a separate, additive axis from
+ * [grantedPermissions]: the latter is a flat set of tool-declared
+ * permission strings ([ai.droidcommand.agent.ToolSpec.requiredPermissions]),
+ * while [grantedCategories] is the structured [PermissionCategory]
+ * taxonomy — consulted only via [isCategoryGranted], not by
+ * [SecurityPolicyEnforcer.authorize], so no existing caller is affected by
+ * its addition.
  */
 class SecurityPolicy(
     val rootEnabled: Boolean = false,
     val rootAvailable: () -> Boolean = { false },
     val grantedPermissions: Set<String> = emptySet(),
     val autoApprove: Set<SecurityLevel> = setOf(SecurityLevel.NORMAL),
+    val grantedCategories: Set<PermissionCategory> = emptySet(),
 )

@@ -3,6 +3,7 @@ package ai.droidcommand.config
 import ai.droidcommand.security.AuditEvent
 import ai.droidcommand.security.AuditEventType
 import ai.droidcommand.security.AuditLog
+import ai.droidcommand.security.CapabilityId
 
 /**
  * CAP-013, P1.5. Distinct from [ConfigSource]: a [ConfigSource] answers "what
@@ -13,13 +14,12 @@ import ai.droidcommand.security.AuditLog
  * given capability owns without ever seeing another capability's secret
  * value in the process.
  *
- * `capabilityId` is plain [String] here rather than the roadmap prompt's own
- * `CapabilityId` type: the Capability Registry (CAP-008/CAP-009, P1.0/P1.1)
- * that type belongs to is still MISSING in this repository (per
- * `docs/AUDIT_2026-09-05.md`'s CAP-### reconciliation), so this slice takes
- * the same "thinner than specified" approach already documented there for
- * `RiskTier`'s missing companion types, rather than inventing a whole
- * registry type this module has no other user for.
+ * `capabilityId` is now a real [CapabilityId] (CAP-008, P1.0) — this module
+ * already depended on `core-security`, so no new module dependency was
+ * needed for the migration. Originally shipped as a plain [String] stand-in
+ * while [CapabilityId] was still MISSING (per `docs/AUDIT_2026-09-05.md`'s
+ * CAP-### reconciliation); the CAP-013/CAP-014 entries that named this as
+ * follow-up work are now closed out here.
  *
  * The roadmap prompt's own `putSecret(secretId, value)` signature has no
  * `capabilityId` parameter, yet `listSecretIds(capabilityId)` requires one —
@@ -33,11 +33,11 @@ import ai.droidcommand.security.AuditLog
 interface SecretsVault {
     fun getSecret(secretId: String): String?
 
-    fun putSecret(secretId: String, value: String, capabilityId: String? = null)
+    fun putSecret(secretId: String, value: String, capabilityId: CapabilityId? = null)
 
     fun revokeSecret(secretId: String)
 
-    fun listSecretIds(capabilityId: String): List<String>
+    fun listSecretIds(capabilityId: CapabilityId): List<String>
 }
 
 /**
@@ -59,14 +59,14 @@ interface EnhancedConfigSource : ConfigSource {
  * whether a call succeeds, only whether it is recorded.
  */
 class InMemorySecretsVault(private val auditLog: AuditLog? = null) : SecretsVault {
-    private data class Entry(val value: String, val capabilityId: String?)
+    private data class Entry(val value: String, val capabilityId: CapabilityId?)
 
     private val secrets = mutableMapOf<String, Entry>()
 
     @Synchronized
     override fun getSecret(secretId: String): String? {
         val entry = secrets[secretId]
-        val owner = entry?.capabilityId ?: "unscoped"
+        val owner = entry?.capabilityId?.value ?: "unscoped"
         val outcome = if (entry != null) "success" else "not found"
         auditLog?.record(
             AuditEvent(
@@ -79,7 +79,7 @@ class InMemorySecretsVault(private val auditLog: AuditLog? = null) : SecretsVaul
     }
 
     @Synchronized
-    override fun putSecret(secretId: String, value: String, capabilityId: String?) {
+    override fun putSecret(secretId: String, value: String, capabilityId: CapabilityId?) {
         secrets[secretId] = Entry(value, capabilityId)
     }
 
@@ -91,7 +91,7 @@ class InMemorySecretsVault(private val auditLog: AuditLog? = null) : SecretsVaul
     }
 
     @Synchronized
-    override fun listSecretIds(capabilityId: String): List<String> =
+    override fun listSecretIds(capabilityId: CapabilityId): List<String> =
         secrets.filterValues { it.capabilityId == capabilityId }.keys.toList()
 }
 
