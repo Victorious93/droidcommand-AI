@@ -70,34 +70,29 @@ class RootExecutionTargetTest {
     }
 
     @Test
-    fun `a non-null workingDir fails without calling the underlying executor`() {
+    fun `argv is split into executable and args, workingDir-env-timeout are forwarded`() {
         val executor = RecordingRootExecutor(true, RootExecutionResult.Success(0, "", "", 0))
-        val result = RootExecutionTarget("root-1", context(), executor).execute(listOf("id"), workingDir = "/tmp")
-
-        assertEquals(0, executor.callCount)
-        assertEquals(-1, result.exitCode)
-        assertTrue(result.stderr.contains("working directory"))
-    }
-
-    @Test
-    fun `a non-null env fails without calling the underlying executor`() {
-        val executor = RecordingRootExecutor(true, RootExecutionResult.Success(0, "", "", 0))
-        val result = RootExecutionTarget("root-1", context(), executor).execute(listOf("id"), env = mapOf("FOO" to "bar"))
-
-        assertEquals(0, executor.callCount)
-        assertEquals(-1, result.exitCode)
-        assertTrue(result.stderr.contains("environment"))
-    }
-
-    @Test
-    fun `argv is split into executable and args, timeoutMs is forwarded`() {
-        val executor = RecordingRootExecutor(true, RootExecutionResult.Success(0, "", "", 0))
-        RootExecutionTarget("root-1", context(), executor).execute(listOf("id", "-u"), timeoutMs = 5_000)
+        RootExecutionTarget("root-1", context(), executor).execute(
+            argv = listOf("id", "-u"),
+            workingDir = "/tmp",
+            env = mapOf("FOO" to "bar"),
+            timeoutMs = 5_000,
+        )
 
         val command = executor.lastCommand!!
         assertEquals("id", command.executable)
         assertEquals(listOf("-u"), command.args)
+        assertEquals("/tmp", command.workingDirectory)
+        assertEquals(mapOf("FOO" to "bar"), command.environment)
         assertEquals(5_000, command.timeoutMillis)
+    }
+
+    @Test
+    fun `a null env forwards an empty map, not null`() {
+        val executor = RecordingRootExecutor(true, RootExecutionResult.Success(0, "", "", 0))
+        RootExecutionTarget("root-1", context(), executor).execute(argv = listOf("id"), env = null)
+
+        assertEquals(emptyMap(), executor.lastCommand!!.environment)
     }
 
     @Test

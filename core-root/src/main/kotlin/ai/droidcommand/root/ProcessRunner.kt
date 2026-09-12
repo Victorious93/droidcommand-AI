@@ -24,10 +24,25 @@ internal sealed class ProcessRunResult {
  * pattern `core-shell.ProcessBuilderShellExecutor` already established and
  * is real-subprocess-tested against, applied here rather than duplicated
  * with subtle differences.
+ *
+ * [workingDirectory]/[environment] default to `null`/empty so every
+ * pre-existing caller (the detection probes, which have no need for
+ * either) is unaffected; [MagiskProvider.execute] is the only caller that
+ * passes a non-default value, threaded straight from [RootCommand].
  */
-internal fun runProcess(argv: List<String>, timeoutMillis: Long, isCancelled: () -> Boolean = { false }): ProcessRunResult {
+internal fun runProcess(
+    argv: List<String>,
+    timeoutMillis: Long,
+    isCancelled: () -> Boolean = { false },
+    workingDirectory: String? = null,
+    environment: Map<String, String> = emptyMap(),
+): ProcessRunResult {
+    val builder = ProcessBuilder(argv)
+    workingDirectory?.let { builder.directory(java.io.File(it)) }
+    builder.environment().putAll(environment)
+
     val process = try {
-        ProcessBuilder(argv).start()
+        builder.start()
     } catch (e: IOException) {
         return ProcessRunResult.FailedToStart(e.message ?: "process failed to start")
     }
