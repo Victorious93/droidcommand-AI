@@ -44,7 +44,7 @@ re-verifying something.
 
 ## What's already been verified (don't re-derive)
 
-- This is a 19-module pure-Kotlin/JVM Gradle project (confirmed directly
+- This is a 20-module pure-Kotlin/JVM Gradle project (confirmed directly
   against `settings.gradle.kts`; `core-mcp`, `core-integration-tests`
   (a test-only module with no `src/main`, holding cross-module integration
   tests that need two sibling modules together — e.g. `core-shell` and
@@ -56,12 +56,19 @@ re-verifying something.
   instructions/Forge objectives through a real `DroidCommandSession`,
   built with `LlmProviderFactory.createPlanner`; distinct from the
   still-PLANNED Android `:app` module, which this environment has no SDK
-  to build), and, most recently, `core-termux` (2026-09-13 — fills
+  to build), `core-termux` (2026-09-13 — fills
   `core-security.ExecutionTargetType.TERMUX`, surfaced by a first-time
   survey of `android-code-studio`/AndroidIDE; see the "Termux
-  ExecutionTarget" audit addendum) were each added after an earlier
-  module-count figure was first written elsewhere in this repo's docs —
-  don't trust an older module count without checking `settings.gradle.kts`).
+  ExecutionTarget" audit addendum), and, most recently, `core-prompt-regen`
+  (2026-09-13 — the Prompt Regenerator, a new capability requested directly
+  by the project owner and out of band from the `CAP-###` roster, not a
+  fabricated `CAP-037`; a deterministic, LLM-free pipeline that turns a
+  vague/incomplete user request into a structured, optimized prompt for
+  Claude Code/Codex/GPT/Gemini/local models, wired into `cli` as
+  `regenerate-prompt`; see the "Prompt Regenerator" audit addendum) were
+  each added after an earlier module-count figure was first written
+  elsewhere in this repo's docs — don't trust an older module count
+  without checking `settings.gradle.kts`).
   No Android SDK, no
   device, no root, no LLM credentials, no MCP client exist in most build
   environments this project runs in — everything downstream of those

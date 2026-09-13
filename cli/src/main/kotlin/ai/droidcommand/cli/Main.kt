@@ -61,6 +61,12 @@ import kotlin.system.exitProcess
  * `DROIDCOMMAND_LLM_PROVIDER_IDS`.
  */
 fun main(args: Array<String>) {
+    // Forces UTF-8 regardless of the host's default charset/locale (this environment's is POSIX/C,
+    // which otherwise mangles non-ASCII output — e.g. `regenerate-prompt`'s em dashes — into '?').
+    // A prompt handed to another AI must survive byte-for-byte; the platform default is not a safe bet.
+    System.setOut(java.io.PrintStream(java.io.FileOutputStream(java.io.FileDescriptor.out), true, Charsets.UTF_8))
+    System.setErr(java.io.PrintStream(java.io.FileOutputStream(java.io.FileDescriptor.err), true, Charsets.UTF_8))
+
     if (args.isEmpty() || args[0] in setOf("-h", "--help", "help")) {
         printUsage()
         exitProcess(if (args.isEmpty()) 1 else 0)
@@ -75,6 +81,7 @@ fun main(args: Array<String>) {
         }
         "pilot" -> runPilot(session, args.drop(1))
         "forge" -> runForge(session, args.drop(1))
+        "regenerate-prompt" -> runRegeneratePrompt(args.drop(1))
         else -> {
             System.err.println("Unknown command '$command'")
             printUsage()
@@ -197,6 +204,11 @@ internal fun printUsage() {
           list-tools                     List every registered tool and its spec
           pilot <tool> [key=value ...]   Run a single Pilot Mode tool invocation
           forge <objective text...>      Run a Forge Mode objective via an LLM planner
+          regenerate-prompt <input...>   Turn a vague request into an optimized prompt for another AI
+                                          [--target claude|codex|gpt|gemini|local|general]
+                                          [--repo <path>] [--previous-response-file <path>]
+                                          [--shorter|--more-detailed|--more-technical]
+                                          [--adapt claude|codex|gpt|gemini|local]
 
         Forge Mode reads its LLM configuration from the process environment
         (ai.droidcommand.config.EnvConfigSource), using the same
@@ -208,6 +220,7 @@ internal fun printUsage() {
         Examples:
           pilot echo text=hello
           forge "Echo the word hello"
+          regenerate-prompt "fix the login bug" --target claude
         """.trimIndent(),
     )
 }
