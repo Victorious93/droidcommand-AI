@@ -15,6 +15,7 @@ dependencies {
     implementation(project(":core-security"))
     implementation(project(":core-shell"))
     implementation(project(":core-root"))
+    implementation(project(":core-termux"))
     implementation(project(":core-build"))
     testImplementation(kotlin("test"))
 }
