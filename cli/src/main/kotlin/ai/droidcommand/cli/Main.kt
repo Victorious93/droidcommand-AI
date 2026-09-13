@@ -36,6 +36,8 @@ import ai.droidcommand.security.SecurityPolicyEnforcer
 import ai.droidcommand.shell.ProcessBuilderShellExecutor
 import ai.droidcommand.shell.ShellSecurityPolicy
 import ai.droidcommand.shell.ShellTool
+import ai.droidcommand.termux.NullTermuxExecutor
+import ai.droidcommand.termux.TermuxTool
 import java.nio.file.Path
 import kotlin.system.exitProcess
 
@@ -90,14 +92,19 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * caller-injectable, mirroring [runForge]'s `configSource`/`transport` parameters, so tests can
  * supply a scripted prompt instead of blocking on real stdin.
  *
- * `run_shell_command`/`run_root_command`/`build_project` are now registered alongside [EchoTool] —
- * each is `SENSITIVE`/`ROOT`, so unlike `EchoTool` (`NORMAL`, auto-approved), all three go through
- * [SecureToolExecutor]'s real policy/approval gate before ever reaching their executor. Every one
- * is denied-by-default until explicitly configured or approved: `run_shell_command` has an empty
- * allowed-executable list unless `DROIDCOMMAND_CLI_SHELL_ALLOWED_EXECUTABLES` is set;
- * `run_root_command` is denied outright ([SecurityPolicy.rootEnabled] is `false` and
- * [PermissionCategory.ROOT] is not granted) regardless of the approval prompt's answer, since this
- * environment has no real root executor ([NullRootExecutor] fails cleanly either way);
+ * `run_shell_command`/`run_root_command`/`run_termux_command`/`build_project` are now registered
+ * alongside [EchoTool] — each is `SENSITIVE`/`ROOT`, so unlike `EchoTool` (`NORMAL`, auto-approved),
+ * all four go through [SecureToolExecutor]'s real policy/approval gate before ever reaching their
+ * executor. Every one is denied-by-default until explicitly configured or approved:
+ * `run_shell_command` has an empty allowed-executable list unless
+ * `DROIDCOMMAND_CLI_SHELL_ALLOWED_EXECUTABLES` is set; `run_root_command` is denied outright
+ * ([SecurityPolicy.rootEnabled] is `false` and [PermissionCategory.ROOT] is not granted) regardless
+ * of the approval prompt's answer, since this environment has no real root executor
+ * ([NullRootExecutor] fails cleanly either way); `run_termux_command` is backed by
+ * [NullTermuxExecutor] for the same reason — this environment has no adb/device/Termux, so it fails
+ * cleanly rather than fabricating a Termux backend (a real one, `ai.droidcommand.termux.AdbTermuxExecutor`,
+ * exists but is `IMPLEMENTED — NOT RUNTIME VERIFIED`; wiring it in here would need real hardware to
+ * configure against, which this CLI's device-free design deliberately does not assume);
  * `build_project` uses [LocalProcessBuildExecutor], the same real, allow-listed
  * [ProcessBuilderShellExecutor] [ShellTool] uses — a build command is, at the OS level, just another
  * shell command, so both tools share one allowlist rather than this CLI inventing a second, separate
@@ -112,6 +119,7 @@ internal fun buildSession(approvalPrompt: ApprovalPrompt = ConsoleApprovalPrompt
         register(EchoTool())
         register(ShellTool(ProcessBuilderShellExecutor(shellSecurityPolicy())))
         register(RootTool(NullRootExecutor()))
+        register(TermuxTool(NullTermuxExecutor()))
         register(BuildTool(buildPipeline(), ::buildRequestFromInput))
     }
     val stateMachine = AgentStateMachine()

@@ -44,21 +44,25 @@ re-verifying something.
 
 ## What's already been verified (don't re-derive)
 
-- This is an 18-module pure-Kotlin/JVM Gradle project (confirmed directly
+- This is a 19-module pure-Kotlin/JVM Gradle project (confirmed directly
   against `settings.gradle.kts`; `core-mcp`, `core-integration-tests`
   (a test-only module with no `src/main`, holding cross-module integration
   tests that need two sibling modules together — e.g. `core-shell` and
   `core-root`, neither of which depends on the other), `core-llm-factory`
   (2026-09-12 — the provider-construction factory closing the second half
   of "config-driven multi-provider construction"; `core-config.MultiLlmConfigLoader`
-  had already closed the config-loading half), and, most recently, `cli`
+  had already closed the config-loading half), `cli`
   (2026-09-12 — the device-free CLI entrypoint that dispatches Pilot
   instructions/Forge objectives through a real `DroidCommandSession`,
   built with `LlmProviderFactory.createPlanner`; distinct from the
   still-PLANNED Android `:app` module, which this environment has no SDK
-  to build) were each added after an earlier module-count figure was first
-  written elsewhere in this repo's docs — don't trust an older module count
-  without checking `settings.gradle.kts`). No Android SDK, no
+  to build), and, most recently, `core-termux` (2026-09-13 — fills
+  `core-security.ExecutionTargetType.TERMUX`, surfaced by a first-time
+  survey of `android-code-studio`/AndroidIDE; see the "Termux
+  ExecutionTarget" audit addendum) were each added after an earlier
+  module-count figure was first written elsewhere in this repo's docs —
+  don't trust an older module count without checking `settings.gradle.kts`).
+  No Android SDK, no
   device, no root, no LLM credentials, no MCP client exist in most build
   environments this project runs in — everything downstream of those
   (device control, root execution, live LLM calls, real builds/APKs) is
@@ -85,6 +89,18 @@ re-verifying something.
   are extracted into `DP-###`/`OD-###` rows — read those rather than
   re-cloning and re-inspecting either repo, unless a specific task needs a
   fresh lookup neither doc covers.
+- A third repo, `android-code-studio` (AndroidIDE,
+  `https://github.com/Victorious93/android-code-studio`), was surveyed for
+  the first time on 2026-09-13 (`AC-###` rows, same addendum). It's a full
+  Android IDE — almost none of it overlaps this project's domain, and it's
+  **GPLv3** (this repo has no `LICENSE` file at all, so copying its source
+  would create real copyleft obligations — don't). The one relevant finding
+  was its bundled Termux app surfacing `core-security`'s already-declared-
+  but-unimplemented `ExecutionTargetType.TERMUX` slot; the adopted capability
+  is the *public, documented* `com.termux.RUN_COMMAND` intent protocol,
+  implemented clean-room in the new `core-termux` module — not any GPLv3
+  source. Don't re-clone/re-survey `android-code-studio` unless a specific
+  task needs a fresh lookup the addendum doesn't cover.
 
 ## How to continue the work
 

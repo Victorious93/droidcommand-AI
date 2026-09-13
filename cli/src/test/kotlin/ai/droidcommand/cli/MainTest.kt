@@ -35,7 +35,7 @@ class MainTest {
         val cliSession = buildSession()
         val specs = cliSession.registry.list()
         assertEquals(
-            listOf("echo", "run_shell_command", "run_root_command", "build_project"),
+            listOf("echo", "run_shell_command", "run_root_command", "run_termux_command", "build_project"),
             specs.map { it.name },
         )
     }
@@ -55,6 +55,12 @@ class MainTest {
     @Test
     fun `pilot run_root_command is denied outright regardless of the approval prompt's answer`() {
         val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("run_root_command", "executable=id"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot run_termux_command fails cleanly against NullTermuxExecutor, even when approved`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("run_termux_command", "executable=echo"))
         assertEquals(1, exitCode)
     }
 
