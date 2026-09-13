@@ -17,6 +17,7 @@ dependencies {
     implementation(project(":core-root"))
     implementation(project(":core-termux"))
     implementation(project(":core-build"))
+    implementation(project(":core-build-local"))
     testImplementation(kotlin("test"))
 }
 

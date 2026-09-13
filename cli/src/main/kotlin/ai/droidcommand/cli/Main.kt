@@ -16,12 +16,12 @@ import ai.droidcommand.build.BuildSecurityPolicy
 import ai.droidcommand.build.BuildTarget
 import ai.droidcommand.build.BuildTool
 import ai.droidcommand.build.EnvironmentTool
-import ai.droidcommand.build.MockBuildExecutor
 import ai.droidcommand.build.ProjectType
 import ai.droidcommand.build.SourceLocation
 import ai.droidcommand.build.ToolAvailability
 import ai.droidcommand.build.ToolCheckResult
 import ai.droidcommand.build.WorkspaceManager
+import ai.droidcommand.build.local.LocalProcessBuildExecutor
 import ai.droidcommand.config.ConfigSource
 import ai.droidcommand.config.EnvConfigSource
 import ai.droidcommand.llm.factory.LlmProviderFactory
@@ -105,9 +105,11 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * cleanly rather than fabricating a Termux backend (a real one, `ai.droidcommand.termux.AdbTermuxExecutor`,
  * exists but is `IMPLEMENTED — NOT RUNTIME VERIFIED`; wiring it in here would need real hardware to
  * configure against, which this CLI's device-free design deliberately does not assume);
- * `build_project` uses [MockBuildExecutor] — an honest, non-executing placeholder, the same
- * `EchoTool`-style "no real capability behind this yet" framing, not a real compiler/Gradle
- * invocation. No [ai.droidcommand.security.GrantStore]/[ai.droidcommand.security.AuditLog] is
+ * `build_project` uses [LocalProcessBuildExecutor], the same real, allow-listed
+ * [ProcessBuilderShellExecutor] [ShellTool] uses — a build command is, at the OS level, just another
+ * shell command, so both tools share one allowlist rather than this CLI inventing a second, separate
+ * one; with no build command supplied at all it fails via [LocalProcessBuildExecutor]'s own "No
+ * build command configured" message. No [ai.droidcommand.security.GrantStore]/[ai.droidcommand.security.AuditLog] is
  * wired: neither tool declares a `grantCapability`, and this CLI is one command per process
  * invocation with no persistence across runs, so an in-memory audit log nobody ever reads back
  * would be inert plumbing — a named follow-up, not silently added.
@@ -143,25 +145,46 @@ private fun shellSecurityPolicy() = ShellSecurityPolicy(
 /**
  * Workspace root defaults to the process's current working directory, matching this module's own
  * "no CLI-specific config file, use what the environment already gives you" precedent
- * ([EnvConfigSource]). [MockBuildExecutor] is the real, already-shipped honest placeholder — no
- * real compiler/Gradle invocation is wired in this slice.
+ * ([EnvConfigSource]). [LocalProcessBuildExecutor] delegates the actual command spawn to the same
+ * allow-listed [ShellSecurityPolicy]/[ProcessBuilderShellExecutor] [ShellTool] uses via
+ * [shellSecurityPolicy] — no second, parallel process-execution path.
  */
 private fun buildPipeline() = BuildPipeline(
     WorkspaceManager(listOf(Path.of(System.getProperty("user.dir")))),
-    MockBuildExecutor(),
+    LocalProcessBuildExecutor(ProcessBuilderShellExecutor(shellSecurityPolicy())),
     object : BuildEnvironmentDetector {
         override fun check(tool: EnvironmentTool) = ToolCheckResult(tool, ToolAvailability.AVAILABLE)
     },
 )
 
-/** [BuildRequest.securityConstraints.allowedWorkspaceRoots][BuildSecurityPolicy.allowedWorkspaceRoots] must match [buildPipeline]'s [WorkspaceManager.authorizedRoots] exactly (as strings), or every request is denied with `SecurityDenied` regardless of approval. */
+/**
+ * [BuildRequest.securityConstraints.allowedWorkspaceRoots][BuildSecurityPolicy.allowedWorkspaceRoots]
+ * must match [buildPipeline]'s [WorkspaceManager.authorizedRoots] exactly (as strings), or every
+ * request is denied with `SecurityDenied` regardless of approval. [LocalProcessBuildExecutor] never
+ * invents a build command from [ProjectType] — it reads `metadata["command.executable"]`
+ * (required)/`metadata["command.args"]`/`metadata["artifact.paths"]` verbatim, so those three tool
+ * input keys are threaded straight through to [BuildRequest.metadata] unchanged rather than this CLI
+ * inventing a second naming scheme for the same thing.
+ *
+ * `sourceDir` is a **required** input, not defaulted to [buildPipeline]'s own working directory —
+ * found the hard way (a real, approved `build_project` invocation) that a build's source directory
+ * defaulting to the same directory a workspace gets created *under* makes `WorkspaceManager.create`'s
+ * fresh workspace subdirectory itself part of the tree `WorkspaceManager.importSource` then tries to
+ * copy, recursing until the filesystem refuses ("File name too long"). Requiring an explicit,
+ * distinct `sourceDir` avoids ever constructing that self-referential request in the first place;
+ * `WorkspaceManager`/`BuildPipeline` themselves behave exactly as documented (copy source into a new
+ * workspace) — the hazard is only in *this CLI* ever defaulting the two to the same path, so the fix
+ * belongs here, not in `core-build`.
+ */
 private fun buildRequestFromInput(input: Map<String, String>): BuildRequest {
+    val sourceDir = input["sourceDir"] ?: throw IllegalArgumentException("Missing required input 'sourceDir'")
     val root = System.getProperty("user.dir")
     return BuildRequest(
-        sourceLocation = SourceLocation.LocalDirectory(input["sourceDir"] ?: root),
+        sourceLocation = SourceLocation.LocalDirectory(sourceDir),
         projectType = input["projectType"]?.let { ProjectType.valueOf(it.uppercase()) } ?: ProjectType.JVM,
         target = input["target"]?.let { BuildTarget.valueOf(it.uppercase()) } ?: BuildTarget.DEBUG,
         securityConstraints = BuildSecurityPolicy(allowedWorkspaceRoots = listOf(root)),
+        metadata = input.filterKeys { it == "command.executable" || it == "command.args" || it == "artifact.paths" },
     )
 }
 

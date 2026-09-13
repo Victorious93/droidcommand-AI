@@ -65,8 +65,8 @@ class MainTest {
     }
 
     @Test
-    fun `pilot build_project fails cleanly and touches no filesystem when approval is refused`() {
-        val exitCode = runPilot(buildSession(ApprovalPrompt { false }), listOf("build_project"))
+    fun `pilot build_project fails cleanly and touches no filesystem when approval is refused, even with a build command supplied`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { false }), listOf("build_project", "command.executable=echo"))
         assertEquals(1, exitCode)
     }
 
