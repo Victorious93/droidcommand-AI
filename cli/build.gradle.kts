@@ -18,6 +18,7 @@ dependencies {
     implementation(project(":core-termux"))
     implementation(project(":core-build"))
     implementation(project(":core-build-local"))
+    implementation(project(":core-prompt-regen"))
     testImplementation(kotlin("test"))
 }
 

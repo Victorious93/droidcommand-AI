@@ -19,6 +19,7 @@ include(":core-build-remote")
 include(":core-mcp")
 include(":core-integration-tests")
 include(":cli")
+include(":core-prompt-regen")
 
 // The following modules are part of the target architecture (see
 // docs/ARCHITECTURE.md) but do not yet contain implemented code and are
