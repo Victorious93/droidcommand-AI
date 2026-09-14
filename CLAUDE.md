@@ -197,3 +197,325 @@ checkout -B <branch> origin/main`) rather than stacking on stale history.
   `ExecutionRouter`/`CapabilityManager` integration, and Terminal/UI display
   were deliberately not built since none of those exist yet in this
   repository — don't mistake their absence for an oversight.
+
+---
+
+## Consumer Product Roadmap (DroidCommand AI — App Layer)
+
+This section documents a phased plan to build DroidCommand AI into a
+consumer-facing Android app: a privacy-first AI chat platform combining
+on-device local model inference (`ProviderType.LOCAL`) with cloud BYOK
+providers (`ProviderType.CLOUD`/`SELF_HOSTED`) in a Jetpack Compose UI. It
+was drafted against this repo's actual current state (verified 2026-09-14
+against `settings.gradle.kts` and the modules it names) — a session
+proposed an initial version of this section; the numbers and a couple of
+technical claims below are corrected from that draft rather than taken on
+faith, per findings noted inline.
+
+### Workflow rules (apply to every phase below)
+
+- **No pull request is ever opened automatically for this roadmap's work.**
+  Commit to the phase's feature branch; open a PR only when explicitly
+  requested ("open PR" / "create PR for phase N"). This is a stricter,
+  phase-scoped version of this file's own general "open a PR, watch it
+  through CI" step above — that step still applies to ordinary audit-driven
+  work; treat this override as specific to Consumer Roadmap phases.
+- **One phase at a time.** Don't start Phase N+1 until the human approves
+  Phase N.
+- **No fabricated completions.** Every file delivered must be genuine,
+  compilable, tested Kotlin — this is the same honesty convention this repo
+  already applies everywhere else (`Null*`/`Mock*` self-documentation, the
+  audit's VERIFIED IMPLEMENTED/PARTIAL/STUB/MISSING grading). Never mark
+  something IMPLEMENTED unless `./gradlew test` passes for that
+  module/slice; state exactly what was tested and what was not.
+- **Preserve all existing modules.** The 20 modules currently in
+  `settings.gradle.kts` (`core-agent`, `core-llm`, `core-security`,
+  `core-config`, `core-remote`, `core-build`, `core-tools-android`,
+  `core-shell`, `core-apk-lifecycle`, `core-root`, `core-termux`,
+  `core-llm-anthropic`, `core-llm-openai`, `core-llm-factory`,
+  `core-build-local`, `core-build-remote`, `core-mcp`,
+  `core-integration-tests`, `cli`, `core-prompt-regen`) are source of truth.
+  New work wires to them; it doesn't rewrite them unless a real bug is
+  found. **Correction to an earlier draft of this section:** that draft
+  said "19 existing pure-JVM modules" and listed 13 of them, omitting
+  `core-llm-factory`, `core-mcp`, `core-integration-tests`, `cli`, and
+  `core-prompt-regen` entirely — that was a stale/incomplete snapshot, not
+  this repo's real state. Re-check `settings.gradle.kts` at the start of
+  each phase rather than trusting this count once it ages, per this file's
+  own standing rule above.
+- **ARCHITECTURE.md and AUDIT docs stay current.** Every phase that adds or
+  changes a component updates `docs/ARCHITECTURE.md`'s status table and
+  appends a dated entry to `docs/AUDIT_2026-09-05.md`, per this repo's
+  append-only convention — never rewrite an existing addendum entry.
+- **Branch naming:** `feature/phase-N-<slug>` (e.g.
+  `feature/phase-0-android-shell`).
+- **Commit style:** matches existing repo convention —
+  `feat(module): description (CAP-### if applicable)`.
+
+---
+
+### Phase 0 — Android App Shell (Foundation)
+**Status:** NOT STARTED
+**Branch:** `feature/phase-0-android-shell`
+**Depends on:** nothing new — wires to existing `core-llm`, `core-agent`, `core-config`
+
+Adds the `app/` module: the first Android-SDK-dependent module in this
+repo (`docs/ARCHITECTURE.md`'s `app (Android shell)` row is currently
+PLANNED — no directory, Gradle file, or manifest exists yet, and this
+JVM-only environment has no Android SDK to build one; see that row and
+`cli`'s own row for the already-documented distinction between the two).
+A minimal, real, runnable APK: Hilt DI wired through, a Compose navigation
+skeleton, and stub screens only (no inference, no chat) — scaffolding for
+every later phase. `settings.gradle.kts` gets `include(":app")`.
+
+**Acceptance:** `./gradlew :app:assembleDebug` succeeds; app launches on
+an emulator (API 26+) with stub screens; `./gradlew test` still passes
+across all 20 existing modules (zero regressions in anything above).
+
+---
+
+### Phase 1 — Multi-Provider Cloud BYOK (GPT, Claude, Gemini, Groq)
+**Status:** NOT STARTED
+**Branch:** `feature/phase-1-cloud-providers`
+**Depends on:** Phase 0, existing `core-llm-anthropic`, `core-llm-openai`
+
+Adds `core-llm-google` (Gemini — its own JSON shape via `generateContent`,
+not OpenAI-compatible, but the same `LlmProvider` contract) and
+`core-llm-groq` (OpenAI-compatible; can extend `core-llm-openai`'s
+transport and override only base URL + model list — verified structurally
+plausible: `core-llm-anthropic`/`core-llm-openai` each ship exactly two
+files today, a `*Provider` and a `*Api`/`*MessagesApi`, a pattern
+`core-llm-groq` can follow directly). Adds `core-conversations`
+(Room-backed chat storage replacing `JsonFileConversationStore` for
+Android — that class and the `ConversationStore` interface it implements
+are real and exist today in `core-agent`; Room is genuinely new). Adds API
+key entry in Settings, wired to the real `SecretsVault`/
+`VaultBackedConfigSource` pair in `core-config` (both verified to exist,
+CAP-013) via a new `KeystoreSecretsVault` backed by Android Keystore /
+`EncryptedSharedPreferences`. Adds a model picker and a working end-to-end
+chat screen (type → send → stream → display).
+
+**Acceptance:** API keys enterable per provider; provider+model
+selectable; chat streams a real response; conversations persist across
+restarts; `./gradlew test` passes, and `core-llm-google`'s tests run
+against a local mock server, never a live API.
+
+---
+
+### Phase 2 — Local Model Inference (llama.cpp / GGUF)
+**Status:** NOT STARTED
+**Branch:** `feature/phase-2-local-inference`
+**Depends on:** Phase 1
+
+Adds `core-llm-local`, filling the `ProviderType.LOCAL` slot with a real
+llama.cpp JNI bridge (`core-llm/src/main/kotlin/.../ProviderType.kt`
+already declares `LOCAL`/`SELF_HOSTED`/`CLOUD`; only `LOCAL` has zero
+real-provider backing today). First NDK/CMake module in this repo — a
+thin JNI shim only (`llama_jni.cpp` has `Java_*` entrypoints, no inference
+logic of its own), linking a prebuilt `libllama.so` per ABI
+(arm64-v8a/armeabi-v7a/x86_64). OpenCL (Adreno) and Vulkan backends
+compiled in; CPU/OpenCL/Vulkan selection automatic by device capability,
+user-overridable in Settings. Model management (`ModelMetadata`,
+`ModelRepository` with SHA-256 integrity checking) extends
+`core-conversations`.
+
+**Correction to an earlier draft of this section:** that draft claimed
+`AiProviderSelector` "already has latency/resource hooks" that this phase
+would merely fill with real data. That's false as of 2026-09-14 —
+`core-llm/src/main/kotlin/ai/droidcommand/llm/AiProviderSelector.kt`'s own
+doc comment states plainly that P0.4 names latency and resource
+(memory/GPU) as selection factors but "no real measurement of either
+exists anywhere in this repository... Neither is implemented here."
+`ProviderPreferences` today filters only on capability, context length,
+`requireLocal`, and cost. This phase would be the **first** place real
+latency/resource numbers exist in this codebase (via a `ModelBenchmark`
+utility) — extending `ProviderPreferences`/`DefaultAiProviderSelector` to
+actually use them is new work this phase must scope explicitly, not a
+pre-existing hook being wired up.
+
+**App size / distribution — raised directly by the project owner, not in
+the original draft:** llama.cpp's native libraries (three ABIs) plus any
+bundled or downloaded GGUF model (even a 1B-parameter Q4 quantization runs
+several hundred MB) make this by far the heaviest phase in APK/storage
+terms. Don't fold this into one ever-larger monolithic `app` APK by
+default. Two real options, not mutually exclusive:
+1. **Play Feature Delivery on-demand dynamic feature module** — same
+   logical app, one Play listing, but the native libs + model-download
+   flow ship as an on-demand module the base APK doesn't carry; a user who
+   never enables local inference never downloads any of it. Simplest
+   option if Play Store is the distribution target; no IPC design needed.
+2. **A genuinely separate companion app**, communicating with `app` over
+   AIDL/a bound service or intents, independently installable/
+   uninstallable and reclaiming its own storage on removal. This is not a
+   new pattern for this repo — `core-termux` already integrates with a
+   separate, independently-installed app (Termux) purely through the
+   public `com.termux.RUN_COMMAND` intent protocol, and `core-root`'s
+   Magisk path assumes a separate privileged app too. A companion
+   "DroidCommand AI: Local Models" app would extend that same established
+   precedent rather than introduce a new one, and works outside Play
+   distribution (sideloading/F-Droid-style), which this project has not
+   ruled out — it has no `LICENSE` file and no stated distribution channel
+   anywhere in its docs today.
+
+Recommendation: default to (1) for the initial ship (far less design/IPC
+surface), and treat (2) as the path if this project ends up outside Play
+distribution — this is a design decision Phase 2 should make explicit and
+record in its own addendum, not one this roadmap section can settle in
+advance. The same choice applies to Phase 5's embedding model below.
+
+**Acceptance:** downloads and runs a real GGUF model
+(Llama-3.2-1B-Instruct-Q4_K_M minimum) fully offline; local↔cloud
+mid-conversation switch works via the existing `AiProviderSelector`;
+`./gradlew :core-llm-local:connectedAndroidTest` passes on an emulator
+(loads a tiny test model, one inference call, non-empty output); every
+downloaded model SHA-256-checked before load.
+
+---
+
+### Phase 3 — Prompt Templates + Skill Builder
+**Status:** NOT STARTED
+**Branch:** `feature/phase-3-templates-skills`
+**Depends on:** Phase 1
+
+Adds a user-facing prompt template library (`PromptTemplate`: named
+`{{variable}}`-slotted reusable prompts, ~20 bundled across
+coding/writing/analysis/creative categories) and a "Skill" concept
+(`Skill`: name, description, system prompt, optional preferred
+provider/model, ~5 bundled — Code Expert, Concise Assistant, Socratic
+Teacher, Creative Writer, Research Analyst), both Room-backed, both
+surfaced as bottom-sheet pickers in chat.
+
+**Flag on the "Skill" entity, not in the original draft:** this repo
+already ships a real, IMPLEMENTED `Persona`/`StyleProfile`/`PersonaManager`
+stack (CAP-005, `core-agent`/`core-llm`) whose whole job is "a named,
+reusable behavioral/style profile that contributes to
+`LlmRequest.systemPrompt`" — the same job the proposed `Skill` entity
+describes, down to the "system prompt + optional provider/model
+preference" shape. Shipping `Skill` as a brand-new, parallel Room entity
+risks exactly the "second, competing model manager concept" this
+codebase's own doc comments (`ModelRouter`, `AiProviderSelector`) already
+name and avoid elsewhere. Phase 3 should scope, up front, whether `Skill`
+is genuinely a new concept (e.g. it needs Room persistence + a picker UI
+`Persona` doesn't have today) or whether it's better built as **the UI/
+Room-backed surface for the existing `Persona` type**, extended with the
+two fields it's missing (`preferredProviderType`, `preferredModel`) rather
+than a duplicate type with its own storage and its own drift risk from
+`Persona` over time. This is a real design decision for that phase, not
+one this section resolves.
+
+**Acceptance:** bundled templates/skills seeded on first launch;
+`{{var}}` slots expand to a fill-in form before send; user-created
+templates/skills persist; an applied skill injects its system prompt on
+every request; `./gradlew test` passes with no regressions.
+
+---
+
+### Phase 4 — Voice Input/Output + Web Search
+**Status:** NOT STARTED
+**Branch:** `feature/phase-4-voice-websearch`
+**Depends on:** Phase 2, Phase 3
+
+New `core-voice` module: `SpeechRecognizer`-based STT (on-device, works
+offline with a local model active) and `TextToSpeech`-based TTS
+(auto-speak/tap-to-speak/off, system voices only — no voice cloning; see
+Out of scope). Optional, off-by-default web search: a chat-toolbar
+toggle sends the query to a search API (Brave Search primary, SerpAPI
+fallback), injecting the top results as system context before the LLM
+call, reusing `core-remote`'s existing `JdkHttpTransport` rather than a
+new HTTP client, with the API key stored in the same `SecretsVault` as LLM
+keys.
+
+**Acceptance:** mic button transcribes into the input field; responses
+can be spoken aloud; web search is verified against a mock search server
+in tests (same pattern as this repo's existing provider tests, never a
+live API); every voice feature degrades to silent/no-crash on permission
+denial.
+
+---
+
+### Phase 5 — Document Q&A (RAG)
+**Status:** NOT STARTED
+**Branch:** `feature/phase-5-document-rag`
+**Depends on:** Phase 2
+
+Drop a PDF/plain-text/Markdown file into a conversation and ask questions
+about it: fixed-size chunking (512 tokens, 64 overlap), on-device
+embedding via a small dedicated model (e.g. `nomic-embed-text` GGUF,
+~270MB, loaded separately from the chat model), Room storage with a float
+blob column and Kotlin-side cosine similarity (no SQLite vector extension
+needed at this scale). PDF via Android's built-in `PdfRenderer` (no
+third-party lib); DOCX/EPUB explicitly deferred (would need Apache POI or
+similar, +5MB+). **Same app-size consideration as Phase 2's embedding
+model applies here** — see that phase's note; the two downloadable-model
+concerns (chat model, embedding model) should share one download/storage
+strategy rather than each phase inventing its own.
+
+**Acceptance:** a PDF can be attached; answers are grounded in its
+content, verified against a known document + known Q&A pairs; the
+embedding model downloads independently of chat models.
+
+---
+
+### Out of scope (explicitly excluded)
+
+| Feature | Reason |
+|---|---|
+| Character cards / roleplay personas | Different product identity; not this app |
+| Voice cloning | Needs a separate ML pipeline with no hook in this stack today |
+| On-device image generation | Separate diffusion runtime; scope creep |
+| Benchmark leaderboard UI | Not relevant to this project's scope |
+| Subscription / proxy backend | Business decision, not (yet) an engineering task |
+| NPU-specific kernels beyond OpenCL/Vulkan | Needs vendor-specific SDKs; deferred |
+| PR auto-generation for this roadmap's phases | Disabled — see Workflow rules above |
+
+**Note on this table, not in the original draft:** the earlier version of
+this section named specific third-party products in a couple of these
+rows (a roleplay-persona app, a named voice-cloning project, a
+benchmark-leaderboard project) that appear nowhere else in this repo's
+docs or history — there's no way to verify from this codebase whether
+those were actually evaluated and rejected for this project, or carried
+over from an unrelated template. The exclusions themselves are harmless
+either way (excluding an unverified feature is a safe default), so they're
+kept above in genericized form; don't cite the removed product names as if
+this project had specifically evaluated them.
+
+---
+
+### Current module inventory (verified against `settings.gradle.kts`, 2026-09-14)
+
+| Module | Type | Status |
+|---|---|---|
+| core-agent | JVM | IMPLEMENTED |
+| core-llm | JVM | IMPLEMENTED |
+| core-llm-anthropic | JVM | IMPLEMENTED |
+| core-llm-openai | JVM | IMPLEMENTED |
+| core-llm-factory | JVM | IMPLEMENTED |
+| core-security | JVM | IMPLEMENTED |
+| core-config | JVM | IMPLEMENTED |
+| core-remote | JVM | IMPLEMENTED |
+| core-shell | JVM | IMPLEMENTED |
+| core-build | JVM | IMPLEMENTED |
+| core-build-local | JVM | IMPLEMENTED |
+| core-build-remote | JVM | IMPLEMENTED |
+| core-tools-android | JVM | IMPLEMENTED (stubs) |
+| core-apk-lifecycle | JVM | IMPLEMENTED (stubs) |
+| core-root | JVM | IMPLEMENTED (stubs) |
+| core-termux | JVM | IMPLEMENTED |
+| core-mcp | JVM | IMPLEMENTED |
+| core-integration-tests | JVM (test-only) | IMPLEMENTED |
+| cli | JVM | IMPLEMENTED |
+| core-prompt-regen | JVM | IMPLEMENTED |
+| core-llm-google | JVM | PLANNED (Phase 1) |
+| core-llm-groq | JVM | PLANNED (Phase 1) |
+| core-conversations | Android (Room) | PLANNED (Phase 1) |
+| core-llm-local | Android + NDK | PLANNED (Phase 2) |
+| core-voice | Android | PLANNED (Phase 4) |
+| app | Android | PLANNED (Phase 0) |
+
+**Correction to an earlier draft of this table:** that draft omitted
+`core-llm-factory`, `core-mcp`, `core-integration-tests`, `cli`, and
+`core-prompt-regen` — all four real and IMPLEMENTED today — while labeling
+itself "current... as of 2026-09-14." The table above is the actual
+current state as of that date; re-verify against `settings.gradle.kts`
+before trusting it further into the future, per this file's own standing
+rule.
