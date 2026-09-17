@@ -56,6 +56,23 @@ class WorkspaceManager(
         }
 
         val destination = validator.resolve(Path.of(handle.rootPath), "source")
+
+        // A sourceDir that nests with the workspace destination (either direction) makes
+        // copyRecursively copy the destination into itself as it walks — reproduced for
+        // real via `cli`'s own build_project defaulting sourceDir to its cwd, the same
+        // directory the workspace gets created under, which crashed with "File name too
+        // long" (docs/AUDIT_2026-09-05.md's "wiring cli's build_project" addendum). Caught
+        // here so every caller is protected, not just the one that already worked around it.
+        val normalizedSource = sourcePath.toAbsolutePath().normalize()
+        val normalizedDestination = destination.toAbsolutePath().normalize()
+        if (normalizedDestination.startsWith(normalizedSource) || normalizedSource.startsWith(normalizedDestination)) {
+            handle.transition(WorkspaceState.FAILED)
+            return WorkspaceImportResult.Failure(
+                "Source path '$normalizedSource' nests with workspace destination '$normalizedDestination' " +
+                    "(copying would recurse into itself); choose a sourceDir outside the workspace root",
+            )
+        }
+
         return try {
             copyRecursively(sourcePath, destination)
             handle.transition(WorkspaceState.READY)

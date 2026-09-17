@@ -85,6 +85,52 @@ class WorkspaceManagerTest {
     }
 
     @Test
+    fun `importSource rejects a sourceDir that is an ancestor of the workspace destination`() {
+        // Reproduces the real bug from docs/AUDIT_2026-09-05.md's "wiring cli's
+        // build_project" addendum: an authorized root used directly as sourceDir
+        // contains the workspace (and its own "source" destination) as a subdirectory,
+        // so copying would recurse into itself ("File name too long") instead of failing
+        // cleanly.
+        val manager = WorkspaceManager(listOf(root))
+        val handle = manager.create()
+
+        val result = manager.importSource(handle, SourceLocation.LocalDirectory(root.toString()))
+
+        val failure = assertIs<WorkspaceImportResult.Failure>(result)
+        assertTrue(failure.reason.contains("nests with workspace destination"))
+        assertEquals(WorkspaceState.FAILED, handle.state)
+        // Never attempted the copy: no "source" subdirectory was created under the workspace.
+        assertFalse(Files.exists(Path.of(handle.rootPath).resolve("source")))
+    }
+
+    @Test
+    fun `importSource rejects a sourceDir equal to the workspace destination`() {
+        val manager = WorkspaceManager(listOf(root))
+        val handle = manager.create()
+        val destination = Path.of(handle.rootPath).resolve("source")
+        Files.createDirectories(destination)
+
+        val result = manager.importSource(handle, SourceLocation.LocalDirectory(destination.toString()))
+
+        assertIs<WorkspaceImportResult.Failure>(result)
+        assertEquals(WorkspaceState.FAILED, handle.state)
+    }
+
+    @Test
+    fun `importSource rejects a sourceDir nested inside the workspace destination`() {
+        val manager = WorkspaceManager(listOf(root))
+        val handle = manager.create()
+        val destination = Path.of(handle.rootPath).resolve("source")
+        val nestedSource = destination.resolve("nested-source")
+        Files.createDirectories(nestedSource)
+
+        val result = manager.importSource(handle, SourceLocation.LocalDirectory(nestedSource.toString()))
+
+        assertIs<WorkspaceImportResult.Failure>(result)
+        assertEquals(WorkspaceState.FAILED, handle.state)
+    }
+
+    @Test
     fun `clean removes the workspace directory from disk`() {
         val manager = WorkspaceManager(listOf(root))
         val handle = manager.create()
