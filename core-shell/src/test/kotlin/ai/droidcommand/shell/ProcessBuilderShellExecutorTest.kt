@@ -128,4 +128,70 @@ class ProcessBuilderShellExecutorTest {
         )
         assertTrue(result.stdout.length < 1000)
     }
+
+    @Test
+    fun `executeBinary captures raw stdout bytes exactly, including bytes that are not valid UTF-8`() {
+        // A real fixture file, real 'cat' subprocess, real pipe — proving byte-for-byte fidelity through
+        // an actual OS process, not just this class's own in-memory logic. Includes 0xFF (an invalid
+        // UTF-8 lead byte on its own) and an embedded 0x0A (a line-feed byte, mid-stream) — either one
+        // would be silently mangled by execute()'s bufferedReader().forEachLine-based text capture.
+        val fixture = Files.createTempFile("droidcommand-shell-binary", ".bin").toFile()
+        try {
+            val bytes = byteArrayOf(0x00, 0x01, 0x0A, 0xFF.toByte(), 0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte(), 0x0D, 0x0A, 0xFE.toByte())
+            fixture.writeBytes(bytes)
+            val executor = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf("cat")))
+            val result = assertIs<ShellBinaryExecutionResult.Success>(
+                executor.executeBinary(ShellCommand(executable = "cat", args = listOf(fixture.path))),
+            )
+            assertEquals(0, result.exitCode)
+            assertTrue(bytes.contentEquals(result.stdout))
+        } finally {
+            fixture.delete()
+        }
+    }
+
+    @Test
+    fun `executeBinary rejects an executable outside the allow-list without starting a process`() {
+        val executor = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf("echo")))
+        val result = assertIs<ShellBinaryExecutionResult.Failure>(executor.executeBinary(ShellCommand(executable = "cat")))
+        assertTrue(result.reason.contains("not in the allowed"))
+    }
+
+    @Test
+    fun `executeBinary reports the real exit code and stderr text alongside raw stdout bytes`() {
+        val executor = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf("cat")))
+        val result = assertIs<ShellBinaryExecutionResult.Success>(
+            executor.executeBinary(ShellCommand(executable = "cat", args = listOf("/no/such/file/droidcommand-test"))),
+        )
+        assertEquals(1, result.exitCode)
+        assertTrue(result.stderr.isNotBlank())
+        assertEquals(0, result.stdout.size)
+    }
+
+    @Test
+    fun `executeBinary truncates captured output once maxOutputBytes is reached, without hanging`() {
+        val executor = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf("seq")))
+        val result = assertIs<ShellBinaryExecutionResult.Success>(
+            executor.executeBinary(ShellCommand(executable = "seq", args = listOf("1", "1000000"), maxOutputBytes = 100)),
+        )
+        assertTrue(result.stdout.size <= 100)
+    }
+
+    @Test
+    fun `executeBinary enforces a real timeout on a real long-running process`() {
+        val executor = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf("sleep")))
+        val result = assertIs<ShellBinaryExecutionResult.Failure>(
+            executor.executeBinary(ShellCommand(executable = "sleep", args = listOf("5"), timeoutMillis = 200)),
+        )
+        assertTrue(result.reason.contains("timed out"))
+    }
+
+    @Test
+    fun `executeBinary honors cancellation on a real long-running process`() {
+        val executor = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf("sleep")))
+        val result = assertIs<ShellBinaryExecutionResult.Failure>(
+            executor.executeBinary(ShellCommand(executable = "sleep", args = listOf("5")), isCancelled = { true }),
+        )
+        assertTrue(result.reason.contains("cancelled"))
+    }
 }

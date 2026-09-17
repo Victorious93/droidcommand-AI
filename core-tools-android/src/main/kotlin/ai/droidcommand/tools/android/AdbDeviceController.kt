@@ -1,10 +1,13 @@
 package ai.droidcommand.tools.android
 
+import ai.droidcommand.shell.ShellBinaryExecutionResult
 import ai.droidcommand.shell.ShellCommand
 import ai.droidcommand.shell.ShellExecutionResult
 import ai.droidcommand.shell.ShellExecutor
 import org.w3c.dom.Element
 import org.w3c.dom.Node
+import java.io.IOException
+import java.nio.file.Files
 import java.time.Instant
 import javax.xml.parsers.DocumentBuilderFactory
 
@@ -16,17 +19,19 @@ import javax.xml.parsers.DocumentBuilderFactory
  * has no opinion on the security policy gating it, matching `core-build-local.LocalProcessBuildExecutor`'s
  * identical relationship to [ShellExecutor].
  *
- * **Deliberately implements only 5 of [DeviceController]'s 29 methods for real** —
- * [getDeviceInfo]/[getBatteryStatus]/[getStorageInfo]/[listInstalledApps]/[getUiTree] — every one
- * read-only and non-mutating. None of the other 24 (anything that taps, types, launches an app, sends
- * an SMS, makes a call, or writes/deletes a file) are implemented here: this device is a real personal
- * phone, and actually exercising a mutating action against it is not a call this class makes
- * unilaterally. Every unimplemented method fails with an explicit "not yet implemented" reason — a
- * **different** honest reason from [NullDeviceController]'s "no real device is connected," since a
+ * **Deliberately implements only 6 of [DeviceController]'s 29 methods for real** —
+ * [getDeviceInfo]/[getBatteryStatus]/[getStorageInfo]/[listInstalledApps]/[getUiTree]/[takeScreenshot] —
+ * every one read-only and non-mutating. None of the other 23 (anything that taps, types, launches an
+ * app, sends an SMS, makes a call, or writes/deletes a file) are implemented here: this device is a
+ * real personal phone, and actually exercising a mutating action against it is not a call this class
+ * makes unilaterally. Every unimplemented method fails with an explicit "not yet implemented" reason —
+ * a **different** honest reason from [NullDeviceController]'s "no real device is connected," since a
  * device genuinely is connected in this topology; conflating "missing capability" with "missing
- * device" would misreport why the call failed. [takeScreenshot] is excluded for a different, technical
- * reason: it needs binary-safe stdout capture, and [ShellExecutor]'s line-oriented process execution
- * would corrupt a real PNG — a real `core-shell` capability gap, not a mutation-safety concern.
+ * device" would misreport why the call failed. [takeScreenshot] was excluded for a separate, technical
+ * reason until [ShellExecutor.executeBinary] existed: `adb exec-out screencap -p` writes a raw PNG to
+ * stdout, and [ShellExecutor.execute]'s line-oriented text capture would have corrupted it — see
+ * `docs/AUDIT_2026-09-05.md`'s "core-shell binary-safe process I/O" addendum for the `core-shell` side
+ * of this fix.
  */
 class AdbDeviceController(
     private val shell: ShellExecutor,
@@ -157,6 +162,71 @@ class AdbDeviceController(
         )
     }
 
+    /**
+     * Captures the real screen via `adb exec-out screencap -p` — `exec-out`, not `shell`, specifically
+     * because it streams the command's raw stdout back over the adb data channel with no pty/line-ending
+     * translation in between, the same reason [ShellExecutor.executeBinary] itself exists rather than
+     * [ShellExecutor.execute]. The PNG is saved to a fresh JVM temp file (no caller-supplied output
+     * directory to authorize, unlike `core-build.WorkspaceManager` — a single self-contained file, not a
+     * tree this class would need to clean up or guard against escaping) and its real width/height are
+     * read back out of the PNG's own IHDR chunk rather than a separate `wm size` call, which reports the
+     * logical display size and isn't guaranteed to match a screenshot's actual pixel dimensions.
+     */
+    override fun takeScreenshot(): ScreenshotResult {
+        val argv = adbArgv("exec-out", "screencap", "-p")
+        val result = shell.executeBinary(
+            ShellCommand(
+                executable = argv.first(),
+                args = argv.drop(1),
+                timeoutMillis = SCREENSHOT_TIMEOUT_MILLIS,
+                maxOutputBytes = MAX_SCREENSHOT_BYTES,
+            ),
+        )
+        val png = when (result) {
+            is ShellBinaryExecutionResult.Failure -> return ScreenshotResult.Failure("Cannot take a screenshot: ${result.reason}")
+            is ShellBinaryExecutionResult.Success -> {
+                if (result.exitCode != 0) {
+                    return ScreenshotResult.Failure("Cannot take a screenshot: 'adb exec-out screencap -p' exited ${result.exitCode}: ${result.stderr}")
+                }
+                result.stdout
+            }
+        }
+        val dimensions = parsePngDimensions(png)
+            ?: return ScreenshotResult.Failure("Cannot take a screenshot: captured output (${png.size} bytes) is not a valid PNG")
+
+        val savedPath = try {
+            val file = Files.createTempFile("droidcommand-screenshot-", ".png")
+            Files.write(file, png)
+            file
+        } catch (e: IOException) {
+            return ScreenshotResult.Failure("Cannot take a screenshot: failed to save it to disk: ${e.message}")
+        }
+
+        return ScreenshotResult.Success(
+            path = savedPath.toString(),
+            widthPx = dimensions.widthPx,
+            heightPx = dimensions.heightPx,
+            sizeBytes = png.size.toLong(),
+        )
+    }
+
+    private data class PngDimensions(val widthPx: Int, val heightPx: Int)
+
+    /** Reads width/height directly out of a PNG's mandatory-first IHDR chunk — no image-decoding library needed for just this. */
+    private fun parsePngDimensions(bytes: ByteArray): PngDimensions? {
+        if (bytes.size < 24) return null
+        if (!bytes.copyOfRange(0, PNG_SIGNATURE.size).contentEquals(PNG_SIGNATURE)) return null
+        if (String(bytes, 12, 4, Charsets.US_ASCII) != "IHDR") return null
+
+        fun beUInt32(offset: Int): Int =
+            ((bytes[offset].toInt() and 0xFF) shl 24) or
+                ((bytes[offset + 1].toInt() and 0xFF) shl 16) or
+                ((bytes[offset + 2].toInt() and 0xFF) shl 8) or
+                (bytes[offset + 3].toInt() and 0xFF)
+
+        return PngDimensions(widthPx = beUInt32(16), heightPx = beUInt32(20))
+    }
+
     private fun failure(action: String) = DeviceActionResult.Failure(notImplemented(action))
 
     override fun tap(x: Int, y: Int) = failure("tap")
@@ -164,7 +234,6 @@ class AdbDeviceController(
     override fun typeText(text: String) = failure("type text")
     override fun pressKey(key: DeviceKey) = failure("press key")
     override fun launchApp(packageName: String) = failure("launch app")
-    override fun takeScreenshot() = ScreenshotResult.Failure(notImplemented("take screenshot"))
     override fun readFile(path: String) = FileReadResult.Failure(notImplemented("read file"))
     override fun writeFile(path: String, content: String, append: Boolean) = failure("write file")
     override fun moveFile(fromPath: String, toPath: String) = failure("move file")
@@ -192,5 +261,8 @@ class AdbDeviceController(
         val LEVEL_PATTERN = Regex("""level:\s*(-?\d+)""")
         val POWERED_PATTERN = Regex("""(?:AC|USB|Wireless) powered:\s*(true|false)""")
         val BOUNDS_PATTERN = Regex("""\[(-?\d+),(-?\d+)]\[(-?\d+),(-?\d+)]""")
+        val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+        const val SCREENSHOT_TIMEOUT_MILLIS = 15_000L
+        const val MAX_SCREENSHOT_BYTES = 20_000_000L
     }
 }

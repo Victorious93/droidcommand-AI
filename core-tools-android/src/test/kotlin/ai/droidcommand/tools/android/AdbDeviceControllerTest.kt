@@ -49,48 +49,62 @@ class AdbDeviceControllerTest {
         </hierarchy>
     """.trimIndent()
 
-    private fun adbScript(xmlFixturePath: String): String = """
+    private fun adbScript(xmlFixturePath: String, pngFixturePath: String): String = """
         #!/bin/sh
-        if [ "${'$'}1" != "shell" ]; then
-          exit 1
-        fi
-        shift
-        case "${'$'}*" in
-          "getprop ro.product.manufacturer")
-            echo "TestManufacturer" ;;
-          "getprop ro.product.model")
-            echo "TestModel" ;;
-          "getprop ro.build.version.release")
-            echo "16" ;;
-          "wm size")
-            echo "Physical size: 1080x2400" ;;
-          "dumpsys battery")
-            echo "Current Battery Service state:"
-            echo "  AC powered: false"
-            echo "  USB powered: true"
-            echo "  Wireless powered: false"
-            echo "  status: 2"
-            echo "  level: 77"
-            echo "  scale: 100"
+        case "${'$'}1" in
+          exec-out)
+            shift
+            case "${'$'}*" in
+              "screencap -p")
+                cat "$pngFixturePath" ;;
+              *)
+                exit 1 ;;
+            esac
+            exit 0
             ;;
-          "df /data")
-            echo "Filesystem     1K-blocks    Used Available Use% Mounted on"
-            echo "/dev/block/dm-7 111935132 45678900 62345678 43% /data"
+          shell)
+            shift
+            case "${'$'}*" in
+              "getprop ro.product.manufacturer")
+                echo "TestManufacturer" ;;
+              "getprop ro.product.model")
+                echo "TestModel" ;;
+              "getprop ro.build.version.release")
+                echo "16" ;;
+              "wm size")
+                echo "Physical size: 1080x2400" ;;
+              "dumpsys battery")
+                echo "Current Battery Service state:"
+                echo "  AC powered: false"
+                echo "  USB powered: true"
+                echo "  Wireless powered: false"
+                echo "  status: 2"
+                echo "  level: 77"
+                echo "  scale: 100"
+                ;;
+              "df /data")
+                echo "Filesystem     1K-blocks    Used Available Use% Mounted on"
+                echo "/dev/block/dm-7 111935132 45678900 62345678 43% /data"
+                ;;
+              "pm list packages -3")
+                echo "package:com.example.foo"
+                echo "package:com.example.bar"
+                ;;
+              "uiautomator dump /sdcard/window_dump.xml")
+                echo "UI hierarchy dumped to: /sdcard/window_dump.xml" ;;
+              "cat /sdcard/window_dump.xml")
+                cat "$xmlFixturePath" ;;
+              "rm /sdcard/window_dump.xml")
+                : ;;
+              *)
+                exit 1 ;;
+            esac
+            exit 0
             ;;
-          "pm list packages -3")
-            echo "package:com.example.foo"
-            echo "package:com.example.bar"
-            ;;
-          "uiautomator dump /sdcard/window_dump.xml")
-            echo "UI hierarchy dumped to: /sdcard/window_dump.xml" ;;
-          "cat /sdcard/window_dump.xml")
-            cat "$xmlFixturePath" ;;
-          "rm /sdcard/window_dump.xml")
-            : ;;
           *)
-            exit 1 ;;
+            exit 1
+            ;;
         esac
-        exit 0
         """.trimIndent()
 
     private fun newController(adbPath: String) = AdbDeviceController(
@@ -98,9 +112,18 @@ class AdbDeviceControllerTest {
         adbExecutable = adbPath,
     )
 
+    /** A real PNG, encoded by the JDK's own javax.imageio — no hand-crafted byte fixture needed. */
+    private fun writePngFixture(name: String, widthPx: Int, heightPx: Int): String {
+        val file = File(tempDir, name)
+        val image = java.awt.image.BufferedImage(widthPx, heightPx, java.awt.image.BufferedImage.TYPE_INT_RGB)
+        javax.imageio.ImageIO.write(image, "png", file)
+        return file.absolutePath
+    }
+
     private fun newController(): AdbDeviceController {
         val xmlPath = File(tempDir, "window_dump.xml").apply { writeText(uiTreeXml) }.absolutePath
-        return newController(writeScript("adb", adbScript(xmlPath)))
+        val pngPath = writePngFixture("screenshot-fixture.png", widthPx = 4, heightPx = 3)
+        return newController(writeScript("adb", adbScript(xmlPath, pngPath)))
     }
 
     @Test
@@ -181,6 +204,61 @@ class AdbDeviceControllerTest {
     }
 
     @Test
+    fun `takeScreenshot saves a real PNG captured via adb exec-out and reports its true dimensions`() {
+        val result = assertIs<ScreenshotResult.Success>(newController().takeScreenshot())
+
+        assertEquals(4, result.widthPx)
+        assertEquals(3, result.heightPx)
+        val savedFile = File(result.path)
+        assertTrue(savedFile.exists())
+        assertEquals(result.sizeBytes, savedFile.length())
+        // Real, decodable PNG bytes came through the pipe unmangled — proving executeBinary's raw
+        // capture, not just that some bytes arrived: execute()'s text-oriented capture would have
+        // corrupted this (PNG bytes are not valid UTF-8) and javax.imageio would fail to decode it.
+        assertTrue(javax.imageio.ImageIO.read(savedFile) != null)
+        savedFile.delete() // this test's own responsibility: takeScreenshot() saves outside tempDir by design
+    }
+
+    @Test
+    fun `takeScreenshot fails cleanly when adb cannot be started`() {
+        val result = assertIs<ScreenshotResult.Failure>(
+            AdbDeviceController(
+                shell = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf(File(tempDir, "no-such-adb").absolutePath))),
+                adbExecutable = File(tempDir, "no-such-adb").absolutePath,
+            ).takeScreenshot(),
+        )
+        assertTrue(result.reason.contains("Cannot take a screenshot"))
+    }
+
+    @Test
+    fun `takeScreenshot fails cleanly when adb exec-out exits non-zero`() {
+        val adbPath = writeScript(
+            "adb-screenshot-fails",
+            """
+            #!/bin/sh
+            echo "no devices/emulators found" 1>&2
+            exit 1
+            """.trimIndent(),
+        )
+        val result = assertIs<ScreenshotResult.Failure>(newController(adbPath).takeScreenshot())
+        assertTrue(result.reason.contains("exited 1"))
+    }
+
+    @Test
+    fun `takeScreenshot fails cleanly when the captured output is not a valid PNG`() {
+        val adbPath = writeScript(
+            "adb-screenshot-garbage",
+            """
+            #!/bin/sh
+            printf 'not a png'
+            exit 0
+            """.trimIndent(),
+        )
+        val result = assertIs<ScreenshotResult.Failure>(newController(adbPath).takeScreenshot())
+        assertTrue(result.reason.contains("not a valid PNG"))
+    }
+
+    @Test
     fun `every unimplemented method fails with a distinct 'not yet implemented' reason, never touching adb`() {
         val markerFile = File(tempDir, "touched")
         val adbPath = writeScript(
@@ -221,7 +299,6 @@ class AdbDeviceControllerTest {
             assertTrue(failure.reason.contains("not yet implemented"))
         }
 
-        assertIs<ScreenshotResult.Failure>(device.takeScreenshot()).also { assertTrue(it.reason.contains("not yet implemented")) }
         assertIs<FileReadResult.Failure>(device.readFile("/x")).also { assertTrue(it.reason.contains("not yet implemented")) }
         assertIs<FileListResult.Failure>(device.listDirectory("/x")).also { assertTrue(it.reason.contains("not yet implemented")) }
         assertIs<NetworkStateResult.Failure>(device.getNetworkState()).also { assertTrue(it.reason.contains("not yet implemented")) }
