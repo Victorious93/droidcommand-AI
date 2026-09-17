@@ -6,10 +6,11 @@ package ai.droidcommand.apklifecycle
  * `core-tools-android.DeviceController`'s role in those modules. Nothing
  * in [ApkLifecyclePipeline] talks to `adb` or any Android API directly;
  * every device-touching step goes through an implementation of this
- * interface. [NullApkLifecycleExecutor] is the only one that exists in
- * this repository — a real `adb`-backed or Android-SDK-backed
- * implementation needs a connected/emulated device this environment does
- * not have.
+ * interface. [NullApkLifecycleExecutor] is the fail-closed default; [AdbApkLifecycleExecutor]
+ * (ROADMAP-087) is a real, `adb`-shell-backed implementation, in the same PC-drives-a-tethered-phone
+ * topology as `core-tools-android.AdbDeviceController`/`core-root.AdbRootExecutor` — verified against a
+ * real scripted `adb` subprocess in tests, but not yet runtime-verified against a real device, since none
+ * is connected in this environment.
  */
 interface ApkLifecycleExecutor {
     fun install(request: InstallRequest): InstallResult
