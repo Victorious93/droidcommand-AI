@@ -257,12 +257,18 @@ DroidCommand AI
 │                            (optional) test → result through an
 │                            ApkLifecycleExecutor extension point — same
 │                            pattern as BuildExecutor/DeviceController.
-│                            NullApkLifecycleExecutor is the only
-│                            implementation; every method fails explicitly
-│                            rather than fabricating a successful install
-│                            or launch. A real adb-backed executor
-│                            (PLANNED) needs a connected/emulated device
-│                            this environment does not have.
+│                            NullApkLifecycleExecutor is the fail-closed
+│                            default; AdbApkLifecycleExecutor (ROADMAP-087,
+│                            added 2026-09-17) is a real adb-shell-backed
+│                            implementation — install/uninstall via
+│                            `adb install`/`adb uninstall`, launch via
+│                            `resolve-activity`+`am start`, log collection
+│                            via `pidof`+`logcat --pid=`, and instrumented
+│                            tests via `pm list instrumentation`+
+│                            `am instrument -w -r`'s raw status-code
+│                            protocol — tested against a real scripted `adb`
+│                            subprocess (IMPLEMENTED — NOT RUNTIME VERIFIED
+│                            against a real device, none connected here).
 │
 ├── core-remote               RemoteEndpoint (HTTPS-by-default, path-only
 │                            resolution so a request can never be aimed at
@@ -375,9 +381,16 @@ is a real, working, fail-closed-by-default shell executor, tested against
 real subprocesses (`echo`, `sleep`, `pwd`, `env`, ...) rather than mocked,
 and `core-apk-lifecycle` follows `core-tools-android`'s pattern again:
 `ApkLifecyclePipeline` is real orchestration logic (consuming an
-already-completed `core-build.BuildResult`), but `NullApkLifecycleExecutor`
-is the only `ApkLifecycleExecutor`, and it fails every install/launch/log/
-test call explicitly rather than fabricating a successful deployment, and
+already-completed `core-build.BuildResult`); `NullApkLifecycleExecutor`
+fails every install/launch/log/test call explicitly rather than
+fabricating a successful deployment, and `AdbApkLifecycleExecutor`
+(2026-09-17) is a real `adb`-shell-backed executor in the same
+PC-drives-a-tethered-phone topology as `core-tools-android`'s
+`AdbDeviceController`/`core-root`'s `AdbRootExecutor` — real command
+sequences (`adb install`, `resolve-activity`+`am start`,
+`pidof`+`logcat`, `pm list instrumentation`+`am instrument -w -r`),
+proven against a real scripted `adb` subprocess, not yet against a real
+device, and
 `core-root` closes a loop left open since Phase 6/7: `core-security`'s
 `rootEnabled`/`rootAvailable` gate has existed for several increments but
 was never exercised end to end against a real `Tool` until `RootTool`
@@ -903,7 +916,7 @@ there is still no asynchronous/polling variant of the protocol.
 | core-apk-lifecycle: ApkLifecyclePipeline | IMPLEMENTED | Unit-tested for every stage's success/failure path, incl. best-effort log collection vs. fatal install/launch/test-harness failures |
 | core-apk-lifecycle: ApkLifecycleTool + core-security integration | IMPLEMENTED | `ApkLifecycleToolSecureExecutorIntegrationTest` — a denied deployment never reaches the executor |
 | core-apk-lifecycle: NullApkLifecycleExecutor | IMPLEMENTED (explicitly non-real) | Every method fails explicitly ("no real device/adb is connected"); never fabricates a successful install, launch, or test run |
-| core-apk-lifecycle: a real adb-backed ApkLifecycleExecutor | PLANNED | Needs a connected/emulated Android device this environment does not have |
+| core-apk-lifecycle: AdbApkLifecycleExecutor (ROADMAP-087) | IMPLEMENTED — NOT RUNTIME VERIFIED | Real `adb install`/`uninstall`/`resolve-activity`+`am start`/`pidof`+`logcat`/`pm list instrumentation`+`am instrument -w -r` command sequences, proven against a real scripted `adb` subprocess (12 new tests); no real device connected in this environment to verify against |
 | core-remote: RemoteEndpoint / HttpTransport / RemoteClient | IMPLEMENTED | `RemoteEndpoint.kt`, `HttpTransport.kt`, `RemoteClient.kt`, unit-tested against a fake transport |
 | core-remote: JdkHttpTransport (real HTTP client) | IMPLEMENTED | `JdkHttpTransport.kt`, tested against a real local `HttpServer` on loopback — a genuine network round trip and a genuine timeout, not mocked |
 | core-remote: mutual TLS (client certificates) | IMPLEMENTED | `MutualTlsConfig.kt`, wired into `JdkHttpTransport`'s optional constructor param; tested against a real TLS handshake with a real `keytool`-generated private CA and server/client certificate chain |
