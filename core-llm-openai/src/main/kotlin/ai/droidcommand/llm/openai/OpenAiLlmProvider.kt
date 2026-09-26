@@ -9,6 +9,7 @@ import ai.droidcommand.llm.LlmError
 import ai.droidcommand.llm.LlmProvider
 import ai.droidcommand.llm.LlmRequest
 import ai.droidcommand.llm.LlmResponse
+import ai.droidcommand.llm.ResponseFormat
 import ai.droidcommand.llm.StreamingLlmProvider
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.remote.RemoteClient
@@ -45,6 +46,14 @@ import java.net.http.HttpTimeoutException
  * reads the server-sent `data:` chunks until `[DONE]`: `delta.content`
  * goes to the caller as it arrives, and `delta.tool_calls` fragments are
  * accumulated into the first tool call's name and arguments.
+ *
+ * Structured output (ROADMAP-060) maps [LlmRequest.responseFormat] onto
+ * the API's own `response_format`: [ResponseFormat.Json] becomes
+ * `json_object` mode (which OpenAI rejects unless the word "JSON" appears
+ * somewhere in the messages, so a caller's prompt must say it), and
+ * [ResponseFormat.Schema] becomes `json_schema`. Self-hosted
+ * OpenAI-compatible servers vary in which of the two they honor. The
+ * returned text is checked to be a JSON object either way.
  */
 class OpenAiLlmProvider(
     override val config: LlmConfig,
@@ -74,7 +83,7 @@ class OpenAiLlmProvider(
         )
 
         return when (result) {
-            is RemoteResult.Success -> parseResponse(result.body)
+            is RemoteResult.Success -> parseResponse(result.body).requireJsonObjectIf(request.responseFormat != null)
             is RemoteResult.Failure -> LlmResponse.Error(classify(result))
         }
     }
@@ -95,12 +104,20 @@ class OpenAiLlmProvider(
         parser.finish()
 
         return when (result) {
-            is RemoteResult.Success -> accumulator.result()
+            is RemoteResult.Success -> accumulator.result().requireJsonObjectIf(request.responseFormat != null)
             is RemoteResult.Failure -> LlmResponse.Error(classify(result))
         }
     }
 
     private fun encodeRequest(request: LlmRequest, stream: Boolean): Result<String> {
+        val format = request.responseFormat
+        if (format != null && request.tools.isNotEmpty()) {
+            return Result.failure(IllegalArgumentException("responseFormat cannot be combined with tools"))
+        }
+        val responseFormat = format?.let {
+            toOpenAiResponseFormat(it) ?: return Result.failure(IllegalArgumentException("responseFormat schema is not a JSON object"))
+        }
+
         val chatRequest = OpenAiChatRequest(
             model = config.model,
             messages = toOpenAiMessages(request.systemPrompt, request.messages),
@@ -108,6 +125,7 @@ class OpenAiLlmProvider(
             maxTokens = request.maxOutputTokens ?: config.maxOutputTokens,
             tools = request.tools.takeIf { it.isNotEmpty() }?.map { it.toOpenAiToolDefinition() },
             stream = stream.takeIf { it },
+            responseFormat = responseFormat,
         )
 
         return try {
@@ -117,8 +135,44 @@ class OpenAiLlmProvider(
         }
     }
 
-    private fun Throwable.asError(): LlmResponse =
-        LlmResponse.Error(LlmError.InvalidResponse("Failed to encode request: $message"))
+    private fun Throwable.asError(): LlmResponse = LlmResponse.Error(
+        LlmError.InvalidResponse(if (this is IllegalArgumentException) "Invalid request: $message" else "Failed to encode request: $message"),
+    )
+
+    private fun toOpenAiResponseFormat(format: ResponseFormat): JsonObject? = when (format) {
+        is ResponseFormat.Json -> buildJsonObject { put("type", JsonPrimitive("json_object")) }
+        is ResponseFormat.Schema -> {
+            val schema = try {
+                json.parseToJsonElement(format.schema) as? JsonObject
+            } catch (e: SerializationException) {
+                null
+            }
+            schema?.let {
+                buildJsonObject {
+                    put("type", JsonPrimitive("json_schema"))
+                    put(
+                        "json_schema",
+                        buildJsonObject {
+                            put("name", JsonPrimitive(format.name))
+                            put("schema", it)
+                            put("strict", JsonPrimitive(format.strict))
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    /** With structured output requested, a text answer that isn't a JSON object is an error, not a success. */
+    private fun LlmResponse.requireJsonObjectIf(structured: Boolean): LlmResponse {
+        if (!structured || this !is LlmResponse.Text) return this
+        val parsed = try {
+            json.parseToJsonElement(content) as? JsonObject
+        } catch (e: SerializationException) {
+            null
+        }
+        return if (parsed != null) this else LlmResponse.Error(LlmError.InvalidResponse("Structured output requested, but the response was not a JSON object"))
+    }
 
     /** Builds the final [LlmResponse] from streamed chunks, mirroring [parseResponse]'s rules (a tool call wins over text). */
     private inner class StreamAccumulator(private val onTextDelta: (String) -> Unit) {
