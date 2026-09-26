@@ -78,6 +78,14 @@ class DroidCommandSession(
         }
     }
 
+    /**
+     * [reservedFinalizationIterations] (default `0`, every existing caller
+     * unaffected) is passed straight through to [ObjectiveEngine] — see its
+     * own doc comment for the exact mechanism (a prompting-only step-budget
+     * nudge in the last N iterations, never a fabricated [AgentState.Completed]).
+     * Exposed here so a Forge Mode caller can opt in without constructing an
+     * [ObjectiveEngine] directly.
+     */
     fun runForgeObjective(
         objective: String,
         planner: Planner,
@@ -85,13 +93,22 @@ class DroidCommandSession(
         maxIterations: Int = 25,
         retryPolicy: RetryPolicy = RetryPolicy(),
         isCancelled: () -> Boolean = { false },
+        reservedFinalizationIterations: Int = 0,
     ): ObjectiveOutcome {
         synchronized(lock) {
             check(mode == AgentMode.FORGE) { "runForgeObjective called while in $mode mode" }
             taskActive = true
         }
         try {
-            val engine = ObjectiveEngine(registry, executor, stateMachine, planner, maxIterations, AgentMode.FORGE)
+            val engine = ObjectiveEngine(
+                registry,
+                executor,
+                stateMachine,
+                planner,
+                maxIterations,
+                AgentMode.FORGE,
+                reservedFinalizationIterations = reservedFinalizationIterations,
+            )
             return engine.run(objective, context, retryPolicy, isCancelled)
         } finally {
             synchronized(lock) { taskActive = false }

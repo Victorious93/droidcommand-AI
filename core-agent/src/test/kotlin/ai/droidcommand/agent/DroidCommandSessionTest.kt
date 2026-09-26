@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 private class SessionNoopTool(name: String, allowedModes: Set<AgentMode> = AgentMode.entries.toSet()) : Tool {
     override val spec = ToolSpec(name = name, description = "no-op", allowedModes = allowedModes)
@@ -17,6 +18,15 @@ private class ImmediateCompletePlanner : Planner {
         availableTools: List<ToolSpec>,
         lastObservation: ToolResult?,
     ) = PlannerDecision.Complete("done")
+}
+
+private class SessionAlwaysInvokePlanner(private val toolName: String) : Planner {
+    override fun decide(
+        objective: String,
+        context: ConversationContext,
+        availableTools: List<ToolSpec>,
+        lastObservation: ToolResult?,
+    ) = PlannerDecision.InvokeTool(toolName, emptyMap())
 }
 
 private fun newSession(): Triple<DroidCommandSession, ToolRegistry, AgentStateMachine> {
@@ -181,5 +191,37 @@ class DroidCommandSessionTest {
         session.runForgeObjective("do something", planner)
 
         assertEquals(setOf("echo"), offeredToolNames)
+    }
+
+    @Test
+    fun `reservedFinalizationIterations defaults to 0 and appends no step-budget nudge`() {
+        val (session, _, _) = newSession()
+        session.switchMode(AgentMode.FORGE)
+        val context = ConversationContext()
+
+        session.runForgeObjective("do something", ImmediateCompletePlanner(), context = context)
+
+        assertEquals(0, context.messages.count { it.role == Role.SYSTEM })
+    }
+
+    @Test
+    fun `runForgeObjective threads reservedFinalizationIterations through to the underlying ObjectiveEngine`() {
+        val (session, _, _) = newSession()
+        session.switchMode(AgentMode.FORGE)
+        val context = ConversationContext()
+
+        val outcome = session.runForgeObjective(
+            "never finishes",
+            SessionAlwaysInvokePlanner("echo"),
+            context = context,
+            maxIterations = 4,
+            reservedFinalizationIterations = 2,
+        )
+
+        assertIs<AgentState.Failed>(outcome.finalState)
+        val systemMessages = context.messages.filter { it.role == Role.SYSTEM }
+        assertEquals(2, systemMessages.size)
+        assertTrue(systemMessages[0].content.contains("2 iteration(s) remain"))
+        assertTrue(systemMessages[1].content.contains("1 iteration(s) remain"))
     }
 }
