@@ -82,8 +82,9 @@ fun main(args: Array<String>) {
         "pilot" -> runPilot(session, args.drop(1))
         "forge" -> runForge(session, args.drop(1))
         "regenerate-prompt" -> runRegeneratePrompt(args.drop(1))
-        "device-serve" -> runDeviceServe(session, args.drop(1))
+        "device-serve" -> runDeviceServe(args.drop(1))
         "device-send" -> runDeviceSend(args.drop(1))
+        "device-forge" -> runDeviceForge(args.drop(1))
         else -> {
             System.err.println("Unknown command '$command'")
             printUsage()
@@ -217,6 +218,9 @@ internal fun printUsage() {
           device-send <host:port> <controller id> <tool> [key=value ...]
                                          Send one Pilot request to a device-serve instance
                                          (reads the secret from DROIDCOMMAND_PAIRING_SECRET)
+          device-forge <host:port> <controller id> <objective...>
+                                         Run a Forge objective on a device-serve instance,
+                                         planned by the device's own LLM configuration
 
         Forge Mode reads its LLM configuration from the process environment
         (ai.droidcommand.config.EnvConfigSource), using the same
