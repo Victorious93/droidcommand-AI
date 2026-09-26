@@ -168,13 +168,16 @@ DroidCommand AI
 │                            NullTermuxExecutor is the only always-present
 │                            implementation. AdbTermuxExecutor is a real
 │                            backend dispatching Termux's publicly
-│                            documented `com.termux.RUN_COMMAND` intent over
-│                            `adb shell am startservice`, reading output
-│                            back via an injected RootExecutor (root is
-│                            needed only for readback — Android's app
-│                            sandboxing blocks a plain adb shell from
-│                            reading Termux's private data dir; dispatch
-│                            itself needs no root) — IMPLEMENTED — NOT
+│                            documented `com.termux.RUN_COMMAND` intent as
+│                            root (`am start-foreground-service` via the
+│                            injected RootExecutor, since the adb shell user
+│                            cannot hold the dangerous RUN_COMMAND
+│                            permission), refusing up front unless the
+│                            device's termux.properties sets
+│                            allow-external-apps=true, and reading output
+│                            back via the same RootExecutor (2026-09-26
+│                            correction; see that audit addendum) —
+│                            IMPLEMENTED — NOT
 │                            RUNTIME VERIFIED, since no adb/Termux device
 │                            exists in any environment this was built in;
 │                            see the "Termux ExecutionTarget" audit
@@ -912,6 +915,7 @@ there is still no asynchronous/polling variant of the protocol.
 | core-build: DryRunPlanner | IMPLEMENTED | Unit-tested incl. "performs no filesystem mutation" |
 | core-build: BuildTool + core-security integration | IMPLEMENTED | `BuildToolSecureExecutorIntegrationTest` — a denied build never creates a workspace, verified on disk |
 | core-build: MockBuildExecutor | IMPLEMENTED (explicitly non-real) | Never performs a real build; default outcome is zero artifacts with an output message saying so |
+| core-build: JsonFileBuildEventSink (persistent, queryable build-log storage, ROADMAP-078) | IMPLEMENTED | Added 2026-09-10 (open as PR #47, ported onto current main 2026-09-26) — `BuildEventSink`'s own doc comment already named this as the intended extension point ("a future ... build-history store consumes it by implementing this interface, not by this module growing a database"); `JsonFileBuildEventSink` is that implementation. Every `BuildEvent` for a given build is appended as one JSON-Lines record to its own file under a directory, keyed by `buildId` (the same id-allow-list + normalize-then-`startsWith` path-escape defense this module's own `WorkspacePathValidator` established, mirrored by every `JsonFile*` store elsewhere in the codebase), surviving a process restart — extending `core-security.JsonFileAuditLog`'s append-only pattern (no delete/rewrite path at all) to build logs instead of security events. `list()` returns every build id with at least one recorded event; `load(buildId)` re-reads and returns its events oldest-first, genuinely from disk each call. `core-build`'s first dependency on `kotlinx.serialization` (plugin + `kotlinx-serialization-json` 1.7.3, matching every other module's pin). Unit-tested (`JsonFileBuildEventSinkTest`): events for one build recorded in order, events for different builds never mixing, `list()` sorted correctly, metadata round-tripping, events surviving a fresh sink instance over the same directory, and `../`-shaped/absolute-path-shaped build id rejection. |
 | core-build: a real BuildExecutor for JVM/NATIVE/GENERIC projects | IMPLEMENTED | `core-build-local.LocalProcessBuildExecutor`, real subprocess execution via `core-shell.ShellExecutor`, tested against a real `javac` invocation; see Section 5g |
 | core-build: a real BuildExecutor delegating to a remote build server (RemoteBuildExecutor) | IMPLEMENTED | `core-build-remote.RemoteBuildExecutor`, real HTTP over `core-remote.RemoteClient`, tested against a real local `HttpServer`; never refuses ANDROID (the remote server is expected to carry the SDK/AGP); see Section 5h |
 | core-build: a real BuildExecutor for ANDROID projects running on-device/on-host (AndroidGradleBuildExecutor) | PLANNED | Needs the Android SDK/AGP this environment does not have |
