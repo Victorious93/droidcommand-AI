@@ -47,13 +47,24 @@ class SessionKeys(sendKey: ByteArray, receiveKey: ByteArray) {
  * stream, a WebSocket); it deliberately does not tolerate reordering.
  *
  * Not thread-safe: use one instance per connection and serialize [seal] and
- * [open] calls per direction.
+ * [open] calls per direction. [close] may be called from any thread; after
+ * it, [seal] and [open] throw [SecureChannelException]. [PairingRegistry]
+ * closes a peer's channels when that peer is revoked.
  */
 class SecureChannel(private val keys: SessionKeys) {
     private var nextSendCounter = 0L
     private var lastReceivedCounter = -1L
 
+    @Volatile
+    var isClosed: Boolean = false
+        private set
+
+    fun close() {
+        isClosed = true
+    }
+
     fun seal(plaintext: ByteArray): ByteArray {
+        if (isClosed) throw SecureChannelException("Channel is closed")
         check(nextSendCounter != Long.MAX_VALUE) { "Send counter exhausted; re-pair to get fresh keys" }
         val counter = nextSendCounter++
         val header = counterBytes(counter)
@@ -63,6 +74,7 @@ class SecureChannel(private val keys: SessionKeys) {
     }
 
     fun open(record: ByteArray): ByteArray {
+        if (isClosed) throw SecureChannelException("Channel is closed")
         if (record.size < COUNTER_BYTES + TAG_BYTES) {
             throw SecureChannelException("Record too short: ${record.size} bytes")
         }
