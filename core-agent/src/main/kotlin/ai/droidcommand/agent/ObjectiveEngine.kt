@@ -25,6 +25,23 @@ data class ObjectiveOutcome(val finalState: AgentState, val iterations: Int)
  * direct [ToolExecutor]/`core-security`'s `SecureToolExecutor` calls are
  * not wired to a logger yet — that remains a follow-up, not silently
  * assumed to be covered by this constructor.
+ *
+ * [reservedFinalizationIterations] (default `0`, every existing caller
+ * unaffected) reserves the last N iterations of [maxIterations] to nudge
+ * [planner] toward a graceful finish instead of a hard failure: for each
+ * iteration in that window, a `Role.SYSTEM` "step-budget notice" message
+ * (naming how many iterations remain) is appended to [ConversationContext]
+ * before [planner] is asked to decide, asking it to return
+ * [PlannerDecision.Complete] with a best-effort summary rather than invoke
+ * another tool. This is a prompting-only nudge, never a structural
+ * override — [planner] is still free to return [PlannerDecision.InvokeTool],
+ * and if it never returns [PlannerDecision.Complete] by the true last
+ * iteration, this still ends in [AgentState.Failed] exactly as it always
+ * has. Fabricating a `Completed` the planner never actually returned would
+ * misrepresent what happened, so this engine never does that on its
+ * behalf — closing the "dies mid-exploration" failure mode identified in
+ * `docs/HACKERAI_SOURCE_AUDIT.md` means giving the planner a real chance to
+ * wrap up, not guaranteeing a success it hasn't earned.
  */
 class ObjectiveEngine(
     private val registry: ToolRegistry,
@@ -34,10 +51,19 @@ class ObjectiveEngine(
     private val maxIterations: Int = 25,
     private val mode: AgentMode = AgentMode.FORGE,
     private val logger: Logger = NoOpLogger,
+    private val reservedFinalizationIterations: Int = 0,
 ) {
     init {
         require(maxIterations >= 1) { "maxIterations must be >= 1, got $maxIterations" }
+        require(reservedFinalizationIterations >= 0) {
+            "reservedFinalizationIterations must be >= 0, got $reservedFinalizationIterations"
+        }
+        require(reservedFinalizationIterations < maxIterations) {
+            "reservedFinalizationIterations must be < maxIterations ($maxIterations), got $reservedFinalizationIterations"
+        }
     }
+
+    private val finalizationWindowStart = maxIterations - reservedFinalizationIterations + 1
 
     fun run(
         objective: String,
@@ -54,6 +80,20 @@ class ObjectiveEngine(
                 logger.warn("objective_cancelled", mapOf("iteration" to iteration.toString()))
                 val cancelled = stateMachine.transition(AgentState.Cancelled("Cancelled before iteration $iteration"))
                 return ObjectiveOutcome(cancelled, iteration - 1)
+            }
+
+            if (iteration >= finalizationWindowStart) {
+                val remaining = maxIterations - iteration + 1
+                logger.info(
+                    "finalization_nudge_sent",
+                    mapOf("iteration" to iteration.toString(), "remaining" to remaining.toString(), "maxIterations" to maxIterations.toString()),
+                )
+                context.append(
+                    Role.SYSTEM,
+                    "Step-budget notice: $remaining iteration(s) remain out of $maxIterations for this objective. " +
+                        "If you cannot fully complete it, respond now with your best final answer (a Complete decision) " +
+                        "summarizing what was accomplished and what remains, rather than invoking another tool.",
+                )
             }
 
             stateMachine.transition(AgentState.Planning(objective))
