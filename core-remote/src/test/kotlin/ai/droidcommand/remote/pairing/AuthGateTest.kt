@@ -1,28 +1,13 @@
 package ai.droidcommand.remote.pairing
 
-import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import java.time.ZoneId
-import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AuthGateTest {
-    private class MutableClock(var now: Instant) : Clock() {
-        override fun getZone(): ZoneId = ZoneOffset.UTC
-
-        override fun withZone(zone: ZoneId): Clock = this
-
-        override fun instant(): Instant = now
-
-        fun advance(duration: Duration) {
-            now = now.plus(duration)
-        }
-    }
-
     private val clock = MutableClock(Instant.parse("2026-09-26T12:00:00Z"))
     private val gate = AuthGate(clock = clock)
 
