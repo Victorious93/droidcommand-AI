@@ -85,6 +85,7 @@ fun main(args: Array<String>) {
         "device-serve" -> runDeviceServe(args.drop(1))
         "device-send" -> runDeviceSend(args.drop(1))
         "device-forge" -> runDeviceForge(args.drop(1))
+        "device-discover" -> runDeviceDiscover(args.drop(1))
         else -> {
             System.err.println("Unknown command '$command'")
             printUsage()
@@ -214,13 +215,16 @@ internal fun printUsage() {
                                           [--adapt claude|codex|gpt|gemini|local]
           device-serve                   Listen for a paired controller and run its Pilot requests
                                           [--bind host:port] [--name <controller name>]
-                                          [--ttl-minutes <n>]
+                                          [--ttl-minutes <n>] [--discoverable]
+                                          [--device-name <name>]
           device-send <host:port> <controller id> <tool> [key=value ...]
                                          Send one Pilot request to a device-serve instance
                                          (reads the secret from DROIDCOMMAND_PAIRING_SECRET)
           device-forge <host:port> <controller id> <objective...>
                                          Run a Forge objective on a device-serve instance,
                                          planned by the device's own LLM configuration
+          device-discover                List device-serve --discoverable instances on the
+                                          local network [--timeout-ms <n>] [--target host:port]
 
         Forge Mode reads its LLM configuration from the process environment
         (ai.droidcommand.config.EnvConfigSource), using the same
@@ -232,12 +236,15 @@ internal fun printUsage() {
         device-serve binds to loopback unless --bind says otherwise. It prints a
         controller id and a one-time pairing secret; every request it receives
         still goes through this machine's tool policy and approval prompt.
+        With --discoverable it also answers device-discover on UDP port 7101,
+        revealing only its name and port, never the controller id or secret.
 
         Examples:
           pilot echo text=hello
           forge "Echo the word hello"
           regenerate-prompt "fix the login bug" --target claude
-          device-serve --bind 0.0.0.0:7100 --name "My laptop"
+          device-serve --bind 0.0.0.0:7100 --name "My laptop" --discoverable
+          device-discover
           device-send 192.168.1.20:7100 <controller id> echo text=hello
         """.trimIndent(),
     )

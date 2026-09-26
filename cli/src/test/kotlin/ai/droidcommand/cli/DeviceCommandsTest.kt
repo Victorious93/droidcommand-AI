@@ -72,7 +72,7 @@ class DeviceCommandsTest {
 
     @AfterTest
     fun stop() {
-        running.server.close()
+        running.close()
     }
 
     private fun captureStdout(block: () -> Int): Pair<Int, String> {
@@ -177,6 +177,44 @@ class DeviceCommandsTest {
         assertEquals(1, exitCode)
         assertTrue(output.contains("no providers configured"), output)
         assertEquals(1, runDeviceForge(listOf(target, running.pairing.device.id), secretEnv), "an objective is required")
+    }
+
+    @Test
+    fun `device-discover finds a discoverable device-serve and its port`() {
+        val discoverable = startDeviceServer(
+            ::newSession,
+            InetSocketAddress(InetAddress.getLoopbackAddress(), 0),
+            "Test laptop",
+            ttl = null,
+            discoveryBind = InetSocketAddress(InetAddress.getLoopbackAddress(), 0),
+            deviceName = "Kitchen phone",
+        )
+        try {
+            val udp = discoverable.discoveryAddress!!
+            val (exitCode, output) = captureStdout {
+                runDeviceDiscover(listOf("--target", "${udp.hostString}:${udp.port}", "--timeout-ms", "1000"))
+            }
+            assertEquals(0, exitCode, output)
+            assertTrue(output.contains(":${discoverable.address.port}  Kitchen phone"), output)
+            assertTrue(!output.contains(discoverable.pairing.device.id), "discovery must not reveal the controller id")
+        } finally {
+            discoverable.close()
+        }
+    }
+
+    @Test
+    fun `device-serve is not discoverable unless asked`() {
+        assertNull(running.discovery)
+        assertEquals(1, runDeviceDiscover(listOf("--target", target, "--timeout-ms", "200")))
+    }
+
+    @Test
+    fun `discovery options are validated`() {
+        assertEquals(1, runDeviceServe(listOf("--discoverable")), "loopback can't be discovered from another device")
+        assertEquals(1, runDeviceServe(listOf("--device-name")))
+        assertEquals(1, runDeviceDiscover(listOf("--timeout-ms", "0")))
+        assertEquals(1, runDeviceDiscover(listOf("--target", "no-port")))
+        assertEquals(1, runDeviceDiscover(listOf("--bogus")))
     }
 
     @Test

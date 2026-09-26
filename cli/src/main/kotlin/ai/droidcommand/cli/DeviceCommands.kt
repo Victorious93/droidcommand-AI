@@ -9,6 +9,8 @@ import ai.droidcommand.agent.describe
 import ai.droidcommand.config.EnvConfigSource
 import ai.droidcommand.llm.factory.LlmProviderFactory
 import ai.droidcommand.remote.JdkHttpTransport
+import ai.droidcommand.remote.discovery.DeviceDiscovery
+import ai.droidcommand.remote.discovery.DiscoveryResponder
 import ai.droidcommand.remote.pairing.NewPairing
 import ai.droidcommand.remote.pairing.PairedConnection
 import ai.droidcommand.remote.pairing.PairedSocketClient
@@ -64,7 +66,18 @@ internal fun parseInputPairs(pairs: List<String>, err: PrintStream = System.err)
     return input
 }
 
-internal class RunningDeviceServer(val server: PairedSocketServer, val address: InetSocketAddress, val pairing: NewPairing)
+internal class RunningDeviceServer(
+    val server: PairedSocketServer,
+    val address: InetSocketAddress,
+    val pairing: NewPairing,
+    val discovery: DiscoveryResponder? = null,
+    val discoveryAddress: InetSocketAddress? = null,
+) {
+    fun close() {
+        discovery?.close()
+        server.close()
+    }
+}
 
 /**
  * Starts a [PairedSocketServer] that runs each request it receives on a fresh session from
@@ -77,6 +90,9 @@ internal class RunningDeviceServer(val server: PairedSocketServer, val address: 
  * [ai.droidcommand.security.SecureToolExecutor] gate as a local call, so a sensitive tool still
  * needs approval on this machine's console. A remote controller can't approve its own request.
  * Requests run one at a time.
+ *
+ * With [discoveryBind] set, a [DiscoveryResponder] also answers LAN discovery probes under
+ * [deviceName], pointing at the paired server's port. Discovery reveals only the name and port.
  */
 internal fun startDeviceServer(
     sessionFactory: () -> CliSession,
@@ -84,14 +100,28 @@ internal fun startDeviceServer(
     controllerName: String,
     ttl: Duration?,
     plannerFactory: () -> Planner = { LlmProviderFactory.createPlanner(EnvConfigSource(), JdkHttpTransport()) },
+    discoveryBind: InetSocketAddress? = null,
+    deviceName: String = defaultDeviceName(),
 ): RunningDeviceServer {
     val registry = PairingRegistry()
     val pairing = registry.pair(controllerName, ttl)
     val dispatcher = RemoteDispatcher(sessionFactory, plannerFactory)
     val server = PairedSocketServer(registry) { connection -> serveConnection(dispatcher, connection) }
     val address = server.start(bind)
-    return RunningDeviceServer(server, address, pairing)
+    if (discoveryBind == null) return RunningDeviceServer(server, address, pairing)
+    val responder = DiscoveryResponder(deviceName, address.port)
+    val discoveryAddress = try {
+        responder.start(discoveryBind)
+    } catch (e: IOException) {
+        responder.close()
+        server.close()
+        throw e
+    }
+    return RunningDeviceServer(server, address, pairing, responder, discoveryAddress)
 }
+
+internal fun defaultDeviceName(): String =
+    runCatching { InetAddress.getLocalHost().hostName }.getOrNull()?.takeIf { it.isNotBlank() } ?: "DroidCommand device"
 
 private class RemoteDispatcher(private val sessionFactory: () -> CliSession, private val plannerFactory: () -> Planner) {
     private var planner: Planner? = null
@@ -147,11 +177,16 @@ private fun serveConnection(dispatcher: RemoteDispatcher, connection: PairedConn
     }
 }
 
-/** `device-serve [--bind host:port] [--name <controller name>] [--ttl-minutes <n>]`. Blocks until the process is killed. */
+/**
+ * `device-serve [--bind host:port] [--name <controller name>] [--ttl-minutes <n>] [--discoverable]
+ * [--device-name <name>]`. Blocks until the process is killed.
+ */
 internal fun runDeviceServe(rest: List<String>): Int {
     var bind = InetSocketAddress(InetAddress.getLoopbackAddress(), 0)
     var name = "Controller"
     var ttl: Duration? = null
+    var discoverable = false
+    var deviceName = defaultDeviceName()
     var i = 0
     while (i < rest.size) {
         when (val arg = rest[i]) {
@@ -159,17 +194,26 @@ internal fun runDeviceServe(rest: List<String>): Int {
             "--name" -> name = rest.getOrNull(++i) ?: return usageError("--name requires a value")
             "--ttl-minutes" -> ttl = rest.getOrNull(++i)?.toLongOrNull()?.takeIf { it > 0 }?.let(Duration::ofMinutes)
                 ?: return usageError("--ttl-minutes requires a positive whole number")
+            "--discoverable" -> discoverable = true
+            "--device-name" -> deviceName = rest.getOrNull(++i)?.takeIf { it.isNotBlank() }
+                ?: return usageError("--device-name requires a value")
             else -> return usageError("Unknown device-serve option '$arg'")
         }
         i++
     }
+    if (discoverable && bind.address?.isLoopbackAddress != false) {
+        return usageError("--discoverable needs --bind to a network address (for example 0.0.0.0:7100); other devices can't reach loopback")
+    }
+    val discoveryBind = if (discoverable) InetSocketAddress(DeviceDiscovery.DEFAULT_PORT) else null
     val running = try {
-        startDeviceServer({ buildSession() }, bind, name, ttl)
+        startDeviceServer({ buildSession() }, bind, name, ttl, discoveryBind = discoveryBind, deviceName = deviceName)
     } catch (e: IOException) {
-        System.err.println("Could not listen on $bind: ${e.message}")
+        val where = if (discoverable) "$bind or UDP port ${DeviceDiscovery.DEFAULT_PORT}" else "$bind"
+        System.err.println("Could not listen on $where: ${e.message}")
         return 1
     }
     println("Listening on ${running.address.hostString}:${running.address.port}")
+    running.discoveryAddress?.let { println("Discoverable as \"$deviceName\" on UDP port ${it.port}") }
     println("Controller id: ${running.pairing.device.id}")
     println("Pairing secret (shown once; pass it to the controller as $SECRET_ENV): ${running.pairing.secret.encode()}")
     running.pairing.device.expiresAt?.let { println("Pairing expires at $it") }
@@ -206,6 +250,40 @@ internal fun runDeviceForge(rest: List<String>, secretSource: (String) -> String
     val address = parseHostPort(rest[0]) ?: return usageError("Expected host:port, got '${rest[0]}'")
     val objective = rest.drop(2).joinToString(" ")
     return sendToDevice(rest[0], address, rest[1], RemotePilot.encodeForgeRequest(objective), secretSource)
+}
+
+/**
+ * `device-discover [--timeout-ms <n>] [--target host:port ...]`: lists `device-serve --discoverable`
+ * instances that answer. Without `--target` it broadcasts on the local network. Exits 1 when none answer.
+ */
+internal fun runDeviceDiscover(rest: List<String>): Int {
+    var timeout = Duration.ofSeconds(2)
+    val targets = mutableListOf<InetSocketAddress>()
+    var i = 0
+    while (i < rest.size) {
+        when (val arg = rest[i]) {
+            "--timeout-ms" -> timeout = rest.getOrNull(++i)?.toLongOrNull()?.takeIf { it in 1..60_000 }?.let(Duration::ofMillis)
+                ?: return usageError("--timeout-ms requires a whole number from 1 to 60000")
+            "--target" -> targets += parseHostPort(rest.getOrNull(++i)) ?: return usageError("--target requires host:port")
+            else -> return usageError("Unknown device-discover option '$arg'")
+        }
+        i++
+    }
+    val found = try {
+        DeviceDiscovery.discover(targets.ifEmpty { listOf(DeviceDiscovery.broadcastTarget()) }, timeout)
+    } catch (e: IOException) {
+        System.err.println("Discovery failed: ${e.message}")
+        return 1
+    }
+    if (found.isEmpty()) {
+        System.err.println("No devices answered within ${timeout.toMillis()} ms.")
+        return 1
+    }
+    for (device in found) {
+        val host = device.address.address.hostAddress.let { if (':' in it) "[$it]" else it }
+        println("$host:${device.address.port}  ${device.name}")
+    }
+    return 0
 }
 
 private fun sendToDevice(
