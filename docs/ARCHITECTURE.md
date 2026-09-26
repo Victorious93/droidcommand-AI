@@ -168,13 +168,16 @@ DroidCommand AI
 │                            NullTermuxExecutor is the only always-present
 │                            implementation. AdbTermuxExecutor is a real
 │                            backend dispatching Termux's publicly
-│                            documented `com.termux.RUN_COMMAND` intent over
-│                            `adb shell am startservice`, reading output
-│                            back via an injected RootExecutor (root is
-│                            needed only for readback — Android's app
-│                            sandboxing blocks a plain adb shell from
-│                            reading Termux's private data dir; dispatch
-│                            itself needs no root) — IMPLEMENTED — NOT
+│                            documented `com.termux.RUN_COMMAND` intent as
+│                            root (`am start-foreground-service` via the
+│                            injected RootExecutor, since the adb shell user
+│                            cannot hold the dangerous RUN_COMMAND
+│                            permission), refusing up front unless the
+│                            device's termux.properties sets
+│                            allow-external-apps=true, and reading output
+│                            back via the same RootExecutor (2026-09-26
+│                            correction; see that audit addendum) —
+│                            IMPLEMENTED — NOT
 │                            RUNTIME VERIFIED, since no adb/Termux device
 │                            exists in any environment this was built in;
 │                            see the "Termux ExecutionTarget" audit
