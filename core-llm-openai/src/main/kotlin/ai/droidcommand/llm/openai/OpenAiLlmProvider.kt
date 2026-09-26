@@ -9,10 +9,12 @@ import ai.droidcommand.llm.LlmError
 import ai.droidcommand.llm.LlmProvider
 import ai.droidcommand.llm.LlmRequest
 import ai.droidcommand.llm.LlmResponse
+import ai.droidcommand.llm.StreamingLlmProvider
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.remote.RemoteClient
 import ai.droidcommand.remote.RemoteEndpoint
 import ai.droidcommand.remote.RemoteResult
+import ai.droidcommand.remote.ServerSentEventParser
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -38,13 +40,18 @@ import java.net.http.HttpTimeoutException
  * OpenAI-compatible servers (a local Ollama/vLLM instance, for example)
  * accept requests with no key at all, so failing closed on an absent key
  * would be dishonest about what this shape actually requires.
+ *
+ * [stream] (ROADMAP-058) sends the same request with `"stream": true` and
+ * reads the server-sent `data:` chunks until `[DONE]`: `delta.content`
+ * goes to the caller as it arrives, and `delta.tool_calls` fragments are
+ * accumulated into the first tool call's name and arguments.
  */
 class OpenAiLlmProvider(
     override val config: LlmConfig,
     transport: HttpTransport,
     private val retryPolicy: RetryPolicy = RetryPolicy(),
     requireHttps: Boolean = true,
-) : LlmProvider {
+) : StreamingLlmProvider {
     private val remoteClient = RemoteClient(
         RemoteEndpoint(config.endpoint ?: DEFAULT_BASE_URL, requireHttps = requireHttps),
         transport,
@@ -56,19 +63,7 @@ class OpenAiLlmProvider(
     }
 
     override fun complete(request: LlmRequest): LlmResponse {
-        val chatRequest = OpenAiChatRequest(
-            model = config.model,
-            messages = toOpenAiMessages(request.systemPrompt, request.messages),
-            temperature = request.temperature ?: config.temperature,
-            maxTokens = request.maxOutputTokens ?: config.maxOutputTokens,
-            tools = request.tools.takeIf { it.isNotEmpty() }?.map { it.toOpenAiToolDefinition() },
-        )
-
-        val body = try {
-            json.encodeToString(OpenAiChatRequest.serializer(), chatRequest)
-        } catch (e: SerializationException) {
-            return LlmResponse.Error(LlmError.InvalidResponse("Failed to encode request: ${e.message}"))
-        }
+        val body = encodeRequest(request, stream = false).getOrElse { return it.asError() }
 
         val result = remoteClient.send(
             path = "v1/chat/completions",
@@ -81,6 +76,100 @@ class OpenAiLlmProvider(
         return when (result) {
             is RemoteResult.Success -> parseResponse(result.body)
             is RemoteResult.Failure -> LlmResponse.Error(classify(result))
+        }
+    }
+
+    override fun stream(request: LlmRequest, onTextDelta: (String) -> Unit): LlmResponse {
+        val body = encodeRequest(request, stream = true).getOrElse { return it.asError() }
+
+        val accumulator = StreamAccumulator(onTextDelta)
+        val parser = ServerSentEventParser { event -> accumulator.accept(event.data) }
+        val result = remoteClient.sendStreaming(
+            path = "v1/chat/completions",
+            method = "POST",
+            headers = mapOf("content-type" to "application/json"),
+            body = body,
+            retryPolicy = retryPolicy,
+            onLine = parser::feed,
+        )
+        parser.finish()
+
+        return when (result) {
+            is RemoteResult.Success -> accumulator.result()
+            is RemoteResult.Failure -> LlmResponse.Error(classify(result))
+        }
+    }
+
+    private fun encodeRequest(request: LlmRequest, stream: Boolean): Result<String> {
+        val chatRequest = OpenAiChatRequest(
+            model = config.model,
+            messages = toOpenAiMessages(request.systemPrompt, request.messages),
+            temperature = request.temperature ?: config.temperature,
+            maxTokens = request.maxOutputTokens ?: config.maxOutputTokens,
+            tools = request.tools.takeIf { it.isNotEmpty() }?.map { it.toOpenAiToolDefinition() },
+            stream = stream.takeIf { it },
+        )
+
+        return try {
+            Result.success(json.encodeToString(OpenAiChatRequest.serializer(), chatRequest))
+        } catch (e: SerializationException) {
+            Result.failure(e)
+        }
+    }
+
+    private fun Throwable.asError(): LlmResponse =
+        LlmResponse.Error(LlmError.InvalidResponse("Failed to encode request: $message"))
+
+    /** Builds the final [LlmResponse] from streamed chunks, mirroring [parseResponse]'s rules (a tool call wins over text). */
+    private inner class StreamAccumulator(private val onTextDelta: (String) -> Unit) {
+        private val text = StringBuilder()
+        private val toolNames = sortedMapOf<Int, StringBuilder>()
+        private val toolArguments = mutableMapOf<Int, StringBuilder>()
+        private var sawChoice = false
+        private var done = false
+        private var error: LlmError? = null
+
+        fun accept(data: String) {
+            if (done || error != null) return
+            if (data.trim() == "[DONE]") {
+                done = true
+                return
+            }
+            val chunk = try {
+                json.decodeFromString(OpenAiStreamChunk.serializer(), data)
+            } catch (e: SerializationException) {
+                error = LlmError.InvalidResponse("Malformed stream chunk: ${e.message}")
+                return
+            }
+            chunk.error?.let {
+                error = LlmError.ModelUnavailable("Stream error ${it.type ?: "unknown"}: ${it.message ?: ""}")
+                return
+            }
+            val delta = chunk.choices.firstOrNull()?.also { sawChoice = true }?.delta ?: return
+            delta.content?.takeIf { it.isNotEmpty() }?.let {
+                text.append(it)
+                onTextDelta(it)
+            }
+            delta.toolCalls?.forEach { call ->
+                call.function?.name?.let { toolNames.getOrPut(call.index) { StringBuilder() }.append(it) }
+                call.function?.arguments?.let { toolArguments.getOrPut(call.index) { StringBuilder() }.append(it) }
+            }
+        }
+
+        fun result(): LlmResponse {
+            error?.let { return LlmResponse.Error(it) }
+            toolNames.entries.firstOrNull()?.let { (index, name) ->
+                val raw = toolArguments[index]?.toString().orEmpty().ifBlank { "{}" }
+                val arguments = try {
+                    json.parseToJsonElement(raw) as? JsonObject
+                        ?: return LlmResponse.Error(LlmError.InvalidResponse("tool_call arguments was not a JSON object"))
+                } catch (e: SerializationException) {
+                    return LlmResponse.Error(LlmError.InvalidResponse("Malformed tool_call arguments: ${e.message}"))
+                }
+                return LlmResponse.ToolCall(name.toString(), arguments.flatten())
+            }
+            if (!sawChoice) return LlmResponse.Error(LlmError.InvalidResponse("Stream contained no choices"))
+            return LlmResponse.Text(text.toString())
         }
     }
 
