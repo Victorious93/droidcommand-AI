@@ -82,6 +82,8 @@ fun main(args: Array<String>) {
         "pilot" -> runPilot(session, args.drop(1))
         "forge" -> runForge(session, args.drop(1))
         "regenerate-prompt" -> runRegeneratePrompt(args.drop(1))
+        "device-serve" -> runDeviceServe(session, args.drop(1))
+        "device-send" -> runDeviceSend(args.drop(1))
         else -> {
             System.err.println("Unknown command '$command'")
             printUsage()
@@ -209,6 +211,12 @@ internal fun printUsage() {
                                           [--repo <path>] [--previous-response-file <path>]
                                           [--shorter|--more-detailed|--more-technical]
                                           [--adapt claude|codex|gpt|gemini|local]
+          device-serve                   Listen for a paired controller and run its Pilot requests
+                                          [--bind host:port] [--name <controller name>]
+                                          [--ttl-minutes <n>]
+          device-send <host:port> <controller id> <tool> [key=value ...]
+                                         Send one Pilot request to a device-serve instance
+                                         (reads the secret from DROIDCOMMAND_PAIRING_SECRET)
 
         Forge Mode reads its LLM configuration from the process environment
         (ai.droidcommand.config.EnvConfigSource), using the same
@@ -217,10 +225,16 @@ internal fun printUsage() {
         full list. At least one provider must be configured or 'forge' fails
         with a clear error instead of a stack trace.
 
+        device-serve binds to loopback unless --bind says otherwise. It prints a
+        controller id and a one-time pairing secret; every request it receives
+        still goes through this machine's tool policy and approval prompt.
+
         Examples:
           pilot echo text=hello
           forge "Echo the word hello"
           regenerate-prompt "fix the login bug" --target claude
+          device-serve --bind 0.0.0.0:7100 --name "My laptop"
+          device-send 192.168.1.20:7100 <controller id> echo text=hello
         """.trimIndent(),
     )
 }
@@ -242,15 +256,7 @@ internal fun runPilot(cliSession: CliSession, rest: List<String>): Int {
         return 1
     }
     val toolName = rest[0]
-    val input = mutableMapOf<String, String>()
-    for (pair in rest.drop(1)) {
-        val separator = pair.indexOf('=')
-        if (separator < 0) {
-            System.err.println("Invalid input '$pair'; expected key=value")
-            return 1
-        }
-        input[pair.substring(0, separator)] = pair.substring(separator + 1)
-    }
+    val input = parseInputPairs(rest.drop(1)) ?: return 1
 
     val result = try {
         cliSession.session.runPilotInstruction(toolName, input)
