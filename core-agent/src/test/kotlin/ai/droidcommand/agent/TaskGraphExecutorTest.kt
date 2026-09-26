@@ -125,3 +125,90 @@ class TaskGraphExecutorTest {
         assertEquals(LogLevel.WARN, event.level)
     }
 }
+
+class TaskGraphExecutorVerificationTest {
+    private val done = ObjectiveOutcome(AgentState.Completed("done"), 1)
+
+    private class RecordingVerifier(private val result: (Task) -> TaskVerification) : TaskVerifier {
+        val seenTasks = mutableListOf<Task>()
+
+        override fun verify(task: Task, outcome: ObjectiveOutcome): TaskVerification {
+            seenTasks += task
+            return result(task)
+        }
+    }
+
+    @Test
+    fun `a passing verification records Passed on the task outcome`() {
+        val graph = graphOf(Task(id = "a", description = "a", verificationCriteria = listOf("a works")))
+        val verifier = RecordingVerifier { TaskVerification.Passed }
+
+        val outcome = TaskGraphExecutor(verifier = verifier).run(graph, ScriptedTaskRunner { done })
+
+        val completed = assertIs<TaskGraphOutcome.Completed>(outcome)
+        assertEquals(TaskVerification.Passed, completed.completedTasks.single().verification)
+        assertEquals(listOf("a"), verifier.seenTasks.map { it.id })
+    }
+
+    @Test
+    fun `a failed verification stops the graph and skips every later task`() {
+        val graph = graphOf(
+            Task(id = "a", description = "a", verificationCriteria = listOf("a works")),
+            Task(id = "b", description = "b", dependencies = setOf("a")),
+        )
+        val failed = TaskVerification.Failed(listOf("a works"), "it does not")
+        val runner = ScriptedTaskRunner { done }
+
+        val outcome = TaskGraphExecutor(verifier = RecordingVerifier { failed }).run(graph, runner)
+
+        val stopped = assertIs<TaskGraphOutcome.StoppedOnVerificationFailure>(outcome)
+        assertEquals("a", stopped.failedTask.id)
+        assertSame(failed, stopped.verification)
+        assertEquals(listOf("b"), stopped.skippedTasks.map { it.id })
+        assertTrue(stopped.completedTasks.isEmpty())
+        assertEquals(listOf("a"), runner.seenTasks.map { it.id })
+    }
+
+    @Test
+    fun `an inconclusive verification fails closed`() {
+        val graph = graphOf(Task(id = "a", description = "a", verificationCriteria = listOf("a works")))
+
+        val outcome = TaskGraphExecutor(verifier = RecordingVerifier { TaskVerification.Inconclusive("provider down") })
+            .run(graph, ScriptedTaskRunner { done })
+
+        assertIs<TaskVerification.Inconclusive>(assertIs<TaskGraphOutcome.StoppedOnVerificationFailure>(outcome).verification)
+    }
+
+    @Test
+    fun `tasks without criteria are never sent to the verifier`() {
+        val graph = graphOf(Task(id = "a", description = "a"))
+        val verifier = RecordingVerifier { TaskVerification.Failed(emptyList(), "should not be called") }
+
+        val outcome = TaskGraphExecutor(verifier = verifier).run(graph, ScriptedTaskRunner { done })
+
+        val completed = assertIs<TaskGraphOutcome.Completed>(outcome)
+        assertEquals(null, completed.completedTasks.single().verification)
+        assertTrue(verifier.seenTasks.isEmpty())
+    }
+
+    @Test
+    fun `a task that did not complete is never sent to the verifier`() {
+        val graph = graphOf(Task(id = "a", description = "a", verificationCriteria = listOf("a works")))
+        val verifier = RecordingVerifier { TaskVerification.Passed }
+        val runner = ScriptedTaskRunner { ObjectiveOutcome(AgentState.Failed(RuntimeException("boom")), 1) }
+
+        val outcome = TaskGraphExecutor(verifier = verifier).run(graph, runner)
+
+        assertIs<TaskGraphOutcome.StoppedOnFailure>(outcome)
+        assertTrue(verifier.seenTasks.isEmpty())
+    }
+
+    @Test
+    fun `with no verifier configured criteria stay unchecked`() {
+        val graph = graphOf(Task(id = "a", description = "a", verificationCriteria = listOf("a works")))
+
+        val outcome = TaskGraphExecutor().run(graph, ScriptedTaskRunner { done })
+
+        assertEquals(null, assertIs<TaskGraphOutcome.Completed>(outcome).completedTasks.single().verification)
+    }
+}
