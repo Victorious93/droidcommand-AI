@@ -20,6 +20,15 @@ re-verifying something.
 - **`docs/ARCHITECTURE.md`** — per-component implementation status, kept in
   sync with the audit.
 - **`docs/CORE_BUILD.md`** — the build/workspace pipeline specifically.
+- **`docs/SECURITY.md`** — the security requirements doc (2026-09-26),
+  reconciling a Codex engineering brief's storage/networking/secrets/
+  logging/tool-execution requirements against what `core-security`/
+  `core-shell` already implement (`SecureToolExecutor`, `ApprovalFlow`/
+  `RiskTier`, `GrantStore`, `AuditLog`, `CapabilityRegistry`,
+  `ShellSecurityPolicy`) and what's gated on the still-PLANNED Android
+  `:app` module (SAF, Android Keystore, Network Security Configuration).
+  Update it as each gated item moves to IMPLEMENTED — don't let it go
+  stale the way an earlier draft of this file's module count did.
 - **`docs/HACKERAI_SOURCE_AUDIT.md`** — a focused audit (2026-09-26) of
   `Victorious93/hackeraiETC` ("HackerAI"), the project owner's other repo,
   read against a migration brief that referred to it as "HackerGPT" (no
