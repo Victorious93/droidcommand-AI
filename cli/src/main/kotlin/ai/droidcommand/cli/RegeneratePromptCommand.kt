@@ -83,7 +83,7 @@ internal fun runRegeneratePrompt(rest: List<String>): Int {
     return 0
 }
 
-private fun usageError(message: String): Int {
+internal fun usageError(message: String): Int {
     System.err.println(message)
     return 1
 }
