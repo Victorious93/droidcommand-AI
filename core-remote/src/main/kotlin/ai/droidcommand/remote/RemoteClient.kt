@@ -73,6 +73,72 @@ class RemoteClient(
         return lastResult
     }
 
+    /**
+     * Like [send], but delivers a 2xx response body to [onLine] one line at
+     * a time as it arrives, via [StreamingHttpTransport.sendStreaming]. The
+     * returned [RemoteResult.Success.body] is always empty.
+     *
+     * Retries follow [send]'s rules with one addition: an attempt is only
+     * retried if **no line has been delivered yet**. Once [onLine] has seen
+     * part of a body, a retry would replay it from the start and the caller
+     * would see duplicated output, so a mid-stream I/O failure is returned
+     * as a [RemoteResult.Failure] immediately instead.
+     *
+     * Fails without sending anything if [transport] is not a
+     * [StreamingHttpTransport].
+     */
+    fun sendStreaming(
+        path: String,
+        method: String = "GET",
+        headers: Map<String, String> = emptyMap(),
+        body: String? = null,
+        retryPolicy: RetryPolicy = RetryPolicy(),
+        connectTimeoutMillis: Long = 10_000,
+        requestTimeoutMillis: Long = 30_000,
+        onLine: (String) -> Unit,
+    ): RemoteResult {
+        val streamingTransport = transport as? StreamingHttpTransport
+            ?: return RemoteResult.Failure("Transport ${transport::class.simpleName} does not support streaming")
+        val url = endpoint.resolve(path)
+        var lastResult: RemoteResult.Failure = RemoteResult.Failure("Request never attempted")
+        var linesDelivered = false
+
+        for (attempt in 1..retryPolicy.maxAttempts) {
+            val spec = HttpRequestSpec(
+                method = method,
+                url = url,
+                headers = headers + authHeader(),
+                body = body,
+                connectTimeoutMillis = connectTimeoutMillis,
+                requestTimeoutMillis = requestTimeoutMillis,
+            )
+
+            val outcome = try {
+                classify(
+                    streamingTransport.sendStreaming(spec) { line ->
+                        linesDelivered = true
+                        onLine(line)
+                    },
+                )
+            } catch (e: IOException) {
+                val failure = RemoteResult.Failure(e.message ?: "I/O failure", e)
+                if (linesDelivered) Outcome.Terminal(failure) else Outcome.Retryable(failure)
+            }
+
+            when (outcome) {
+                is Outcome.Success -> return outcome.result
+                is Outcome.Terminal -> return outcome.result
+                is Outcome.Retryable -> {
+                    lastResult = outcome.result
+                    if (attempt < retryPolicy.maxAttempts) {
+                        sleep(retryPolicy.backoff(attempt))
+                    }
+                }
+            }
+        }
+        return lastResult
+    }
+
     private fun classify(response: HttpResponseSpec): Outcome = when {
         response.statusCode in 200..399 ->
             Outcome.Success(RemoteResult.Success(response.statusCode, response.body, response.headers))

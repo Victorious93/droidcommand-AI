@@ -18,7 +18,13 @@ data class AnthropicRequest(
     val messages: List<AnthropicMessage>,
     val temperature: Double? = null,
     val tools: List<AnthropicToolDefinition>? = null,
+    @SerialName("tool_choice") val toolChoice: AnthropicToolChoice? = null,
+    val stream: Boolean? = null,
 )
+
+/** `{"type":"tool","name":...}` forces the model to call that one tool. */
+@Serializable
+data class AnthropicToolChoice(val type: String, val name: String? = null)
 
 @Serializable
 data class AnthropicMessage(val role: String, val content: String)
@@ -54,3 +60,29 @@ data class AnthropicContentBlock(
     val name: String? = null,
     val input: JsonObject? = null,
 )
+
+/**
+ * One `data:` payload of a streamed (`"stream": true`) Messages API
+ * response. Only the fields this provider reads are modeled: `type`
+ * distinguishes `content_block_start` / `content_block_delta` / `error` /
+ * the rest, which are ignored.
+ */
+@Serializable
+data class AnthropicStreamEvent(
+    val type: String,
+    val index: Int? = null,
+    @SerialName("content_block") val contentBlock: AnthropicContentBlock? = null,
+    val delta: AnthropicStreamDelta? = null,
+    val error: AnthropicStreamError? = null,
+)
+
+/** A `text_delta` carries [text]; an `input_json_delta` carries a fragment of a tool call's input as [partialJson]. */
+@Serializable
+data class AnthropicStreamDelta(
+    val type: String? = null,
+    val text: String? = null,
+    @SerialName("partial_json") val partialJson: String? = null,
+)
+
+@Serializable
+data class AnthropicStreamError(val type: String? = null, val message: String? = null)

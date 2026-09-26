@@ -22,6 +22,9 @@ data class OpenAiChatRequest(
     val temperature: Double? = null,
     @SerialName("max_tokens") val maxTokens: Int? = null,
     val tools: List<OpenAiToolDefinition>? = null,
+    val stream: Boolean? = null,
+    /** `{"type":"json_object"}` or `{"type":"json_schema","json_schema":{...}}`; built by the provider from [ai.droidcommand.llm.ResponseFormat]. */
+    @SerialName("response_format") val responseFormat: JsonObject? = null,
 )
 
 @Serializable
@@ -65,3 +68,41 @@ data class OpenAiToolCall(val id: String? = null, val type: String? = null, val 
 /** [arguments] is a JSON object serialized as a *string*, per the real API shape — not a nested JSON object. */
 @Serializable
 data class OpenAiFunctionCall(val name: String, val arguments: String)
+
+/**
+ * One `data:` chunk of a streamed (`"stream": true`) Chat Completions
+ * response. The stream ends with a literal `data: [DONE]` line, which is
+ * not JSON and is handled before decoding. [error] is how several
+ * OpenAI-compatible servers report a failure after the stream started.
+ */
+@Serializable
+data class OpenAiStreamChunk(
+    val choices: List<OpenAiStreamChoice> = emptyList(),
+    val error: OpenAiStreamError? = null,
+)
+
+@Serializable
+data class OpenAiStreamChoice(
+    val delta: OpenAiStreamDelta? = null,
+    @SerialName("finish_reason") val finishReason: String? = null,
+)
+
+@Serializable
+data class OpenAiStreamDelta(
+    val content: String? = null,
+    @SerialName("tool_calls") val toolCalls: List<OpenAiStreamToolCall>? = null,
+)
+
+/** Tool calls arrive in fragments keyed by [index]: [function] name first, then [OpenAiStreamFunction.arguments] in pieces. */
+@Serializable
+data class OpenAiStreamToolCall(
+    val index: Int = 0,
+    val id: String? = null,
+    val function: OpenAiStreamFunction? = null,
+)
+
+@Serializable
+data class OpenAiStreamFunction(val name: String? = null, val arguments: String? = null)
+
+@Serializable
+data class OpenAiStreamError(val message: String? = null, val type: String? = null)

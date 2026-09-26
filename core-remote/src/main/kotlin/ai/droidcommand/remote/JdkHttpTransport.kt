@@ -33,13 +33,44 @@ import javax.net.ssl.SSLContext
 class JdkHttpTransport(
     private val certificatePinner: CertificatePinner? = null,
     private val mutualTls: MutualTlsConfig? = null,
-) : HttpTransport {
+) : StreamingHttpTransport {
     override fun send(request: HttpRequestSpec): HttpResponseSpec {
-        val client = HttpClient.newBuilder()
+        val response = buildClient(request).send(buildRequest(request), HttpResponse.BodyHandlers.ofString())
+        return HttpResponseSpec(response.statusCode(), headersOf(response), response.body())
+    }
+
+    /**
+     * Streams a 2xx body line by line via [java.net.http.HttpResponse.BodyHandlers.ofLines];
+     * see [StreamingHttpTransport] for the contract. [HttpRequestSpec.requestTimeoutMillis]
+     * bounds the wait for the response *headers* only — the JDK does not
+     * apply it to reading the body — so a server that stops sending
+     * mid-stream is only bounded by the connection itself.
+     */
+    override fun sendStreaming(request: HttpRequestSpec, onLine: (String) -> Unit): HttpResponseSpec {
+        val response = buildClient(request).send(buildRequest(request), HttpResponse.BodyHandlers.ofLines())
+        val headers = headersOf(response)
+        response.body().use { lines ->
+            if (response.statusCode() !in 200..299) {
+                return HttpResponseSpec(response.statusCode(), headers, lines.toList().joinToString("\n"))
+            }
+            try {
+                lines.forEach(onLine)
+            } catch (e: java.io.UncheckedIOException) {
+                // Stream<String> can only surface a read failure unchecked; restore the
+                // IOException the StreamingHttpTransport contract promises.
+                throw e.cause ?: e
+            }
+        }
+        return HttpResponseSpec(response.statusCode(), headers, "")
+    }
+
+    private fun buildClient(request: HttpRequestSpec): HttpClient =
+        HttpClient.newBuilder()
             .connectTimeout(Duration.ofMillis(request.connectTimeoutMillis))
             .apply { if (certificatePinner != null || mutualTls != null) sslContext(buildSslContext()) }
             .build()
 
+    private fun buildRequest(request: HttpRequestSpec): HttpRequest {
         val bodyPublisher = if (request.body != null) {
             HttpRequest.BodyPublishers.ofString(request.body)
         } else {
@@ -51,15 +82,16 @@ class JdkHttpTransport(
             .method(request.method, bodyPublisher)
 
         request.headers.forEach { (name, value) -> requestBuilder.header(name, value) }
+        return requestBuilder.build()
+    }
 
-        val response = client.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
-
+    private fun headersOf(response: HttpResponse<*>): Map<String, String> {
         // HTTP header names are case-insensitive per spec; java.net.http.HttpHeaders
         // does not guarantee the sender's exact casing survives into map(), so the
         // map handed back here must be looked up case-insensitively too.
         val headers = java.util.TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER)
         response.headers().map().forEach { (name, values) -> headers[name] = values.joinToString(",") }
-        return HttpResponseSpec(response.statusCode(), headers, response.body())
+        return headers
     }
 
     private fun buildSslContext(): SSLContext {
