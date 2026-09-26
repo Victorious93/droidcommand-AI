@@ -72,9 +72,9 @@ Fourteen pure-Kotlin/JVM modules are implemented and tested:
   trust store a private-CA-signed server certificate is still correctly
   rejected by ordinary platform CA trust). When both are supplied,
   pinning wins for validating the server (a stricter, narrower check),
-  while mTLS's client certificate is still presented. Still PLANNED: a
-  build-server client actually built on top of this transport —
-  `core-llm-anthropic` is now the first real consumer, described next.
+  while mTLS's client certificate is still presented. Real consumers of
+  this transport: `core-llm-anthropic` (described next) and
+  `core-build-remote.RemoteBuildExecutor`, a real build-server client.
 - `core-llm-anthropic` — the first real `LlmProvider`: `AnthropicLlmProvider`
   encodes/decodes Anthropic's actual Messages API JSON shape
   (`kotlinx.serialization`) over `core-remote`'s real `RemoteClient` and
