@@ -23,6 +23,8 @@ data class OpenAiChatRequest(
     @SerialName("max_tokens") val maxTokens: Int? = null,
     val tools: List<OpenAiToolDefinition>? = null,
     val stream: Boolean? = null,
+    /** `{"type":"json_object"}` or `{"type":"json_schema","json_schema":{...}}`; built by the provider from [ai.droidcommand.llm.ResponseFormat]. */
+    @SerialName("response_format") val responseFormat: JsonObject? = null,
 )
 
 @Serializable

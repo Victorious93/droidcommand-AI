@@ -18,8 +18,13 @@ data class AnthropicRequest(
     val messages: List<AnthropicMessage>,
     val temperature: Double? = null,
     val tools: List<AnthropicToolDefinition>? = null,
+    @SerialName("tool_choice") val toolChoice: AnthropicToolChoice? = null,
     val stream: Boolean? = null,
 )
+
+/** `{"type":"tool","name":...}` forces the model to call that one tool. */
+@Serializable
+data class AnthropicToolChoice(val type: String, val name: String? = null)
 
 @Serializable
 data class AnthropicMessage(val role: String, val content: String)

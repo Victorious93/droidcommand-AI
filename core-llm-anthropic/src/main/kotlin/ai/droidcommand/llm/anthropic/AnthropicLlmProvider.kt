@@ -9,6 +9,7 @@ import ai.droidcommand.llm.LlmError
 import ai.droidcommand.llm.LlmProvider
 import ai.droidcommand.llm.LlmRequest
 import ai.droidcommand.llm.LlmResponse
+import ai.droidcommand.llm.ResponseFormat
 import ai.droidcommand.llm.StreamingLlmProvider
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.remote.RemoteClient
@@ -42,6 +43,14 @@ import java.net.http.HttpTimeoutException
  * a tool call's input, and an in-stream `error` event becomes
  * [LlmResponse.Error]. Every other event type (`message_start`, `ping`,
  * `message_delta`, ...) is ignored.
+ *
+ * Structured output (ROADMAP-060): this API version has no JSON mode, so a
+ * request with [LlmRequest.responseFormat] is sent as a single tool whose
+ * `input_schema` is the requested schema, with `tool_choice` forcing the
+ * model to call it. The tool call's input *is* the structured result and
+ * is returned as [LlmResponse.Text] holding that JSON object, never as
+ * [LlmResponse.ToolCall]. When streaming, the input's JSON fragments are
+ * what reach the text callback.
  */
 class AnthropicLlmProvider(
     override val config: LlmConfig,
@@ -72,7 +81,7 @@ class AnthropicLlmProvider(
         )
 
         return when (result) {
-            is RemoteResult.Success -> parseResponse(result.body)
+            is RemoteResult.Success -> parseResponse(result.body, request.responseFormat)
             is RemoteResult.Failure -> LlmResponse.Error(classify(result))
         }
     }
@@ -84,7 +93,7 @@ class AnthropicLlmProvider(
         }
         val body = encodeRequest(request, stream = true).getOrElse { return it.asError() }
 
-        val accumulator = StreamAccumulator(onTextDelta)
+        val accumulator = StreamAccumulator(onTextDelta, structured = request.responseFormat != null)
         val parser = ServerSentEventParser { event -> accumulator.accept(event.data) }
         val result = remoteClient.sendStreaming(
             path = "v1/messages",
@@ -109,6 +118,14 @@ class AnthropicLlmProvider(
     )
 
     private fun encodeRequest(request: LlmRequest, stream: Boolean): Result<String> {
+        val format = request.responseFormat
+        if (format != null && request.tools.isNotEmpty()) {
+            return Result.failure(IllegalArgumentException("responseFormat cannot be combined with tools"))
+        }
+        val structuredTool = format?.let {
+            structuredOutputTool(it) ?: return Result.failure(IllegalArgumentException("responseFormat schema is not a JSON object"))
+        }
+
         val (systemPrompt, messages) = toAnthropicMessages(request.systemPrompt, request.messages)
         val anthropicRequest = AnthropicRequest(
             model = config.model,
@@ -116,7 +133,8 @@ class AnthropicLlmProvider(
             system = systemPrompt,
             messages = messages,
             temperature = request.temperature ?: config.temperature,
-            tools = request.tools.takeIf { it.isNotEmpty() }?.map { it.toAnthropicToolDefinition() },
+            tools = structuredTool?.let { listOf(it) } ?: request.tools.takeIf { it.isNotEmpty() }?.map { it.toAnthropicToolDefinition() },
+            toolChoice = structuredTool?.let { AnthropicToolChoice(type = "tool", name = it.name) },
             stream = stream.takeIf { it },
         )
 
@@ -127,15 +145,28 @@ class AnthropicLlmProvider(
         }
     }
 
-    private fun Throwable.asError(): LlmResponse =
-        LlmResponse.Error(LlmError.InvalidResponse("Failed to encode request: $message"))
+    private fun Throwable.asError(): LlmResponse = LlmResponse.Error(
+        LlmError.InvalidResponse(if (this is IllegalArgumentException) "Invalid request: $message" else "Failed to encode request: $message"),
+    )
+
+    private fun structuredOutputTool(format: ResponseFormat): AnthropicToolDefinition? = when (format) {
+        is ResponseFormat.Json -> AnthropicToolDefinition(STRUCTURED_TOOL_NAME, STRUCTURED_TOOL_DESCRIPTION, openObjectSchema())
+        is ResponseFormat.Schema -> {
+            val schema = try {
+                json.parseToJsonElement(format.schema) as? JsonObject
+            } catch (e: SerializationException) {
+                null
+            }
+            schema?.let { AnthropicToolDefinition(format.name, STRUCTURED_TOOL_DESCRIPTION, it) }
+        }
+    }
 
     /**
      * Builds the final [LlmResponse] from a stream's events, mirroring
      * [parseResponse]'s rules: the first `tool_use` block wins over text,
      * and a stream with no content blocks at all is an error.
      */
-    private inner class StreamAccumulator(private val onTextDelta: (String) -> Unit) {
+    private inner class StreamAccumulator(private val onTextDelta: (String) -> Unit, private val structured: Boolean) {
         private val text = StringBuilder()
         private val toolNames = sortedMapOf<Int, String>()
         private val toolInputs = mutableMapOf<Int, StringBuilder>()
@@ -163,11 +194,15 @@ class AnthropicLlmProvider(
                 "content_block_delta" -> {
                     val delta = event.delta ?: return
                     when (delta.type) {
-                        "text_delta" -> delta.text?.takeIf { it.isNotEmpty() }?.let {
+                        "text_delta" -> delta.text?.takeIf { it.isNotEmpty() && !structured }?.let {
                             text.append(it)
                             onTextDelta(it)
                         }
-                        "input_json_delta" -> toolInputs[event.index ?: 0]?.append(delta.partialJson ?: "")
+                        "input_json_delta" -> {
+                            val fragment = delta.partialJson ?: ""
+                            toolInputs[event.index ?: 0]?.append(fragment)
+                            if (structured && fragment.isNotEmpty()) onTextDelta(fragment)
+                        }
                     }
                 }
                 "error" -> error = streamError(event.error)
@@ -176,6 +211,7 @@ class AnthropicLlmProvider(
 
         fun result(): LlmResponse {
             error?.let { return LlmResponse.Error(it) }
+            if (structured) return structuredResult()
             toolNames.entries.firstOrNull()?.let { (index, name) ->
                 if (name.isEmpty()) return LlmResponse.Error(LlmError.InvalidResponse("tool_use content block missing 'name'"))
                 val raw = toolInputs[index]?.toString().orEmpty().ifBlank { "{}" }
@@ -190,6 +226,18 @@ class AnthropicLlmProvider(
             if (!sawContentBlock) return LlmResponse.Error(LlmError.InvalidResponse("Stream contained no content blocks"))
             return LlmResponse.Text(text.toString())
         }
+
+        private fun structuredResult(): LlmResponse {
+            val index = toolNames.keys.firstOrNull()
+                ?: return LlmResponse.Error(LlmError.InvalidResponse("Structured output requested, but the stream had no tool_use block"))
+            val raw = toolInputs[index]?.toString().orEmpty().ifBlank { "{}" }
+            return try {
+                (json.parseToJsonElement(raw) as? JsonObject)?.let { LlmResponse.Text(it.toString()) }
+                    ?: LlmResponse.Error(LlmError.InvalidResponse("Structured output was not a JSON object"))
+            } catch (e: SerializationException) {
+                LlmResponse.Error(LlmError.InvalidResponse("Malformed structured output: ${e.message}"))
+            }
+        }
     }
 
     /** Anthropic's in-stream errors use the same `type` names as its HTTP error bodies. */
@@ -202,7 +250,7 @@ class AnthropicLlmProvider(
         }
     }
 
-    private fun parseResponse(body: String): LlmResponse {
+    private fun parseResponse(body: String, format: ResponseFormat?): LlmResponse {
         val decoded = try {
             json.decodeFromString(AnthropicResponse.serializer(), body)
         } catch (e: SerializationException) {
@@ -210,6 +258,11 @@ class AnthropicLlmProvider(
         }
 
         val toolUse = decoded.content.firstOrNull { it.type == "tool_use" }
+        if (format != null) {
+            val input = toolUse?.input
+                ?: return LlmResponse.Error(LlmError.InvalidResponse("Structured output requested, but the response had no tool_use input"))
+            return LlmResponse.Text(input.toString())
+        }
         if (toolUse != null) {
             val name = toolUse.name
                 ?: return LlmResponse.Error(LlmError.InvalidResponse("tool_use content block missing 'name'"))
@@ -241,6 +294,10 @@ class AnthropicLlmProvider(
          * explicit, documented fallback rather than a silent invented value.
          */
         const val DEFAULT_MAX_TOKENS = 1024
+
+        /** The tool name used for [ResponseFormat.Json], which has no caller-given schema name. */
+        const val STRUCTURED_TOOL_NAME = "json_output"
+        private const val STRUCTURED_TOOL_DESCRIPTION = "Respond by calling this tool; its input is your complete answer."
     }
 }
 
