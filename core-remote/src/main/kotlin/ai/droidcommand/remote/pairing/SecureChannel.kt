@@ -59,8 +59,27 @@ class SecureChannel(private val keys: SessionKeys) {
     var isClosed: Boolean = false
         private set
 
+    private val closeListeners = mutableListOf<() -> Unit>()
+
+    /** Closes the channel and runs every [onClose] listener once. Idempotent. */
     fun close() {
-        isClosed = true
+        val listeners = synchronized(closeListeners) {
+            if (isClosed) return
+            isClosed = true
+            closeListeners.toList().also { closeListeners.clear() }
+        }
+        listeners.forEach { it() }
+    }
+
+    /** Runs [action] when the channel is closed, or at once if it already is. */
+    fun onClose(action: () -> Unit) {
+        synchronized(closeListeners) {
+            if (!isClosed) {
+                closeListeners += action
+                return
+            }
+        }
+        action()
     }
 
     fun seal(plaintext: ByteArray): ByteArray {
