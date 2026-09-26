@@ -137,6 +137,20 @@ class BuildPipelineTest {
     }
 
     @Test
+    fun `an executor failure keeps the executor's output and exit status as diagnostics`() {
+        val executor = object : BuildExecutor {
+            override fun execute(context: BuildContext, isCancelled: () -> Boolean) =
+                BuildExecutionResult.Failure(2, "e: Main.kt:3:5 Unresolved reference 'foo'.", BuildError.BuildFailed("exited with code 2"))
+        }
+
+        val result = assertIs<BuildResult.Failure>(pipeline(executor = executor).execute(request()))
+
+        assertEquals("e: Main.kt:3:5 Unresolved reference 'foo'.", result.diagnostics)
+        assertEquals(2, result.exitStatus)
+        assertEquals(BuildFailureCategory.COMPILATION, BuildFailureClassifier.classify(result).category)
+    }
+
+    @Test
     fun `an artifact outside the workspace root is rejected at VALIDATE_RESULT, even if it exists and matches its declared size`() {
         // A file that genuinely exists with the right size, but sitting directly
         // under the top-level authorized root rather than inside the workspace

@@ -37,9 +37,9 @@ class BuildPipeline(
         fun timedOut() = clock().isAfter(deadline)
         fun effectivelyCancelled() = isCancelled() || timedOut()
 
-        fun terminate(stage: BuildStage, error: BuildError): BuildResult.Failure {
+        fun terminate(stage: BuildStage, error: BuildError, diagnostics: String? = null, exitStatus: Int? = null): BuildResult.Failure {
             emit(BuildEventType.BUILD_FAILED, "Build failed at $stage: ${error.message}", mapOf("code" to error.code))
-            return BuildResult.Failure(buildId, stage, error, events)
+            return BuildResult.Failure(buildId, stage, error, events, diagnostics, exitStatus)
         }
 
         fun terminateCancelledOrTimedOut(stage: BuildStage): BuildResult.Failure =
@@ -115,7 +115,10 @@ class BuildPipeline(
             is BuildExecutionResult.Failure -> {
                 workspace.transition(WorkspaceState.FAILED)
                 cleanupBestEffort(workspace, events) { t, m, md -> emit(t, m, md) }
-                return terminate(BuildStage.EXECUTE, execResult.error)
+                // Keep the executor's own output: it is the only evidence of *why*
+                // the build failed (compiler errors, failing tests), and
+                // BuildFailureClassifier reads it from here.
+                return terminate(BuildStage.EXECUTE, execResult.error, execResult.output.ifBlank { null }, execResult.exitStatus)
             }
             is BuildExecutionResult.Success -> execResult.artifacts to execResult.warnings
         }
