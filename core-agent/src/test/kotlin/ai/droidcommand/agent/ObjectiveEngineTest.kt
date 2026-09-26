@@ -2,7 +2,9 @@ package ai.droidcommand.agent
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 private class ScriptedPlanner(private val decisions: MutableList<PlannerDecision>) : Planner {
     var invocations = 0
@@ -71,10 +73,23 @@ private class RecordingLogger : Logger {
     }
 }
 
-private fun newEngine(planner: Planner, registry: ToolRegistry = ToolRegistry(), maxIterations: Int = 25): Triple<ObjectiveEngine, AgentStateMachine, ToolRegistry> {
+private fun newEngine(
+    planner: Planner,
+    registry: ToolRegistry = ToolRegistry(),
+    maxIterations: Int = 25,
+    reservedFinalizationIterations: Int = 0,
+): Triple<ObjectiveEngine, AgentStateMachine, ToolRegistry> {
     val stateMachine = AgentStateMachine()
     val executor = ToolExecutor(registry, stateMachine, sleep = { })
-    return Triple(ObjectiveEngine(registry, executor, stateMachine, planner, maxIterations), stateMachine, registry)
+    val engine = ObjectiveEngine(
+        registry,
+        executor,
+        stateMachine,
+        planner,
+        maxIterations,
+        reservedFinalizationIterations = reservedFinalizationIterations,
+    )
+    return Triple(engine, stateMachine, registry)
 }
 
 class ObjectiveEngineTest {
@@ -274,5 +289,145 @@ class ObjectiveEngineTest {
         assertIs<AgentState.Cancelled>(outcome.finalState)
         assertEquals(0, outcome.iterations)
         assertEquals(stateMachine.state, outcome.finalState)
+    }
+
+    @Test
+    fun `reservedFinalizationIterations defaults to 0 and never appends a nudge`() {
+        val registry = ToolRegistry().apply { register(EngineNoopTool("echo")) }
+        val planner = AlwaysInvokePlanner("echo")
+        val (engine, _, _) = newEngine(planner, registry, maxIterations = 4)
+        val context = ConversationContext()
+
+        val outcome = engine.run("never finishes", context = context)
+
+        assertIs<AgentState.Failed>(outcome.finalState)
+        assertEquals(4, outcome.iterations)
+        assertEquals(4, planner.invocations)
+        assertEquals(0, context.messages.count { it.role == Role.SYSTEM })
+    }
+
+    @Test
+    fun `appends a step-budget nudge for each iteration inside the reserved window`() {
+        val registry = ToolRegistry().apply { register(EngineNoopTool("echo")) }
+        val planner = AlwaysInvokePlanner("echo")
+        val (engine, _, _) = newEngine(planner, registry, maxIterations = 4, reservedFinalizationIterations = 2)
+        val context = ConversationContext()
+
+        engine.run("never finishes", context = context)
+
+        val systemMessages = context.messages.filter { it.role == Role.SYSTEM }
+        assertEquals(2, systemMessages.size)
+        assertTrue(systemMessages[0].content.contains("2 iteration(s) remain"))
+        assertTrue(systemMessages[1].content.contains("1 iteration(s) remain"))
+
+        val messages = context.messages
+        for (systemMessage in systemMessages) {
+            val index = messages.indexOf(systemMessage)
+            assertTrue(messages[index + 1].role == Role.ASSISTANT && messages[index + 1].content.contains("Invoking tool"))
+        }
+    }
+
+    @Test
+    fun `completes with fewer than maxIterations when the planner responds to the finalization nudge`() {
+        val registry = ToolRegistry().apply { register(EngineNoopTool("echo")) }
+        val planner = ScriptedPlanner(
+            mutableListOf(
+                PlannerDecision.InvokeTool("echo", emptyMap()),
+                PlannerDecision.Complete("best-effort summary"),
+            ),
+        )
+        val (engine, _, _) = newEngine(planner, registry, maxIterations = 3, reservedFinalizationIterations = 2)
+
+        val outcome = engine.run("never finishes")
+
+        assertIs<AgentState.Completed>(outcome.finalState)
+        assertEquals(2, outcome.iterations)
+        assertEquals(2, planner.invocations)
+    }
+
+    @Test
+    fun `still ends in Failed, never fabricating Completed, when the planner ignores the finalization nudge`() {
+        val registry = ToolRegistry().apply { register(EngineNoopTool("echo")) }
+        val planner = AlwaysInvokePlanner("echo")
+        val (engine, _, _) = newEngine(planner, registry, maxIterations = 4, reservedFinalizationIterations = 2)
+        val context = ConversationContext()
+
+        val outcome = engine.run("never finishes", context = context)
+
+        assertIs<AgentState.Failed>(outcome.finalState)
+        assertEquals(4, outcome.iterations)
+        assertEquals(4, planner.invocations)
+        assertEquals(2, context.messages.count { it.role == Role.SYSTEM })
+    }
+
+    @Test
+    fun `rejects a negative reservedFinalizationIterations`() {
+        val stateMachine = AgentStateMachine()
+        val registry = ToolRegistry()
+        val executor = ToolExecutor(registry, stateMachine, sleep = { })
+        assertFailsWith<IllegalArgumentException> {
+            ObjectiveEngine(registry, executor, stateMachine, AlwaysInvokePlanner("echo"), reservedFinalizationIterations = -1)
+        }
+    }
+
+    @Test
+    fun `rejects reservedFinalizationIterations equal to maxIterations`() {
+        val stateMachine = AgentStateMachine()
+        val registry = ToolRegistry()
+        val executor = ToolExecutor(registry, stateMachine, sleep = { })
+        assertFailsWith<IllegalArgumentException> {
+            ObjectiveEngine(registry, executor, stateMachine, AlwaysInvokePlanner("echo"), maxIterations = 4, reservedFinalizationIterations = 4)
+        }
+    }
+
+    @Test
+    fun `accepts reservedFinalizationIterations one less than maxIterations`() {
+        val stateMachine = AgentStateMachine()
+        val registry = ToolRegistry()
+        val executor = ToolExecutor(registry, stateMachine, sleep = { })
+        ObjectiveEngine(registry, executor, stateMachine, AlwaysInvokePlanner("echo"), maxIterations = 4, reservedFinalizationIterations = 3)
+    }
+
+    @Test
+    fun `cancellation on the iteration that would enter the reserved window still gets no nudge`() {
+        // isCancelled is also threaded through to the tool executor, which checks it once per
+        // attempt (RetryPolicy defaults to 1 attempt) — so iteration 1's normal engine-level check
+        // (call 1) plus its successful tool invocation's own check (call 2) both return false
+        // before iteration 2's engine-level check (call 3) triggers cancellation right at the
+        // start of the one iteration that would otherwise enter the reserved window.
+        val registry = ToolRegistry().apply { register(EngineNoopTool("echo")) }
+        val planner = AlwaysInvokePlanner("echo")
+        val (engine, _, _) = newEngine(planner, registry, maxIterations = 2, reservedFinalizationIterations = 1)
+        val context = ConversationContext()
+        var calls = 0
+        val isCancelled = {
+            calls++
+            calls == 3
+        }
+
+        val outcome = engine.run("never finishes", context = context, isCancelled = isCancelled)
+
+        assertIs<AgentState.Cancelled>(outcome.finalState)
+        assertEquals(1, outcome.iterations)
+        assertTrue(context.messages.none { it.role == Role.SYSTEM })
+    }
+
+    @Test
+    fun `logs finalization_nudge_sent at INFO with iteration, remaining, and maxIterations fields`() {
+        val registry = ToolRegistry().apply { register(EngineNoopTool("echo")) }
+        val planner = AlwaysInvokePlanner("echo")
+        val stateMachine = AgentStateMachine()
+        val executor = ToolExecutor(registry, stateMachine, sleep = { })
+        val logger = RecordingLogger()
+        val engine = ObjectiveEngine(registry, executor, stateMachine, planner, maxIterations = 4, logger = logger, reservedFinalizationIterations = 2)
+
+        engine.run("never finishes")
+
+        val nudgeEvents = logger.events.filter { it.message == "finalization_nudge_sent" }
+        assertEquals(2, nudgeEvents.size)
+        assertTrue(nudgeEvents.all { it.level == LogLevel.INFO })
+        assertEquals("2", nudgeEvents[0].fields["remaining"])
+        assertEquals("1", nudgeEvents[1].fields["remaining"])
+        assertTrue(nudgeEvents.all { it.fields["maxIterations"] == "4" })
     }
 }
