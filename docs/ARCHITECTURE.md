@@ -195,14 +195,14 @@ DroidCommand AI
 │                            implementations against real java.nio.file
 │                            operations — not fakes. MockBuildExecutor
 │                            never performs a real build (see
-│                            docs/CORE_BUILD.md). No AndroidGradleBuildExecutor/
-│                            RemoteBuildExecutor exists yet (PLANNED — the
-│                            former needs the Android SDK/AGP this
-│                            environment does not have; the latter needs a
-│                            real build server). core-build-local now
-│                            supplies the third: a real
+│                            docs/CORE_BUILD.md). No AndroidGradleBuildExecutor
+│                            exists yet (PLANNED — needs the Android
+│                            SDK/AGP this environment does not have).
+│                            core-build-local supplies a real
 │                            LocalProcessBuildExecutor for
-│                            ProjectType.JVM/NATIVE/GENERIC builds.
+│                            ProjectType.JVM/NATIVE/GENERIC builds, and
+│                            core-build-remote a real RemoteBuildExecutor
+│                            over core-remote's RemoteClient.
 │
 ├── core-build-local          LocalProcessBuildExecutor — a real
 │                            BuildExecutor, not a fake, for
@@ -627,12 +627,12 @@ trust store correctly rejects the server's private-CA-signed certificate
 via ordinary platform CA trust, proving mTLS support composes with the
 existing default rather than silently replacing it everywhere.
 
-What remains PLANNED: there is still no build-server client built on top
-of `RemoteClient` — `core-llm-anthropic` is now the first consumer (see
-5e) — and certificate pinning (trusting a peer by a specific public-key
-hash rather than by presenting a client certificate or the ordinary CA
-chain) is a separate, narrower trust mechanism from mTLS that has not
-been built in this module yet.
+Consumers built on top of `RemoteClient` since: `core-llm-anthropic`
+(see 5e) and `core-build-remote.RemoteBuildExecutor`, a real build-server
+client. Certificate pinning (trusting a peer by a specific public-key hash
+rather than by presenting a client certificate or the ordinary CA chain)
+is also implemented, in `CertificatePinner.kt` — see the status table's
+"core-remote: certificate pinning" row.
 
 ## 5e. core-llm-anthropic (implemented — the first real LlmProvider)
 
@@ -931,7 +931,7 @@ there is still no asynchronous/polling variant of the protocol.
 | core-remote: JdkHttpTransport (real HTTP client) | IMPLEMENTED | `JdkHttpTransport.kt`, tested against a real local `HttpServer` on loopback — a genuine network round trip and a genuine timeout, not mocked |
 | core-remote: mutual TLS (client certificates) | IMPLEMENTED | `MutualTlsConfig.kt`, wired into `JdkHttpTransport`'s optional constructor param; tested against a real TLS handshake with a real `keytool`-generated private CA and server/client certificate chain |
 | core-remote: certificate pinning | IMPLEMENTED | Added 2026-09-05: `CertificatePinner.kt` pins a peer's SubjectPublicKeyInfo (SHA-256) — the same "pin the key, not the CA chain" approach as OkHttp's `CertificatePinner` — rejecting construction with zero pins. Wired into `JdkHttpTransport` as a second optional constructor param, composable with `mutualTls`: pinning takes precedence for server validation when both are set (mTLS's own trust store is a fallback, its client-certificate presentation is always independent), and the platform default CA trust applies when neither is set. `CertificatePinnerIntegrationTest` proves this against a real TLS handshake with a real `keytool`-generated self-signed certificate: a correct pin completes the handshake, a wrong one fails it for real, no pinner falls back to ordinary CA trust (and correctly rejects the same self-signed certificate), and pinning's precedence over an mTLS trust store is proven both ways (a correct pin succeeds despite an empty mTLS trust store; a wrong pin fails despite an mTLS trust store that would have accepted the certificate) |
-| core-remote: a concrete LlmProvider using RemoteClient | IMPLEMENTED | `core-llm-anthropic.AnthropicLlmProvider` consumes `RemoteClient`/`HttpTransport` directly; no build-server client on top of `RemoteClient` exists yet |
+| core-remote: a concrete LlmProvider using RemoteClient | IMPLEMENTED | `core-llm-anthropic.AnthropicLlmProvider` consumes `RemoteClient`/`HttpTransport` directly; `core-build-remote.RemoteBuildExecutor` is the build-server client on top of `RemoteClient` |
 | core-llm-anthropic: AnthropicRequest/AnthropicResponse JSON mapping | IMPLEMENTED | `AnthropicMessagesApi.kt`, kotlinx.serialization, unit-tested against a real local server's real JSON |
 | core-llm-anthropic: AnthropicLlmProvider (real HTTP LlmProvider) | IMPLEMENTED (real, not mocked) | Real request encoding/response parsing over `RemoteClient`; x-api-key auth read fresh per call, never cached; status-code -> LlmError mapping (401/403 Authentication, 429/5xx ModelUnavailable, other non-2xx InvalidResponse); tested against a real local `HttpServer`, never api.anthropic.com |
 | core-llm-openai: OpenAiChatRequest/OpenAiChatResponse JSON mapping | IMPLEMENTED | `OpenAiChatApi.kt`, kotlinx.serialization, unit-tested against a real local server's real JSON |
