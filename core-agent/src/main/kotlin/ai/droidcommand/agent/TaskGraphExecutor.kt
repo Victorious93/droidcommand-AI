@@ -12,7 +12,17 @@ fun interface TaskRunner {
     fun run(task: Task): ObjectiveOutcome
 }
 
-data class TaskOutcome(val task: Task, val objectiveOutcome: ObjectiveOutcome)
+/**
+ * [verification] is null when no [TaskVerifier] was configured or the task
+ * had no [Task.verificationCriteria] to check; otherwise it is always
+ * [TaskVerification.Passed] here, since a task that fails verification is
+ * reported through [TaskGraphOutcome.StoppedOnVerificationFailure] instead.
+ */
+data class TaskOutcome(
+    val task: Task,
+    val objectiveOutcome: ObjectiveOutcome,
+    val verification: TaskVerification? = null,
+)
 
 /** The result of running a whole [TaskGraph] through [TaskGraphExecutor.run]. */
 sealed class TaskGraphOutcome {
@@ -35,6 +45,22 @@ sealed class TaskGraphOutcome {
         override val completedTasks: List<TaskOutcome>,
         val failedTask: Task,
         val failedOutcome: ObjectiveOutcome,
+        val skippedTasks: List<Task>,
+    ) : TaskGraphOutcome()
+
+    /**
+     * [failedTask] reached [AgentState.Completed], but the configured
+     * [TaskVerifier] returned [TaskVerification.Failed] or
+     * [TaskVerification.Inconclusive] for its [Task.verificationCriteria].
+     * Treated exactly like [StoppedOnFailure] — every later task in
+     * execution order is skipped — because a dependent task built on an
+     * unverified result is no safer than one built on a failed one.
+     */
+    data class StoppedOnVerificationFailure(
+        override val completedTasks: List<TaskOutcome>,
+        val failedTask: Task,
+        val objectiveOutcome: ObjectiveOutcome,
+        val verification: TaskVerification,
         val skippedTasks: List<Task>,
     ) : TaskGraphOutcome()
 
@@ -79,8 +105,19 @@ sealed class TaskGraphOutcome {
  * ```
  * — the same "dedicated instance per independent task" rule
  * [AgentStateMachine]'s own doc comment already states for `MacroScheduler`.
+ *
+ * **Verification:** when [verifier] is set, every task that reaches
+ * [AgentState.Completed] with a non-empty [Task.verificationCriteria] is
+ * checked before it counts as done; anything other than
+ * [TaskVerification.Passed] stops the graph with
+ * [TaskGraphOutcome.StoppedOnVerificationFailure]. With no [verifier]
+ * (the default) criteria stay unchecked, exactly as before this parameter
+ * existed.
  */
-class TaskGraphExecutor(private val logger: Logger = NoOpLogger) {
+class TaskGraphExecutor(
+    private val logger: Logger = NoOpLogger,
+    private val verifier: TaskVerifier? = null,
+) {
     fun run(
         graph: TaskGraph,
         runTask: TaskRunner,
@@ -101,8 +138,25 @@ class TaskGraphExecutor(private val logger: Logger = NoOpLogger) {
 
             when (outcome.finalState) {
                 is AgentState.Completed -> {
+                    val verification = if (verifier != null && task.verificationCriteria.isNotEmpty()) {
+                        verifier.verify(task, outcome)
+                    } else {
+                        null
+                    }
+                    if (verification != null && verification !is TaskVerification.Passed) {
+                        val skipped = graph.executionOrder.subList(index + 1, graph.executionOrder.size).map { graph.task(it) }
+                        logger.warn(
+                            "task_verification_failed",
+                            mapOf(
+                                "task" to task.id,
+                                "verification" to verification::class.simpleName.orEmpty(),
+                                "skipped" to skipped.size.toString(),
+                            ),
+                        )
+                        return TaskGraphOutcome.StoppedOnVerificationFailure(completed, task, outcome, verification, skipped)
+                    }
                     logger.info("task_completed", mapOf("task" to task.id))
-                    completed.add(TaskOutcome(task, outcome))
+                    completed.add(TaskOutcome(task, outcome, verification))
                 }
 
                 is AgentState.Cancelled -> {

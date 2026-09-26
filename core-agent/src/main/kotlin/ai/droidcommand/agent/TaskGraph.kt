@@ -5,9 +5,8 @@ package ai.droidcommand.agent
  * description a [Planner]/[ObjectiveEngine] can drive to completion, the
  * ids of other [Task]s that must complete first ([dependencies]), and
  * free-text [verificationCriteria] a caller may use to judge whether the
- * task actually succeeded (not itself evaluated by anything in this file —
- * that's a caller/planner concern, the same restraint [KnowledgeEntry]'s
- * [source] field already takes toward its own free-text content).
+ * task actually succeeded. Nothing in this file evaluates them; a
+ * [TaskVerifier] passed to [TaskGraphExecutor] does.
  */
 data class Task(
     val id: String,
