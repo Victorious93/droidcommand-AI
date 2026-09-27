@@ -114,6 +114,9 @@ object PairingHandshake {
 
         /** The peer is locked out by the [AuthGate]; no handshake was attempted. */
         data class LockedOut(val until: Instant) : DeviceResponse()
+
+        /** The device has no active pairing for this peer. Counted as a failure by the [AuthGate]. */
+        data class Rejected(val reason: String) : DeviceResponse()
     }
 
     sealed class DeviceResult {
@@ -153,25 +156,49 @@ object PairingHandshake {
         }
     }
 
-    /** The device's side. One instance may serve many handshakes; each gets its own [PendingPairing]. */
+    /**
+     * The device's side. One instance may serve many handshakes; each gets its own [PendingPairing].
+     *
+     * [secretFor] maps a peer id to that peer's pairing secret, or null when the peer is unknown,
+     * revoked or expired ([PairingRegistry.secretFor] is the intended source). The secret is
+     * looked up again before a pending handshake completes, so revoking a peer mid-handshake
+     * stops it from getting session keys. An unknown peer counts as a failure against [gate].
+     */
     class Device(
-        secret: PairingSecret,
+        private val secretFor: (peerId: String) -> PairingSecret?,
         private val gate: AuthGate = AuthGate(),
         private val random: SecureRandom = SecureRandom(),
     ) {
-        private val secret = secret.toByteArray()
+        /** A device with one secret, shared by every peer id. */
+        constructor(
+            secret: PairingSecret,
+            gate: AuthGate = AuthGate(),
+            random: SecureRandom = SecureRandom(),
+        ) : this({ _: String -> secret }, gate, random)
 
-        fun respond(peerId: String, clientHello: ClientHello): DeviceResponse {
-            gate.lockedUntil(peerId)?.let { return DeviceResponse.LockedOut(it) }
+        /**
+         * [gateKey] is what [gate] counts failures against. It defaults to [peerId]; a network
+         * server should pass the remote address instead, so someone who knows a controller's id
+         * can't lock that controller out by failing handshakes under its name.
+         */
+        fun respond(peerId: String, clientHello: ClientHello, gateKey: String = peerId): DeviceResponse {
+            gate.lockedUntil(gateKey)?.let { return DeviceResponse.LockedOut(it) }
+            val secret = secretFor(peerId)
+            if (secret == null) {
+                gate.recordFailure(gateKey)
+                return DeviceResponse.Rejected("Peer is not paired, or its pairing was revoked or expired")
+            }
             val sn = ByteArray(NONCE_BYTES).also(random::nextBytes)
             val cn = clientHello.clientNonce
-            val hello = ServerHello(sn, proof(secret, SERVER_PROOF_LABEL, cn, sn))
-            return DeviceResponse.Challenge(hello, PendingPairing(peerId, cn, sn))
+            val hello = ServerHello(sn, proof(secret.toByteArray(), SERVER_PROOF_LABEL, cn, sn))
+            return DeviceResponse.Challenge(hello, PendingPairing(peerId, gateKey, secret, cn, sn))
         }
 
         /** State between [respond] and the controller's [ClientFinish]. Single use. */
         inner class PendingPairing internal constructor(
             private val peerId: String,
+            private val gateKey: String,
+            private val secret: PairingSecret,
             private val clientNonce: ByteArray,
             private val serverNonce: ByteArray,
         ) {
@@ -180,14 +207,18 @@ object PairingHandshake {
             fun complete(finish: ClientFinish): DeviceResult {
                 check(!completed) { "complete() already called; a pending pairing is single-use" }
                 completed = true
-                gate.lockedUntil(peerId)?.let { return DeviceResult.LockedOut(it) }
-                val expected = proof(secret, CLIENT_PROOF_LABEL, clientNonce, serverNonce)
+                gate.lockedUntil(gateKey)?.let { return DeviceResult.LockedOut(it) }
+                if (secretFor(peerId)?.matches(secret) != true) {
+                    return DeviceResult.Rejected("Pairing was revoked, expired or replaced during the handshake")
+                }
+                val secretBytes = secret.toByteArray()
+                val expected = proof(secretBytes, CLIENT_PROOF_LABEL, clientNonce, serverNonce)
                 if (!MessageDigest.isEqual(expected, finish.clientProof)) {
-                    gate.recordFailure(peerId)
+                    gate.recordFailure(gateKey)
                     return DeviceResult.Rejected("Controller proof did not match the pairing secret")
                 }
-                gate.recordSuccess(peerId)
-                val (toDevice, toController) = deriveKeys(secret, clientNonce, serverNonce)
+                gate.recordSuccess(gateKey)
+                val (toDevice, toController) = deriveKeys(secretBytes, clientNonce, serverNonce)
                 return DeviceResult.Paired(SessionKeys(sendKey = toController, receiveKey = toDevice))
             }
         }

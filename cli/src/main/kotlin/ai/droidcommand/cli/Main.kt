@@ -82,6 +82,11 @@ fun main(args: Array<String>) {
         "pilot" -> runPilot(session, args.drop(1))
         "forge" -> runForge(session, args.drop(1))
         "regenerate-prompt" -> runRegeneratePrompt(args.drop(1))
+        "device-serve" -> runDeviceServe(args.drop(1))
+        "device-send" -> runDeviceSend(args.drop(1))
+        "device-forge" -> runDeviceForge(args.drop(1))
+        "device-discover" -> runDeviceDiscover(args.drop(1))
+        "device-pairings" -> runDevicePairings(args.drop(1))
         else -> {
             System.err.println("Unknown command '$command'")
             printUsage()
@@ -209,6 +214,21 @@ internal fun printUsage() {
                                           [--repo <path>] [--previous-response-file <path>]
                                           [--shorter|--more-detailed|--more-technical]
                                           [--adapt claude|codex|gpt|gemini|local]
+          device-serve                   Listen for a paired controller and run its Pilot requests
+                                          [--bind host:port] [--name <controller name>]
+                                          [--ttl-minutes <n>] [--discoverable]
+                                          [--device-name <name>] [--new-pairing]
+                                          [--pairings <path> | --no-persist]
+          device-send <host:port> <controller id> <tool> [key=value ...]
+                                         Send one Pilot request to a device-serve instance
+                                         (reads the secret from DROIDCOMMAND_PAIRING_SECRET)
+          device-forge <host:port> <controller id> <objective...>
+                                         Run a Forge objective on a device-serve instance,
+                                         planned by the device's own LLM configuration
+          device-pairings [revoke <id>]  List saved pairings, or revoke one
+                                          [--pairings <path>]
+          device-discover                List device-serve --discoverable instances on the
+                                          local network [--timeout-ms <n>] [--target host:port]
 
         Forge Mode reads its LLM configuration from the process environment
         (ai.droidcommand.config.EnvConfigSource), using the same
@@ -217,10 +237,22 @@ internal fun printUsage() {
         full list. At least one provider must be configured or 'forge' fails
         with a clear error instead of a stack trace.
 
+        device-serve binds to loopback unless --bind says otherwise. It prints a
+        controller id and a one-time pairing secret; every request it receives
+        still goes through this machine's tool policy and approval prompt.
+        With --discoverable it also answers device-discover on UDP port 7101,
+        revealing only its name and port, never the controller id or secret.
+        Pairings are saved to ~/.droidcommand/pairings (readable only by you),
+        so a restart keeps them; a new secret is shown only when no saved
+        pairing is active, or with --new-pairing.
+
         Examples:
           pilot echo text=hello
           forge "Echo the word hello"
           regenerate-prompt "fix the login bug" --target claude
+          device-serve --bind 0.0.0.0:7100 --name "My laptop" --discoverable
+          device-discover
+          device-send 192.168.1.20:7100 <controller id> echo text=hello
         """.trimIndent(),
     )
 }
@@ -242,15 +274,7 @@ internal fun runPilot(cliSession: CliSession, rest: List<String>): Int {
         return 1
     }
     val toolName = rest[0]
-    val input = mutableMapOf<String, String>()
-    for (pair in rest.drop(1)) {
-        val separator = pair.indexOf('=')
-        if (separator < 0) {
-            System.err.println("Invalid input '$pair'; expected key=value")
-            return 1
-        }
-        input[pair.substring(0, separator)] = pair.substring(separator + 1)
-    }
+    val input = parseInputPairs(rest.drop(1)) ?: return 1
 
     val result = try {
         cliSession.session.runPilotInstruction(toolName, input)

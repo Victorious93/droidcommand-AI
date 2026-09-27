@@ -25,6 +25,9 @@ class PairingHandshakeTest {
         if (response is PairingHandshake.DeviceResponse.LockedOut) {
             return PairingHandshake.ControllerResult.Rejected("locked out") to PairingHandshake.DeviceResult.LockedOut(response.until)
         }
+        if (response is PairingHandshake.DeviceResponse.Rejected) {
+            return PairingHandshake.ControllerResult.Rejected("not paired") to PairingHandshake.DeviceResult.Rejected(response.reason)
+        }
         val challenge = assertIs<PairingHandshake.DeviceResponse.Challenge>(response)
         val controllerResult = controller.finish(PairingHandshake.ServerHello.fromBytes(challenge.hello.toBytes()))
         if (controllerResult !is PairingHandshake.ControllerResult.Paired) return controllerResult to null
