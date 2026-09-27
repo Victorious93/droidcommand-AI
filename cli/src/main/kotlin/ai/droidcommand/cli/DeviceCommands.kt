@@ -14,18 +14,28 @@ import ai.droidcommand.llm.factory.LlmProviderFactory
 import ai.droidcommand.remote.JdkHttpTransport
 import ai.droidcommand.remote.discovery.DeviceDiscovery
 import ai.droidcommand.remote.discovery.DiscoveryResponder
+import ai.droidcommand.remote.pairing.FilePairingStore
 import ai.droidcommand.remote.pairing.NewPairing
 import ai.droidcommand.remote.pairing.PairedConnection
+import ai.droidcommand.remote.pairing.PairedDevice
 import ai.droidcommand.remote.pairing.PairedSocketClient
 import ai.droidcommand.remote.pairing.PairedSocketServer
 import ai.droidcommand.remote.pairing.PairingRegistry
 import ai.droidcommand.remote.pairing.PairingRejectedException
 import ai.droidcommand.remote.pairing.PairingSecret
+import ai.droidcommand.remote.pairing.PairingStatus
 import java.io.IOException
 import java.io.PrintStream
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.nio.file.Path
 import java.time.Duration
+import java.time.Instant
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The remote request format carried inside each encrypted record. A Pilot request is the tool
@@ -34,13 +44,17 @@ import java.time.Duration
  * the two can't be confused. A response is one status byte ([STATUS_OK] or [STATUS_FAILED])
  * followed by the result text. While a Forge objective runs, the device may first send any number
  * of [STATUS_PROGRESS] records, one per step; the final [STATUS_OK] or [STATUS_FAILED] record
- * always ends the response.
+ * always ends the response. While an objective runs, the controller may send [CANCEL_MARKER] on
+ * the same connection to stop it before its next step; a cancel with nothing running is ignored.
  */
 internal object RemotePilot {
     const val STATUS_OK: Byte = 0
     const val STATUS_FAILED: Byte = 1
     const val STATUS_PROGRESS: Byte = 2
     const val FORGE_MARKER = "@forge"
+    const val CANCEL_MARKER = "@cancel"
+
+    fun encodeCancel(): ByteArray = CANCEL_MARKER.toByteArray()
 
     fun encodeForgeRequest(objective: String): ByteArray = "$FORGE_MARKER\n$objective".toByteArray()
 
@@ -106,7 +120,10 @@ internal fun parseInputPairs(pairs: List<String>, err: PrintStream = System.err)
 internal class RunningDeviceServer(
     val server: PairedSocketServer,
     val address: InetSocketAddress,
-    val pairing: NewPairing,
+    /** The pairing made at startup, or null when saved pairings were reused. */
+    val pairing: NewPairing?,
+    /** Every pairing that can connect right now. */
+    val activePairings: List<PairedDevice>,
     val discovery: DiscoveryResponder? = null,
     val discoveryAddress: InetSocketAddress? = null,
 ) {
@@ -129,6 +146,9 @@ internal class RunningDeviceServer(
  * needs approval on this machine's console. A remote controller can't approve its own request.
  * Requests run one at a time.
  *
+ * Pairs a new controller named [controllerName] only when [registry] has no active pairing or
+ * [forceNewPairing] is set; otherwise the saved pairings are reused and no secret is shown.
+ *
  * With [discoveryBind] set, a [DiscoveryResponder] also answers LAN discovery probes under
  * [deviceName], pointing at the paired server's port. Discovery reveals only the name and port.
  */
@@ -140,13 +160,17 @@ internal fun startDeviceServer(
     plannerFactory: () -> Planner = { LlmProviderFactory.createPlanner(EnvConfigSource(), JdkHttpTransport()) },
     discoveryBind: InetSocketAddress? = null,
     deviceName: String = defaultDeviceName(),
+    registry: PairingRegistry = PairingRegistry(),
+    forceNewPairing: Boolean = false,
 ): RunningDeviceServer {
-    val registry = PairingRegistry()
-    val pairing = registry.pair(controllerName, ttl)
+    val now = Instant.now()
+    val hasActive = registry.list().any { it.status(now) == PairingStatus.ACTIVE }
+    val pairing = if (forceNewPairing || !hasActive) registry.pair(controllerName, ttl) else null
+    val active = registry.list().filter { it.status(now) == PairingStatus.ACTIVE }
     val dispatcher = RemoteDispatcher(sessionFactory, plannerFactory)
     val server = PairedSocketServer(registry) { connection -> serveConnection(dispatcher, connection) }
     val address = server.start(bind)
-    if (discoveryBind == null) return RunningDeviceServer(server, address, pairing)
+    if (discoveryBind == null) return RunningDeviceServer(server, address, pairing, active)
     val responder = DiscoveryResponder(deviceName, address.port)
     val discoveryAddress = try {
         responder.start(discoveryBind)
@@ -155,7 +179,7 @@ internal fun startDeviceServer(
         server.close()
         throw e
     }
-    return RunningDeviceServer(server, address, pairing, responder, discoveryAddress)
+    return RunningDeviceServer(server, address, pairing, active, responder, discoveryAddress)
 }
 
 internal fun defaultDeviceName(): String =
@@ -190,9 +214,37 @@ private class RemoteDispatcher(private val sessionFactory: () -> CliSession, pri
     }
 }
 
+/**
+ * Serves one controller connection. A reader thread takes every incoming record, so a
+ * [RemotePilot.CANCEL_MARKER] sent while an objective runs reaches it at once; every other record
+ * is queued and handled in order on this thread.
+ */
 private fun serveConnection(dispatcher: RemoteDispatcher, connection: PairedConnection) {
+    val requests = LinkedBlockingQueue<ByteArray>()
+    val endOfStream = ByteArray(0)
+    val runningCancel = AtomicReference<AtomicBoolean?>()
+    val readerDone = AtomicBoolean(false)
+    Thread.ofVirtual().start {
+        try {
+            while (true) {
+                val record = connection.receive() ?: break
+                if (record.decodeToString() == RemotePilot.CANCEL_MARKER) {
+                    runningCancel.get()?.set(true)
+                } else {
+                    requests.put(record)
+                }
+            }
+        } catch (e: IOException) {
+            // The connection broke; treated like a clean close below.
+        } finally {
+            readerDone.set(true)
+            runningCancel.get()?.set(true)
+            requests.put(endOfStream)
+        }
+    }
     while (true) {
-        val request = connection.receive() ?: return
+        val request = requests.take()
+        if (request === endOfStream) return
         val lines = RemotePilot.decodeRequest(request)
         if (lines.first() == RemotePilot.FORGE_MARKER) {
             val objective = lines.drop(1).joinToString("\n").trim()
@@ -201,8 +253,14 @@ private fun serveConnection(dispatcher: RemoteDispatcher, connection: PairedConn
                 continue
             }
             val progress = ProgressSender(connection)
-            val (ok, text) = dispatcher.forge(objective, progress, progress::controllerGone)
-            if (progress.controllerGone()) return
+            val cancel = AtomicBoolean(false)
+            runningCancel.set(cancel)
+            val (ok, text) = try {
+                dispatcher.forge(objective, progress) { cancel.get() || readerDone.get() || progress.controllerGone() }
+            } finally {
+                runningCancel.set(null)
+            }
+            if (readerDone.get() || progress.controllerGone()) return
             connection.send(RemotePilot.encodeResponse(ok, text))
             continue
         }
@@ -249,9 +307,14 @@ internal fun runDeviceServe(rest: List<String>): Int {
     var ttl: Duration? = null
     var discoverable = false
     var deviceName = defaultDeviceName()
+    var pairingsFile: Path? = defaultPairingsFile()
+    var forceNewPairing = false
     var i = 0
     while (i < rest.size) {
         when (val arg = rest[i]) {
+            "--pairings" -> pairingsFile = rest.getOrNull(++i)?.let(Path::of) ?: return usageError("--pairings requires a path")
+            "--no-persist" -> pairingsFile = null
+            "--new-pairing" -> forceNewPairing = true
             "--bind" -> bind = parseHostPort(rest.getOrNull(++i)) ?: return usageError("--bind requires host:port")
             "--name" -> name = rest.getOrNull(++i) ?: return usageError("--name requires a value")
             "--ttl-minutes" -> ttl = rest.getOrNull(++i)?.toLongOrNull()?.takeIf { it > 0 }?.let(Duration::ofMinutes)
@@ -267,8 +330,18 @@ internal fun runDeviceServe(rest: List<String>): Int {
         return usageError("--discoverable needs --bind to a network address (for example 0.0.0.0:7100); other devices can't reach loopback")
     }
     val discoveryBind = if (discoverable) InetSocketAddress(DeviceDiscovery.DEFAULT_PORT) else null
+    val registry = openRegistry(pairingsFile) ?: return 1
     val running = try {
-        startDeviceServer({ buildSession() }, bind, name, ttl, discoveryBind = discoveryBind, deviceName = deviceName)
+        startDeviceServer(
+            { buildSession() },
+            bind,
+            name,
+            ttl,
+            discoveryBind = discoveryBind,
+            deviceName = deviceName,
+            registry = registry,
+            forceNewPairing = forceNewPairing,
+        )
     } catch (e: IOException) {
         val where = if (discoverable) "$bind or UDP port ${DeviceDiscovery.DEFAULT_PORT}" else "$bind"
         System.err.println("Could not listen on $where: ${e.message}")
@@ -276,9 +349,19 @@ internal fun runDeviceServe(rest: List<String>): Int {
     }
     println("Listening on ${running.address.hostString}:${running.address.port}")
     running.discoveryAddress?.let { println("Discoverable as \"$deviceName\" on UDP port ${it.port}") }
-    println("Controller id: ${running.pairing.device.id}")
-    println("Pairing secret (shown once; pass it to the controller as $SECRET_ENV): ${running.pairing.secret.encode()}")
-    running.pairing.device.expiresAt?.let { println("Pairing expires at $it") }
+    val pairing = running.pairing
+    if (pairing != null) {
+        println("Controller id: ${pairing.device.id}")
+        println("Pairing secret (shown once; pass it to the controller as $SECRET_ENV): ${pairing.secret.encode()}")
+        pairing.device.expiresAt?.let { println("Pairing expires at $it") }
+    }
+    val reused = running.activePairings.filter { it.id != pairing?.device?.id }
+    if (reused.isNotEmpty()) {
+        println("Accepting saved pairing(s):")
+        reused.forEach { println("  ${describePairing(it, Instant.now())}") }
+        if (pairing == null) println("Run with --new-pairing to pair another controller.")
+    }
+    println(if (pairingsFile != null) "Pairings are saved in $pairingsFile" else "Pairings are not saved (--no-persist)")
     System.out.flush()
     Thread.currentThread().join()
     return 0
@@ -312,6 +395,86 @@ internal fun runDeviceForge(rest: List<String>, secretSource: (String) -> String
     val address = parseHostPort(rest[0]) ?: return usageError("Expected host:port, got '${rest[0]}'")
     val objective = rest.drop(2).joinToString(" ")
     return sendToDevice(rest[0], address, rest[1], RemotePilot.encodeForgeRequest(objective), secretSource)
+}
+
+/** `~/.droidcommand/pairings`, or null when the home directory is unknown. */
+internal fun defaultPairingsFile(): Path? =
+    System.getProperty("user.home")?.takeIf { it.isNotBlank() }?.let { Path.of(it, ".droidcommand", "pairings") }
+
+/**
+ * A registry backed by [file], or in memory only when [file] is null. Returns null after printing
+ * why when the file can't be used: an unreadable, malformed or too-open file is an error, never
+ * silently replaced. On a file system without POSIX permissions it falls back to memory with a
+ * warning, since the secrets couldn't be protected there.
+ */
+internal fun openRegistry(file: Path?, err: PrintStream = System.err): PairingRegistry? {
+    if (file == null) return PairingRegistry()
+    val store = try {
+        FilePairingStore(file)
+    } catch (e: UnsupportedOperationException) {
+        err.println("Warning: ${e.message}; pairings will not be saved")
+        return PairingRegistry()
+    }
+    return try {
+        PairingRegistry(store = store)
+    } catch (e: IOException) {
+        err.println("Could not load pairings: ${e.message}")
+        null
+    }
+}
+
+internal fun describePairing(device: PairedDevice, now: Instant): String {
+    val status = when (device.status(now)) {
+        PairingStatus.ACTIVE -> device.expiresAt?.let { "active until $it" } ?: "active"
+        PairingStatus.EXPIRED -> "expired at ${device.expiresAt}"
+        PairingStatus.REVOKED -> "revoked at ${device.revokedAt}"
+    }
+    return "${device.id}  ${device.displayName}  ($status)"
+}
+
+/**
+ * `device-pairings [--pairings <path>] [revoke <controller id>]`: lists saved pairings, or revokes
+ * one. A running `device-serve` keeps the pairings it loaded at startup, so restart it after a
+ * revoke for the revocation to reach it.
+ */
+internal fun runDevicePairings(rest: List<String>): Int {
+    var file: Path? = defaultPairingsFile()
+    val positional = mutableListOf<String>()
+    var i = 0
+    while (i < rest.size) {
+        when (val arg = rest[i]) {
+            "--pairings" -> file = rest.getOrNull(++i)?.let(Path::of) ?: return usageError("--pairings requires a path")
+            else -> positional += arg
+        }
+        i++
+    }
+    val path = file ?: return usageError("No home directory; pass --pairings <path>")
+    val registry = openRegistry(path) ?: return 1
+    val now = Instant.now()
+    return when {
+        positional.isEmpty() -> {
+            val all = registry.list()
+            if (all.isEmpty()) println("No saved pairings in $path") else all.forEach { println(describePairing(it, now)) }
+            0
+        }
+        positional.size == 2 && positional[0] == "revoke" -> {
+            val id = positional[1]
+            val revoked = try {
+                registry.revoke(id)
+            } catch (e: IOException) {
+                System.err.println("Could not save the revocation: ${e.message}")
+                return 1
+            }
+            if (revoked) {
+                println("Revoked $id. Restart device-serve if it is running so it stops accepting this controller.")
+                0
+            } else {
+                System.err.println("No active pairing with id $id")
+                1
+            }
+        }
+        else -> usageError("Usage: device-pairings [--pairings <path>] [revoke <controller id>]")
+    }
 }
 
 /**
@@ -364,7 +527,16 @@ private fun sendToDevice(
     return try {
         PairedSocketClient.connect(address, controllerId, secret).use { connection ->
             connection.send(request)
-            printUntilFinal(connection)
+            val finished = CountDownLatch(1)
+            // Ctrl-C asks the device to cancel, then waits briefly so the final state still prints.
+            val onInterrupt = Thread { cancelAndWait(connection, finished, Duration.ofSeconds(15)) }
+            Runtime.getRuntime().addShutdownHook(onInterrupt)
+            try {
+                printUntilFinal(connection)
+            } finally {
+                finished.countDown()
+                runCatching { Runtime.getRuntime().removeShutdownHook(onInterrupt) }
+            }
         }
     } catch (e: PairingRejectedException) {
         System.err.println("Pairing with $target failed: ${e.message}")
@@ -373,6 +545,18 @@ private fun sendToDevice(
         System.err.println("Could not reach the device at $target: ${e.message}")
         1
     }
+}
+
+/**
+ * Sends a cancel request unless the response already [finished], then waits up to [wait] for it
+ * to finish. Returns true when a cancel was sent.
+ */
+internal fun cancelAndWait(connection: PairedConnection, finished: CountDownLatch, wait: Duration): Boolean {
+    if (finished.count == 0L) return false
+    System.err.println("Asking the device to cancel...")
+    val sent = runCatching { connection.send(RemotePilot.encodeCancel()) }.isSuccess
+    finished.await(wait.toMillis(), TimeUnit.MILLISECONDS)
+    return sent
 }
 
 /** Prints progress records as they arrive, then the final result. Returns the exit code. */

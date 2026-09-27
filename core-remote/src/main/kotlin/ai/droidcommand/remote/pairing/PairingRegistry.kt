@@ -42,20 +42,31 @@ class NewPairing(val device: PairedDevice, val secret: PairingSecret) {
  * once, and [closeExpiredChannels] closes those whose pairing has since
  * expired (call it periodically; nothing here runs a timer).
  *
- * In memory only. Pairing secrets need secure storage (Android Keystore on
- * the device), which belongs to the still-PLANNED `:app` module, so this
- * class deliberately has no file-backed variant: writing secrets to a plain
- * JSON file would be worse than re-pairing after a restart. Thread-safe.
+ * In memory unless a [store] is given. With one, saved pairings are loaded
+ * at construction and every [pair] and [revoke] is saved before it returns,
+ * so pairings, expiry times and revocations survive a restart. The JVM `cli`
+ * uses [FilePairingStore] (an owner-only file, as the project owner chose on
+ * 2026-09-27); on the Android app, pairings belong in Android Keystore,
+ * which the still-PLANNED `:app` module would provide. Thread-safe.
  */
 class PairingRegistry(
     private val clock: Clock = Clock.systemUTC(),
     private val random: SecureRandom = SecureRandom(),
+    private val store: PairingStore? = null,
 ) {
     private class Entry(var device: PairedDevice, val secret: PairingSecret) {
         val channels = mutableListOf<SecureChannel>()
     }
 
     private val entries = linkedMapOf<String, Entry>()
+
+    init {
+        store?.load()?.forEach { entries[it.device.id] = Entry(it.device, it.secret) }
+    }
+
+    private fun persist() {
+        store?.save(entries.values.map { StoredPairing(it.device, it.secret) })
+    }
 
     /** Pairs a new controller. With [ttl], the pairing expires that long after now. */
     @Synchronized
@@ -71,6 +82,13 @@ class PairingRegistry(
         )
         val secret = PairingSecret.generate(random)
         entries[device.id] = Entry(device, secret)
+        try {
+            persist()
+        } catch (e: java.io.IOException) {
+            // A pairing that can't be saved would vanish on restart; don't hand out its secret.
+            entries.remove(device.id)
+            throw e
+        }
         return NewPairing(device, secret)
     }
 
@@ -94,6 +112,8 @@ class PairingRegistry(
     /**
      * Revokes [id] and closes every channel opened for it. Returns false when
      * [id] is unknown or already revoked. The record stays in [list] as revoked.
+     * With a [store], the revocation takes effect in memory first and is then
+     * saved; if saving fails this still revokes, then throws the save error.
      */
     @Synchronized
     fun revoke(id: String): Boolean {
@@ -102,6 +122,7 @@ class PairingRegistry(
         entry.device = entry.device.copy(revokedAt = clock.instant())
         entry.channels.forEach(SecureChannel::close)
         entry.channels.clear()
+        persist()
         return true
     }
 
