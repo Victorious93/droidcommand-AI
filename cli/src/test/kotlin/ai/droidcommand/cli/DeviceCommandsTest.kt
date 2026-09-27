@@ -72,8 +72,9 @@ class DeviceCommandsTest {
         ttl = null,
         plannerFactory = { plannerFactory() },
     )
+    private val pairing = running.pairing!!
     private val target = "${running.address.hostString}:${running.address.port}"
-    private val secretEnv = { name: String -> if (name == SECRET_ENV) running.pairing.secret.encode() else null }
+    private val secretEnv = { name: String -> if (name == SECRET_ENV) pairing.secret.encode() else null }
 
     @AfterTest
     fun stop() {
@@ -95,7 +96,7 @@ class DeviceCommandsTest {
     @Test
     fun `a paired controller runs a Pilot tool on the device and gets the result`() {
         val (exitCode, output) = captureStdout {
-            runDeviceSend(listOf(target, running.pairing.device.id, "echo", "text=hello from the laptop"), secretEnv)
+            runDeviceSend(listOf(target, pairing.device.id, "echo", "text=hello from the laptop"), secretEnv)
         }
         assertEquals(0, exitCode)
         assertTrue(output.contains("hello from the laptop"), output)
@@ -105,7 +106,7 @@ class DeviceCommandsTest {
     fun `a sensitive tool still needs approval on the device, and a refusal fails the request`() {
         approve = false
         val (exitCode, _) = captureStdout {
-            runDeviceSend(listOf(target, running.pairing.device.id, "run_shell_command", "executable=echo"), secretEnv)
+            runDeviceSend(listOf(target, pairing.device.id, "run_shell_command", "executable=echo"), secretEnv)
         }
         assertEquals(1, exitCode)
         assertEquals(1, approvals.get(), "the device-side approval prompt was asked exactly once")
@@ -114,9 +115,9 @@ class DeviceCommandsTest {
     @Test
     fun `the device keeps serving after a request fails`() {
         approve = false
-        assertEquals(1, runDeviceSend(listOf(target, running.pairing.device.id, "run_shell_command", "executable=echo"), secretEnv))
+        assertEquals(1, runDeviceSend(listOf(target, pairing.device.id, "run_shell_command", "executable=echo"), secretEnv))
         val (exitCode, output) = captureStdout {
-            runDeviceSend(listOf(target, running.pairing.device.id, "echo", "text=second request"), secretEnv)
+            runDeviceSend(listOf(target, pairing.device.id, "echo", "text=second request"), secretEnv)
         }
         assertEquals(0, exitCode, output)
         assertTrue(output.contains("second request"), output)
@@ -125,7 +126,7 @@ class DeviceCommandsTest {
     @Test
     fun `the wrong secret is refused`() {
         val wrong = PairingSecret.generate().encode()
-        val exitCode = runDeviceSend(listOf(target, running.pairing.device.id, "echo", "text=x")) { wrong }
+        val exitCode = runDeviceSend(listOf(target, pairing.device.id, "echo", "text=x")) { wrong }
         assertEquals(1, exitCode)
     }
 
@@ -137,20 +138,20 @@ class DeviceCommandsTest {
 
     @Test
     fun `a missing or malformed secret fails before connecting`() {
-        assertEquals(1, runDeviceSend(listOf(target, running.pairing.device.id, "echo", "text=x")) { null })
-        assertEquals(1, runDeviceSend(listOf(target, running.pairing.device.id, "echo", "text=x")) { "not-a-secret" })
+        assertEquals(1, runDeviceSend(listOf(target, pairing.device.id, "echo", "text=x")) { null })
+        assertEquals(1, runDeviceSend(listOf(target, pairing.device.id, "echo", "text=x")) { "not-a-secret" })
     }
 
     @Test
     fun `malformed arguments fail cleanly`() {
-        assertEquals(1, runDeviceSend(listOf(target, running.pairing.device.id), secretEnv))
-        assertEquals(1, runDeviceSend(listOf("no-port", running.pairing.device.id, "echo"), secretEnv))
-        assertEquals(1, runDeviceSend(listOf(target, running.pairing.device.id, "echo", "missing-separator"), secretEnv))
+        assertEquals(1, runDeviceSend(listOf(target, pairing.device.id), secretEnv))
+        assertEquals(1, runDeviceSend(listOf("no-port", pairing.device.id, "echo"), secretEnv))
+        assertEquals(1, runDeviceSend(listOf(target, pairing.device.id, "echo", "missing-separator"), secretEnv))
     }
 
     @Test
     fun `remote Pilot requests run as REMOTE, so an owner-only tool is refused`() {
-        val exitCode = runDeviceSend(listOf(target, running.pairing.device.id, "owner_only"), secretEnv)
+        val exitCode = runDeviceSend(listOf(target, pairing.device.id, "owner_only"), secretEnv)
         assertEquals(1, exitCode)
         assertEquals(0, ownerOnlyRuns.get())
         // The same tool still runs for the device owner locally.
@@ -161,7 +162,7 @@ class DeviceCommandsTest {
     @Test
     fun `a Forge objective runs on the device with the device's planner`() {
         val (exitCode, output) = captureStdout {
-            runDeviceForge(listOf(target, running.pairing.device.id, "say", "hello"), secretEnv)
+            runDeviceForge(listOf(target, pairing.device.id, "say", "hello"), secretEnv)
         }
         assertEquals(0, exitCode, output)
         assertTrue(output.contains("Completed"), output)
@@ -171,7 +172,7 @@ class DeviceCommandsTest {
         assertTrue(started >= 0 && step > started && output.indexOf("Final state") > step, output)
         // Later Pilot requests keep working after a Forge objective has run to completion.
         val (pilotExit, pilotOutput) = captureStdout {
-            runDeviceSend(listOf(target, running.pairing.device.id, "echo", "text=still pilot"), secretEnv)
+            runDeviceSend(listOf(target, pairing.device.id, "echo", "text=still pilot"), secretEnv)
         }
         assertEquals(0, pilotExit, pilotOutput)
         assertTrue(pilotOutput.contains("still pilot"), pilotOutput)
@@ -181,11 +182,11 @@ class DeviceCommandsTest {
     fun `a Forge objective fails cleanly when the device has no LLM configured`() {
         plannerFactory = { throw IllegalStateException("no providers configured") }
         val (exitCode, output) = captureStdout {
-            runDeviceForge(listOf(target, running.pairing.device.id, "do", "something"), secretEnv)
+            runDeviceForge(listOf(target, pairing.device.id, "do", "something"), secretEnv)
         }
         assertEquals(1, exitCode)
         assertTrue(output.contains("no providers configured"), output)
-        assertEquals(1, runDeviceForge(listOf(target, running.pairing.device.id), secretEnv), "an objective is required")
+        assertEquals(1, runDeviceForge(listOf(target, pairing.device.id), secretEnv), "an objective is required")
     }
 
     @Test
@@ -205,7 +206,7 @@ class DeviceCommandsTest {
             }
             assertEquals(0, exitCode, output)
             assertTrue(output.contains(":${discoverable.address.port}  Kitchen phone"), output)
-            assertTrue(!output.contains(discoverable.pairing.device.id), "discovery must not reveal the controller id")
+            assertTrue(!output.contains(discoverable.pairing!!.device.id), "discovery must not reveal the controller id")
         } finally {
             discoverable.close()
         }
@@ -230,14 +231,14 @@ class DeviceCommandsTest {
     fun `a Forge objective stops when the controller goes away`() {
         val decisions = AtomicInteger()
         plannerFactory = { loopingPlanner(decisions) }
-        PairedSocketClient.connect(running.address, running.pairing.device.id, running.pairing.secret).use { connection ->
+        PairedSocketClient.connect(running.address, pairing.device.id, pairing.secret).use { connection ->
             connection.send(RemotePilot.encodeForgeRequest("loop forever"))
             val first = RemotePilot.decodeResponse(connection.receive()!!)
             assertTrue(first.progress, first.text)
         }
         // Requests run one at a time, so this one is answered only after the objective has stopped.
         val (exitCode, output) = captureStdout {
-            runDeviceSend(listOf(target, running.pairing.device.id, "echo", "text=after"), secretEnv)
+            runDeviceSend(listOf(target, pairing.device.id, "echo", "text=after"), secretEnv)
         }
         assertEquals(0, exitCode, output)
         assertTrue(decisions.get() < 25, "the objective should stop early, not run all 25 steps (ran ${decisions.get()})")
@@ -261,7 +262,7 @@ class DeviceCommandsTest {
     fun `a cancel request stops a running objective and the final state says so`() {
         val decisions = AtomicInteger()
         plannerFactory = { loopingPlanner(decisions) }
-        PairedSocketClient.connect(running.address, running.pairing.device.id, running.pairing.secret).use { connection ->
+        PairedSocketClient.connect(running.address, pairing.device.id, pairing.secret).use { connection ->
             connection.send(RemotePilot.encodeForgeRequest("loop forever"))
             assertTrue(RemotePilot.decodeResponse(connection.receive()!!).progress)
             connection.send(RemotePilot.encodeCancel())
@@ -279,7 +280,7 @@ class DeviceCommandsTest {
 
     @Test
     fun `a cancel with nothing running is ignored`() {
-        PairedSocketClient.connect(running.address, running.pairing.device.id, running.pairing.secret).use { connection ->
+        PairedSocketClient.connect(running.address, pairing.device.id, pairing.secret).use { connection ->
             connection.send(RemotePilot.encodeCancel())
             connection.send(RemotePilot.encodeRequest("echo", listOf("text=fine")))
             val response = RemotePilot.decodeResponse(connection.receive()!!)
@@ -291,7 +292,7 @@ class DeviceCommandsTest {
     fun `cancelAndWait sends a cancel only while the response is still open`() {
         val decisions = AtomicInteger()
         plannerFactory = { loopingPlanner(decisions) }
-        PairedSocketClient.connect(running.address, running.pairing.device.id, running.pairing.secret).use { connection ->
+        PairedSocketClient.connect(running.address, pairing.device.id, pairing.secret).use { connection ->
             connection.send(RemotePilot.encodeForgeRequest("loop forever"))
             val finished = CountDownLatch(1)
             val printer = Thread.ofVirtual().start {
@@ -314,6 +315,58 @@ class DeviceCommandsTest {
         assertEquals("Step 2: shell threw an error", describeProgress(threw))
         assertNull(describeProgress(LogEvent(LogLevel.DEBUG, "tool_result", mapOf("iteration" to "1"))))
         assertNull(describeProgress(LogEvent(LogLevel.INFO, "objective_completed", mapOf("iteration" to "1"))))
+    }
+
+    @Test
+    fun `a restarted device-serve accepts the controller it paired before, without a new secret`() {
+        val file = kotlin.io.path.createTempDirectory("device-serve").resolve("pairings")
+        val first = startDeviceServer(::newSession, InetSocketAddress(InetAddress.getLoopbackAddress(), 0), "Laptop", null, registry = openRegistry(file)!!)
+        val saved = first.pairing!!
+        first.close()
+
+        val restarted = startDeviceServer(::newSession, InetSocketAddress(InetAddress.getLoopbackAddress(), 0), "Laptop", null, registry = openRegistry(file)!!)
+        try {
+            assertNull(restarted.pairing, "no new secret when a saved pairing is active")
+            assertEquals(listOf(saved.device.id), restarted.activePairings.map { it.id })
+            val env = { name: String -> if (name == SECRET_ENV) saved.secret.encode() else null }
+            val (exitCode, output) = captureStdout {
+                runDeviceSend(listOf("${restarted.address.hostString}:${restarted.address.port}", saved.device.id, "echo", "text=remembered"), env)
+            }
+            assertEquals(0, exitCode, output)
+            assertTrue(output.contains("remembered"), output)
+        } finally {
+            restarted.close()
+        }
+
+        val forced = startDeviceServer(
+            ::newSession,
+            InetSocketAddress(InetAddress.getLoopbackAddress(), 0),
+            "Tablet",
+            null,
+            registry = openRegistry(file)!!,
+            forceNewPairing = true,
+        )
+        forced.close()
+        assertEquals(2, forced.activePairings.size, "--new-pairing adds a controller alongside the saved one")
+    }
+
+    @Test
+    fun `device-pairings lists and revokes saved pairings`() {
+        val file = kotlin.io.path.createTempDirectory("device-pairings").resolve("pairings")
+        val registry = openRegistry(file)!!
+        val laptop = registry.pair("Laptop")
+        registry.pair("Tablet")
+
+        val (listExit, listing) = captureStdout { runDevicePairings(listOf("--pairings", file.toString())) }
+        assertEquals(0, listExit)
+        assertTrue(listing.contains("Laptop") && listing.contains("Tablet") && listing.contains("active"), listing)
+        assertTrue(!listing.contains(laptop.secret.encode()), "secrets are never listed")
+
+        val (revokeExit, _) = captureStdout { runDevicePairings(listOf("--pairings", file.toString(), "revoke", laptop.device.id)) }
+        assertEquals(0, revokeExit)
+        assertNull(openRegistry(file)!!.secretFor(laptop.device.id), "the revocation was saved")
+        assertEquals(1, runDevicePairings(listOf("--pairings", file.toString(), "revoke", laptop.device.id)), "already revoked")
+        assertEquals(1, runDevicePairings(listOf("--pairings", file.toString(), "delete", "x")))
     }
 
     @Test
