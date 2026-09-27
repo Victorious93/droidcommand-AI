@@ -84,7 +84,8 @@ class DroidCommandSession(
      * own doc comment for the exact mechanism (a prompting-only step-budget
      * nudge in the last N iterations, never a fabricated [AgentState.Completed]).
      * Exposed here so a Forge Mode caller can opt in without constructing an
-     * [ObjectiveEngine] directly.
+     * [ObjectiveEngine] directly. [logger] (default [NoOpLogger]) is passed
+     * through the same way, so a caller can watch each step as it happens.
      */
     fun runForgeObjective(
         objective: String,
@@ -94,6 +95,7 @@ class DroidCommandSession(
         retryPolicy: RetryPolicy = RetryPolicy(),
         isCancelled: () -> Boolean = { false },
         reservedFinalizationIterations: Int = 0,
+        logger: Logger = NoOpLogger,
     ): ObjectiveOutcome {
         synchronized(lock) {
             check(mode == AgentMode.FORGE) { "runForgeObjective called while in $mode mode" }
@@ -107,6 +109,7 @@ class DroidCommandSession(
                 planner,
                 maxIterations,
                 AgentMode.FORGE,
+                logger = logger,
                 reservedFinalizationIterations = reservedFinalizationIterations,
             )
             return engine.run(objective, context, retryPolicy, isCancelled)
