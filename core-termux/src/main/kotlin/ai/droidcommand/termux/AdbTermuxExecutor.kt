@@ -80,7 +80,7 @@ class AdbTermuxExecutor(
     private val pollIntervalMillis: Long = 300,
     private val dispatchTimeoutMillis: Long = 10_000,
     private val logger: Logger = NoOpLogger,
-) : TermuxExecutor {
+) : TermuxExecutor, InstalledTerminalProbe {
     /** Presence only — no RUN_COMMAND dispatch, no root call. Mirrors [ai.droidcommand.root.AdbRootExecutor.isDeviceConnected]. */
     fun isDeviceConnected(): Boolean {
         val result = runLocal(adbArgv() + listOf("get-state"), dispatchTimeoutMillis)
@@ -91,6 +91,23 @@ class AdbTermuxExecutor(
     fun isTermuxInstalled(): Boolean {
         val result = runLocal(adbArgv() + listOf("shell", "pm", "list", "packages", termuxPackage), dispatchTimeoutMillis)
         return result is LocalProcessResult.Ran && result.exitCode == 0 && result.stdout.contains("package:$termuxPackage")
+    }
+
+    override fun isTermuxPackageInstalled(): Boolean = isTermuxInstalled()
+
+    /**
+     * The installed app's `versionName`, read from `adb shell dumpsys package` (no root, no access to
+     * the app's data). Null when it isn't installed or the output has no `versionName=` line.
+     */
+    override fun termuxPackageVersionName(): String? {
+        val result = runLocal(adbArgv() + listOf("shell", "dumpsys", "package", termuxPackage), dispatchTimeoutMillis)
+        if (result !is LocalProcessResult.Ran || result.exitCode != 0) return null
+        return result.stdout.lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.startsWith("versionName=") }
+            ?.removePrefix("versionName=")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
     }
 
     /**
