@@ -3,6 +3,9 @@ package ai.droidcommand.cli
 import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.AgentState
 import ai.droidcommand.agent.Initiator
+import ai.droidcommand.agent.LogEvent
+import ai.droidcommand.agent.LogLevel
+import ai.droidcommand.agent.Logger
 import ai.droidcommand.agent.Planner
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.describe
@@ -29,11 +32,14 @@ import java.time.Duration
  * name and its `key=value` inputs, one per line (so a value may contain spaces). A Forge request
  * is the line [FORGE_MARKER] followed by the objective text; tool names never start with `@`, so
  * the two can't be confused. A response is one status byte ([STATUS_OK] or [STATUS_FAILED])
- * followed by the result text.
+ * followed by the result text. While a Forge objective runs, the device may first send any number
+ * of [STATUS_PROGRESS] records, one per step; the final [STATUS_OK] or [STATUS_FAILED] record
+ * always ends the response.
  */
 internal object RemotePilot {
     const val STATUS_OK: Byte = 0
     const val STATUS_FAILED: Byte = 1
+    const val STATUS_PROGRESS: Byte = 2
     const val FORGE_MARKER = "@forge"
 
     fun encodeForgeRequest(objective: String): ByteArray = "$FORGE_MARKER\n$objective".toByteArray()
@@ -46,9 +52,40 @@ internal object RemotePilot {
     fun encodeResponse(ok: Boolean, text: String): ByteArray =
         byteArrayOf(if (ok) STATUS_OK else STATUS_FAILED) + text.toByteArray()
 
-    fun decodeResponse(bytes: ByteArray): Pair<Boolean, String> {
-        if (bytes.isEmpty()) return false to "Empty response from device"
-        return (bytes[0] == STATUS_OK) to bytes.copyOfRange(1, bytes.size).decodeToString()
+    fun encodeProgress(text: String): ByteArray = byteArrayOf(STATUS_PROGRESS) + text.toByteArray()
+
+    /** A decoded record: progress, or the final result ([ok] says whether it succeeded). */
+    class Response(val progress: Boolean, val ok: Boolean, val text: String)
+
+    fun decodeResponse(bytes: ByteArray): Response {
+        if (bytes.isEmpty()) return Response(progress = false, ok = false, text = "Empty response from device")
+        val text = bytes.copyOfRange(1, bytes.size).decodeToString()
+        return when (bytes[0]) {
+            STATUS_PROGRESS -> Response(progress = true, ok = true, text = text)
+            STATUS_OK -> Response(progress = false, ok = true, text = text)
+            else -> Response(progress = false, ok = false, text = text)
+        }
+    }
+}
+
+/**
+ * Turns one [ai.droidcommand.agent.ObjectiveEngine] log event into a progress line for the
+ * controller, or null for events not worth sending. Only the step number, tool name and outcome
+ * go out: never tool inputs or exception details, which could carry more than the controller
+ * should see.
+ */
+internal fun describeProgress(event: LogEvent): String? {
+    if (event.level == LogLevel.DEBUG) return null
+    val step = event.fields["iteration"]?.let { "Step $it: " }.orEmpty()
+    return when (event.message) {
+        "objective_started" -> "Started"
+        "tool_result" -> "${step}ran ${event.fields["tool"]} (${event.fields["outcome"]})"
+        "unknown_tool" -> "${step}the planner asked for an unknown tool, ${event.fields["tool"]}"
+        "tool_threw" -> "${step}${event.fields["tool"]} threw an error"
+        "planner_threw" -> "${step}the planner threw an error"
+        "finalization_nudge_sent" -> "${step}${event.fields["remaining"]} step(s) left; asking the planner to finish"
+        "objective_completed", "objective_aborted", "objective_cancelled", "objective_exhausted_iterations" -> null
+        else -> "$step${event.message}"
     }
 }
 
@@ -86,7 +123,8 @@ internal class RunningDeviceServer(
  * objective completed or failed on a shared session, every later request would be refused. A Pilot request runs one tool as [Initiator.REMOTE], so a tool restricted to
  * the device owner stays off-limits. A Forge request runs a whole objective with a planner built on
  * this machine by [plannerFactory] (from this machine's own LLM configuration, never the
- * controller's). Either way every tool call goes through the same
+ * controller's), sending a progress record after each step. If a progress record can't be
+ * delivered because the controller went away, the objective is cancelled before its next step. Either way every tool call goes through the same
  * [ai.droidcommand.security.SecureToolExecutor] gate as a local call, so a sensitive tool still
  * needs approval on this machine's console. A remote controller can't approve its own request.
  * Requests run one at a time.
@@ -134,7 +172,7 @@ private class RemoteDispatcher(private val sessionFactory: () -> CliSession, pri
     }
 
     @Synchronized
-    fun forge(objective: String): Pair<Boolean, String> {
+    fun forge(objective: String, progress: Logger, isCancelled: () -> Boolean): Pair<Boolean, String> {
         val planner = planner ?: try {
             plannerFactory().also { planner = it }
         } catch (e: Exception) {
@@ -143,7 +181,7 @@ private class RemoteDispatcher(private val sessionFactory: () -> CliSession, pri
         val outcome = try {
             val session = sessionFactory().session
             session.switchMode(AgentMode.FORGE)
-            session.runForgeObjective(objective, planner)
+            session.runForgeObjective(objective, planner, isCancelled = isCancelled, logger = progress)
         } catch (e: Exception) {
             return false to "Error running objective: ${e.message}"
         }
@@ -158,7 +196,13 @@ private fun serveConnection(dispatcher: RemoteDispatcher, connection: PairedConn
         val lines = RemotePilot.decodeRequest(request)
         if (lines.first() == RemotePilot.FORGE_MARKER) {
             val objective = lines.drop(1).joinToString("\n").trim()
-            val (ok, text) = if (objective.isEmpty()) false to "No objective given" else dispatcher.forge(objective)
+            if (objective.isEmpty()) {
+                connection.send(RemotePilot.encodeResponse(false, "No objective given"))
+                continue
+            }
+            val progress = ProgressSender(connection)
+            val (ok, text) = dispatcher.forge(objective, progress, progress::controllerGone)
+            if (progress.controllerGone()) return
             connection.send(RemotePilot.encodeResponse(ok, text))
             continue
         }
@@ -174,6 +218,24 @@ private fun serveConnection(dispatcher: RemoteDispatcher, connection: PairedConn
             }
         }
         connection.send(response)
+    }
+}
+
+/** Sends each step of a running objective to the controller, and notices when it has gone away. */
+private class ProgressSender(private val connection: PairedConnection) : Logger {
+    @Volatile
+    private var gone = false
+
+    fun controllerGone(): Boolean = gone || connection.isClosed
+
+    override fun log(event: LogEvent) {
+        if (gone) return
+        val line = describeProgress(event) ?: return
+        try {
+            connection.send(RemotePilot.encodeProgress(line))
+        } catch (e: IOException) {
+            gone = true
+        }
     }
 }
 
@@ -302,10 +364,7 @@ private fun sendToDevice(
     return try {
         PairedSocketClient.connect(address, controllerId, secret).use { connection ->
             connection.send(request)
-            val reply = connection.receive() ?: return usageError("Device closed the connection without answering")
-            val (ok, text) = RemotePilot.decodeResponse(reply)
-            println(text)
-            if (ok) 0 else 1
+            printUntilFinal(connection)
         }
     } catch (e: PairingRejectedException) {
         System.err.println("Pairing with $target failed: ${e.message}")
@@ -313,6 +372,17 @@ private fun sendToDevice(
     } catch (e: IOException) {
         System.err.println("Could not reach the device at $target: ${e.message}")
         1
+    }
+}
+
+/** Prints progress records as they arrive, then the final result. Returns the exit code. */
+private fun printUntilFinal(connection: PairedConnection): Int {
+    while (true) {
+        val reply = connection.receive() ?: return usageError("Device closed the connection without answering")
+        val response = RemotePilot.decodeResponse(reply)
+        println(if (response.progress) "[device] ${response.text}" else response.text)
+        System.out.flush()
+        if (!response.progress) return if (response.ok) 0 else 1
     }
 }
 

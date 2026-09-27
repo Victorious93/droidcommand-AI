@@ -2,11 +2,14 @@ package ai.droidcommand.cli
 
 import ai.droidcommand.agent.ConversationContext
 import ai.droidcommand.agent.Initiator
+import ai.droidcommand.agent.LogEvent
+import ai.droidcommand.agent.LogLevel
 import ai.droidcommand.agent.Planner
 import ai.droidcommand.agent.PlannerDecision
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolSpec
+import ai.droidcommand.remote.pairing.PairedSocketClient
 import ai.droidcommand.remote.pairing.PairingSecret
 import ai.droidcommand.security.ApprovalPrompt
 import java.io.ByteArrayOutputStream
@@ -160,6 +163,10 @@ class DeviceCommandsTest {
         }
         assertEquals(0, exitCode, output)
         assertTrue(output.contains("Completed"), output)
+        // Each step reached the controller before the final result.
+        val started = output.indexOf("[device] Started")
+        val step = output.indexOf("[device] Step 1: ran echo (Success)")
+        assertTrue(started >= 0 && step > started && output.indexOf("Final state") > step, output)
         // Later Pilot requests keep working after a Forge objective has run to completion.
         val (pilotExit, pilotOutput) = captureStdout {
             runDeviceSend(listOf(target, running.pairing.device.id, "echo", "text=still pilot"), secretEnv)
@@ -215,6 +222,46 @@ class DeviceCommandsTest {
         assertEquals(1, runDeviceDiscover(listOf("--timeout-ms", "0")))
         assertEquals(1, runDeviceDiscover(listOf("--target", "no-port")))
         assertEquals(1, runDeviceDiscover(listOf("--bogus")))
+    }
+
+    @Test
+    fun `a Forge objective stops when the controller goes away`() {
+        val decisions = AtomicInteger()
+        plannerFactory = {
+            object : Planner {
+                override fun decide(
+                    objective: String,
+                    context: ConversationContext,
+                    availableTools: List<ToolSpec>,
+                    lastObservation: ToolResult?,
+                ): PlannerDecision {
+                    decisions.incrementAndGet()
+                    Thread.sleep(50)
+                    return PlannerDecision.InvokeTool("echo", mapOf("text" to "again"))
+                }
+            }
+        }
+        PairedSocketClient.connect(running.address, running.pairing.device.id, running.pairing.secret).use { connection ->
+            connection.send(RemotePilot.encodeForgeRequest("loop forever"))
+            val first = RemotePilot.decodeResponse(connection.receive()!!)
+            assertTrue(first.progress, first.text)
+        }
+        // Requests run one at a time, so this one is answered only after the objective has stopped.
+        val (exitCode, output) = captureStdout {
+            runDeviceSend(listOf(target, running.pairing.device.id, "echo", "text=after"), secretEnv)
+        }
+        assertEquals(0, exitCode, output)
+        assertTrue(decisions.get() < 25, "the objective should stop early, not run all 25 steps (ran ${decisions.get()})")
+    }
+
+    @Test
+    fun `progress lines carry the step, tool and outcome, never inputs or errors`() {
+        val result = LogEvent(LogLevel.INFO, "tool_result", mapOf("iteration" to "3", "tool" to "echo", "outcome" to "Success", "input" to "secret"))
+        assertEquals("Step 3: ran echo (Success)", describeProgress(result))
+        val threw = LogEvent(LogLevel.ERROR, "tool_threw", mapOf("iteration" to "2", "tool" to "shell"), IllegalStateException("password=hunter2"))
+        assertEquals("Step 2: shell threw an error", describeProgress(threw))
+        assertNull(describeProgress(LogEvent(LogLevel.DEBUG, "tool_result", mapOf("iteration" to "1"))))
+        assertNull(describeProgress(LogEvent(LogLevel.INFO, "objective_completed", mapOf("iteration" to "1"))))
     }
 
     @Test
