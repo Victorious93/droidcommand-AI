@@ -16,6 +16,8 @@ import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.time.Duration
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -227,20 +229,7 @@ class DeviceCommandsTest {
     @Test
     fun `a Forge objective stops when the controller goes away`() {
         val decisions = AtomicInteger()
-        plannerFactory = {
-            object : Planner {
-                override fun decide(
-                    objective: String,
-                    context: ConversationContext,
-                    availableTools: List<ToolSpec>,
-                    lastObservation: ToolResult?,
-                ): PlannerDecision {
-                    decisions.incrementAndGet()
-                    Thread.sleep(50)
-                    return PlannerDecision.InvokeTool("echo", mapOf("text" to "again"))
-                }
-            }
-        }
+        plannerFactory = { loopingPlanner(decisions) }
         PairedSocketClient.connect(running.address, running.pairing.device.id, running.pairing.secret).use { connection ->
             connection.send(RemotePilot.encodeForgeRequest("loop forever"))
             val first = RemotePilot.decodeResponse(connection.receive()!!)
@@ -252,6 +241,69 @@ class DeviceCommandsTest {
         }
         assertEquals(0, exitCode, output)
         assertTrue(decisions.get() < 25, "the objective should stop early, not run all 25 steps (ran ${decisions.get()})")
+    }
+
+    /** A planner that never finishes: it keeps invoking echo, slowly, and counts its decisions. */
+    private fun loopingPlanner(decisions: AtomicInteger) = object : Planner {
+        override fun decide(
+            objective: String,
+            context: ConversationContext,
+            availableTools: List<ToolSpec>,
+            lastObservation: ToolResult?,
+        ): PlannerDecision {
+            decisions.incrementAndGet()
+            Thread.sleep(50)
+            return PlannerDecision.InvokeTool("echo", mapOf("text" to "again"))
+        }
+    }
+
+    @Test
+    fun `a cancel request stops a running objective and the final state says so`() {
+        val decisions = AtomicInteger()
+        plannerFactory = { loopingPlanner(decisions) }
+        PairedSocketClient.connect(running.address, running.pairing.device.id, running.pairing.secret).use { connection ->
+            connection.send(RemotePilot.encodeForgeRequest("loop forever"))
+            assertTrue(RemotePilot.decodeResponse(connection.receive()!!).progress)
+            connection.send(RemotePilot.encodeCancel())
+            var response = RemotePilot.decodeResponse(connection.receive()!!)
+            while (response.progress) response = RemotePilot.decodeResponse(connection.receive()!!)
+            assertEquals(false, response.ok)
+            assertTrue(response.text.contains("Cancelled"), response.text)
+            assertTrue(decisions.get() < 25, "stopped after ${decisions.get()} steps")
+            // The same connection keeps working afterwards.
+            connection.send(RemotePilot.encodeRequest("echo", listOf("text=still here")))
+            val next = RemotePilot.decodeResponse(connection.receive()!!)
+            assertTrue(next.ok && next.text.contains("still here"), next.text)
+        }
+    }
+
+    @Test
+    fun `a cancel with nothing running is ignored`() {
+        PairedSocketClient.connect(running.address, running.pairing.device.id, running.pairing.secret).use { connection ->
+            connection.send(RemotePilot.encodeCancel())
+            connection.send(RemotePilot.encodeRequest("echo", listOf("text=fine")))
+            val response = RemotePilot.decodeResponse(connection.receive()!!)
+            assertTrue(response.ok && response.text.contains("fine"), response.text)
+        }
+    }
+
+    @Test
+    fun `cancelAndWait sends a cancel only while the response is still open`() {
+        val decisions = AtomicInteger()
+        plannerFactory = { loopingPlanner(decisions) }
+        PairedSocketClient.connect(running.address, running.pairing.device.id, running.pairing.secret).use { connection ->
+            connection.send(RemotePilot.encodeForgeRequest("loop forever"))
+            val finished = CountDownLatch(1)
+            val printer = Thread.ofVirtual().start {
+                var response = RemotePilot.decodeResponse(connection.receive()!!)
+                while (response.progress) response = RemotePilot.decodeResponse(connection.receive()!!)
+                finished.countDown()
+            }
+            assertTrue(cancelAndWait(connection, finished, Duration.ofSeconds(10)))
+            printer.join()
+            assertEquals(0L, finished.count)
+            assertEquals(false, cancelAndWait(connection, finished, Duration.ofSeconds(1)), "nothing to cancel once finished")
+        }
     }
 
     @Test

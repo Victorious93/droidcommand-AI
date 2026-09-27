@@ -26,6 +26,11 @@ import java.io.PrintStream
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The remote request format carried inside each encrypted record. A Pilot request is the tool
@@ -34,13 +39,17 @@ import java.time.Duration
  * the two can't be confused. A response is one status byte ([STATUS_OK] or [STATUS_FAILED])
  * followed by the result text. While a Forge objective runs, the device may first send any number
  * of [STATUS_PROGRESS] records, one per step; the final [STATUS_OK] or [STATUS_FAILED] record
- * always ends the response.
+ * always ends the response. While an objective runs, the controller may send [CANCEL_MARKER] on
+ * the same connection to stop it before its next step; a cancel with nothing running is ignored.
  */
 internal object RemotePilot {
     const val STATUS_OK: Byte = 0
     const val STATUS_FAILED: Byte = 1
     const val STATUS_PROGRESS: Byte = 2
     const val FORGE_MARKER = "@forge"
+    const val CANCEL_MARKER = "@cancel"
+
+    fun encodeCancel(): ByteArray = CANCEL_MARKER.toByteArray()
 
     fun encodeForgeRequest(objective: String): ByteArray = "$FORGE_MARKER\n$objective".toByteArray()
 
@@ -190,9 +199,37 @@ private class RemoteDispatcher(private val sessionFactory: () -> CliSession, pri
     }
 }
 
+/**
+ * Serves one controller connection. A reader thread takes every incoming record, so a
+ * [RemotePilot.CANCEL_MARKER] sent while an objective runs reaches it at once; every other record
+ * is queued and handled in order on this thread.
+ */
 private fun serveConnection(dispatcher: RemoteDispatcher, connection: PairedConnection) {
+    val requests = LinkedBlockingQueue<ByteArray>()
+    val endOfStream = ByteArray(0)
+    val runningCancel = AtomicReference<AtomicBoolean?>()
+    val readerDone = AtomicBoolean(false)
+    Thread.ofVirtual().start {
+        try {
+            while (true) {
+                val record = connection.receive() ?: break
+                if (record.decodeToString() == RemotePilot.CANCEL_MARKER) {
+                    runningCancel.get()?.set(true)
+                } else {
+                    requests.put(record)
+                }
+            }
+        } catch (e: IOException) {
+            // The connection broke; treated like a clean close below.
+        } finally {
+            readerDone.set(true)
+            runningCancel.get()?.set(true)
+            requests.put(endOfStream)
+        }
+    }
     while (true) {
-        val request = connection.receive() ?: return
+        val request = requests.take()
+        if (request === endOfStream) return
         val lines = RemotePilot.decodeRequest(request)
         if (lines.first() == RemotePilot.FORGE_MARKER) {
             val objective = lines.drop(1).joinToString("\n").trim()
@@ -201,8 +238,14 @@ private fun serveConnection(dispatcher: RemoteDispatcher, connection: PairedConn
                 continue
             }
             val progress = ProgressSender(connection)
-            val (ok, text) = dispatcher.forge(objective, progress, progress::controllerGone)
-            if (progress.controllerGone()) return
+            val cancel = AtomicBoolean(false)
+            runningCancel.set(cancel)
+            val (ok, text) = try {
+                dispatcher.forge(objective, progress) { cancel.get() || readerDone.get() || progress.controllerGone() }
+            } finally {
+                runningCancel.set(null)
+            }
+            if (readerDone.get() || progress.controllerGone()) return
             connection.send(RemotePilot.encodeResponse(ok, text))
             continue
         }
@@ -364,7 +407,16 @@ private fun sendToDevice(
     return try {
         PairedSocketClient.connect(address, controllerId, secret).use { connection ->
             connection.send(request)
-            printUntilFinal(connection)
+            val finished = CountDownLatch(1)
+            // Ctrl-C asks the device to cancel, then waits briefly so the final state still prints.
+            val onInterrupt = Thread { cancelAndWait(connection, finished, Duration.ofSeconds(15)) }
+            Runtime.getRuntime().addShutdownHook(onInterrupt)
+            try {
+                printUntilFinal(connection)
+            } finally {
+                finished.countDown()
+                runCatching { Runtime.getRuntime().removeShutdownHook(onInterrupt) }
+            }
         }
     } catch (e: PairingRejectedException) {
         System.err.println("Pairing with $target failed: ${e.message}")
@@ -373,6 +425,18 @@ private fun sendToDevice(
         System.err.println("Could not reach the device at $target: ${e.message}")
         1
     }
+}
+
+/**
+ * Sends a cancel request unless the response already [finished], then waits up to [wait] for it
+ * to finish. Returns true when a cancel was sent.
+ */
+internal fun cancelAndWait(connection: PairedConnection, finished: CountDownLatch, wait: Duration): Boolean {
+    if (finished.count == 0L) return false
+    System.err.println("Asking the device to cancel...")
+    val sent = runCatching { connection.send(RemotePilot.encodeCancel()) }.isSuccess
+    finished.await(wait.toMillis(), TimeUnit.MILLISECONDS)
+    return sent
 }
 
 /** Prints progress records as they arrive, then the final result. Returns the exit code. */
