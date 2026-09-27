@@ -126,12 +126,41 @@ internal class RunningDeviceServer(
     val activePairings: List<PairedDevice>,
     val discovery: DiscoveryResponder? = null,
     val discoveryAddress: InetSocketAddress? = null,
+    private val maintenance: Thread? = null,
 ) {
     fun close() {
+        maintenance?.interrupt()
         discovery?.close()
         server.close()
     }
 }
+
+/**
+ * Every [interval], applies revocations saved to the pairings file by another process (so
+ * `device-pairings revoke` reaches this server without a restart) and closes the connections of
+ * pairings that have expired. A pairings file that can't be read is reported to [err] and retried
+ * next time; the server keeps its last good state meanwhile.
+ */
+private fun startPairingMaintenance(registry: PairingRegistry, interval: Duration, err: PrintStream): Thread =
+    Thread.ofVirtual().name("pairing-maintenance").start {
+        var lastError: String? = null
+        while (!Thread.currentThread().isInterrupted) {
+            try {
+                Thread.sleep(interval)
+            } catch (e: InterruptedException) {
+                return@start
+            }
+            try {
+                registry.applyStoredRevocations().forEach { err.println("Revoked $it (from the pairings file); its connections were closed") }
+                registry.closeExpiredChannels().forEach { err.println("Pairing $it expired; its connections were closed") }
+                lastError = null
+            } catch (e: IOException) {
+                // Report a problem once, not every few seconds.
+                if (e.message != lastError) err.println("Could not re-read the pairings file: ${e.message}")
+                lastError = e.message
+            }
+        }
+    }
 
 /**
  * Starts a [PairedSocketServer] that runs each request it receives on a fresh session from
@@ -147,7 +176,9 @@ internal class RunningDeviceServer(
  * Requests run one at a time.
  *
  * Pairs a new controller named [controllerName] only when [registry] has no active pairing or
- * [forceNewPairing] is set; otherwise the saved pairings are reused and no secret is shown.
+ * [forceNewPairing] is set; otherwise the saved pairings are reused and no secret is shown. Every
+ * [maintenanceInterval] it picks up revocations saved by `device-pairings` and closes expired
+ * pairings' connections.
  *
  * With [discoveryBind] set, a [DiscoveryResponder] also answers LAN discovery probes under
  * [deviceName], pointing at the paired server's port. Discovery reveals only the name and port.
@@ -162,6 +193,7 @@ internal fun startDeviceServer(
     deviceName: String = defaultDeviceName(),
     registry: PairingRegistry = PairingRegistry(),
     forceNewPairing: Boolean = false,
+    maintenanceInterval: Duration = Duration.ofSeconds(5),
 ): RunningDeviceServer {
     val now = Instant.now()
     val hasActive = registry.list().any { it.status(now) == PairingStatus.ACTIVE }
@@ -170,16 +202,16 @@ internal fun startDeviceServer(
     val dispatcher = RemoteDispatcher(sessionFactory, plannerFactory)
     val server = PairedSocketServer(registry) { connection -> serveConnection(dispatcher, connection) }
     val address = server.start(bind)
-    if (discoveryBind == null) return RunningDeviceServer(server, address, pairing, active)
-    val responder = DiscoveryResponder(deviceName, address.port)
+    val responder = discoveryBind?.let { DiscoveryResponder(deviceName, address.port) }
     val discoveryAddress = try {
-        responder.start(discoveryBind)
+        responder?.start(discoveryBind)
     } catch (e: IOException) {
-        responder.close()
+        responder?.close()
         server.close()
         throw e
     }
-    return RunningDeviceServer(server, address, pairing, active, responder, discoveryAddress)
+    val maintenance = startPairingMaintenance(registry, maintenanceInterval, System.err)
+    return RunningDeviceServer(server, address, pairing, active, responder, discoveryAddress, maintenance)
 }
 
 internal fun defaultDeviceName(): String =
@@ -434,8 +466,8 @@ internal fun describePairing(device: PairedDevice, now: Instant): String {
 
 /**
  * `device-pairings [--pairings <path>] [revoke <controller id>]`: lists saved pairings, or revokes
- * one. A running `device-serve` keeps the pairings it loaded at startup, so restart it after a
- * revoke for the revocation to reach it.
+ * one. A running `device-serve` on the same file picks up the revocation on its next maintenance
+ * pass (every few seconds) and closes that controller's connections.
  */
 internal fun runDevicePairings(rest: List<String>): Int {
     var file: Path? = defaultPairingsFile()
@@ -466,7 +498,7 @@ internal fun runDevicePairings(rest: List<String>): Int {
                 return 1
             }
             if (revoked) {
-                println("Revoked $id. Restart device-serve if it is running so it stops accepting this controller.")
+                println("Revoked $id. A running device-serve using this file drops it within a few seconds.")
                 0
             } else {
                 System.err.println("No active pairing with id $id")

@@ -141,6 +141,27 @@ class PairingRegistry(
         return SecureChannel(keys).also { entry.channels += it }
     }
 
+    /**
+     * Re-reads the [store] and revokes, in memory, every pairing the store marks revoked that is
+     * still active here, closing its channels. This is how a revocation made by another process
+     * (such as `device-pairings revoke`) reaches a running server. Only revocations are taken
+     * from the store: pairings are never added or reactivated this way. Returns the ids revoked;
+     * empty without a store. Throws what [PairingStore.load] throws.
+     */
+    @Synchronized
+    fun applyStoredRevocations(): List<String> {
+        val stored = store?.load() ?: return emptyList()
+        return stored.mapNotNull { saved ->
+            val revokedAt = saved.device.revokedAt ?: return@mapNotNull null
+            val entry = entries[saved.device.id] ?: return@mapNotNull null
+            if (entry.device.revokedAt != null) return@mapNotNull null
+            entry.device = entry.device.copy(revokedAt = revokedAt)
+            entry.channels.forEach(SecureChannel::close)
+            entry.channels.clear()
+            entry.device.id
+        }
+    }
+
     /** Open channels tracked for [id]. */
     @Synchronized
     fun openChannelCount(id: String): Int = entries[id]?.channels?.count { !it.isClosed } ?: 0
