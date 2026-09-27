@@ -76,6 +76,25 @@ class FilePairingStoreTest {
     }
 
     @Test
+    fun `a revocation saved by another process reaches a running registry, and nothing else does`() {
+        val running = registry()
+        val laptop = running.pair("Laptop")
+        val keys = SessionKeys(ByteArray(32) { 1 }, ByteArray(32) { 2 })
+        val channel = running.openChannel(laptop.device.id, keys)
+
+        val other = registry()
+        other.revoke(laptop.device.id)
+        other.pair("Added elsewhere")
+
+        assertEquals(listOf(laptop.device.id), running.applyStoredRevocations())
+        assertNull(running.secretFor(laptop.device.id))
+        assertTrue(channel.isClosed, "the revoked controller's channel was closed")
+        assertEquals(1, running.list().size, "a pairing added by another process is not picked up")
+        assertEquals(emptyList(), running.applyStoredRevocations(), "applying twice changes nothing")
+        assertEquals(emptyList(), PairingRegistry().applyStoredRevocations(), "no store, nothing to apply")
+    }
+
+    @Test
     fun `no file yet means no pairings`() {
         assertEquals(emptyList(), registry().list())
         assertFalse(Files.exists(file))

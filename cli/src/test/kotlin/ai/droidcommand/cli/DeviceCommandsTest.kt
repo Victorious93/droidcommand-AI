@@ -10,6 +10,7 @@ import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolSpec
 import ai.droidcommand.remote.pairing.PairedSocketClient
+import ai.droidcommand.remote.pairing.PairingRejectedException
 import ai.droidcommand.remote.pairing.PairingSecret
 import ai.droidcommand.security.ApprovalPrompt
 import java.io.ByteArrayOutputStream
@@ -22,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -367,6 +369,53 @@ class DeviceCommandsTest {
         assertNull(openRegistry(file)!!.secretFor(laptop.device.id), "the revocation was saved")
         assertEquals(1, runDevicePairings(listOf("--pairings", file.toString(), "revoke", laptop.device.id)), "already revoked")
         assertEquals(1, runDevicePairings(listOf("--pairings", file.toString(), "delete", "x")))
+    }
+
+    @Test
+    fun `device-pairings revoke cuts off a running device-serve's live connection`() {
+        val file = kotlin.io.path.createTempDirectory("device-revoke").resolve("pairings")
+        val server = startDeviceServer(
+            ::newSession,
+            InetSocketAddress(InetAddress.getLoopbackAddress(), 0),
+            "Laptop",
+            null,
+            registry = openRegistry(file)!!,
+            maintenanceInterval = Duration.ofMillis(100),
+        )
+        try {
+            val laptop = server.pairing!!
+            PairedSocketClient.connect(server.address, laptop.device.id, laptop.secret).use { connection ->
+                connection.send(RemotePilot.encodeRequest("echo", listOf("text=before")))
+                assertTrue(RemotePilot.decodeResponse(connection.receive()!!).ok)
+                val (exitCode, _) = captureStdout { runDevicePairings(listOf("--pairings", file.toString(), "revoke", laptop.device.id)) }
+                assertEquals(0, exitCode)
+                assertNull(connection.receive(), "the server closed the revoked controller's connection")
+            }
+            assertFailsWith<PairingRejectedException> {
+                PairedSocketClient.connect(server.address, laptop.device.id, laptop.secret)
+            }
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `a running device-serve closes the connection of a pairing that expires`() {
+        val server = startDeviceServer(
+            ::newSession,
+            InetSocketAddress(InetAddress.getLoopbackAddress(), 0),
+            "Short-lived",
+            Duration.ofSeconds(1),
+            maintenanceInterval = Duration.ofMillis(100),
+        )
+        try {
+            val pairing = server.pairing!!
+            PairedSocketClient.connect(server.address, pairing.device.id, pairing.secret).use { connection ->
+                assertNull(connection.receive(), "the connection closes once the pairing expires")
+            }
+        } finally {
+            server.close()
+        }
     }
 
     @Test
