@@ -37,13 +37,27 @@ import javax.inject.Singleton
  * [MetasploitTool]/[SetTool] are registered exactly like [RootTool]/
  * [TermuxTool]: `SecurityLevel.SENSITIVE`, always confirmed via
  * [ComposeApprovalPrompt], denied by default until an operator wires in a
- * real `ShellBackedMetasploitExecutor`/`ProcessBackedSetExecutor` (not done
- * here — this environment has no real `msfconsole`/`setoolkit` install to
- * point at, the same reason `cli.buildSession` stays on the Null
- * executors). [ShellTool]'s [ShellSecurityPolicy] is empty (no allowed
- * executables) for the same fail-closed reason `cli`'s own default is
- * empty — a real deployment configures it explicitly, this module never
- * invents a "safe commands" allowlist on the operator's behalf.
+ * real `ShellBackedMetasploitExecutor`/`ProcessBackedSetExecutor`.
+ *
+ * **Deliberately still Null-backed here, unlike `cli.buildSession`
+ * (updated to an opt-in `DROIDCOMMAND_CLI_METASPLOIT`/`DROIDCOMMAND_CLI_SETOOLKIT`
+ * env-var switch).** That switch doesn't transfer to this module for two
+ * real reasons, not oversight: (1) there is no persisted Settings/config
+ * layer here yet for a user to safely toggle this from — that is Phase 1's
+ * own "API key entry... Settings screen" scope, not this Phase 0 shell's;
+ * or an env var Android apps aren't normally configured through the way a
+ * CLI process is. (2) `msfconsole`/`setoolkit` are Ruby/Python tools a
+ * bare Android app process cannot `exec` unless they are themselves
+ * reachable inside that process's own filesystem/PATH (e.g. a rooted
+ * device or a Termux-hosted install) — a materially different, and
+ * currently unverified, precondition from `cli`'s "runs on a PC that may
+ * have msfconsole installed" assumption. Wiring a real backend in here is
+ * real future work once Phase 1's Settings/secrets layer exists to gate
+ * it, not something this entry silently defers without saying so.
+ * [ShellTool]'s [ShellSecurityPolicy] is empty (no allowed executables)
+ * for the same fail-closed reason `cli`'s own default is empty — a real
+ * deployment configures it explicitly, this module never invents a "safe
+ * commands" allowlist on the operator's behalf.
  */
 @Module
 @InstallIn(SingletonComponent::class)

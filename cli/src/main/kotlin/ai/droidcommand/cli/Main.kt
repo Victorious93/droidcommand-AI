@@ -26,7 +26,6 @@ import ai.droidcommand.config.ConfigSource
 import ai.droidcommand.config.EnvConfigSource
 import ai.droidcommand.llm.factory.LlmProviderFactory
 import ai.droidcommand.metasploit.MetasploitTool
-import ai.droidcommand.metasploit.NullMetasploitExecutor
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.remote.JdkHttpTransport
 import ai.droidcommand.root.NullRootExecutor
@@ -35,7 +34,6 @@ import ai.droidcommand.security.ApprovalPrompt
 import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
-import ai.droidcommand.setoolkit.NullSetExecutor
 import ai.droidcommand.setoolkit.SetTool
 import ai.droidcommand.shell.ProcessBuilderShellExecutor
 import ai.droidcommand.shell.ShellSecurityPolicy
@@ -130,15 +128,19 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * `run_metasploit_module`/`run_setoolkit_attack` (added for the HackerAI-port security-tooling
  * request) are registered the same way — `SENSITIVE`/`PermissionCategory.NETWORK`, always requiring
  * confirmation. [PermissionCategory.NETWORK] is granted below alongside `TERMINAL`, so — like
- * `run_termux_command`, not like `run_root_command`'s outright denial — both reach the real
- * approval gate and are only then backed by [NullMetasploitExecutor]/[NullSetExecutor]: this
- * device-free CLI has no real `msfconsole`/`setoolkit` installation to point at, so both fail
- * closed with an honest "no real backend configured" message rather than fabricate a run. The real
- * backends (`ai.droidcommand.metasploit.ShellBackedMetasploitExecutor`,
- * `ai.droidcommand.setoolkit.ProcessBackedSetExecutor`) exist and are unit-tested against a scripted
- * shell, but wiring either in here would need an actual installation this environment does not have —
- * a caller that does have one constructs that real executor directly instead of going through
- * [buildSession]'s defaults, the same pattern `AdbTermuxExecutor` already documents.
+ * `run_termux_command` — both reach the real approval gate regardless of which executor backs
+ * them. As of this wiring, both follow [device]'s exact opt-in pattern rather than staying
+ * hard-coded to their `Null*` executors: [metasploitExecutorFor]/[setExecutorFor] read
+ * `DROIDCOMMAND_CLI_METASPLOIT`/`DROIDCOMMAND_CLI_SETOOLKIT` (off by default) and return
+ * `ai.droidcommand.metasploit.ShellBackedMetasploitExecutor`/`ai.droidcommand.setoolkit.ProcessBackedSetExecutor`
+ * only when enabled — otherwise `NullMetasploitExecutor`/`NullSetExecutor`, unchanged from before
+ * this wiring. Both real executors reuse [shellSecurityPolicy]'s allowlist (the same
+ * `build_project` precedent), so enabling either env var alone still isn't enough to run anything —
+ * the configured `msfconsole`/`setoolkit` path must also be added to
+ * `DROIDCOMMAND_CLI_SHELL_ALLOWED_EXECUTABLES`. This CLI has no real `msfconsole`/`setoolkit`
+ * installation of its own to test against, so enabling either switch here remains
+ * `IMPLEMENTED — NOT RUNTIME VERIFIED` in practice, the same honesty label `AdbTermuxExecutor`
+ * already carries for the identical reason.
  *
  * No [ai.droidcommand.security.GrantStore]/[ai.droidcommand.security.AuditLog] is
  * wired: none of these six tools declares a `grantCapability`, and this CLI is one command per process
@@ -155,8 +157,8 @@ internal fun buildSession(
         register(RootTool(NullRootExecutor()))
         register(TermuxTool(termuxExecutorFor(device)))
         register(BuildTool(buildPipeline(), ::buildRequestFromInput))
-        register(MetasploitTool(NullMetasploitExecutor()))
-        register(SetTool(NullSetExecutor()))
+        register(MetasploitTool(metasploitExecutorFor()))
+        register(SetTool(setExecutorFor()))
     }
     val stateMachine = AgentStateMachine()
     val delegate = ToolExecutor(registry, stateMachine)
@@ -171,8 +173,10 @@ internal fun buildSession(
  * `DROIDCOMMAND_CLI_SHELL_ALLOWED_EXECUTABLES` (comma-separated) rather than this CLI inventing an
  * arbitrary "safe commands" allowlist on their behalf. [ShellSecurityPolicy.allowedWorkingDirectories]
  * is fixed to the process's own working directory, matching [buildPipeline]'s identical choice.
+ * Shared, unmodified, by [metasploitExecutorFor]/[setExecutorFor] too — one allowlist for every
+ * shell-backed tool this CLI has, not a separate one per tool.
  */
-private fun shellSecurityPolicy() = ShellSecurityPolicy(
+internal fun shellSecurityPolicy() = ShellSecurityPolicy(
     allowedExecutables = System.getenv("DROIDCOMMAND_CLI_SHELL_ALLOWED_EXECUTABLES")
         ?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }?.toSet() ?: emptySet(),
     allowedWorkingDirectories = listOf(System.getProperty("user.dir")),
@@ -276,6 +280,13 @@ internal fun printUsage() {
         run_termux_command reaches an adb-connected phone only when
         DROIDCOMMAND_CLI_ADB=1 is set (optionally DROIDCOMMAND_CLI_ADB_SERIAL and
         DROIDCOMMAND_CLI_ADB_PATH); otherwise it fails without touching any device.
+
+        run_metasploit_module/run_setoolkit_attack reach a real msfconsole/setoolkit
+        only when DROIDCOMMAND_CLI_METASPLOIT=1 / DROIDCOMMAND_CLI_SETOOLKIT=1 is set
+        (optionally DROIDCOMMAND_CLI_METASPLOIT_PATH / DROIDCOMMAND_CLI_SETOOLKIT_PATH,
+        default msfconsole/setoolkit) AND that exact path is also listed in
+        DROIDCOMMAND_CLI_SHELL_ALLOWED_EXECUTABLES; otherwise both fail without running
+        anything. Every call still needs explicit approval regardless of either switch.
 
         Examples:
           pilot echo text=hello
