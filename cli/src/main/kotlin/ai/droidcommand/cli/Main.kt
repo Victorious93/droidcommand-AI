@@ -25,6 +25,8 @@ import ai.droidcommand.build.local.LocalProcessBuildExecutor
 import ai.droidcommand.config.ConfigSource
 import ai.droidcommand.config.EnvConfigSource
 import ai.droidcommand.llm.factory.LlmProviderFactory
+import ai.droidcommand.metasploit.MetasploitTool
+import ai.droidcommand.metasploit.NullMetasploitExecutor
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.remote.JdkHttpTransport
 import ai.droidcommand.root.NullRootExecutor
@@ -33,6 +35,8 @@ import ai.droidcommand.security.ApprovalPrompt
 import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
+import ai.droidcommand.setoolkit.NullSetExecutor
+import ai.droidcommand.setoolkit.SetTool
 import ai.droidcommand.shell.ProcessBuilderShellExecutor
 import ai.droidcommand.shell.ShellSecurityPolicy
 import ai.droidcommand.shell.ShellTool
@@ -121,8 +125,23 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * [ProcessBuilderShellExecutor] [ShellTool] uses — a build command is, at the OS level, just another
  * shell command, so both tools share one allowlist rather than this CLI inventing a second, separate
  * one; with no build command supplied at all it fails via [LocalProcessBuildExecutor]'s own "No
- * build command configured" message. No [ai.droidcommand.security.GrantStore]/[ai.droidcommand.security.AuditLog] is
- * wired: neither tool declares a `grantCapability`, and this CLI is one command per process
+ * build command configured" message.
+ *
+ * `run_metasploit_module`/`run_setoolkit_attack` (added for the HackerAI-port security-tooling
+ * request) are registered the same way — `SENSITIVE`/`PermissionCategory.NETWORK`, always requiring
+ * confirmation. [PermissionCategory.NETWORK] is granted below alongside `TERMINAL`, so — like
+ * `run_termux_command`, not like `run_root_command`'s outright denial — both reach the real
+ * approval gate and are only then backed by [NullMetasploitExecutor]/[NullSetExecutor]: this
+ * device-free CLI has no real `msfconsole`/`setoolkit` installation to point at, so both fail
+ * closed with an honest "no real backend configured" message rather than fabricate a run. The real
+ * backends (`ai.droidcommand.metasploit.ShellBackedMetasploitExecutor`,
+ * `ai.droidcommand.setoolkit.ProcessBackedSetExecutor`) exist and are unit-tested against a scripted
+ * shell, but wiring either in here would need an actual installation this environment does not have —
+ * a caller that does have one constructs that real executor directly instead of going through
+ * [buildSession]'s defaults, the same pattern `AdbTermuxExecutor` already documents.
+ *
+ * No [ai.droidcommand.security.GrantStore]/[ai.droidcommand.security.AuditLog] is
+ * wired: none of these six tools declares a `grantCapability`, and this CLI is one command per process
  * invocation with no persistence across runs, so an in-memory audit log nobody ever reads back
  * would be inert plumbing — a named follow-up, not silently added.
  */
@@ -133,10 +152,12 @@ internal fun buildSession(approvalPrompt: ApprovalPrompt = ConsoleApprovalPrompt
         register(RootTool(NullRootExecutor()))
         register(TermuxTool(NullTermuxExecutor()))
         register(BuildTool(buildPipeline(), ::buildRequestFromInput))
+        register(MetasploitTool(NullMetasploitExecutor()))
+        register(SetTool(NullSetExecutor()))
     }
     val stateMachine = AgentStateMachine()
     val delegate = ToolExecutor(registry, stateMachine)
-    val policy = SecurityPolicy(grantedCategories = setOf(PermissionCategory.TERMINAL))
+    val policy = SecurityPolicy(grantedCategories = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK))
     val secure = SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(policy), approvalPrompt)
     return CliSession(DroidCommandSession(registry, secure, stateMachine), registry)
 }

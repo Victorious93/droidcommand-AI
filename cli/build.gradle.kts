@@ -19,6 +19,8 @@ dependencies {
     implementation(project(":core-build"))
     implementation(project(":core-build-local"))
     implementation(project(":core-prompt-regen"))
+    implementation(project(":core-tools-metasploit"))
+    implementation(project(":core-tools-setoolkit"))
     testImplementation(kotlin("test"))
 }
 
