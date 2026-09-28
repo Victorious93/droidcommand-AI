@@ -56,6 +56,14 @@ dependencies {
     implementation(project(":core-tools-metasploit"))
     implementation(project(":core-tools-setoolkit"))
 
+    // Phase 3/4 — companion capability modules.
+    // core-hackerai and core-pentest-swarm provide the JVM-side Tool stubs and
+    // catalog types; core-companion (Android library, also excluded from
+    // settings.gradle.kts) provides the AIDL contracts and registry that wire
+    // those stubs to the live companion APKs at runtime.
+    implementation(project(":core-hackerai"))
+    implementation(project(":core-pentest-swarm"))
+
     implementation(platform("androidx.compose:compose-bom:2025.09.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")

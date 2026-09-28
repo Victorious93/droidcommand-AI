@@ -39,3 +39,11 @@ include(":core-pentest-swarm")
 //   always, not because it is empty. See the "app module (Phase 0 Compose
 //   scaffold)" audit addendum: it has NOT been build-verified in this
 //   environment (no `./gradlew :app:assembleDebug` has ever run against it).
+//
+//   :core-companion (Android library — AIDL contracts + CompanionRegistry/
+//   CompanionCapabilityHealthChecker/CompanionTool for DCA ↔ companion APK
+//   IPC, added in Phase 4 of the Companion APK Integration). All source is
+//   complete, but the module requires Android SDK/AGP to compile (it uses
+//   PackageManager, ServiceConnection, @Parcelize). Excluded here for the
+//   same SDK-availability reason as :app. See core-companion/build.gradle.kts
+//   and docs/AUDIT_2026-09-05.md's "Phase 4" addendum for the full record.
