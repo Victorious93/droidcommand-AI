@@ -88,6 +88,20 @@ re-verifying something.
   each added after an earlier module-count figure was first written
   elsewhere in this repo's docs — don't trust an older module count
   without checking `settings.gradle.kts`).
+  **Correction (2026-09-28):** two more modules landed since the above was
+  written — `core-tools-metasploit`/`core-tools-setoolkit` (Metasploit and
+  Social-Engineer Toolkit GUI tools, requested directly by the project
+  owner, out of band from the `CAP-###` roster, following this same
+  `core-prompt-regen` precedent), bringing the real count to 22, not 20.
+  The Android `:app` module named above as "still-PLANNED" also now has
+  real Phase 0 Compose/Hilt source on disk (a nav skeleton plus a live
+  Tools screen wired to a real `SecureToolExecutor`) — "PLANNED" is still
+  the accurate *build* status (excluded from `settings.gradle.kts`'s
+  active `include(...)` list, un-build-verified, no Android SDK here), but
+  "no directory... exists yet" no longer does. See the "real Metasploit/SET
+  executors" and "app module (Phase 0 Compose scaffold)" audit addenda for
+  the full record; don't trust this correction's own count forever either —
+  check `settings.gradle.kts`.
   No Android SDK, no
   device, no root, no LLM credentials, no MCP client exist in most build
   environments this project runs in — everything downstream of those
@@ -261,7 +275,10 @@ faith, per findings noted inline.
   `core-prompt-regen` entirely — that was a stale/incomplete snapshot, not
   this repo's real state. Re-check `settings.gradle.kts` at the start of
   each phase rather than trusting this count once it ages, per this file's
-  own standing rule above.
+  own standing rule above. **Second correction (2026-09-28):** the count is
+  now 22, not 20 — `core-tools-metasploit`/`core-tools-setoolkit` (see the
+  "What's already been verified" section above) are in
+  `settings.gradle.kts` too.
 - **ARCHITECTURE.md and AUDIT docs stay current.** Every phase that adds or
   changes a component updates `docs/ARCHITECTURE.md`'s status table and
   appends a dated entry to `docs/AUDIT_2026-09-05.md`, per this repo's
@@ -524,12 +541,14 @@ this project had specifically evaluated them.
 | core-integration-tests | JVM (test-only) | IMPLEMENTED |
 | cli | JVM | IMPLEMENTED |
 | core-prompt-regen | JVM | IMPLEMENTED |
+| core-tools-metasploit | JVM | IMPLEMENTED (real executor, NOT RUNTIME VERIFIED) |
+| core-tools-setoolkit | JVM | IMPLEMENTED (real executor, NOT RUNTIME VERIFIED) |
 | core-llm-google | JVM | PLANNED (Phase 1) |
 | core-llm-groq | JVM | PLANNED (Phase 1) |
 | core-conversations | Android (Room) | PLANNED (Phase 1) |
 | core-llm-local | Android + NDK | PLANNED (Phase 2) |
 | core-voice | Android | PLANNED (Phase 4) |
-| app | Android | PLANNED (Phase 0) |
+| app | Android | Phase 0 Compose/Hilt source exists (not in `settings.gradle.kts`'s active `include(...)` list, not build-verified — no Android SDK here) |
 
 **Correction to an earlier draft of this table:** that draft omitted
 `core-llm-factory`, `core-mcp`, `core-integration-tests`, `cli`, and
@@ -538,3 +557,13 @@ itself "current... as of 2026-09-14." The table above is the actual
 current state as of that date; re-verify against `settings.gradle.kts`
 before trusting it further into the future, per this file's own standing
 rule.
+
+**Second correction (2026-09-28):** `core-tools-metasploit`/
+`core-tools-setoolkit` (Metasploit/Social-Engineer Toolkit GUI tools,
+requested directly by the project owner) were added after the above was
+written, and `app`'s row understated its own state — it now has real
+Phase 0 source, not "PLANNED" in the sense of "nothing exists yet." See
+the "real Metasploit/SET executors wired into cli" and "app module (Phase
+0 Compose scaffold)" `docs/AUDIT_2026-09-05.md` addenda for the full
+record. As ever, re-verify against `settings.gradle.kts` rather than
+trusting this table indefinitely.
