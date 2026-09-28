@@ -35,7 +35,15 @@ class MainTest {
         val cliSession = buildSession()
         val specs = cliSession.registry.list()
         assertEquals(
-            listOf("echo", "run_shell_command", "run_root_command", "run_termux_command", "build_project"),
+            listOf(
+                "echo",
+                "run_shell_command",
+                "run_root_command",
+                "run_termux_command",
+                "build_project",
+                "run_metasploit_module",
+                "run_setoolkit_attack",
+            ),
             specs.map { it.name },
         )
     }
@@ -61,6 +69,42 @@ class MainTest {
     @Test
     fun `pilot run_termux_command fails cleanly against NullTermuxExecutor, even when approved`() {
         val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("run_termux_command", "executable=echo"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot run_metasploit_module fails cleanly against NullMetasploitExecutor, even when approved`() {
+        val exitCode = runPilot(
+            buildSession(ApprovalPrompt { true }),
+            listOf("run_metasploit_module", "moduleType=AUXILIARY", "modulePath=auxiliary/scanner/portscan/tcp", "targetHost=10.0.0.5"),
+        )
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot run_metasploit_module is denied and never reaches the executor when approval is refused`() {
+        val exitCode = runPilot(
+            buildSession(ApprovalPrompt { false }),
+            listOf("run_metasploit_module", "moduleType=AUXILIARY", "modulePath=auxiliary/scanner/portscan/tcp", "targetHost=10.0.0.5"),
+        )
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot run_setoolkit_attack fails cleanly against NullSetExecutor, even when approved`() {
+        val exitCode = runPilot(
+            buildSession(ApprovalPrompt { true }),
+            listOf("run_setoolkit_attack", "attackVector=WEBSITE_ATTACK", "targetHost=10.0.0.5"),
+        )
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot run_setoolkit_attack is denied and never reaches the executor when approval is refused`() {
+        val exitCode = runPilot(
+            buildSession(ApprovalPrompt { false }),
+            listOf("run_setoolkit_attack", "attackVector=WEBSITE_ATTACK", "targetHost=10.0.0.5"),
+        )
         assertEquals(1, exitCode)
     }
 

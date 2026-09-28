@@ -20,10 +20,20 @@ include(":core-mcp")
 include(":core-integration-tests")
 include(":cli")
 include(":core-prompt-regen")
+include(":core-tools-metasploit")
+include(":core-tools-setoolkit")
 
 // The following modules are part of the target architecture (see
-// docs/ARCHITECTURE.md) but do not yet contain implemented code and are
-// intentionally not included in the build to avoid an unbuildable root:
-//   :app (Android UI shell — gated on an Android SDK/device this
-//   environment does not have; :cli above is the separate device-free
-//   entrypoint named alongside it in docs/AUDIT_2026-09-05.md's addenda)
+// docs/ARCHITECTURE.md) but are intentionally not included in the build to
+// avoid an unbuildable root:
+//   :app (Android UI shell — gated on an Android SDK this environment does
+//   not have; :cli above is the separate device-free entrypoint named
+//   alongside it in docs/AUDIT_2026-09-05.md's addenda). Unlike when this
+//   comment was first written, :app now DOES contain real, complete Kotlin/
+//   Compose/Hilt source (Phase 0 nav skeleton plus a real Tools screen
+//   wired to a live SecureToolExecutor, including the run_metasploit_module/
+//   run_setoolkit_attack GUI added for the HackerAI-port security-tooling
+//   request) — it is excluded here for the same SDK-availability reason as
+//   always, not because it is empty. See the "app module (Phase 0 Compose
+//   scaffold)" audit addendum: it has NOT been build-verified in this
+//   environment (no `./gradlew :app:assembleDebug` has ever run against it).
