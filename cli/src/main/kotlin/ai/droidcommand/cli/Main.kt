@@ -36,7 +36,6 @@ import ai.droidcommand.security.SecurityPolicyEnforcer
 import ai.droidcommand.shell.ProcessBuilderShellExecutor
 import ai.droidcommand.shell.ShellSecurityPolicy
 import ai.droidcommand.shell.ShellTool
-import ai.droidcommand.termux.NullTermuxExecutor
 import ai.droidcommand.termux.TermuxTool
 import java.nio.file.Path
 import kotlin.system.exitProcess
@@ -86,6 +85,7 @@ fun main(args: Array<String>) {
         "device-send" -> runDeviceSend(args.drop(1))
         "device-forge" -> runDeviceForge(args.drop(1))
         "device-discover" -> runDeviceDiscover(args.drop(1))
+        "device-terminal" -> runDeviceTerminal(args.drop(1))
         "device-pairings" -> runDevicePairings(args.drop(1))
         else -> {
             System.err.println("Unknown command '$command'")
@@ -113,10 +113,10 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * ([SecurityPolicy.rootEnabled] is `false` and [PermissionCategory.ROOT] is not granted) regardless
  * of the approval prompt's answer, since this environment has no real root executor
  * ([NullRootExecutor] fails cleanly either way); `run_termux_command` is backed by
- * [NullTermuxExecutor] for the same reason — this environment has no adb/device/Termux, so it fails
- * cleanly rather than fabricating a Termux backend (a real one, `ai.droidcommand.termux.AdbTermuxExecutor`,
- * exists but is `IMPLEMENTED — NOT RUNTIME VERIFIED`; wiring it in here would need real hardware to
- * configure against, which this CLI's device-free design deliberately does not assume);
+ * `ai.droidcommand.termux.NullTermuxExecutor`, failing cleanly, unless [device] is set (from
+ * `DROIDCOMMAND_CLI_ADB`, off by default): then it reaches the adb-connected phone's Termux or
+ * VictorSuite through `ai.droidcommand.termux.AdbTermuxExecutor` (`IMPLEMENTED — NOT RUNTIME
+ * VERIFIED`), still behind the same approval gate ([termuxExecutorFor]);
  * `build_project` uses [LocalProcessBuildExecutor], the same real, allow-listed
  * [ProcessBuilderShellExecutor] [ShellTool] uses — a build command is, at the OS level, just another
  * shell command, so both tools share one allowlist rather than this CLI inventing a second, separate
@@ -126,12 +126,15 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * invocation with no persistence across runs, so an in-memory audit log nobody ever reads back
  * would be inert plumbing — a named follow-up, not silently added.
  */
-internal fun buildSession(approvalPrompt: ApprovalPrompt = ConsoleApprovalPrompt): CliSession {
+internal fun buildSession(
+    approvalPrompt: ApprovalPrompt = ConsoleApprovalPrompt,
+    device: AdbDeviceConfig? = AdbDeviceConfig.fromEnvironment(),
+): CliSession {
     val registry = ToolRegistry().apply {
         register(EchoTool())
         register(ShellTool(ProcessBuilderShellExecutor(shellSecurityPolicy())))
         register(RootTool(NullRootExecutor()))
-        register(TermuxTool(NullTermuxExecutor()))
+        register(TermuxTool(termuxExecutorFor(device)))
         register(BuildTool(buildPipeline(), ::buildRequestFromInput))
     }
     val stateMachine = AgentStateMachine()
@@ -227,6 +230,9 @@ internal fun printUsage() {
                                          planned by the device's own LLM configuration
           device-pairings [revoke <id>]  List saved pairings, or revoke one
                                           [--pairings <path>]
+          device-terminal                Show which terminal (Termux, VictorSuite or none)
+                                          an adb-connected phone would run commands in
+                                          [--adb <path>] [--serial <serial>]
           device-discover                List device-serve --discoverable instances on the
                                           local network [--timeout-ms <n>] [--target host:port]
 
@@ -245,6 +251,10 @@ internal fun printUsage() {
         Pairings are saved to ~/.droidcommand/pairings (readable only by you),
         so a restart keeps them; a new secret is shown only when no saved
         pairing is active, or with --new-pairing.
+
+        run_termux_command reaches an adb-connected phone only when
+        DROIDCOMMAND_CLI_ADB=1 is set (optionally DROIDCOMMAND_CLI_ADB_SERIAL and
+        DROIDCOMMAND_CLI_ADB_PATH); otherwise it fails without touching any device.
 
         Examples:
           pilot echo text=hello
