@@ -156,6 +156,24 @@ class AdbTermuxExecutorTest {
     }
 
     @Test
+    fun `termuxPackageVersionName reads versionName from a real adb dumpsys call`() {
+        val dumpsys = """
+            #!/bin/sh
+            if [ "${'$'}1" = "shell" ] && [ "${'$'}2" = "dumpsys" ] && [ "${'$'}4" = "com.termux" ]; then
+              echo "Packages:"
+              echo "  Package [com.termux] (1a2b3c):"
+              echo "    versionCode=117 minSdk=24 targetSdk=28"
+              echo "    versionName=0.118.3.54"
+              exit 0
+            fi
+            exit 1
+        """.trimIndent()
+        assertEquals("0.118.3.54", executor(dumpsys).termuxPackageVersionName())
+        assertEquals(null, executor("#!/bin/sh\nexit 1").termuxPackageVersionName(), "a failed dumpsys means unknown")
+        assertEquals(null, executor("#!/bin/sh\necho 'Unable to find package: com.termux'\nexit 0").termuxPackageVersionName())
+    }
+
+    @Test
     fun `isAvailable requires device, Termux and root all together`() {
         assertTrue(executor(rootExecutor = FakeRootExecutor(available = true)).isAvailable())
         assertFalse(executor(rootExecutor = FakeRootExecutor(available = false)).isAvailable())
