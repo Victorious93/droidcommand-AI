@@ -1030,3 +1030,23 @@ These are session facts, not permanent project constraints — a developer
 machine or CI runner with the Android SDK and a connected/emulated device
 removes most of them. They are recorded here so that "PLANNED" status above
 is auditable rather than asserted.
+
+## 7c. CI: audit header-count guard (2026-09-28)
+
+`.github/workflows/ci.yml` gains a new step — **"Check docs/AUDIT_2026-09-05.md
+header count does not drop"** — that runs before the Gradle build on every push
+to `main` and every pull request. It counts `^### ` headers in
+`docs/AUDIT_2026-09-05.md` on the current commit and on its base (the base
+branch for a PR; the previous commit for a push to `main`) and fails the build if
+the count on the current commit is lower.
+
+`actions/checkout` is bumped from the default shallow clone to `fetch-depth: 2`
+so both the current commit and its immediate parent are available without an
+additional fetch.
+
+This closes the "three occurrences" gap named in `docs/AUDIT_2026-09-05.md`: all
+three silent-drop instances (PRs #83, #89, #91) would have failed this check,
+since each reduced the header count relative to its base branch. The check is
+cheap (a single `grep -c` per side), has no false-positive risk for any PR that
+correctly appends rather than overwrites, and lives in the same CI run that
+already verifies tests and lint.

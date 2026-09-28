@@ -14,6 +14,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check docs/AUDIT_2026-09-05.md header count does not drop
+        run: |
+          HEAD_COUNT=$(grep -c "^### " docs/AUDIT_2026-09-05.md)
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # PR: HEAD^1 is the base branch tip (actions/checkout creates a merge commit)
+            BASE_COUNT=$(git show HEAD^1:docs/AUDIT_2026-09-05.md | grep -c "^### ")
+          else
+            # push to main: compare against the previous commit
+            BASE_COUNT=$(git show HEAD~1:docs/AUDIT_2026-09-05.md 2>/dev/null | grep -c "^### " || echo 0)
+          fi
+          echo "AUDIT header count — base: ${BASE_COUNT}, head: ${HEAD_COUNT}"
+          if [ "${HEAD_COUNT}" -lt "${BASE_COUNT}" ]; then
+            echo "ERROR: docs/AUDIT_2026-09-05.md header count dropped from ${BASE_COUNT} to ${HEAD_COUNT}."
+            echo "A merge likely silently dropped append-at-end addendum entries."
+            echo "Run: git diff HEAD^1 -- docs/AUDIT_2026-09-05.md | grep '^-### ' to see what's missing."
+            exit 1
+          fi
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
