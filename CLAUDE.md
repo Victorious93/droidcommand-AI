@@ -500,41 +500,55 @@ this project had specifically evaluated them.
 
 ---
 
-### Current module inventory (verified against `settings.gradle.kts`, 2026-09-14)
+### Current module inventory (verified against `settings.gradle.kts`, 2026-09-29)
+
+24 modules are wired into the build via `include(...)` in
+`settings.gradle.kts`. `app/` also exists on disk with real source but is
+deliberately **not** in `settings.gradle.kts` (gated on an Android SDK this
+environment does not have — see the excluded-module comment at the bottom of
+`settings.gradle.kts`).
 
 | Module | Type | Status |
 |---|---|---|
 | core-agent | JVM | IMPLEMENTED |
 | core-llm | JVM | IMPLEMENTED |
-| core-llm-anthropic | JVM | IMPLEMENTED |
-| core-llm-openai | JVM | IMPLEMENTED |
-| core-llm-factory | JVM | IMPLEMENTED |
 | core-security | JVM | IMPLEMENTED |
 | core-config | JVM | IMPLEMENTED |
 | core-remote | JVM | IMPLEMENTED |
-| core-shell | JVM | IMPLEMENTED |
 | core-build | JVM | IMPLEMENTED |
-| core-build-local | JVM | IMPLEMENTED |
-| core-build-remote | JVM | IMPLEMENTED |
 | core-tools-android | JVM | IMPLEMENTED (stubs) |
+| core-shell | JVM | IMPLEMENTED |
 | core-apk-lifecycle | JVM | IMPLEMENTED (stubs) |
 | core-root | JVM | IMPLEMENTED (stubs) |
 | core-termux | JVM | IMPLEMENTED |
+| core-llm-anthropic | JVM | IMPLEMENTED |
+| core-llm-openai | JVM | IMPLEMENTED |
+| core-llm-factory | JVM | IMPLEMENTED |
+| core-build-local | JVM | IMPLEMENTED |
+| core-build-remote | JVM | IMPLEMENTED |
 | core-mcp | JVM | IMPLEMENTED |
 | core-integration-tests | JVM (test-only) | IMPLEMENTED |
 | cli | JVM | IMPLEMENTED |
 | core-prompt-regen | JVM | IMPLEMENTED |
+| core-tools-metasploit | JVM | IMPLEMENTED |
+| core-tools-setoolkit | JVM | IMPLEMENTED |
+| core-hackerai | JVM | IMPLEMENTED |
+| core-pentest-swarm | JVM | IMPLEMENTED |
+| app | Android | ON DISK, EXCLUDED (not build-verified — no Android SDK) |
 | core-llm-google | JVM | PLANNED (Phase 1) |
 | core-llm-groq | JVM | PLANNED (Phase 1) |
 | core-conversations | Android (Room) | PLANNED (Phase 1) |
 | core-llm-local | Android + NDK | PLANNED (Phase 2) |
 | core-voice | Android | PLANNED (Phase 4) |
-| app | Android | PLANNED (Phase 0) |
 
-**Correction to an earlier draft of this table:** that draft omitted
-`core-llm-factory`, `core-mcp`, `core-integration-tests`, `cli`, and
-`core-prompt-regen` — all four real and IMPLEMENTED today — while labeling
-itself "current... as of 2026-09-14." The table above is the actual
-current state as of that date; re-verify against `settings.gradle.kts`
-before trusting it further into the future, per this file's own standing
-rule.
+**Correction to earlier drafts of this table:** the 2026-09-14 draft
+labeled itself "current" while omitting five modules that existed then
+(`core-llm-factory`, `core-mcp`, `core-integration-tests`, `cli`,
+`core-prompt-regen`). Its corrected form was then itself left to age. The
+table above (2026-09-29) adds the four security-tooling modules built since
+(`core-tools-metasploit`, `core-tools-setoolkit`, `core-hackerai`,
+`core-pentest-swarm`, all in `settings.gradle.kts`) and re-classifies `app`
+from PLANNED to ON DISK, EXCLUDED — it now holds real Kotlin/Compose/Hilt
+source but is still not in the build and has never been build-verified here.
+Re-verify against `settings.gradle.kts` before trusting this table further
+into the future, per this file's own standing rule.
