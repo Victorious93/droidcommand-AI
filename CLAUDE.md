@@ -238,12 +238,17 @@ inflate any entry's status past what those addenda actually say:
   Go server (loopback, port 18080); needs that project's own companion APK
   installed and its server running.
 - **`Victorious93/VictorSuite`** (GPL, Termux/ZeroTermux-derived) —
-  PLANNED only. No `core-victorsuite` module or bridge code exists; the
-  integration shape (most likely Termux-style `RUN_COMMAND`-intent, given
-  VictorSuite's own Termux lineage, but not yet decided) needs scoping via
-  Plan Mode before any code is written. Don't confuse this with the
-  already-implemented `core-termux` module, which talks to Termux itself,
-  not to VictorSuite.
+  scoped 2026-09-29b: **already covered by `core-termux`, no new module
+  needed.** VictorSuite ships under Termux's own `applicationId`
+  (`com.termux`), unmodified `RUN_COMMAND` contract included, so
+  `AdbTermuxExecutor`'s existing `"com.termux"` default already reaches
+  it — DCA can't and doesn't need to distinguish a VictorSuite install
+  from genuine Termux, though the two can never be installed on the same
+  device (colliding package identity). VictorSuite's real differentiators
+  (multi-distro switching, backup/restore, its plugin framework) are
+  UI-only and unreachable from `RUN_COMMAND` — closing that gap needs new
+  surface area in VictorSuite's own repo, out of scope here. See
+  `docs/AUDIT_2026-09-05.md`'s addendum for the full record.
 
 ---
 
