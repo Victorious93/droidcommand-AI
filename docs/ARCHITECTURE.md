@@ -370,6 +370,21 @@ DroidCommand AI
 │                            NullSetExecutor is the only always-present
 │                            implementation.
 │
+├── core-hackerai             (added 2026-09-28) Kotlin ports of HackerAI
+│                            ETC's (Victorious93/hackeraiETC) TypeScript
+│                            subagent-orchestration logic — part of the
+│                            DroidCommand AI companion-app fleet (see
+│                            Section 8). HackerAiTool is a stub pending the
+│                            HackerAI companion-APK AIDL binding.
+│
+├── core-pentest-swarm        (added 2026-09-28) JVM bridge to the
+│                            Pentest-Swarm-AI (Victorious93/Pentest-Swarm-AI,
+│                            forked from Armur-Ai/Pentest-Swarm-AI) Go
+│                            server's REST API — part of the companion-app
+│                            fleet (Section 8). SwarmTool requires that
+│                            project's companion APK installed and its Go
+│                            server reachable on port 18080.
+│
 └── core-mcp                  McpToolServer — exposes core-agent's
                              ToolRegistry over the real, official Kotlin MCP
                              SDK (io.modelcontextprotocol:kotlin-sdk-server),
@@ -1088,3 +1103,29 @@ since each reduced the header count relative to its base branch. The check is
 cheap (a single `grep -c` per side), has no false-positive risk for any PR that
 correctly appends rather than overwrites, and lives in the same CI run that
 already verifies tests and lint.
+
+## 8. Companion app fleet (planned)
+
+DroidCommand AI's target architecture includes a small fleet of separate,
+independently-installable Android companion apps that DCA talks to over a
+local IPC/network boundary (AIDL binding or loopback REST/HTTP), rather
+than folding their functionality into the `:app` monolith — the same
+pattern `core-termux`'s `com.termux.RUN_COMMAND` intent integration and
+`core-root`'s Magisk path already establish for this codebase (see
+`CLAUDE.md`'s Phase 2 "app size / distribution" note for the precedent).
+Three repositories are the fleet's members, at three different stages:
+
+| Repo | Role | Status |
+|---|---|---|
+| [`Victorious93/hackeraiETC`](https://github.com/Victorious93/hackeraiETC) ("HackerAI") | Security-task delegation companion — `core-hackerai` is a Kotlin port of its subagent-orchestration logic (`SubagentContracts`, `DoomLoopDetector`, `RuntimeRecovery`, `StepBudgetGate`, `SkillCatalog`/`SkillRanker`), reached at runtime through `HackerAiTool` once a companion AIDL service (`IHackerAIService`) is bound. | `core-hackerai` module IMPLEMENTED (JVM bridge only); the AIDL companion binding itself is PLANNED — see `docs/AUDIT_2026-09-05.md`'s "Phase 3: core-hackerai and core-pentest-swarm modules" addendum (2026-09-28). |
+| [`Victorious93/Pentest-Swarm-AI`](https://github.com/Victorious93/Pentest-Swarm-AI) (fork of [`Armur-Ai/Pentest-Swarm-AI`](https://github.com/Armur-Ai/Pentest-Swarm-AI), AGPL-3.0) | Autonomous pentest-swarm companion — `core-pentest-swarm` is a JVM `SwarmClient` speaking that project's Go-server REST API (loopback, port 18080) via `core-remote.HttpTransport`, exposed as `PentestSwarmScanTool`/`PentestSwarmRunChainTool`/`PentestSwarmRunPlaybookTool`. | `core-pentest-swarm` module IMPLEMENTED (JVM bridge only); requires that project's own companion APK installed and its Go server running — `REQUIRES_EXTERNAL_SERVICE` otherwise. Same addendum as above. |
+| [`Victorious93/VictorSuite`](https://github.com/Victorious93/VictorSuite) (Termux/ZeroTermux-derived, GPL) | Planned Linux-environment/Termux-management companion, alongside `core-termux`'s existing public `com.termux.RUN_COMMAND` integration. | PLANNED — added to this table 2026-09-29 (see that date's audit addendum); no `core-victorsuite` module, bridge code, or wiring of any kind exists yet in this repository. Not to be confused with the already-implemented `core-termux` module, which integrates with Termux itself, not VictorSuite. |
+
+None of the three companion APKs is built by this repository or lives in
+this repository's source tree — each is its own independently-versioned,
+independently-licensed project. DCA's own JVM bridge modules
+(`core-hackerai`, `core-pentest-swarm`, and a future `core-victorsuite` if
+one is built) hold only the client-side contract/logic; the fleet apps
+themselves are out of scope for `./gradlew test` here, same as the
+Android `:app` module and any other device-only component named
+PLANNED/BLOCKED elsewhere in this doc.
