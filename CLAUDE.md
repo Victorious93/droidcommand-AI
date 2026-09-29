@@ -217,6 +217,39 @@ checkout -B <branch> origin/main`) rather than stacking on stale history.
   were deliberately not built since none of those exist yet in this
   repository — don't mistake their absence for an oversight.
 
+## Companion app fleet
+
+DroidCommand AI is the hub of a small fleet of separate, independently
+licensed and independently versioned Android companion apps, reached over
+a local IPC/network boundary (AIDL binding or loopback REST) rather than
+folded into `:app` — see `docs/ARCHITECTURE.md`'s §8 "Companion app fleet"
+for the full per-app breakdown and `docs/AUDIT_2026-09-05.md`'s "Phase 3:
+core-hackerai and core-pentest-swarm modules" (2026-09-28) and "VictorSuite
+added to the companion app fleet" (2026-09-29) addenda for status. Three
+repos, three different stages — don't re-derive this list, and don't
+inflate any entry's status past what those addenda actually say:
+
+- **`Victorious93/hackeraiETC`** ("HackerAI") — `core-hackerai` (this repo)
+  is a Kotlin port of its subagent-orchestration logic; the companion AIDL
+  binding it will eventually run over is still PLANNED.
+- **`Victorious93/Pentest-Swarm-AI`** (a fork of the AGPL-3.0
+  `Armur-Ai/Pentest-Swarm-AI` — keep that upstream attribution and license
+  intact) — `core-pentest-swarm` (this repo) is a real REST client for its
+  Go server (loopback, port 18080); needs that project's own companion APK
+  installed and its server running.
+- **`Victorious93/VictorSuite`** (GPL, Termux/ZeroTermux-derived) —
+  scoped 2026-09-29b: **already covered by `core-termux`, no new module
+  needed.** VictorSuite ships under Termux's own `applicationId`
+  (`com.termux`), unmodified `RUN_COMMAND` contract included, so
+  `AdbTermuxExecutor`'s existing `"com.termux"` default already reaches
+  it — DCA can't and doesn't need to distinguish a VictorSuite install
+  from genuine Termux, though the two can never be installed on the same
+  device (colliding package identity). VictorSuite's real differentiators
+  (multi-distro switching, backup/restore, its plugin framework) are
+  UI-only and unreachable from `RUN_COMMAND` — closing that gap needs new
+  surface area in VictorSuite's own repo, out of scope here. See
+  `docs/AUDIT_2026-09-05.md`'s addendum for the full record.
+
 ---
 
 ## Consumer Product Roadmap (DroidCommand AI — App Layer)
@@ -247,21 +280,24 @@ faith, per findings noted inline.
   audit's VERIFIED IMPLEMENTED/PARTIAL/STUB/MISSING grading). Never mark
   something IMPLEMENTED unless `./gradlew test` passes for that
   module/slice; state exactly what was tested and what was not.
-- **Preserve all existing modules.** The 20 modules currently in
+- **Preserve all existing modules.** The 24 modules currently in
   `settings.gradle.kts` (`core-agent`, `core-llm`, `core-security`,
   `core-config`, `core-remote`, `core-build`, `core-tools-android`,
   `core-shell`, `core-apk-lifecycle`, `core-root`, `core-termux`,
   `core-llm-anthropic`, `core-llm-openai`, `core-llm-factory`,
   `core-build-local`, `core-build-remote`, `core-mcp`,
-  `core-integration-tests`, `cli`, `core-prompt-regen`) are source of truth.
-  New work wires to them; it doesn't rewrite them unless a real bug is
-  found. **Correction to an earlier draft of this section:** that draft
-  said "19 existing pure-JVM modules" and listed 13 of them, omitting
-  `core-llm-factory`, `core-mcp`, `core-integration-tests`, `cli`, and
-  `core-prompt-regen` entirely — that was a stale/incomplete snapshot, not
-  this repo's real state. Re-check `settings.gradle.kts` at the start of
-  each phase rather than trusting this count once it ages, per this file's
-  own standing rule above.
+  `core-integration-tests`, `cli`, `core-prompt-regen`,
+  `core-tools-metasploit`, `core-tools-setoolkit`, `core-hackerai`,
+  `core-pentest-swarm`) are source of truth. New work wires to them; it
+  doesn't rewrite them unless a real bug is found. **Correction to an
+  earlier draft of this section:** that draft said "19 existing pure-JVM
+  modules" and listed 13 of them, omitting `core-llm-factory`, `core-mcp`,
+  `core-integration-tests`, `cli`, and `core-prompt-regen` entirely — that
+  was a stale/incomplete snapshot, not this repo's real state. The four
+  security-tooling modules (`core-tools-metasploit`, `core-tools-setoolkit`,
+  `core-hackerai`, `core-pentest-swarm`) were added since then. Re-check
+  `settings.gradle.kts` at the start of each phase rather than trusting
+  this count once it ages, per this file's own standing rule above.
 - **ARCHITECTURE.md and AUDIT docs stay current.** Every phase that adds or
   changes a component updates `docs/ARCHITECTURE.md`'s status table and
   appends a dated entry to `docs/AUDIT_2026-09-05.md`, per this repo's
@@ -274,22 +310,26 @@ faith, per findings noted inline.
 ---
 
 ### Phase 0 — Android App Shell (Foundation)
-**Status:** NOT STARTED
-**Branch:** `feature/phase-0-android-shell`
+**Status:** ON DISK — NOT BUILD-VERIFIED (no Android SDK in this environment)
+**Branch:** `feature/phase-0-android-shell` (merged to `main` via PR #104)
 **Depends on:** nothing new — wires to existing `core-llm`, `core-agent`, `core-config`
 
-Adds the `app/` module: the first Android-SDK-dependent module in this
-repo (`docs/ARCHITECTURE.md`'s `app (Android shell)` row is currently
-PLANNED — no directory, Gradle file, or manifest exists yet, and this
-JVM-only environment has no Android SDK to build one; see that row and
-`cli`'s own row for the already-documented distinction between the two).
-A minimal, real, runnable APK: Hilt DI wired through, a Compose navigation
-skeleton, and stub screens only (no inference, no chat) — scaffolding for
-every later phase. `settings.gradle.kts` gets `include(":app")`.
+The `app/` module exists on disk with real Kotlin/Compose/Hilt source
+(Hilt DI, Compose navigation, stub screens for Chat/Home/Settings/Tools
+including the Metasploit and SET UI stubs). It is **not** included in
+`settings.gradle.kts` because this JVM-only environment has no Android
+SDK/AGP. It has never been build-verified — `./gradlew :app:assembleDebug`
+has not been run against it; the plugin/dependency versions in
+`app/build.gradle.kts` are best-effort starting points, not build-confirmed.
+See `docs/AUDIT_2026-09-05.md`'s `app/` row and the "Phase 0 Compose app
+scaffold" entry in PR #104 for the full record.
 
-**Acceptance:** `./gradlew :app:assembleDebug` succeeds; app launches on
-an emulator (API 26+) with stub screens; `./gradlew test` still passes
-across all 20 existing modules (zero regressions in anything above).
+**Acceptance (still unmet):** `./gradlew :app:assembleDebug` succeeds; app
+launches on an emulator (API 26+) with stub screens; `./gradlew test` still
+passes across all 24 existing JVM modules (zero regressions in anything above).
+This requires a real Android SDK — it cannot be verified in this JVM-only
+environment. The module inventory table below records `app` as
+ON DISK, EXCLUDED rather than IMPLEMENTED for exactly this reason.
 
 ---
 
@@ -500,44 +540,58 @@ this project had specifically evaluated them.
 
 ---
 
-### Current module inventory (verified against `settings.gradle.kts`, 2026-09-14)
+### Current module inventory (verified against `settings.gradle.kts`, 2026-09-29)
+
+24 modules are wired into the build via `include(...)` in
+`settings.gradle.kts`. `app/` also exists on disk with real source but is
+deliberately **not** in `settings.gradle.kts` (gated on an Android SDK this
+environment does not have — see the excluded-module comment at the bottom of
+`settings.gradle.kts`).
 
 | Module | Type | Status |
 |---|---|---|
 | core-agent | JVM | IMPLEMENTED |
 | core-llm | JVM | IMPLEMENTED |
-| core-llm-anthropic | JVM | IMPLEMENTED |
-| core-llm-openai | JVM | IMPLEMENTED |
-| core-llm-factory | JVM | IMPLEMENTED |
 | core-security | JVM | IMPLEMENTED |
 | core-config | JVM | IMPLEMENTED |
 | core-remote | JVM | IMPLEMENTED |
-| core-shell | JVM | IMPLEMENTED |
 | core-build | JVM | IMPLEMENTED |
-| core-build-local | JVM | IMPLEMENTED |
-| core-build-remote | JVM | IMPLEMENTED |
 | core-tools-android | JVM | IMPLEMENTED (stubs) |
+| core-shell | JVM | IMPLEMENTED |
 | core-apk-lifecycle | JVM | IMPLEMENTED (stubs) |
 | core-root | JVM | IMPLEMENTED (stubs) |
 | core-termux | JVM | IMPLEMENTED |
+| core-llm-anthropic | JVM | IMPLEMENTED |
+| core-llm-openai | JVM | IMPLEMENTED |
+| core-llm-factory | JVM | IMPLEMENTED |
+| core-build-local | JVM | IMPLEMENTED |
+| core-build-remote | JVM | IMPLEMENTED |
 | core-mcp | JVM | IMPLEMENTED |
 | core-integration-tests | JVM (test-only) | IMPLEMENTED |
 | cli | JVM | IMPLEMENTED |
 | core-prompt-regen | JVM | IMPLEMENTED |
+| core-tools-metasploit | JVM | IMPLEMENTED |
+| core-tools-setoolkit | JVM | IMPLEMENTED |
+| core-hackerai | JVM | IMPLEMENTED |
+| core-pentest-swarm | JVM | IMPLEMENTED |
+| app | Android | ON DISK, EXCLUDED (not build-verified — no Android SDK) |
 | core-llm-google | JVM | PLANNED (Phase 1) |
 | core-llm-groq | JVM | PLANNED (Phase 1) |
 | core-conversations | Android (Room) | PLANNED (Phase 1) |
 | core-llm-local | Android + NDK | PLANNED (Phase 2) |
 | core-voice | Android | PLANNED (Phase 4) |
-| app | Android | PLANNED (Phase 0) |
 
-**Correction to an earlier draft of this table:** that draft omitted
-`core-llm-factory`, `core-mcp`, `core-integration-tests`, `cli`, and
-`core-prompt-regen` — all four real and IMPLEMENTED today — while labeling
-itself "current... as of 2026-09-14." The table above is the actual
-current state as of that date; re-verify against `settings.gradle.kts`
-before trusting it further into the future, per this file's own standing
-rule.
+**Correction to earlier drafts of this table:** the 2026-09-14 draft
+labeled itself "current" while omitting five modules that existed then
+(`core-llm-factory`, `core-mcp`, `core-integration-tests`, `cli`,
+`core-prompt-regen`). Its corrected form was then itself left to age. The
+table above (2026-09-29) adds the four security-tooling modules built since
+(`core-tools-metasploit`, `core-tools-setoolkit`, `core-hackerai`,
+`core-pentest-swarm`, all in `settings.gradle.kts`) and re-classifies `app`
+from PLANNED to ON DISK, EXCLUDED — it now holds real Kotlin/Compose/Hilt
+source but is still not in the build and has never been build-verified here.
+Re-verify against `settings.gradle.kts` before trusting this table further
+into the future, per this file's own standing rule.
 
 ---
 

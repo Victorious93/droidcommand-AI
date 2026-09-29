@@ -370,6 +370,21 @@ DroidCommand AI
 │                            NullSetExecutor is the only always-present
 │                            implementation.
 │
+├── core-hackerai             (added 2026-09-28) Kotlin ports of HackerAI
+│                            ETC's (Victorious93/hackeraiETC) TypeScript
+│                            subagent-orchestration logic — part of the
+│                            DroidCommand AI companion-app fleet (see
+│                            Section 8). HackerAiTool is a stub pending the
+│                            HackerAI companion-APK AIDL binding.
+│
+├── core-pentest-swarm        (added 2026-09-28) JVM bridge to the
+│                            Pentest-Swarm-AI (Victorious93/Pentest-Swarm-AI,
+│                            forked from Armur-Ai/Pentest-Swarm-AI) Go
+│                            server's REST API — part of the companion-app
+│                            fleet (Section 8). SwarmTool requires that
+│                            project's companion APK installed and its Go
+│                            server reachable on port 18080.
+│
 └── core-mcp                  McpToolServer — exposes core-agent's
                              ToolRegistry over the real, official Kotlin MCP
                              SDK (io.modelcontextprotocol:kotlin-sdk-server),
@@ -1091,7 +1106,7 @@ already verifies tests and lint.
 
 ## 8. Companion APK modules (added 2026-09-29 — Phase 3 / Phase 4 / Phase 6)
 
-These three modules are part of the companion APK integration work. The two JVM
+These modules are part of the companion APK integration work. The two JVM
 modules (`core-hackerai`, `core-pentest-swarm`) are in `settings.gradle.kts` and
 verified by `./gradlew test`. The Android module (`core-companion`) is excluded
 from `settings.gradle.kts` (same as `:app`) — it contains the AIDL contracts and
@@ -1104,5 +1119,16 @@ Android-SDK-dependent glue that only builds with an Android SDK.
 | core-companion | IMPLEMENTED (source only — NOT BUILD-VERIFIED) | Android library module; excluded from `settings.gradle.kts`. Contains the AIDL contract source of truth: `ICompanionService.aidl`, `IHackerAIService.aidl`, `IPentestSwarmService.aidl`, `CompanionCapabilityParcel.aidl`. Kotlin glue: `CompanionCapabilityParcel.kt`, `CompanionDescriptor.kt`, `CompanionRegistry.kt`, `CompanionCapabilityHealthChecker.kt`, `CompanionTool.kt`. Needs Android SDK to build; not included in active build settings. |
 | HackerAI companion APK | IMPLEMENTED (source only — NOT BUILD-VERIFIED) | `hackeraiETC/android/`. Standalone Android Gradle project. Package: `ai.hackerai.companion`. AIDL: `IHackerAIService.aidl` (copy of core-companion's). Bound service: `HackerAIBoundService`; permission: `ai.droidcommand.permission.BIND_HACKERAI`. Consumes `core-hackerai:0.1.0-SNAPSHOT` via `mavenLocal()`. JVM tests pass. |
 | Pentest-Swarm companion APK | IMPLEMENTED (source only — NOT BUILD-VERIFIED) | `Pentest-Swarm-AI/android/`. Standalone Android Gradle project. Package: `ai.pentestswarm.companion`. Bundles Go binary as `res/raw/pentestswarm_<abi>` (gitignored; built by CI). AIDL: `IPentestSwarmService.aidl` (copy of core-companion's). Bound service: `PentestSwarmBoundService`; permission: `ai.droidcommand.permission.BIND_PENTESTSWARM`. Go process managed by `SwarmProcess` (per-session API key) + `SwarmForegroundService`. Consumes `core-pentest-swarm:0.1.0-SNAPSHOT` via `mavenLocal()`. JVM tests pass. |
+| VictorSuite | COVERED BY `core-termux` — no new module | [`Victorious93/VictorSuite`](https://github.com/Victorious93/VictorSuite) (Termux/ZeroTermux-derived, GPL) ships under the identical Android package identity as Termux itself (`applicationId`/`namespace` `com.termux`, unmodified `RunCommandService`/`RUN_COMMAND` permission). `core-termux.AdbTermuxExecutor`'s `termuxPackage` default (`"com.termux"`) already targets this contract; no `core-victorsuite` module, new `ExecutionTargetType`, or bridge code is needed or planned. Scoped 2026-09-29b — see `docs/AUDIT_2026-09-05.md`. |
 
 See `COMPANION_PROTOCOL.md` (repo root) for the full integration protocol.
+
+None of the three companion APKs is built by this repository or lives in
+this repository's source tree — each is its own independently-versioned,
+independently-licensed project. DCA's own JVM bridge modules
+(`core-hackerai`, `core-pentest-swarm`) hold only the client-side
+contract/logic; the fleet apps themselves are out of scope for
+`./gradlew test` here, same as the Android `:app` module and any other
+device-only component named PLANNED/BLOCKED elsewhere in this doc.
+VictorSuite is the one fleet member with no dedicated bridge module at
+all, by design — see its row above.

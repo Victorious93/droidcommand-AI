@@ -3,8 +3,8 @@ package ai.droidcommand.hackerai
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlin.test.Test
-import kotlin.test.assertIs
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
 class DoomLoopDetectorTest {
     private fun makeResult(value: String, timestamp: String = "2026-01-01T00:00:00Z") =

@@ -187,4 +187,81 @@ class MainTest {
 
         assertEquals(1, exitCode)
     }
+
+    @Test
+    fun `forge with --finalization-steps 2 threads the value through and completes normally`() {
+        // Two scripted responses: tool call then Completed text — same shape as the end-to-end test.
+        // The flag must not alter the outcome, only the reservedFinalizationIterations value passed
+        // to DroidCommandSession.runForgeObjective.
+        val transport = ScriptedHttpTransport(
+            mutableListOf(
+                200 to """{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"echo","input":{"text":"hi"}}],"model":"claude-test-model","stop_reason":"tool_use"}""",
+                200 to """{"id":"msg_2","type":"message","role":"assistant","content":[{"type":"text","text":"Done."}],"model":"claude-test-model","stop_reason":"end_turn"}""",
+            ),
+        )
+
+        val exitCode = runForge(
+            buildSession(),
+            listOf("--finalization-steps", "2", "Echo", "hi"),
+            configSource = anthropicSource(),
+            transport = transport,
+        )
+
+        assertEquals(0, exitCode)
+    }
+
+    @Test
+    fun `forge rejects --finalization-steps with a non-integer value`() {
+        val exitCode = runForge(
+            buildSession(),
+            listOf("--finalization-steps", "notanumber", "Echo", "hi"),
+            configSource = anthropicSource(),
+            transport = ScriptedHttpTransport(mutableListOf()),
+        )
+
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `forge rejects --finalization-steps with a negative value`() {
+        val exitCode = runForge(
+            buildSession(),
+            listOf("--finalization-steps", "-1", "Echo", "hi"),
+            configSource = anthropicSource(),
+            transport = ScriptedHttpTransport(mutableListOf()),
+        )
+
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `forge rejects an unknown flag`() {
+        val exitCode = runForge(
+            buildSession(),
+            listOf("--unknown-flag", "Echo", "hi"),
+            configSource = anthropicSource(),
+            transport = ScriptedHttpTransport(mutableListOf()),
+        )
+
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `forge with --finalization-steps 0 is identical to the default (no nudge)`() {
+        val transport = ScriptedHttpTransport(
+            mutableListOf(
+                200 to """{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"echo","input":{"text":"hi"}}],"model":"claude-test-model","stop_reason":"tool_use"}""",
+                200 to """{"id":"msg_2","type":"message","role":"assistant","content":[{"type":"text","text":"Done."}],"model":"claude-test-model","stop_reason":"end_turn"}""",
+            ),
+        )
+
+        val exitCode = runForge(
+            buildSession(),
+            listOf("--finalization-steps", "0", "Echo", "hi"),
+            configSource = anthropicSource(),
+            transport = transport,
+        )
+
+        assertEquals(0, exitCode)
+    }
 }

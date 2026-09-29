@@ -237,6 +237,7 @@ internal fun printUsage() {
           list-tools                     List every registered tool and its spec
           pilot <tool> [key=value ...]   Run a single Pilot Mode tool invocation
           forge <objective text...>      Run a Forge Mode objective via an LLM planner
+                                          [--finalization-steps <n>]
           regenerate-prompt <input...>   Turn a vague request into an optimized prompt for another AI
                                           [--target claude|codex|gpt|gemini|local|general]
                                           [--repo <path>] [--previous-response-file <path>]
@@ -267,6 +268,14 @@ internal fun printUsage() {
         core-config.MultiLlmConfigLoader defines — see its doc comment for the
         full list. At least one provider must be configured or 'forge' fails
         with a clear error instead of a stack trace.
+
+        --finalization-steps <n> reserves the last N iterations of a Forge run
+        as a "step budget nudge": the engine adds a system-prompt reminder that
+        the budget is nearly exhausted so the planner attempts to produce a
+        final answer rather than continuing to use tools. This is a prompting-
+        only mechanism — the engine never fabricates an AgentState.Completed
+        on the planner's behalf. Default is 0 (no nudge). See
+        core-agent.ObjectiveEngine's doc comment for the exact semantics.
 
         device-serve binds to loopback unless --bind says otherwise. It prints a
         controller id and a one-time pairing secret; every request it receives
@@ -341,11 +350,35 @@ internal fun runForge(
     configSource: ConfigSource = EnvConfigSource(),
     transport: HttpTransport = JdkHttpTransport(),
 ): Int {
-    if (rest.isEmpty()) {
-        System.err.println("Usage: forge <objective text...>")
+    // Parse optional flags before the objective text.
+    // Flags must appear before the first non-flag token; everything after the
+    // flags is joined as the objective string.
+    var finalizationSteps = 0
+    var i = 0
+    while (i < rest.size && rest[i].startsWith("--")) {
+        when (rest[i]) {
+            "--finalization-steps" -> {
+                finalizationSteps = rest.getOrNull(++i)?.toIntOrNull()?.takeIf { it >= 0 }
+                    ?: run {
+                        System.err.println("--finalization-steps requires a non-negative integer")
+                        return 1
+                    }
+            }
+            else -> {
+                System.err.println("Unknown forge flag '${rest[i]}'")
+                System.err.println("Usage: forge [--finalization-steps <n>] <objective text...>")
+                return 1
+            }
+        }
+        i++
+    }
+
+    val objectiveTokens = rest.drop(i)
+    if (objectiveTokens.isEmpty()) {
+        System.err.println("Usage: forge [--finalization-steps <n>] <objective text...>")
         return 1
     }
-    val objective = rest.joinToString(" ")
+    val objective = objectiveTokens.joinToString(" ")
 
     val planner = try {
         LlmProviderFactory.createPlanner(configSource, transport)
@@ -359,7 +392,11 @@ internal fun runForge(
     }
 
     cliSession.session.switchMode(AgentMode.FORGE)
-    val outcome = cliSession.session.runForgeObjective(objective, planner)
+    val outcome = cliSession.session.runForgeObjective(
+        objective,
+        planner,
+        reservedFinalizationIterations = finalizationSteps,
+    )
     println("Final state: ${outcome.finalState}")
     println("Iterations: ${outcome.iterations}")
     return if (outcome.finalState is AgentState.Completed) 0 else 1
