@@ -1104,22 +1104,24 @@ cheap (a single `grep -c` per side), has no false-positive risk for any PR that
 correctly appends rather than overwrites, and lives in the same CI run that
 already verifies tests and lint.
 
-## 8. Companion app fleet (planned)
+## 8. Companion APK modules (added 2026-09-29 — Phase 3 / Phase 4 / Phase 6)
 
-DroidCommand AI's target architecture includes a small fleet of separate,
-independently-installable Android companion apps that DCA talks to over a
-local IPC/network boundary (AIDL binding or loopback REST/HTTP), rather
-than folding their functionality into the `:app` monolith — the same
-pattern `core-termux`'s `com.termux.RUN_COMMAND` intent integration and
-`core-root`'s Magisk path already establish for this codebase (see
-`CLAUDE.md`'s Phase 2 "app size / distribution" note for the precedent).
-Three repositories are the fleet's members, at three different stages:
+These modules are part of the companion APK integration work. The two JVM
+modules (`core-hackerai`, `core-pentest-swarm`) are in `settings.gradle.kts` and
+verified by `./gradlew test`. The Android module (`core-companion`) is excluded
+from `settings.gradle.kts` (same as `:app`) — it contains the AIDL contracts and
+Android-SDK-dependent glue that only builds with an Android SDK.
 
-| Repo | Role | Status |
+| Component | Status | Notes |
 |---|---|---|
-| [`Victorious93/hackeraiETC`](https://github.com/Victorious93/hackeraiETC) ("HackerAI") | Security-task delegation companion — `core-hackerai` is a Kotlin port of its subagent-orchestration logic (`SubagentContracts`, `DoomLoopDetector`, `RuntimeRecovery`, `StepBudgetGate`, `SkillCatalog`/`SkillRanker`), reached at runtime through `HackerAiTool` once a companion AIDL service (`IHackerAIService`) is bound. | `core-hackerai` module IMPLEMENTED (JVM bridge only); the AIDL companion binding itself is PLANNED — see `docs/AUDIT_2026-09-05.md`'s "Phase 3: core-hackerai and core-pentest-swarm modules" addendum (2026-09-28). |
-| [`Victorious93/Pentest-Swarm-AI`](https://github.com/Victorious93/Pentest-Swarm-AI) (fork of [`Armur-Ai/Pentest-Swarm-AI`](https://github.com/Armur-Ai/Pentest-Swarm-AI), AGPL-3.0) | Autonomous pentest-swarm companion — `core-pentest-swarm` is a JVM `SwarmClient` speaking that project's Go-server REST API (loopback, port 18080) via `core-remote.HttpTransport`, exposed as `PentestSwarmScanTool`/`PentestSwarmRunChainTool`/`PentestSwarmRunPlaybookTool`. | `core-pentest-swarm` module IMPLEMENTED (JVM bridge only); requires that project's own companion APK installed and its Go server running — `REQUIRES_EXTERNAL_SERVICE` otherwise. Same addendum as above. |
-| [`Victorious93/VictorSuite`](https://github.com/Victorious93/VictorSuite) (Termux/ZeroTermux-derived, GPL) | Linux-environment/Termux-management companion — **already covered by the existing `core-termux` module**, not a separate integration. | COVERED BY `core-termux` — scoped 2026-09-29b (see that date's audit addendum). VictorSuite ships under the identical Android package identity as Termux itself (`applicationId`/`namespace` `com.termux`, unmodified `RunCommandService`/`RUN_COMMAND` permission — VictorSuite's own "rebrand" commits changed branding only, never the package). `core-termux.AdbTermuxExecutor`'s `termuxPackage` default (`"com.termux"`) already targets this contract; no `core-victorsuite` module, new `ExecutionTargetType`, or bridge code is needed or planned. Two real constraints follow: DCA cannot and need not distinguish a VictorSuite install from genuine upstream Termux (identical contract), and a device can have one or the other installed, never both (colliding `applicationId`). VictorSuite's own differentiators beyond stock Termux — multi-distro container switching, backup/restore, its plugin framework — are wired to Activity UI only, not to any CLI/broadcast/AIDL surface a `RUN_COMMAND` shell command can reach; closing that gap would require new surface area in VictorSuite's own repo, out of scope here. |
+| core-hackerai | IMPLEMENTED | JVM module. Kotlin port of HackerAI ETC's agent orchestration logic: `SubagentContracts`, `SecurityFindingResult`, `EvidenceReference`, `SkillCatalog` (loads bundled `strix-skill-catalog.generated.json`), `SkillRanker` (TF-IDF over skill name + description), `DoomLoopDetector` (warn at 3, halt at 5), `RuntimeRecovery` (`ProviderErrorCategory`, exponential backoff), `StepBudgetGate`, `DelegationBudget`, `AgentProfile`. `HackerAiTool` implements `Tool` but returns `ToolResult.Failure` until the companion is connected (AIDL not wired yet — see `core-companion`). Fully unit-tested (64 tests). |
+| core-pentest-swarm | IMPLEMENTED | JVM module. `SwarmClient` (`JdkHttpTransport`-backed REST client for the Go binary at `http://127.0.0.1:18080`; sends `X-API-Key` header); `SwarmApiTypes` (`@Serializable` data classes matching the Go API); `ChainCatalog` / `PlaybookCatalog` (load bundled YAML catalogs compiled to JSON); `SwarmTool.*` (three `Tool` implementations: `pentest_swarm_scan`, `pentest_swarm_run_chain`, `pentest_swarm_run_playbook`); `SwarmCapabilityHealthChecker`. `SwarmClient.getCampaignStatus` added 2026-09-29. Fully unit-tested. |
+| core-companion | IMPLEMENTED (source only — NOT BUILD-VERIFIED) | Android library module; excluded from `settings.gradle.kts`. Contains the AIDL contract source of truth: `ICompanionService.aidl`, `IHackerAIService.aidl`, `IPentestSwarmService.aidl`, `CompanionCapabilityParcel.aidl`. Kotlin glue: `CompanionCapabilityParcel.kt`, `CompanionDescriptor.kt`, `CompanionRegistry.kt`, `CompanionCapabilityHealthChecker.kt`, `CompanionTool.kt`. Needs Android SDK to build; not included in active build settings. |
+| HackerAI companion APK | IMPLEMENTED (source only — NOT BUILD-VERIFIED) | `hackeraiETC/android/`. Standalone Android Gradle project. Package: `ai.hackerai.companion`. AIDL: `IHackerAIService.aidl` (copy of core-companion's). Bound service: `HackerAIBoundService`; permission: `ai.droidcommand.permission.BIND_HACKERAI`. Consumes `core-hackerai:0.1.0-SNAPSHOT` via `mavenLocal()`. JVM tests pass. |
+| Pentest-Swarm companion APK | IMPLEMENTED (source only — NOT BUILD-VERIFIED) | `Pentest-Swarm-AI/android/`. Standalone Android Gradle project. Package: `ai.pentestswarm.companion`. Bundles Go binary as `res/raw/pentestswarm_<abi>` (gitignored; built by CI). AIDL: `IPentestSwarmService.aidl` (copy of core-companion's). Bound service: `PentestSwarmBoundService`; permission: `ai.droidcommand.permission.BIND_PENTESTSWARM`. Go process managed by `SwarmProcess` (per-session API key) + `SwarmForegroundService`. Consumes `core-pentest-swarm:0.1.0-SNAPSHOT` via `mavenLocal()`. JVM tests pass. |
+| VictorSuite | COVERED BY `core-termux` — no new module | [`Victorious93/VictorSuite`](https://github.com/Victorious93/VictorSuite) (Termux/ZeroTermux-derived, GPL) ships under the identical Android package identity as Termux itself (`applicationId`/`namespace` `com.termux`, unmodified `RunCommandService`/`RUN_COMMAND` permission). `core-termux.AdbTermuxExecutor`'s `termuxPackage` default (`"com.termux"`) already targets this contract; no `core-victorsuite` module, new `ExecutionTargetType`, or bridge code is needed or planned. Scoped 2026-09-29b — see `docs/AUDIT_2026-09-05.md`. |
+
+See `COMPANION_PROTOCOL.md` (repo root) for the full integration protocol.
 
 None of the three companion APKs is built by this repository or lives in
 this repository's source tree — each is its own independently-versioned,
