@@ -3,7 +3,6 @@ package ai.droidcommand.hackerai
 import kotlin.test.Test
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import kotlin.test.assertNotNull
 
 class SkillCatalogTest {
     @Test

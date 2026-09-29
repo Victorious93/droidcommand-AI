@@ -32,7 +32,12 @@ enum class SubagentTaskComplexity { LOW, MEDIUM, HIGH }
 enum class SubagentOutputKind { ANSWER, CODE_CHANGE, RESEARCH_NOTES, QA_REPORT, ARTIFACT }
 
 enum class SubagentCapabilityBundle {
-    CODE_READ, CODE_WRITE, WEB_RESEARCH, BROWSER_QA, TERMINAL, EXTERNAL_CONNECTORS
+    CODE_READ,
+    CODE_WRITE,
+    WEB_RESEARCH,
+    BROWSER_QA,
+    TERMINAL,
+    EXTERNAL_CONNECTORS,
 }
 
 @Serializable
