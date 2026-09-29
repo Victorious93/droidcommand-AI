@@ -1088,3 +1088,21 @@ since each reduced the header count relative to its base branch. The check is
 cheap (a single `grep -c` per side), has no false-positive risk for any PR that
 correctly appends rather than overwrites, and lives in the same CI run that
 already verifies tests and lint.
+
+## 8. Companion APK modules (added 2026-09-29 — Phase 3 / Phase 4 / Phase 6)
+
+These three modules are part of the companion APK integration work. The two JVM
+modules (`core-hackerai`, `core-pentest-swarm`) are in `settings.gradle.kts` and
+verified by `./gradlew test`. The Android module (`core-companion`) is excluded
+from `settings.gradle.kts` (same as `:app`) — it contains the AIDL contracts and
+Android-SDK-dependent glue that only builds with an Android SDK.
+
+| Component | Status | Notes |
+|---|---|---|
+| core-hackerai | IMPLEMENTED | JVM module. Kotlin port of HackerAI ETC's agent orchestration logic: `SubagentContracts`, `SecurityFindingResult`, `EvidenceReference`, `SkillCatalog` (loads bundled `strix-skill-catalog.generated.json`), `SkillRanker` (TF-IDF over skill name + description), `DoomLoopDetector` (warn at 3, halt at 5), `RuntimeRecovery` (`ProviderErrorCategory`, exponential backoff), `StepBudgetGate`, `DelegationBudget`, `AgentProfile`. `HackerAiTool` implements `Tool` but returns `ToolResult.Failure` until the companion is connected (AIDL not wired yet — see `core-companion`). Fully unit-tested (64 tests). |
+| core-pentest-swarm | IMPLEMENTED | JVM module. `SwarmClient` (`JdkHttpTransport`-backed REST client for the Go binary at `http://127.0.0.1:18080`; sends `X-API-Key` header); `SwarmApiTypes` (`@Serializable` data classes matching the Go API); `ChainCatalog` / `PlaybookCatalog` (load bundled YAML catalogs compiled to JSON); `SwarmTool.*` (three `Tool` implementations: `pentest_swarm_scan`, `pentest_swarm_run_chain`, `pentest_swarm_run_playbook`); `SwarmCapabilityHealthChecker`. `SwarmClient.getCampaignStatus` added 2026-09-29. Fully unit-tested. |
+| core-companion | IMPLEMENTED (source only — NOT BUILD-VERIFIED) | Android library module; excluded from `settings.gradle.kts`. Contains the AIDL contract source of truth: `ICompanionService.aidl`, `IHackerAIService.aidl`, `IPentestSwarmService.aidl`, `CompanionCapabilityParcel.aidl`. Kotlin glue: `CompanionCapabilityParcel.kt`, `CompanionDescriptor.kt`, `CompanionRegistry.kt`, `CompanionCapabilityHealthChecker.kt`, `CompanionTool.kt`. Needs Android SDK to build; not included in active build settings. |
+| HackerAI companion APK | IMPLEMENTED (source only — NOT BUILD-VERIFIED) | `hackeraiETC/android/`. Standalone Android Gradle project. Package: `ai.hackerai.companion`. AIDL: `IHackerAIService.aidl` (copy of core-companion's). Bound service: `HackerAIBoundService`; permission: `ai.droidcommand.permission.BIND_HACKERAI`. Consumes `core-hackerai:0.1.0-SNAPSHOT` via `mavenLocal()`. JVM tests pass. |
+| Pentest-Swarm companion APK | IMPLEMENTED (source only — NOT BUILD-VERIFIED) | `Pentest-Swarm-AI/android/`. Standalone Android Gradle project. Package: `ai.pentestswarm.companion`. Bundles Go binary as `res/raw/pentestswarm_<abi>` (gitignored; built by CI). AIDL: `IPentestSwarmService.aidl` (copy of core-companion's). Bound service: `PentestSwarmBoundService`; permission: `ai.droidcommand.permission.BIND_PENTESTSWARM`. Go process managed by `SwarmProcess` (per-session API key) + `SwarmForegroundService`. Consumes `core-pentest-swarm:0.1.0-SNAPSHOT` via `mavenLocal()`. JVM tests pass. |
+
+See `COMPANION_PROTOCOL.md` (repo root) for the full integration protocol.

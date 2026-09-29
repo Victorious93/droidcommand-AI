@@ -538,3 +538,35 @@ itself "current... as of 2026-09-14." The table above is the actual
 current state as of that date; re-verify against `settings.gradle.kts`
 before trusting it further into the future, per this file's own standing
 rule.
+
+---
+
+## Companion APK Integration
+
+DCA integrates with two companion APKs via Android Bound Services:
+
+- **HackerAI companion** (`hackeraiETC/android/`) — exposes HackerAI's agent
+  orchestration, skill catalog, and finding validation via `IHackerAIService`
+- **Pentest-Swarm companion** (`Pentest-Swarm-AI/android/`) — exposes the Go
+  pentestswarm binary's campaign/chain/playbook capabilities via
+  `IPentestSwarmService`
+
+**For session orientation on the full integration protocol**, read
+`COMPANION_PROTOCOL.md` at the repo root before modifying AIDL contracts,
+adding companion capabilities, or working on the modules below.
+
+**Modules involved (all verified 2026-09-29):**
+
+| Module | Location | Type | Status |
+|---|---|---|---|
+| `core-hackerai` | `droidcommand-AI/core-hackerai/` | JVM | IMPLEMENTED |
+| `core-pentest-swarm` | `droidcommand-AI/core-pentest-swarm/` | JVM | IMPLEMENTED |
+| `core-companion` | `droidcommand-AI/core-companion/` | Android (excluded from build) | IMPLEMENTED (source only) |
+| HackerAI companion APK | `hackeraiETC/android/` | Android standalone | IMPLEMENTED (source only) |
+| Pentest-Swarm companion APK | `Pentest-Swarm-AI/android/` | Android standalone | IMPLEMENTED (source only) |
+
+**Critical rule — AIDL sync**: The AIDL files in each companion repo are
+copies of the canonical files in `core-companion/src/main/aidl/`. A diverged
+copy causes a `RemoteException: Binder interface mismatch` at runtime with no
+compile-time warning. Always update all three locations together. Details in
+`COMPANION_PROTOCOL.md` § "AIDL Contract Sync Rule".
