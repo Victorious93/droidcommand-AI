@@ -230,13 +230,24 @@ repos, three different stages — don't re-derive this list, and don't
 inflate any entry's status past what those addenda actually say:
 
 - **`Victorious93/hackeraiETC`** ("HackerAI") — `core-hackerai` (this repo)
-  is a Kotlin port of its subagent-orchestration logic; the companion AIDL
-  binding it will eventually run over is still PLANNED.
+  is a Kotlin port of its subagent-orchestration logic. Scoped 2026-09-29c:
+  **there is no buildable AIDL companion binding, and there won't be one —
+  HackerAI has no Android presence at all** (it's a cloud web app; its one
+  native shell is a desktop-only Tauri wrapper). Its real external-control
+  surface (`@hackerai/local`) runs the opposite direction from what
+  `HackerAiTool` needs, and its Agent-run API is browser-session-gated, not
+  API-key-callable. This is a real gap in hackeraiETC's own repo — don't
+  scope it further from here without hackeraiETC adding server-side auth
+  for external callers first.
 - **`Victorious93/Pentest-Swarm-AI`** (a fork of the AGPL-3.0
   `Armur-Ai/Pentest-Swarm-AI` — keep that upstream attribution and license
   intact) — `core-pentest-swarm` (this repo) is a real REST client for its
-  Go server (loopback, port 18080); needs that project's own companion APK
-  installed and its server running.
+  Go server (loopback, port 18080). Scoped 2026-09-29c: **no separate
+  companion APK** — its Go binary has no CGO/native blockers, so it runs as
+  a plain process inside the fleet's own Termux/VictorSuite userland,
+  dispatched the same way as any other `core-termux` command. Whether its
+  Postgres+pgvector/Redis backing services work in practice inside Termux
+  on a real phone is untested.
 - **`Victorious93/VictorSuite`** (GPL, Termux/ZeroTermux-derived) —
   scoped 2026-09-29b: **already covered by `core-termux`, no new module
   needed.** VictorSuite ships under Termux's own `applicationId`
