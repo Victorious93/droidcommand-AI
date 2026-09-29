@@ -217,6 +217,34 @@ checkout -B <branch> origin/main`) rather than stacking on stale history.
   were deliberately not built since none of those exist yet in this
   repository — don't mistake their absence for an oversight.
 
+## Companion app fleet
+
+DroidCommand AI is the hub of a small fleet of separate, independently
+licensed and independently versioned Android companion apps, reached over
+a local IPC/network boundary (AIDL binding or loopback REST) rather than
+folded into `:app` — see `docs/ARCHITECTURE.md`'s §8 "Companion app fleet"
+for the full per-app breakdown and `docs/AUDIT_2026-09-05.md`'s "Phase 3:
+core-hackerai and core-pentest-swarm modules" (2026-09-28) and "VictorSuite
+added to the companion app fleet" (2026-09-29) addenda for status. Three
+repos, three different stages — don't re-derive this list, and don't
+inflate any entry's status past what those addenda actually say:
+
+- **`Victorious93/hackeraiETC`** ("HackerAI") — `core-hackerai` (this repo)
+  is a Kotlin port of its subagent-orchestration logic; the companion AIDL
+  binding it will eventually run over is still PLANNED.
+- **`Victorious93/Pentest-Swarm-AI`** (a fork of the AGPL-3.0
+  `Armur-Ai/Pentest-Swarm-AI` — keep that upstream attribution and license
+  intact) — `core-pentest-swarm` (this repo) is a real REST client for its
+  Go server (loopback, port 18080); needs that project's own companion APK
+  installed and its server running.
+- **`Victorious93/VictorSuite`** (GPL, Termux/ZeroTermux-derived) —
+  PLANNED only. No `core-victorsuite` module or bridge code exists; the
+  integration shape (most likely Termux-style `RUN_COMMAND`-intent, given
+  VictorSuite's own Termux lineage, but not yet decided) needs scoping via
+  Plan Mode before any code is written. Don't confuse this with the
+  already-implemented `core-termux` module, which talks to Termux itself,
+  not to VictorSuite.
+
 ---
 
 ## Consumer Product Roadmap (DroidCommand AI — App Layer)

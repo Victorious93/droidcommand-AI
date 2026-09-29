@@ -12,6 +12,14 @@ for the build/workspace pipeline specifically — this README will be
 rewritten to describe the finished product only once there is a finished
 product to describe.
 
+DroidCommand AI is also the hub of a small fleet of separate, independently
+licensed Android companion apps — `Victorious93/hackeraiETC`,
+`Victorious93/Pentest-Swarm-AI`, and `Victorious93/VictorSuite` — reached
+over a local IPC/network boundary rather than built into this repo. See
+[`CLAUDE.md`](CLAUDE.md#companion-app-fleet) and
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#8-companion-app-fleet-planned)
+for what's actually wired up today versus still planned.
+
 ## Current status
 
 Fourteen pure-Kotlin/JVM modules are implemented and tested:
