@@ -57,7 +57,9 @@ fun rankSkillsForTask(task: String, candidates: List<SubagentSkill>): List<Subag
 
     return candidates.mapIndexed { i, skill ->
         skill to cosine(taskVec, tfidfVector(skillDocs[i], idf))
-    }.sortedWith(compareByDescending<Pair<SubagentSkill, Double>> { it.second }
-        .thenBy { it.first.id })
+    }.sortedWith(
+        compareByDescending<Pair<SubagentSkill, Double>> { it.second }
+            .thenBy { it.first.id },
+    )
         .map { it.first }
 }
