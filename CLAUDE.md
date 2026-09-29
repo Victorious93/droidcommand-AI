@@ -275,21 +275,24 @@ faith, per findings noted inline.
   audit's VERIFIED IMPLEMENTED/PARTIAL/STUB/MISSING grading). Never mark
   something IMPLEMENTED unless `./gradlew test` passes for that
   module/slice; state exactly what was tested and what was not.
-- **Preserve all existing modules.** The 20 modules currently in
+- **Preserve all existing modules.** The 24 modules currently in
   `settings.gradle.kts` (`core-agent`, `core-llm`, `core-security`,
   `core-config`, `core-remote`, `core-build`, `core-tools-android`,
   `core-shell`, `core-apk-lifecycle`, `core-root`, `core-termux`,
   `core-llm-anthropic`, `core-llm-openai`, `core-llm-factory`,
   `core-build-local`, `core-build-remote`, `core-mcp`,
-  `core-integration-tests`, `cli`, `core-prompt-regen`) are source of truth.
-  New work wires to them; it doesn't rewrite them unless a real bug is
-  found. **Correction to an earlier draft of this section:** that draft
-  said "19 existing pure-JVM modules" and listed 13 of them, omitting
-  `core-llm-factory`, `core-mcp`, `core-integration-tests`, `cli`, and
-  `core-prompt-regen` entirely — that was a stale/incomplete snapshot, not
-  this repo's real state. Re-check `settings.gradle.kts` at the start of
-  each phase rather than trusting this count once it ages, per this file's
-  own standing rule above.
+  `core-integration-tests`, `cli`, `core-prompt-regen`,
+  `core-tools-metasploit`, `core-tools-setoolkit`, `core-hackerai`,
+  `core-pentest-swarm`) are source of truth. New work wires to them; it
+  doesn't rewrite them unless a real bug is found. **Correction to an
+  earlier draft of this section:** that draft said "19 existing pure-JVM
+  modules" and listed 13 of them, omitting `core-llm-factory`, `core-mcp`,
+  `core-integration-tests`, `cli`, and `core-prompt-regen` entirely — that
+  was a stale/incomplete snapshot, not this repo's real state. The four
+  security-tooling modules (`core-tools-metasploit`, `core-tools-setoolkit`,
+  `core-hackerai`, `core-pentest-swarm`) were added since then. Re-check
+  `settings.gradle.kts` at the start of each phase rather than trusting
+  this count once it ages, per this file's own standing rule above.
 - **ARCHITECTURE.md and AUDIT docs stay current.** Every phase that adds or
   changes a component updates `docs/ARCHITECTURE.md`'s status table and
   appends a dated entry to `docs/AUDIT_2026-09-05.md`, per this repo's
@@ -302,22 +305,26 @@ faith, per findings noted inline.
 ---
 
 ### Phase 0 — Android App Shell (Foundation)
-**Status:** NOT STARTED
-**Branch:** `feature/phase-0-android-shell`
+**Status:** ON DISK — NOT BUILD-VERIFIED (no Android SDK in this environment)
+**Branch:** `feature/phase-0-android-shell` (merged to `main` via PR #104)
 **Depends on:** nothing new — wires to existing `core-llm`, `core-agent`, `core-config`
 
-Adds the `app/` module: the first Android-SDK-dependent module in this
-repo (`docs/ARCHITECTURE.md`'s `app (Android shell)` row is currently
-PLANNED — no directory, Gradle file, or manifest exists yet, and this
-JVM-only environment has no Android SDK to build one; see that row and
-`cli`'s own row for the already-documented distinction between the two).
-A minimal, real, runnable APK: Hilt DI wired through, a Compose navigation
-skeleton, and stub screens only (no inference, no chat) — scaffolding for
-every later phase. `settings.gradle.kts` gets `include(":app")`.
+The `app/` module exists on disk with real Kotlin/Compose/Hilt source
+(Hilt DI, Compose navigation, stub screens for Chat/Home/Settings/Tools
+including the Metasploit and SET UI stubs). It is **not** included in
+`settings.gradle.kts` because this JVM-only environment has no Android
+SDK/AGP. It has never been build-verified — `./gradlew :app:assembleDebug`
+has not been run against it; the plugin/dependency versions in
+`app/build.gradle.kts` are best-effort starting points, not build-confirmed.
+See `docs/AUDIT_2026-09-05.md`'s `app/` row and the "Phase 0 Compose app
+scaffold" entry in PR #104 for the full record.
 
-**Acceptance:** `./gradlew :app:assembleDebug` succeeds; app launches on
-an emulator (API 26+) with stub screens; `./gradlew test` still passes
-across all 20 existing modules (zero regressions in anything above).
+**Acceptance (still unmet):** `./gradlew :app:assembleDebug` succeeds; app
+launches on an emulator (API 26+) with stub screens; `./gradlew test` still
+passes across all 24 existing JVM modules (zero regressions in anything above).
+This requires a real Android SDK — it cannot be verified in this JVM-only
+environment. The module inventory table below records `app` as
+ON DISK, EXCLUDED rather than IMPLEMENTED for exactly this reason.
 
 ---
 
