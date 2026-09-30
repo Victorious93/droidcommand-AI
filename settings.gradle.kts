@@ -24,6 +24,8 @@ include(":core-tools-metasploit")
 include(":core-tools-setoolkit")
 include(":core-hackerai")
 include(":core-pentest-swarm")
+include(":core-llm-google")
+include(":core-llm-groq")
 
 // The following modules are part of the target architecture (see
 // docs/ARCHITECTURE.md) but are intentionally not included in the build to

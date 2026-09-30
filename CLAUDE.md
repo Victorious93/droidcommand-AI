@@ -280,7 +280,7 @@ faith, per findings noted inline.
   audit's VERIFIED IMPLEMENTED/PARTIAL/STUB/MISSING grading). Never mark
   something IMPLEMENTED unless `./gradlew test` passes for that
   module/slice; state exactly what was tested and what was not.
-- **Preserve all existing modules.** The 24 modules currently in
+- **Preserve all existing modules.** The 26 modules currently in
   `settings.gradle.kts` (`core-agent`, `core-llm`, `core-security`,
   `core-config`, `core-remote`, `core-build`, `core-tools-android`,
   `core-shell`, `core-apk-lifecycle`, `core-root`, `core-termux`,
@@ -288,7 +288,7 @@ faith, per findings noted inline.
   `core-build-local`, `core-build-remote`, `core-mcp`,
   `core-integration-tests`, `cli`, `core-prompt-regen`,
   `core-tools-metasploit`, `core-tools-setoolkit`, `core-hackerai`,
-  `core-pentest-swarm`) are source of truth. New work wires to them; it
+  `core-pentest-swarm`, `core-llm-google`, `core-llm-groq`) are source of truth. New work wires to them; it
   doesn't rewrite them unless a real bug is found. **Correction to an
   earlier draft of this section:** that draft said "19 existing pure-JVM
   modules" and listed 13 of them, omitting `core-llm-factory`, `core-mcp`,
@@ -540,9 +540,9 @@ this project had specifically evaluated them.
 
 ---
 
-### Current module inventory (verified against `settings.gradle.kts`, 2026-09-29)
+### Current module inventory (verified against `settings.gradle.kts`, 2026-09-30)
 
-24 modules are wired into the build via `include(...)` in
+26 modules are wired into the build via `include(...)` in
 `settings.gradle.kts`. `app/` also exists on disk with real source but is
 deliberately **not** in `settings.gradle.kts` (gated on an Android SDK this
 environment does not have — see the excluded-module comment at the bottom of
@@ -574,9 +574,9 @@ environment does not have — see the excluded-module comment at the bottom of
 | core-tools-setoolkit | JVM | IMPLEMENTED |
 | core-hackerai | JVM | IMPLEMENTED |
 | core-pentest-swarm | JVM | IMPLEMENTED |
+| core-llm-google | JVM | IMPLEMENTED (added 2026-09-30, Phase 1) |
+| core-llm-groq | JVM | IMPLEMENTED (added 2026-09-30, Phase 1) |
 | app | Android | ON DISK, EXCLUDED (not build-verified — no Android SDK) |
-| core-llm-google | JVM | PLANNED (Phase 1) |
-| core-llm-groq | JVM | PLANNED (Phase 1) |
 | core-conversations | Android (Room) | PLANNED (Phase 1) |
 | core-llm-local | Android + NDK | PLANNED (Phase 2) |
 | core-voice | Android | PLANNED (Phase 4) |
