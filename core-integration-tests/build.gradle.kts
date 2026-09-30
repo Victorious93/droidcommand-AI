@@ -16,6 +16,9 @@ dependencies {
     testImplementation(project(":core-security"))
     testImplementation(project(":core-shell"))
     testImplementation(project(":core-root"))
+    // Developer-assistance features (docs/DEV_ASSIST.md): edit_file + git checkpoints, tested together.
+    testImplementation(project(":core-code-edit"))
+    testImplementation(project(":core-git"))
     testImplementation(kotlin("test"))
 }
 

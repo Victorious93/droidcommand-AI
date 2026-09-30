@@ -275,7 +275,7 @@ faith, per findings noted inline.
   audit's VERIFIED IMPLEMENTED/PARTIAL/STUB/MISSING grading). Never mark
   something IMPLEMENTED unless `./gradlew test` passes for that
   module/slice; state exactly what was tested and what was not.
-- **Preserve all existing modules.** The 24 modules currently in
+- **Preserve all existing modules.** The 27 modules currently in
   `settings.gradle.kts` (`core-agent`, `core-llm`, `core-security`,
   `core-config`, `core-remote`, `core-build`, `core-tools-android`,
   `core-shell`, `core-apk-lifecycle`, `core-root`, `core-termux`,
@@ -283,7 +283,7 @@ faith, per findings noted inline.
   `core-build-local`, `core-build-remote`, `core-mcp`,
   `core-integration-tests`, `cli`, `core-prompt-regen`,
   `core-tools-metasploit`, `core-tools-setoolkit`, `core-hackerai`,
-  `core-pentest-swarm`) are source of truth. New work wires to them; it
+  `core-pentest-swarm`, `core-code-edit`, `core-repo-map`, `core-git`) are source of truth. New work wires to them; it
   doesn't rewrite them unless a real bug is found. **Correction to an
   earlier draft of this section:** that draft said "19 existing pure-JVM
   modules" and listed 13 of them, omitting `core-llm-factory`, `core-mcp`,
@@ -321,7 +321,7 @@ scaffold" entry in PR #104 for the full record.
 
 **Acceptance (still unmet):** `./gradlew :app:assembleDebug` succeeds; app
 launches on an emulator (API 26+) with stub screens; `./gradlew test` still
-passes across all 24 existing JVM modules (zero regressions in anything above).
+passes across all 27 existing JVM modules (zero regressions in anything above).
 This requires a real Android SDK — it cannot be verified in this JVM-only
 environment. The module inventory table below records `app` as
 ON DISK, EXCLUDED rather than IMPLEMENTED for exactly this reason.
@@ -537,7 +537,7 @@ this project had specifically evaluated them.
 
 ### Current module inventory (verified against `settings.gradle.kts`, 2026-09-29)
 
-24 modules are wired into the build via `include(...)` in
+27 modules are wired into the build via `include(...)` in
 `settings.gradle.kts`. `app/` also exists on disk with real source but is
 deliberately **not** in `settings.gradle.kts` (gated on an Android SDK this
 environment does not have — see the excluded-module comment at the bottom of
@@ -569,6 +569,9 @@ environment does not have — see the excluded-module comment at the bottom of
 | core-tools-setoolkit | JVM | IMPLEMENTED |
 | core-hackerai | JVM | IMPLEMENTED |
 | core-pentest-swarm | JVM | IMPLEMENTED |
+| core-code-edit | JVM | ON DISK, IN BUILD — NOT GRADLE-VERIFIED (tests pass under kotlinc 2.0.21 + JUnit 4; see `docs/DEV_ASSIST.md`) |
+| core-git | JVM | ON DISK, IN BUILD — NOT GRADLE-VERIFIED (tests pass under kotlinc 2.0.21 + JUnit 4; see `docs/DEV_ASSIST.md`) |
+| core-repo-map | JVM | ON DISK, IN BUILD — NOT GRADLE-VERIFIED (lexical parser; tests pass under kotlinc 2.0.21 + JUnit 4; see `docs/DEV_ASSIST.md`) |
 | app | Android | ON DISK, EXCLUDED (not build-verified — no Android SDK) |
 | core-llm-google | JVM | PLANNED (Phase 1) |
 | core-llm-groq | JVM | PLANNED (Phase 1) |
