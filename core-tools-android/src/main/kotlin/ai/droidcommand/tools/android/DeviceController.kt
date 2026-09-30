@@ -48,4 +48,6 @@ interface DeviceController {
     fun mediaPrevious(): DeviceActionResult
     fun setVolume(levelPercent: Int): DeviceActionResult
     fun launchNavigation(destination: String, mode: NavigationMode): DeviceActionResult
+    fun listNotifications(): NotificationsResult
+    fun sendBroadcast(action: String, packageName: String?, extras: Map<String, String>): DeviceActionResult
 }

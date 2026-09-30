@@ -34,6 +34,8 @@ internal class ScriptedDeviceController(
     private val mediaPreviousResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
     private val setVolumeResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
     private val launchNavigationResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
+    private val notificationsResult: NotificationsResult = NotificationsResult.Failure("not scripted"),
+    private val sendBroadcastResult: DeviceActionResult = DeviceActionResult.Failure("not scripted"),
 ) : DeviceController {
     var tapCalls = mutableListOf<Pair<Int, Int>>()
         private set
@@ -82,6 +84,8 @@ internal class ScriptedDeviceController(
     var setVolumeCalls = mutableListOf<Int>()
         private set
     var launchNavigationCalls = mutableListOf<Pair<String, NavigationMode>>()
+        private set
+    var sendBroadcastCalls = mutableListOf<Triple<String, String?, Map<String, String>>>()
         private set
 
     override fun getUiTree(): UiTreeResult {
@@ -213,5 +217,12 @@ internal class ScriptedDeviceController(
     override fun launchNavigation(destination: String, mode: NavigationMode): DeviceActionResult {
         launchNavigationCalls += destination to mode
         return launchNavigationResult
+    }
+
+    override fun listNotifications(): NotificationsResult = notificationsResult
+
+    override fun sendBroadcast(action: String, packageName: String?, extras: Map<String, String>): DeviceActionResult {
+        sendBroadcastCalls += Triple(action, packageName, extras)
+        return sendBroadcastResult
     }
 }

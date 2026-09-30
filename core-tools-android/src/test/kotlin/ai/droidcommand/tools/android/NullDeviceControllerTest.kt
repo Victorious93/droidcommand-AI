@@ -104,4 +104,16 @@ class NullDeviceControllerTest {
     fun `launchNavigation fails explicitly`() {
         assertIs<DeviceActionResult.Failure>(device.launchNavigation("Central Park", NavigationMode.DRIVING))
     }
+
+    @Test
+    fun `listNotifications fails, explicitly, rather than returning a fabricated empty list`() {
+        val result = assertIs<NotificationsResult.Failure>(device.listNotifications())
+        assertTrue(result.reason.contains("no real device"))
+    }
+
+    @Test
+    fun `sendBroadcast fails explicitly rather than fabricating success`() {
+        val result = assertIs<DeviceActionResult.Failure>(device.sendBroadcast("com.example.TEST", null, emptyMap()))
+        assertTrue(result.reason.contains("no real device"))
+    }
 }

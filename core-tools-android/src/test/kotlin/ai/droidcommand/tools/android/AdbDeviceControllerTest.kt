@@ -96,6 +96,13 @@ class AdbDeviceControllerTest {
                 cat "$xmlFixturePath" ;;
               "rm /sdcard/window_dump.xml")
                 : ;;
+              "dumpsys notification")
+                echo "Current Notification Manager state:"
+                echo "  NotificationRecord{0x1a2b3c4d  pkg=com.example.messenger  id=5  tag=null  userId=0}"
+                echo "    some nested field"
+                echo "  NotificationRecord{0x5e6f7a8b  pkg=com.google.android.gm  id=12  tag=inbox  userId=0}"
+                echo "    some nested field"
+                ;;
               *)
                 exit 1 ;;
             esac
@@ -293,6 +300,7 @@ class AdbDeviceControllerTest {
             device.mediaPrevious(),
             device.setVolume(50),
             device.launchNavigation("home", NavigationMode.WALKING),
+            device.sendBroadcast("com.example.TEST", null, emptyMap()),
         )
         for (result in results) {
             val failure = assertIs<DeviceActionResult.Failure>(result)
@@ -306,5 +314,40 @@ class AdbDeviceControllerTest {
         assertIs<ContactsResult.Failure>(device.listContacts()).also { assertTrue(it.reason.contains("not yet implemented")) }
 
         assertTrue(!markerFile.exists(), "an unimplemented method must never invoke adb at all")
+    }
+
+    @Test
+    fun `listNotifications parses real dumpsys notification output into NotificationSummary records`() {
+        val result = assertIs<NotificationsResult.Success>(newController().listNotifications())
+        assertEquals(2, result.notifications.size)
+        assertEquals(NotificationSummary(packageName = "com.example.messenger", id = 5, tag = null), result.notifications[0])
+        assertEquals(NotificationSummary(packageName = "com.google.android.gm", id = 12, tag = "inbox"), result.notifications[1])
+    }
+
+    @Test
+    fun `listNotifications returns empty list when dumpsys has no NotificationRecord lines`() {
+        val adbPath = writeScript(
+            "adb-no-notifs",
+            """
+            #!/bin/sh
+            echo "Current Notification Manager state:"
+            echo "  mNotificationList:"
+            exit 0
+            """.trimIndent(),
+        )
+        val result = assertIs<NotificationsResult.Success>(newController(adbPath).listNotifications())
+        assertEquals(emptyList(), result.notifications)
+    }
+
+    @Test
+    fun `listNotifications fails cleanly when adb fails`() {
+        val adbPath = writeScript(
+            "adb-notif-fails",
+            """
+            #!/bin/sh
+            exit 1
+            """.trimIndent(),
+        )
+        assertIs<NotificationsResult.Failure>(newController(adbPath).listNotifications())
     }
 }
