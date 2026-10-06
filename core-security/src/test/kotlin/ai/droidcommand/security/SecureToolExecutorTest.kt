@@ -95,6 +95,40 @@ class SecureToolExecutorTest {
     }
 
     @Test
+    fun `approval prompt is shown the tool name and exact input, not only a generic reason`() {
+        val spec = ToolSpec(name = "delete-app", description = "d", securityLevel = SecurityLevel.SENSITIVE)
+        var seenTool: String? = null
+        var seenInput: Map<String, String>? = null
+        val prompt = object : ApprovalPrompt {
+            override fun requestApproval(reason: String): Boolean = error("reason-only form must not be what the executor calls")
+
+            override fun requestApproval(toolName: String, input: Map<String, String>, reason: String): Boolean {
+                seenTool = toolName
+                seenInput = input
+                return true
+            }
+        }
+        val (secure, tool, _, _) = newHarness(spec, SecurityPolicy(), approvalPrompt = prompt)
+
+        secure.run("delete-app", mapOf("package" to "com.example.victim"))
+
+        assertEquals("delete-app", seenTool)
+        assertEquals(mapOf("package" to "com.example.victim"), seenInput)
+        assertEquals(1, tool.invocations)
+    }
+
+    @Test
+    fun `a reason-only approval prompt still receives the reason through the default method`() {
+        val spec = ToolSpec(name = "delete-app", description = "d", securityLevel = SecurityLevel.SENSITIVE)
+        var seenReason: String? = null
+        val (secure, _, _, _) = newHarness(spec, SecurityPolicy(), approvalPrompt = ApprovalPrompt { seenReason = it; true })
+
+        secure.run("delete-app", mapOf("package" to "x"))
+
+        assertTrue(seenReason!!.contains("delete-app"))
+    }
+
+    @Test
     fun `denies and never invokes when a required permission is missing`() {
         val spec = ToolSpec(name = "record", description = "d", requiredPermissions = setOf("MICROPHONE"))
         val (secure, tool, _, _) = newHarness(spec, SecurityPolicy(grantedPermissions = emptySet()))

@@ -70,6 +70,8 @@ class SecureToolExecutor(
     private val auditLog: AuditLog? = null,
     private val logger: Logger = NoOpLogger,
 ) : ToolRunner {
+    private val grantLocks = Array(GRANT_LOCK_STRIPES) { Any() }
+
     override fun run(
         toolName: String,
         input: Map<String, String>,
@@ -107,7 +109,7 @@ class SecureToolExecutor(
 
             is PolicyDecision.RequireApproval -> {
                 stateMachine.transition(AgentState.AwaitingApproval(toolName, decision.reason))
-                if (!approvalPrompt.requestApproval(decision.reason)) {
+                if (!approvalPrompt.requestApproval(toolName, input, decision.reason)) {
                     return deny("User denied authorization: ${decision.reason}", AuditEventType.ACCESS_DENIED)
                 }
             }
@@ -115,45 +117,63 @@ class SecureToolExecutor(
             PolicyDecision.Allow -> Unit
         }
 
-        val capability = spec.grantCapability
-        if (capability != null) {
-            val store = grantStore ?: return deny(
-                "Tool '$toolName' requires a live grant for capability '$capability', but no grant store is configured",
-                AuditEventType.GRANT_DENIED,
+        return guardGrant(grantId, spec.grantCapability) {
+            val capability = spec.grantCapability
+            if (capability != null) {
+                val store = grantStore ?: return deny(
+                    "Tool '$toolName' requires a live grant for capability '$capability', but no grant store is configured",
+                    AuditEventType.GRANT_DENIED,
+                )
+                when (val check = store.check(grantId, capability)) {
+                    is GrantCheck.Denied -> return deny("Grant check failed for '$toolName': ${check.reason}", AuditEventType.GRANT_DENIED)
+                    GrantCheck.Live -> Unit
+                }
+            }
+
+            if (auditLog != null && spec.securityLevel != SecurityLevel.NORMAL) {
+                val recorded = auditLog.record(AuditEvent(AuditEventType.ACCESS_GRANTED, toolName, "authorized, invoking"))
+                if (!recorded) {
+                    return deny("Audit log is at capacity; refusing to run '$toolName' unaudited", AuditEventType.ACCESS_DENIED)
+                }
+            }
+
+            val result = delegate.run(toolName, input, retryPolicy, isCancelled, mode, effectiveInitiator)
+            logger.log(
+                LogEvent(
+                    levelFor(result),
+                    "secure_tool_result",
+                    mapOf("tool" to toolName, "outcome" to result::class.simpleName.orEmpty()),
+                ),
             )
-            when (val check = store.check(grantId, capability)) {
-                is GrantCheck.Denied -> return deny("Grant check failed for '$toolName': ${check.reason}", AuditEventType.GRANT_DENIED)
-                GrantCheck.Live -> Unit
+
+            if (capability != null && grantId != null && result is ToolResult.Success) {
+                grantStore?.consume(grantId)
+                auditLog?.record(AuditEvent(AuditEventType.GRANT_CONSUMED, toolName, "grant '$grantId' consumed after successful execution"))
             }
+
+            result
         }
+    }
 
-        if (auditLog != null && spec.securityLevel != SecurityLevel.NORMAL) {
-            val recorded = auditLog.record(AuditEvent(AuditEventType.ACCESS_GRANTED, toolName, "authorized, invoking"))
-            if (!recorded) {
-                return deny("Audit log is at capacity; refusing to run '$toolName' unaudited", AuditEventType.ACCESS_DENIED)
-            }
-        }
-
-        val result = delegate.run(toolName, input, retryPolicy, isCancelled, mode, effectiveInitiator)
-        logger.log(
-            LogEvent(
-                levelFor(result),
-                "secure_tool_result",
-                mapOf("tool" to toolName, "outcome" to result::class.simpleName.orEmpty()),
-            ),
-        )
-
-        if (capability != null && grantId != null && result is ToolResult.Success) {
-            grantStore?.consume(grantId)
-            auditLog?.record(AuditEvent(AuditEventType.GRANT_CONSUMED, toolName, "grant '$grantId' consumed after successful execution"))
-        }
-
-        return result
+    /**
+     * A single-use grant is checked, then the tool runs, then the grant is consumed — three steps that
+     * are not atomic against the store, so two concurrent calls with the same [grantId] could both
+     * pass the check before either consumes it. Serializing the whole window per grant id closes that
+     * (the second caller re-checks only after the first has consumed). Striped rather than one lock
+     * per id so a hostile peer supplying endless distinct ids cannot grow an unbounded lock map.
+     */
+    private inline fun <T> guardGrant(grantId: String?, capability: String?, block: () -> T): T {
+        if (capability == null || grantId == null) return block()
+        return synchronized(grantLocks[(grantId.hashCode() and Int.MAX_VALUE) % grantLocks.size], block)
     }
 
     private fun levelFor(result: ToolResult): LogLevel = when (result) {
         is ToolResult.Success, is ToolResult.Partial -> LogLevel.INFO
         is ToolResult.Unexpected -> LogLevel.WARN
         is ToolResult.Failure -> LogLevel.ERROR
+    }
+
+    private companion object {
+        const val GRANT_LOCK_STRIPES = 64
     }
 }

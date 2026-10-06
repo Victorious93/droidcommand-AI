@@ -63,8 +63,12 @@ re-verifying something.
 
 ## What's already been verified (don't re-derive)
 
-- This is a 20-module pure-Kotlin/JVM Gradle project (confirmed directly
-  against `settings.gradle.kts`; `core-mcp`, `core-integration-tests`
+- This is a 24-module pure-Kotlin/JVM Gradle project (confirmed directly
+  against `settings.gradle.kts` 2026-10-06; the enumeration that follows
+  stops at the 20th module, `core-prompt-regen` — the four security-tooling
+  modules `core-tools-metasploit`, `core-tools-setoolkit`, `core-hackerai`
+  and `core-pentest-swarm` came after it and are listed in the Consumer
+  Product Roadmap's module inventory below; `core-mcp`, `core-integration-tests`
   (a test-only module with no `src/main`, holding cross-module integration
   tests that need two sibling modules together — e.g. `core-shell` and
   `core-root`, neither of which depends on the other), `core-llm-factory`
