@@ -88,3 +88,14 @@ sealed class ContactsResult {
 }
 
 enum class NavigationMode { DRIVING, WALKING, BICYCLING, TRANSIT }
+
+data class NotificationSummary(
+    val packageName: String,
+    val id: Int,
+    val tag: String?,
+)
+
+sealed class NotificationsResult {
+    data class Success(val notifications: List<NotificationSummary>) : NotificationsResult()
+    data class Failure(val reason: String) : NotificationsResult()
+}

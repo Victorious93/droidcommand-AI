@@ -23,12 +23,14 @@ class ToolPermissionCategoryTest {
     }
 
     @Test
-    fun `system query tools are VIEW, network state is NETWORK, and clipboard splits by read vs write`() {
+    fun `system query tools are VIEW, network state is NETWORK, clipboard splits by read vs write, notifications and broadcast are SENSITIVE`() {
         assertEquals(PermissionCategory.VIEW, GetBatteryStatusTool(device).spec.permissionCategory)
         assertEquals(PermissionCategory.NETWORK, GetNetworkStateTool(device).spec.permissionCategory)
         assertEquals(PermissionCategory.VIEW, GetStorageInfoTool(device).spec.permissionCategory)
         assertEquals(PermissionCategory.VIEW, GetClipboardTool(device).spec.permissionCategory)
         assertEquals(PermissionCategory.DEVICE_CONTROL, SetClipboardTool(device).spec.permissionCategory)
+        assertEquals(PermissionCategory.VIEW, ListNotificationsTool(device).spec.permissionCategory)
+        assertEquals(PermissionCategory.DEVICE_CONTROL, SendBroadcastTool(device).spec.permissionCategory)
     }
 
     @Test

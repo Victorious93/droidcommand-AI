@@ -7,19 +7,12 @@ import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolSpec
 
 /**
- * System queries and the clipboard (ROADMAP-037 / master prompt Phase 5
- * "System": battery, network state, storage, clipboard — device info
- * already existed via [DeviceController.getDeviceInfo] before this file,
- * though no `Tool` wrapper for it exists yet either). Intents and
- * notifications, the other two items in the same master-prompt list, are
- * deliberately not covered here — their semantics (which intents are safe
- * to fire, how a notification listener would even be wired without an
- * Android app module) need more design than a mechanical extension of this
- * pattern, unlike the queries below. Reads are [SecurityLevel.NORMAL]
- * (metadata, no different in kind from [ListInstalledAppsTool]); clipboard
- * access is [SecurityLevel.SENSITIVE] in both directions, since a device's
- * clipboard can hold anything a user copied (credentials, tokens) and can
- * be used to inject content into whatever the user pastes into next.
+ * System queries, clipboard, notifications, and broadcast intents (ROADMAP-037 / master
+ * prompt Phase 5 "System"): battery, network state, storage, clipboard, notifications,
+ * and send_broadcast — device info already existed via [DeviceController.getDeviceInfo].
+ * Reads are [SecurityLevel.NORMAL] (metadata); clipboard and notification content are
+ * [SecurityLevel.SENSITIVE] (can hold credentials); broadcasting an intent is
+ * [SecurityLevel.SENSITIVE] (can trigger arbitrary side effects on the device).
  */
 class GetBatteryStatusTool(private val device: DeviceController) : Tool {
     override val spec = ToolSpec(
@@ -89,5 +82,54 @@ class SetClipboardTool(private val device: DeviceController) : Tool {
     override fun execute(input: Map<String, String>): ToolResult {
         val text = input["text"] ?: return ToolResult.Failure("Missing required input 'text'")
         return toToolResult(device.setClipboardText(text))
+    }
+}
+
+class ListNotificationsTool(private val device: DeviceController) : Tool {
+    override val spec = ToolSpec(
+        name = "list_notifications",
+        description = "Lists active notifications: package name, ID, and tag for each",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.VIEW,
+    )
+
+    override fun execute(input: Map<String, String>): ToolResult = when (val result = device.listNotifications()) {
+        is NotificationsResult.Success -> {
+            if (result.notifications.isEmpty()) {
+                ToolResult.Success("No active notifications")
+            } else {
+                ToolResult.Success(
+                    "${result.notifications.size} active notification(s):\n" +
+                        result.notifications.joinToString("\n") { n ->
+                            "  ${n.packageName} id=${n.id}${n.tag?.let { " tag=$it" } ?: ""}"
+                        },
+                )
+            }
+        }
+        is NotificationsResult.Failure -> ToolResult.Failure(result.reason)
+    }
+}
+
+class SendBroadcastTool(private val device: DeviceController) : Tool {
+    override val spec = ToolSpec(
+        name = "send_broadcast",
+        description = "Sends an Android broadcast intent; extras is optional 'key=value,key=value' pairs",
+        securityLevel = SecurityLevel.SENSITIVE,
+        permissionCategory = PermissionCategory.DEVICE_CONTROL,
+    )
+
+    override fun execute(input: Map<String, String>): ToolResult {
+        val action = input["action"] ?: return ToolResult.Failure("Missing required input 'action'")
+        val packageName = input["package_name"]
+        val extrasRaw = input["extras"] ?: ""
+        val extras = if (extrasRaw.isBlank()) {
+            emptyMap()
+        } else {
+            extrasRaw.split(",").mapNotNull { entry ->
+                val eq = entry.indexOf('=')
+                if (eq < 1) null else entry.substring(0, eq).trim() to entry.substring(eq + 1).trim()
+            }.toMap()
+        }
+        return toToolResult(device.sendBroadcast(action, packageName, extras))
     }
 }

@@ -227,6 +227,31 @@ class AdbDeviceController(
         return PngDimensions(widthPx = beUInt32(16), heightPx = beUInt32(20))
     }
 
+    /**
+     * Parses active notifications from `adb shell dumpsys notification` (read-only). Each
+     * `NotificationRecord` line carries `pkg=`, `id=`, and `tag=` fields on the same line —
+     * reliable across Android versions. Title and text are not extracted from the extras dump;
+     * they require per-line lookahead through `android.title=` / `android.text=` keys whose
+     * indentation and escaping differ by Android version.
+     */
+    override fun listNotifications(): NotificationsResult {
+        val output = successfulOutput("shell", "dumpsys", "notification")
+            ?: return NotificationsResult.Failure("Cannot list notifications: 'adb shell dumpsys notification' failed")
+        val notifications = output.lineSequence()
+            .filter { "NotificationRecord" in it }
+            .mapNotNull { line ->
+                val pkg = PKG_PATTERN.find(line)?.groupValues?.get(1) ?: return@mapNotNull null
+                val id = ID_PATTERN.find(line)?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
+                val tag = TAG_PATTERN.find(line)?.groupValues?.get(1)?.takeIf { it != "null" }
+                NotificationSummary(packageName = pkg, id = id, tag = tag)
+            }
+            .toList()
+        return NotificationsResult.Success(notifications)
+    }
+
+    override fun sendBroadcast(action: String, packageName: String?, extras: Map<String, String>) =
+        failure("send broadcast (mutating — not yet implemented; requires explicit owner sign-off per AdbDeviceController's safety-gate invariant for mutating actions)")
+
     private fun failure(action: String) = DeviceActionResult.Failure(notImplemented(action))
 
     override fun tap(x: Int, y: Int) = failure("tap")
@@ -261,6 +286,9 @@ class AdbDeviceController(
         val LEVEL_PATTERN = Regex("""level:\s*(-?\d+)""")
         val POWERED_PATTERN = Regex("""(?:AC|USB|Wireless) powered:\s*(true|false)""")
         val BOUNDS_PATTERN = Regex("""\[(-?\d+),(-?\d+)]\[(-?\d+),(-?\d+)]""")
+        val PKG_PATTERN = Regex("""pkg=(\S+)""")
+        val ID_PATTERN = Regex("""\bid=(-?\d+)""")
+        val TAG_PATTERN = Regex("""\btag=(\S+)""")
         val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
         const val SCREENSHOT_TIMEOUT_MILLIS = 15_000L
         const val MAX_SCREENSHOT_BYTES = 20_000_000L

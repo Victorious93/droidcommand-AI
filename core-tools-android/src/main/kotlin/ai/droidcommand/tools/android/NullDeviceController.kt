@@ -45,4 +45,6 @@ class NullDeviceController : DeviceController {
     override fun mediaPrevious() = failure("skip to the previous media track")
     override fun setVolume(levelPercent: Int) = failure("set volume to $levelPercent%")
     override fun launchNavigation(destination: String, mode: NavigationMode) = failure("launch navigation to '$destination' ($mode)")
+    override fun listNotifications() = NotificationsResult.Failure("Cannot list notifications: no real device is connected (NullDeviceController)")
+    override fun sendBroadcast(action: String, packageName: String?, extras: Map<String, String>) = failure("send broadcast '$action'")
 }
