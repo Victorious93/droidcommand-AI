@@ -95,6 +95,12 @@ DroidCommand AI
 │                            key loader and SharedPreferences storage are NOT built.
 │                            Design adapted from OpenDroid (Apache-2.0).
 │
+├── core-remote HttpUrlConnectionTransport (2026-10-07, Phase 1) — Android-safe
+│                            transport (java.net.http does not exist on Android);
+│                            JVM-tested only. core-llm-factory ChatSession +
+│                            CloudProviderCatalog — the JVM-tested chat core used
+│                            by the app's ChatViewModel.
+│
 ├── core-llm-google          GeminiLlmProvider (2026-10-07, Phase 1) — Gemini
 │                            generateContent / streamGenerateContent?alt=sse,
 │                            its own JSON shape (contents/parts,

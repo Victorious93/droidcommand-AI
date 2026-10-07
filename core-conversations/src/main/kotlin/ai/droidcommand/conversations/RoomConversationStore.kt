@@ -3,11 +3,13 @@ package ai.droidcommand.conversations
 import ai.droidcommand.agent.ConversationContext
 import ai.droidcommand.agent.ConversationStore
 import ai.droidcommand.agent.Role
+import android.content.Context
+import androidx.room.Room
 import java.io.IOException
 
 /**
  * Room-backed [ConversationStore] for Android — the persistent counterpart to
- * `core-agent.JsonFileConversationStore`. UNBUILT/UNTESTED (see build.gradle.kts).
+ * `core-agent.JsonFileConversationStore`. Compiles (2026-10-07e); see ConversationStoreTest for what is and is not tested.
  *
  * Same id rule as the JSON store (`[A-Za-z0-9_-]+`) so the two are interchangeable, and the same
  * load behaviour: messages are re-appended through [ConversationContext.append], so a stored
@@ -55,5 +57,11 @@ class RoomConversationStore(
 
     companion object {
         val ID_PATTERN = Regex("[A-Za-z0-9_-]+")
+
+        /** Opens (creating if needed) the app's conversation database. Keeps Room out of callers' dependencies. */
+        fun create(context: Context): RoomConversationStore {
+            val database = Room.databaseBuilder(context.applicationContext, ConversationDatabase::class.java, "conversations.db").build()
+            return RoomConversationStore(database.conversationDao())
+        }
     }
 }

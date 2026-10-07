@@ -13,7 +13,7 @@ import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
 
-// UNBUILT: written without an Android SDK; see build.gradle.kts. Schema shape (a conversation
+// Compiles (KSP/Room ran 2026-10-07e); DAO SQL is tested only via ConversationStoreTest if present. Schema shape (a conversation
 // row plus ordered message rows keyed by a conversation id, cascade delete) follows the pattern
 // in OpenDroid's chat_sessions/conversations tables (Apache-2.0), reduced to what
 // core-agent.ConversationStore actually stores (system prompt, token budget, role+content).

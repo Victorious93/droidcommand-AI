@@ -367,7 +367,7 @@ ON DISK, EXCLUDED rather than IMPLEMENTED for exactly this reason.
 ---
 
 ### Phase 1 — Multi-Provider Cloud BYOK (GPT, Claude, Gemini, Groq)
-**Status:** IN PROGRESS (started 2026-10-07 on owner go-ahead) — JVM half done: `core-llm-google` and `core-llm-groq` implemented and wired into `core-llm-factory` (`google`/`gemini`/`groq`). Android half: `core-conversations` (Room), Keystore vault glue and Settings key entry COMPILE (2026-10-07e) but are untested and never run; model picker and chat screen NOT STARTED. See the 2026-10-07 Phase 1 audit addendum.
+**Status:** IN PROGRESS (started 2026-10-07 on owner go-ahead) — JVM half done: `core-llm-google` and `core-llm-groq` implemented and wired into `core-llm-factory` (`google`/`gemini`/`groq`). Android half: Room store (8 JVM/Robolectric tests), Keystore vault glue, Settings key entry, model picker and streaming chat screen COMPILE and `:app:assembleDebug` succeeds; chat core is JVM-tested against mock servers (2026-10-07f). Never launched on a device, never called a live API. See the 2026-10-07 Phase 1 audit addendum.
 **Branch:** `feature/phase-1-cloud-providers`
 **Depends on:** Phase 0, existing `core-llm-anthropic`, `core-llm-openai`
 
@@ -613,7 +613,7 @@ environment does not have — see the excluded-module comment at the bottom of
 | app | Android | ON DISK, opt-in via includeAndroid (assembleDebug verified 2026-10-07; never run on a device) |
 | core-llm-google | JVM | IMPLEMENTED (mock-tested, not live-verified) |
 | core-llm-groq | JVM | IMPLEMENTED (mock-tested, not live-verified) |
-| core-conversations | Android (Room) | ON DISK, opt-in (compiles; no tests, never run) |
+| core-conversations | Android (Room) | ON DISK, opt-in (8 Robolectric tests pass; never run on a device) |
 | core-llm-local | Android + NDK | PLANNED (Phase 2) |
 | core-voice | Android | PLANNED (Phase 4) |
 

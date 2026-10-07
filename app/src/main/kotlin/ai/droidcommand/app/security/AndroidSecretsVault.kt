@@ -11,7 +11,7 @@ import java.security.KeyStore
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 
-// UNBUILT/UNTESTED: written without an Android SDK. The Keystore key parameters and the
+// Compiles (2026-10-07e); never run on a device. The Keystore key parameters and the
 // commit()-for-durability storage follow OpenDroid's KeystoreSecretStorage (Apache-2.0); all
 // envelope/AAD/fail-closed logic lives in the JVM-tested core-config.EncryptedSecretsVault.
 

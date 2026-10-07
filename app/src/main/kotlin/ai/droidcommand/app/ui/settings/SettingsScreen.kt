@@ -1,5 +1,7 @@
 package ai.droidcommand.app.ui.settings
 
+import ai.droidcommand.llm.factory.CloudProviderCatalog
+import ai.droidcommand.llm.factory.CloudProviderSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,7 +41,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     ) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall)
         Text("API keys (stored encrypted on this device)", style = MaterialTheme.typography.titleMedium)
-        KeyedProvider.entries.forEach { provider ->
+        CloudProviderCatalog.all.forEach { provider ->
             ApiKeyRow(
                 provider = provider,
                 status = status[provider] ?: KeyStatus.NOT_SET,
@@ -51,7 +53,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun ApiKeyRow(provider: KeyedProvider, status: KeyStatus, onSave: (String) -> Unit, onClear: () -> Unit) {
+private fun ApiKeyRow(provider: CloudProviderSpec, status: KeyStatus, onSave: (String) -> Unit, onClear: () -> Unit) {
     // Not rememberSaveable: a typed-but-unsaved key must not be written into the saved-instance Bundle.
     var input by remember { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
