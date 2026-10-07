@@ -307,6 +307,12 @@ faith, per findings noted inline.
   work; treat this override as specific to Consumer Roadmap phases.
 - **One phase at a time.** Don't start Phase N+1 until the human approves
   Phase N.
+- **After every push, ask about a PR.** Standing instruction from the project
+  owner (2026-10-07): whenever you push an update to the remote, end your
+  reply by asking whether they want a pull request opened — or, if one is
+  already open for the branch, say that the push updated it and ask whether
+  they also want a new one. Asking is not opening: still never open a PR
+  until they say so.
 - **No fabricated completions.** Every file delivered must be genuine,
   compilable, tested Kotlin — this is the same honesty convention this repo
   already applies everywhere else (`Null*`/`Mock*` self-documentation, the
