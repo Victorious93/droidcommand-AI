@@ -8,6 +8,8 @@ import ai.droidcommand.llm.AiProviderInfo
 import ai.droidcommand.llm.LlmConfig
 import ai.droidcommand.llm.ProviderType
 import ai.droidcommand.llm.anthropic.AnthropicLlmProvider
+import ai.droidcommand.llm.google.GeminiLlmProvider
+import ai.droidcommand.llm.groq.GroqLlmProvider
 import ai.droidcommand.llm.openai.OpenAiLlmProvider
 import ai.droidcommand.remote.HttpRequestSpec
 import ai.droidcommand.remote.HttpResponseSpec
@@ -41,6 +43,17 @@ class LlmProviderFactoryTest {
     fun `openai provider builds an OpenAiLlmProvider`() {
         val registered = LlmProviderFactory.build(configured("p1", "openai"), FakeHttpTransport())
         assertIs<OpenAiLlmProvider>(registered.provider)
+    }
+
+    @Test
+    fun `google and its gemini alias build a GeminiLlmProvider`() {
+        assertIs<GeminiLlmProvider>(LlmProviderFactory.build(configured("p1", "google"), FakeHttpTransport()).provider)
+        assertIs<GeminiLlmProvider>(LlmProviderFactory.build(configured("p2", "Gemini"), FakeHttpTransport()).provider)
+    }
+
+    @Test
+    fun `groq provider builds a GroqLlmProvider`() {
+        assertIs<GroqLlmProvider>(LlmProviderFactory.build(configured("p1", "groq"), FakeHttpTransport()).provider)
     }
 
     @Test

@@ -85,6 +85,18 @@ DroidCommand AI
 │                            tool_use_id for Anthropic's native tool_result
 │                            block.
 │
+├── core-llm-google          GeminiLlmProvider (2026-10-07, Phase 1) — Gemini
+│                            generateContent / streamGenerateContent?alt=sse,
+│                            its own JSON shape (contents/parts,
+│                            systemInstruction, functionCall). Key sent as
+│                            x-goog-api-key (never ?key=). Tested against a
+│                            local mock server only; NOT verified live.
+│
+├── core-llm-groq            GroqLlmProvider (2026-10-07, Phase 1) — delegates
+│                            to OpenAiLlmProvider with Groq's
+│                            https://api.groq.com/openai base URL; no
+│                            duplicated wire logic. Mock-server tested only.
+│
 ├── core-llm-openai          OpenAiLlmProvider — a second real LlmProvider,
 │                            speaking the OpenAI Chat Completions API
 │                            shape that OpenAI itself serves and that most

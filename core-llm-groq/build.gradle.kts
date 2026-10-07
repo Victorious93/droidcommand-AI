@@ -9,12 +9,8 @@ repositories {
 dependencies {
     implementation(project(":core-agent"))
     implementation(project(":core-llm"))
-    implementation(project(":core-config"))
     implementation(project(":core-remote"))
-    implementation(project(":core-llm-anthropic"))
     implementation(project(":core-llm-openai"))
-    implementation(project(":core-llm-google"))
-    implementation(project(":core-llm-groq"))
     testImplementation(kotlin("test"))
 }
 
