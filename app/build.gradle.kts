@@ -12,10 +12,19 @@
 // bump them via the IDE's own upgrade-assistant) before this module is
 // added to `settings.gradle.kts` and built for real.
 plugins {
-    id("com.android.application") version "8.7.2"
-    id("org.jetbrains.kotlin.android") version "2.4.10"
-    id("com.google.devtools.ksp") version "2.4.10-1.0.28"
-    id("com.google.dagger.hilt.android") version "2.56.2"
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    // Kotlin 2.x requires the Compose compiler Gradle plugin (matched to the Kotlin version).
+    id("org.jetbrains.kotlin.plugin.compose")
+    // KSP versions are independent of the Kotlin version since 2.3.x (2.3.12 was the latest on
+    // Maven Central when checked, 2026-10-07). Compatibility with Kotlin 2.4.10 is UNVERIFIED.
+    id("com.google.devtools.ksp")
+    id("com.google.dagger.hilt.android")
+}
+
+repositories {
+    google()
+    mavenCentral()
 }
 
 android {
@@ -39,9 +48,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
-    kotlinOptions {
-        jvmTarget = "21"
-    }
 }
 
 dependencies {
@@ -50,6 +56,11 @@ dependencies {
     // Roadmap's "preserve all existing modules" rule.
     implementation(project(":core-agent"))
     implementation(project(":core-security"))
+    implementation(project(":core-config"))
+    implementation(project(":core-conversations"))
+    implementation(project(":core-llm"))
+    implementation(project(":core-remote"))
+    implementation(project(":core-llm-factory"))
     implementation(project(":core-shell"))
     implementation(project(":core-root"))
     implementation(project(":core-termux"))
@@ -73,11 +84,22 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.core:core-ktx:1.15.0")
 
-    implementation("com.google.dagger:hilt-android:2.56.2")
-    ksp("com.google.dagger:hilt-android-compiler:2.56.2")
+    implementation("com.google.dagger:hilt-android:2.58")
+    ksp("com.google.dagger:hilt-android-compiler:2.58")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation(kotlin("test"))
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+
+// Hilt 2.58 bundles a kotlin-metadata-jvm that reads metadata only up to Kotlin 2.3; this module is
+// compiled with Kotlin 2.4. Newer Hilt needs AGP 9. Forcing a newer metadata reader is the
+// workaround Hilt's own error message names.
+configurations.all {
+    resolutionStrategy.force("org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.10")
 }

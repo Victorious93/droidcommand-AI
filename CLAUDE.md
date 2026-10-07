@@ -343,7 +343,7 @@ faith, per findings noted inline.
 ---
 
 ### Phase 0 — Android App Shell (Foundation)
-**Status:** ON DISK — NOT BUILD-VERIFIED (no Android SDK in this environment)
+**Status:** ON DISK — `:app:assembleDebug` VERIFIED 2026-10-07 (2026-10-07e addendum); NOT launched/tested on a device or emulator. Android modules are opt-in: add `includeAndroid=true` to user-level `~/.gradle/gradle.properties` and set `ANDROID_HOME`.
 **Branch:** `feature/phase-0-android-shell` (merged to `main` via PR #104)
 **Depends on:** nothing new — wires to existing `core-llm`, `core-agent`, `core-config`
 
@@ -367,7 +367,7 @@ ON DISK, EXCLUDED rather than IMPLEMENTED for exactly this reason.
 ---
 
 ### Phase 1 — Multi-Provider Cloud BYOK (GPT, Claude, Gemini, Groq)
-**Status:** IN PROGRESS (started 2026-10-07 on owner go-ahead) — JVM half done: `core-llm-google` and `core-llm-groq` implemented and wired into `core-llm-factory` (`google`/`gemini`/`groq`). Android-gated half (`core-conversations` Room storage, `KeystoreSecretsVault`, Settings key entry, model picker, chat screen) NOT STARTED — needs an Android SDK. See the 2026-10-07 Phase 1 audit addendum.
+**Status:** IN PROGRESS (started 2026-10-07 on owner go-ahead) — JVM half done: `core-llm-google` and `core-llm-groq` implemented and wired into `core-llm-factory` (`google`/`gemini`/`groq`). Android half: Room store (8 JVM/Robolectric tests), Keystore vault glue, Settings key entry, model picker and streaming chat screen COMPILE and `:app:assembleDebug` succeeds; chat core is JVM-tested against mock servers (2026-10-07f). Never launched on a device, never called a live API. See the 2026-10-07 Phase 1 audit addendum.
 **Branch:** `feature/phase-1-cloud-providers`
 **Depends on:** Phase 0, existing `core-llm-anthropic`, `core-llm-openai`
 
@@ -608,10 +608,10 @@ environment does not have — see the excluded-module comment at the bottom of
 | core-hackerai | JVM | IMPLEMENTED |
 | core-pentest-swarm | JVM | IMPLEMENTED |
 | core-rootforge | JVM | IMPLEMENTED (passive operations only; 2026-10-07) |
-| app | Android | ON DISK, EXCLUDED (not build-verified — no Android SDK) |
+| app | Android | ON DISK, opt-in via includeAndroid (assembleDebug verified 2026-10-07; never run on a device) |
 | core-llm-google | JVM | IMPLEMENTED (mock-tested, not live-verified) |
 | core-llm-groq | JVM | IMPLEMENTED (mock-tested, not live-verified) |
-| core-conversations | Android (Room) | PLANNED (Phase 1) |
+| core-conversations | Android (Room) | ON DISK, opt-in (8 Robolectric tests pass; never run on a device) |
 | core-llm-local | Android + NDK | PLANNED (Phase 2) |
 | core-voice | Android | PLANNED (Phase 4) |
 

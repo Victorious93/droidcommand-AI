@@ -85,6 +85,22 @@ DroidCommand AI
 │                            tool_use_id for Anthropic's native tool_result
 │                            block.
 │
+├── core-config EncryptedSecretsVault (2026-10-07, Phase 1) — SecretsVault that
+│                            keeps every secret AES-256/GCM-encrypted at rest
+│                            (v1.<iv>.<ct> envelope, AAD bound to the secret id,
+│                            fail-closed getSecret, SecretState for re-entry
+│                            prompts). Cipher/storage are interfaces: JceAesGcmCipher
+│                            takes a SecretKey supplier, so an Android Keystore key
+│                            plugs in later. JVM-tested only; the Android Keystore
+│                            key loader and SharedPreferences storage are NOT built.
+│                            Design adapted from OpenDroid (Apache-2.0).
+│
+├── core-remote HttpUrlConnectionTransport (2026-10-07, Phase 1) — Android-safe
+│                            transport (java.net.http does not exist on Android);
+│                            JVM-tested only. core-llm-factory ChatSession +
+│                            CloudProviderCatalog — the JVM-tested chat core used
+│                            by the app's ChatViewModel.
+│
 ├── core-llm-google          GeminiLlmProvider (2026-10-07, Phase 1) — Gemini
 │                            generateContent / streamGenerateContent?alt=sse,
 │                            its own JSON shape (contents/parts,
