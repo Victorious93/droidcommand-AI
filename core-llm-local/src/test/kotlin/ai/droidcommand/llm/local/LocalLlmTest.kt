@@ -3,11 +3,15 @@ package ai.droidcommand.llm.local
 import ai.droidcommand.agent.Message
 import ai.droidcommand.agent.Role
 import ai.droidcommand.agent.Task
+import ai.droidcommand.agent.ToolSpec
 import ai.droidcommand.llm.AiProviderInfo
 import ai.droidcommand.llm.DefaultAiProviderSelector
+import ai.droidcommand.llm.LlmConfig
 import ai.droidcommand.llm.LlmError
+import ai.droidcommand.llm.LlmProvider
 import ai.droidcommand.llm.LlmRequest
 import ai.droidcommand.llm.LlmResponse
+import ai.droidcommand.llm.ModelRouter
 import ai.droidcommand.llm.ProviderPreferences
 import ai.droidcommand.llm.ProviderType
 import ai.droidcommand.llm.RegisteredProvider
@@ -98,10 +102,36 @@ class LocalLlmTest {
         assertIs<LlmError.ModelUnavailable>((unknown as LlmResponse.Error).error)
     }
 
-    @Test fun `tools and structured output are rejected not ignored`() {
-        val p = LocalLlmProvider("m", repo(), FakeBackend())
+    @Test fun `tools and structured output are refused as ModelUnavailable and never reach the backend`() {
+        val backend = FakeBackend()
+        val p = LocalLlmProvider("m", repo(), backend)
+        val withTools = p.complete(req.copy(tools = listOf(ToolSpec("t", "d"))))
         val withFormat = p.complete(req.copy(responseFormat = ai.droidcommand.llm.ResponseFormat.Json))
-        assertIs<LlmError.InvalidResponse>((withFormat as LlmResponse.Error).error)
+        assertIs<LlmError.ModelUnavailable>((withTools as LlmResponse.Error).error)
+        assertIs<LlmError.ModelUnavailable>((withFormat as LlmResponse.Error).error)
+        assertEquals(0, backend.loads)
+        assertNull(backend.lastRequest)
+    }
+
+    @Test fun `a local-first router falls back to cloud for tool requests instead of failing`() {
+        var cloudCalls = 0
+        val cloud = object : LlmProvider {
+            override val config = LlmConfig("cloud", "c")
+            override fun complete(request: LlmRequest): LlmResponse {
+                cloudCalls++
+                return LlmResponse.ToolCall("t", emptyMap())
+            }
+        }
+        val toolReq = req.copy(tools = listOf(ToolSpec("t", "d")))
+
+        val routed = ModelRouter(listOf(LocalLlmProvider("m", repo(), FakeBackend()), cloud)).complete(toolReq)
+        assertIs<LlmResponse.ToolCall>(routed)
+        assertEquals(1, cloudCalls)
+
+        // Plain chat is still served locally and never touches the cloud provider.
+        val plain = ModelRouter(listOf(LocalLlmProvider("m", repo(), FakeBackend()), cloud)).complete(req)
+        assertEquals(LlmResponse.Text("Hello"), plain)
+        assertEquals(1, cloudCalls)
     }
 
     @Test fun `backend failure maps to error`() {
@@ -125,6 +155,25 @@ class LocalLlmTest {
         assertEquals(500, r.loadMillis)
         assertEquals(10, r.tokensGenerated)
         assertEquals(5.0, r.tokensPerSecond, 1e-9)
+    }
+
+    @Test fun `benchmark does not count unload time as generation time`() {
+        var now = 0L
+        val backend = object : InferenceBackend {
+            override val kind = BackendKind.CPU
+            override fun load(modelPath: String, contextTokens: Int) {}
+            override fun generate(request: GenerationRequest, onToken: (String) -> Boolean) {
+                repeat(10) {
+                    now += 100_000_000L // 10 tokens in exactly 1.0 s
+                    onToken("t")
+                }
+            }
+            override fun unload() {
+                now += 1_000_000_000L // a slow 1.0 s unload must not change the result
+            }
+        }
+        val r = ModelBenchmark { now }.run(backend, "p", 512)
+        assertEquals(10.0, r.tokensPerSecond, 1e-9)
     }
 
     @Test fun `selector filters on measured speed and excludes unmeasured`() {

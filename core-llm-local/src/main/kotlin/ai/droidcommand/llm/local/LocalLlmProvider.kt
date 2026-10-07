@@ -13,8 +13,13 @@ import ai.droidcommand.llm.StreamingLlmProvider
  * yields [LlmError.ModelUnavailable] and never reaches the backend.
  *
  * Tool calls and structured output are not supported (llama.cpp grammar /
- * tool parsing is not implemented): requests asking for either get
- * [LlmError.InvalidResponse] instead of silently ignoring them. Calls are
+ * tool parsing is not implemented): requests asking for either are refused
+ * rather than silently ignored, with [LlmError.ModelUnavailable] — NOT
+ * [LlmError.InvalidResponse]. The distinction matters to
+ * [ai.droidcommand.llm.ModelRouter]: it falls back to the next provider on
+ * `ModelUnavailable` but never on `InvalidResponse`, and the agent planner
+ * always sends tools, so a local-first router would otherwise fail every
+ * planning request instead of using its cloud provider. Calls are
  * serialized, since a loaded native context is not safe to share.
  */
 class LocalLlmProvider(
@@ -74,7 +79,7 @@ class LocalLlmProvider(
     }
 
     private fun unsupported(what: String) =
-        LlmResponse.Error(LlmError.InvalidResponse("Local provider does not support $what"))
+        LlmResponse.Error(LlmError.ModelUnavailable("Local provider cannot serve requests that need $what"))
 
     companion object {
         const val DEFAULT_MAX_TOKENS = 512
