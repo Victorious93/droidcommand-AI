@@ -50,6 +50,8 @@ dependencies {
     // Roadmap's "preserve all existing modules" rule.
     implementation(project(":core-agent"))
     implementation(project(":core-security"))
+    implementation(project(":core-config"))
+    implementation(project(":core-conversations"))
     implementation(project(":core-shell"))
     implementation(project(":core-root"))
     implementation(project(":core-termux"))

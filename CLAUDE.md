@@ -367,7 +367,7 @@ ON DISK, EXCLUDED rather than IMPLEMENTED for exactly this reason.
 ---
 
 ### Phase 1 — Multi-Provider Cloud BYOK (GPT, Claude, Gemini, Groq)
-**Status:** IN PROGRESS (started 2026-10-07 on owner go-ahead) — JVM half done: `core-llm-google` and `core-llm-groq` implemented and wired into `core-llm-factory` (`google`/`gemini`/`groq`). Android-gated half (`core-conversations` Room storage, `KeystoreSecretsVault`, Settings key entry, model picker, chat screen) NOT STARTED — needs an Android SDK. See the 2026-10-07 Phase 1 audit addendum.
+**Status:** IN PROGRESS (started 2026-10-07 on owner go-ahead) — JVM half done: `core-llm-google` and `core-llm-groq` implemented and wired into `core-llm-factory` (`google`/`gemini`/`groq`). Android half: `core-conversations` (Room), Keystore vault glue and Settings key entry are WRITTEN BUT UNBUILT (2026-10-07c addendum); model picker and chat screen NOT STARTED. See the 2026-10-07 Phase 1 audit addendum.
 **Branch:** `feature/phase-1-cloud-providers`
 **Depends on:** Phase 0, existing `core-llm-anthropic`, `core-llm-openai`
 
@@ -611,7 +611,7 @@ environment does not have — see the excluded-module comment at the bottom of
 | app | Android | ON DISK, EXCLUDED (not build-verified — no Android SDK) |
 | core-llm-google | JVM | IMPLEMENTED (mock-tested, not live-verified) |
 | core-llm-groq | JVM | IMPLEMENTED (mock-tested, not live-verified) |
-| core-conversations | Android (Room) | PLANNED (Phase 1) |
+| core-conversations | Android (Room) | ON DISK, EXCLUDED (not build-verified) |
 | core-llm-local | Android + NDK | PLANNED (Phase 2) |
 | core-voice | Android | PLANNED (Phase 4) |
 
