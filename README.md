@@ -20,6 +20,17 @@ over a local IPC/network boundary rather than built into this repo. See
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#8-companion-app-fleet-planned)
 for what's actually wired up today versus still planned.
 
+DCA is evaluating `Victorious93/Kai`'s feature set (chat, memory, provider
+routing, local inference, MCP client, skills, tasks/heartbeat, a Linux
+sandbox, generated UI, personal tools) as a **feature and behavior
+reference** — never a build or runtime dependency — for capabilities DCA
+should offer through its own architecture. See
+[`docs/KAI_INTEGRATION.md`](docs/KAI_INTEGRATION.md) for the evidence-based
+capability map, [`docs/KAI_INTEGRATION_PLAN.md`](docs/KAI_INTEGRATION_PLAN.md)
+for the phased plan, and
+[`docs/CAPABILITY_REPAIR_AUDIT.md`](docs/CAPABILITY_REPAIR_AUDIT.md) for the
+architectural-independence self-audit against those two documents.
+
 ## Current status
 
 Fourteen pure-Kotlin/JVM modules are implemented and tested:

@@ -7,6 +7,10 @@ import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolSpec
+import ai.droidcommand.security.ApprovalPrompt
+import ai.droidcommand.security.SecureToolExecutor
+import ai.droidcommand.security.SecurityPolicy
+import ai.droidcommand.security.SecurityPolicyEnforcer
 import io.modelcontextprotocol.kotlin.sdk.client.Client
 import io.modelcontextprotocol.kotlin.sdk.client.ClientOptions
 import io.modelcontextprotocol.kotlin.sdk.client.StdioClientTransport
@@ -166,16 +170,53 @@ class McpToolServerTest {
     }
 
     @Test
-    fun `string and number arguments reach the tool as strings, a nested array argument is dropped`() {
+    fun `string and number arguments reach the tool as strings`() {
         val tool = EchoInputTool()
         val registry = ToolRegistry().apply { register(tool) }
         val executor = ToolExecutor(registry, AgentStateMachine())
         val mcpServer = McpToolServer(registry, executor)
 
         withMcpClient(mcpServer) { client ->
-            val result = client.callTool("echo", mapOf("text" to "hi", "count" to 3, "tags" to listOf("a", "b")))
+            val result = client.callTool("echo", mapOf("text" to "hi", "count" to 3))
             val content = assertIs<TextContent>(result.content.single())
             assertEquals("count=3, text=hi", content.text)
+        }
+    }
+
+    @Test
+    fun `a nested array or object argument is preserved as its JSON text form, not dropped`() {
+        val tool = EchoInputTool()
+        val registry = ToolRegistry().apply { register(tool) }
+        val executor = ToolExecutor(registry, AgentStateMachine())
+        val mcpServer = McpToolServer(registry, executor)
+
+        withMcpClient(mcpServer) { client ->
+            val result = client.callTool(
+                "echo",
+                mapOf("tags" to listOf("a", "b"), "meta" to mapOf("k" to "v")),
+            )
+            val content = assertIs<TextContent>(result.content.single())
+            assertEquals("""meta={"k":"v"}, tags=["a","b"]""", content.text)
+        }
+    }
+
+    @Test
+    fun `executor accepts a real SecureToolExecutor, not only the plain ToolExecutor`() {
+        val registry = ToolRegistry().apply { register(FixedResultTool("greet", ToolResult.Success("hi"))) }
+        val secureExecutor = SecureToolExecutor(
+            registry = registry,
+            delegate = ToolExecutor(registry, AgentStateMachine()),
+            stateMachine = AgentStateMachine(),
+            enforcer = SecurityPolicyEnforcer(SecurityPolicy()),
+            approvalPrompt = ApprovalPrompt { false },
+        )
+        val mcpServer = McpToolServer(registry, secureExecutor)
+
+        withMcpClient(mcpServer) { client ->
+            val result = client.callTool("greet", emptyMap())
+            assertEquals(false, result.isError)
+            val content = assertIs<TextContent>(result.content.single())
+            assertEquals("hi", content.text)
         }
     }
 

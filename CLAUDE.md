@@ -60,6 +60,32 @@ re-verifying something.
   layers have any real code backing them), and the entry's own priority
   recommendation is `CAP-001` (Context Manager) as the correct next build
   target, per the roadmap's own P0-first dependency-ordering rule.
+- **`docs/KAI_INTEGRATION.md`** / **`docs/KAI_INTEGRATION_PLAN.md`** /
+  **`docs/CAPABILITY_REPAIR_AUDIT.md`** — the project owner's "integrate
+  `Victorious93/Kai`'s useful capabilities into DCA" prompt and its
+  corrected-intent follow-up (2026-10-07). The map document holds one
+  `KAI-###` row per capability (chat, memory, personality, provider
+  routing, local inference, MCP client, skills, tasks/heartbeat, Linux
+  sandbox, Kai Build, generated UI, personal tools, data portability,
+  Splinterlands), each read against Kai's own `docs/features/*.md` and
+  decided against DCA's existing architecture — **architectural
+  independence with selective, licensed reuse**, not a merge: DCA's build
+  and runtime do not require a Kai checkout or running Kai service, and
+  nothing here claims a formal clean-room process (Kai's docs/source were
+  read directly; adaptation is tracked with attribution instead — see
+  that document's own Licensing section for why the distinction matters).
+  The plan document maps the capability map onto 6 dependency-ordered
+  phases, all NOT STARTED except Phase 0's one concrete, tested item: `core-mcp.McpToolServer`'s
+  executor is now typed as `core-agent.ToolRunner` (so it accepts
+  `core-security.SecureToolExecutor`, not only the bare `ToolExecutor`),
+  and a JSON array/object MCP tool-call argument is now preserved as its
+  JSON text form instead of silently dropped. The repair-audit document
+  is a self-audit against the corrected intent, written in the same
+  session as the map/plan (there was no prior commit to recover) — it
+  found and fixed one real defect (the clean-room mischaracterization
+  above) and no others. Same governance gate as the Consumer Product
+  Roadmap below applies: Phase 1 onward needs the owner's go-ahead before
+  implementation starts.
 
 ## What's already been verified (don't re-derive)
 
@@ -341,7 +367,7 @@ ON DISK, EXCLUDED rather than IMPLEMENTED for exactly this reason.
 ---
 
 ### Phase 1 — Multi-Provider Cloud BYOK (GPT, Claude, Gemini, Groq)
-**Status:** NOT STARTED
+**Status:** IN PROGRESS (started 2026-10-07 on owner go-ahead) — JVM half done: `core-llm-google` and `core-llm-groq` implemented and wired into `core-llm-factory` (`google`/`gemini`/`groq`). Android-gated half (`core-conversations` Room storage, `KeystoreSecretsVault`, Settings key entry, model picker, chat screen) NOT STARTED — needs an Android SDK. See the 2026-10-07 Phase 1 audit addendum.
 **Branch:** `feature/phase-1-cloud-providers`
 **Depends on:** Phase 0, existing `core-llm-anthropic`, `core-llm-openai`
 
@@ -583,8 +609,8 @@ environment does not have — see the excluded-module comment at the bottom of
 | core-pentest-swarm | JVM | IMPLEMENTED |
 | core-rootforge | JVM | IMPLEMENTED (passive operations only; 2026-10-07) |
 | app | Android | ON DISK, EXCLUDED (not build-verified — no Android SDK) |
-| core-llm-google | JVM | PLANNED (Phase 1) |
-| core-llm-groq | JVM | PLANNED (Phase 1) |
+| core-llm-google | JVM | IMPLEMENTED (mock-tested, not live-verified) |
+| core-llm-groq | JVM | IMPLEMENTED (mock-tested, not live-verified) |
 | core-conversations | Android (Room) | PLANNED (Phase 1) |
 | core-llm-local | Android + NDK | PLANNED (Phase 2) |
 | core-voice | Android | PLANNED (Phase 4) |
