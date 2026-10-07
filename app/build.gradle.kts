@@ -81,8 +81,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.core:core-ktx:1.15.0")
 
-    implementation("com.google.dagger:hilt-android:2.56.2")
-    ksp("com.google.dagger:hilt-android-compiler:2.56.2")
+    implementation("com.google.dagger:hilt-android:2.58")
+    ksp("com.google.dagger:hilt-android-compiler:2.58")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
@@ -92,4 +92,11 @@ dependencies {
 
 kotlin {
     jvmToolchain(21)
+}
+
+// Hilt 2.58 bundles a kotlin-metadata-jvm that reads metadata only up to Kotlin 2.3; this module is
+// compiled with Kotlin 2.4. Newer Hilt needs AGP 9. Forcing a newer metadata reader is the
+// workaround Hilt's own error message names.
+configurations.all {
+    resolutionStrategy.force("org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.10")
 }

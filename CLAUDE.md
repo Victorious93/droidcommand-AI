@@ -343,7 +343,7 @@ faith, per findings noted inline.
 ---
 
 ### Phase 0 — Android App Shell (Foundation)
-**Status:** ON DISK — NOT BUILD-VERIFIED (no Android SDK in this environment)
+**Status:** ON DISK — `:app:assembleDebug` VERIFIED 2026-10-07 (2026-10-07e addendum); NOT launched/tested on a device or emulator. Android modules are opt-in: add `includeAndroid=true` to user-level `~/.gradle/gradle.properties` and set `ANDROID_HOME`.
 **Branch:** `feature/phase-0-android-shell` (merged to `main` via PR #104)
 **Depends on:** nothing new — wires to existing `core-llm`, `core-agent`, `core-config`
 
@@ -367,7 +367,7 @@ ON DISK, EXCLUDED rather than IMPLEMENTED for exactly this reason.
 ---
 
 ### Phase 1 — Multi-Provider Cloud BYOK (GPT, Claude, Gemini, Groq)
-**Status:** IN PROGRESS (started 2026-10-07 on owner go-ahead) — JVM half done: `core-llm-google` and `core-llm-groq` implemented and wired into `core-llm-factory` (`google`/`gemini`/`groq`). Android half: `core-conversations` (Room), Keystore vault glue and Settings key entry are WRITTEN BUT UNBUILT (2026-10-07c addendum); model picker and chat screen NOT STARTED. See the 2026-10-07 Phase 1 audit addendum.
+**Status:** IN PROGRESS (started 2026-10-07 on owner go-ahead) — JVM half done: `core-llm-google` and `core-llm-groq` implemented and wired into `core-llm-factory` (`google`/`gemini`/`groq`). Android half: `core-conversations` (Room), Keystore vault glue and Settings key entry COMPILE (2026-10-07e) but are untested and never run; model picker and chat screen NOT STARTED. See the 2026-10-07 Phase 1 audit addendum.
 **Branch:** `feature/phase-1-cloud-providers`
 **Depends on:** Phase 0, existing `core-llm-anthropic`, `core-llm-openai`
 
@@ -609,9 +609,11 @@ environment does not have — see the excluded-module comment at the bottom of
 | core-pentest-swarm | JVM | IMPLEMENTED |
 | core-rootforge | JVM | IMPLEMENTED (passive operations only; 2026-10-07) |
 | app | Android | ON DISK, EXCLUDED (not build-verified — no Android SDK) |
+
+| app | Android | ON DISK, opt-in via includeAndroid (assembleDebug verified 2026-10-07; never run on a device) |
 | core-llm-google | JVM | IMPLEMENTED (mock-tested, not live-verified) |
 | core-llm-groq | JVM | IMPLEMENTED (mock-tested, not live-verified) |
-| core-conversations | Android (Room) | ON DISK, EXCLUDED (not build-verified) |
+| core-conversations | Android (Room) | ON DISK, opt-in (compiles; no tests, never run) |
 | core-llm-local | Android + NDK | PLANNED (Phase 2) |
 | core-voice | Android | PLANNED (Phase 4) |
 

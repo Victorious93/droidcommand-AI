@@ -8,7 +8,7 @@ pluginManagement {
         id("org.jetbrains.kotlin.android") version "2.4.10"
         id("org.jetbrains.kotlin.plugin.compose") version "2.4.10"
         id("com.google.devtools.ksp") version "2.3.12"
-        id("com.google.dagger.hilt.android") version "2.56.2"
+        id("com.google.dagger.hilt.android") version "2.58"
     }
     repositories {
         gradlePluginPortal()
