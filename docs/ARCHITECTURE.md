@@ -113,6 +113,16 @@ DroidCommand AI
 │                            https://api.groq.com/openai base URL; no
 │                            duplicated wire logic. Mock-server tested only.
 │
+├── core-llm-local           LocalLlmProvider (2026-10-07, Phase 2, JVM slice only) —
+│                            ProviderType.LOCAL StreamingLlmProvider over an
+│                            InferenceBackend seam; ModelRepository with
+│                            SHA-256 verify-before-load; BackendSelector
+│                            (CPU/OpenCL/Vulkan); ModelBenchmark. Tested
+│                            against FAKE backends only. NO llama.cpp, JNI,
+│                            NDK or real inference exists — PLANNED/BLOCKED
+│                            (no Android SDK/NDK). Not wired into
+│                            core-llm-factory (needs an on-device backend).
+│
 ├── core-llm-openai          OpenAiLlmProvider — a second real LlmProvider,
 │                            speaking the OpenAI Chat Completions API
 │                            shape that OpenAI itself serves and that most

@@ -22,6 +22,8 @@ data class ProviderPreferences(
     val requireLocal: Boolean = false,
     /** A provider whose [AiProviderInfo.cost] is `null` cannot be verified to meet this and is excluded, not assumed to pass. */
     val maxCostPerMillionInputTokens: Double? = null,
+    /** A provider with no [AiProviderInfo.measuredTokensPerSecond] cannot be verified to meet this and is excluded. */
+    val minTokensPerSecond: Double? = null,
 )
 
 /**
@@ -83,6 +85,10 @@ class DefaultAiProviderSelector(
                 (
                     preferences.maxCostPerMillionInputTokens == null ||
                         (info.cost != null && info.cost.inputPerMillionTokens <= preferences.maxCostPerMillionInputTokens)
+                ) &&
+                (
+                    preferences.minTokensPerSecond == null ||
+                        (info.measuredTokensPerSecond != null && info.measuredTokensPerSecond >= preferences.minTokensPerSecond)
                 )
         }
 

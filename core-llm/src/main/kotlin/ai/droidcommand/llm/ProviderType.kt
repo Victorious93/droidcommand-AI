@@ -49,6 +49,8 @@ data class AiProviderInfo(
     val available: Boolean = true,
     val cost: Cost? = null,
     val capabilities: Set<ProviderCapability> = emptySet(),
+    /** Caller-supplied measurement (e.g. from `core-llm-local`'s `ModelBenchmark`); never inferred. */
+    val measuredTokensPerSecond: Double? = null,
 )
 
 /** Pairs a real [LlmProvider] with its declared [info]. */
