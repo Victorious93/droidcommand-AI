@@ -29,6 +29,20 @@ Both companions are **optional and independently installable**. If a companion
 is absent, its `CapabilityHealthChecker` returns `REQUIRES_EXTERNAL_SERVICE`
 and DCA's tools (`HackerAiTool`, `SwarmTool.*`) return `ToolResult.Failure`.
 
+## External nodes are not companions (RootForge)
+
+Everything in this document — AIDL binding, signature permissions, and the
+`DependencyGuard` below — describes **dependent companion APKs**, which exist to
+extend DCA and are meant to stop working without it.
+
+**RootForge OS is the opposite kind of integration and is exempt from all of it.**
+It is an independent product (own CLI, runtime, workspaces) that DCA may *optionally*
+control over an authenticated SSH-carried JSON protocol (`core-rootforge`; see
+`docs/ROOTFORGE_INTEGRATION.md`). Never add a `DependencyGuard`, an AIDL contract, a
+signature-permission bind, or an "install DCA first" check to RootForge. A RootForge
+node that DCA cannot reach, or that DCA has never paired with, loses nothing; removing
+DCA must not disable any RootForge feature.
+
 ## Security Model
 
 ### OS-level enforcement (signature permission)

@@ -151,6 +151,7 @@ internal fun buildSession(
     approvalPrompt: ApprovalPrompt = ConsoleApprovalPrompt,
     device: AdbDeviceConfig? = AdbDeviceConfig.fromEnvironment(),
 ): CliSession {
+    val rootForge = rootForgeTools()
     val registry = ToolRegistry().apply {
         register(EchoTool())
         register(ShellTool(ProcessBuilderShellExecutor(shellSecurityPolicy())))
@@ -159,10 +160,15 @@ internal fun buildSession(
         register(BuildTool(buildPipeline(), ::buildRequestFromInput))
         register(MetasploitTool(metasploitExecutorFor()))
         register(SetTool(setExecutorFor()))
+        rootForge.forEach { register(it) }
     }
     val stateMachine = AgentStateMachine()
     val delegate = ToolExecutor(registry, stateMachine)
-    val policy = SecurityPolicy(grantedCategories = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK))
+    // REMOTE_CONTROL is granted only when the operator explicitly configured RootForge nodes; the
+    // tools are still SENSITIVE, so each call also goes through the approval prompt.
+    val granted = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK) +
+        (if (rootForge.isEmpty()) emptySet() else setOf(PermissionCategory.REMOTE_CONTROL))
+    val policy = SecurityPolicy(grantedCategories = granted)
     val secure = SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(policy), approvalPrompt)
     return CliSession(DroidCommandSession(registry, secure, stateMachine), registry)
 }
