@@ -12,6 +12,8 @@ import ai.droidcommand.llm.LocalFirstOrdering
 import ai.droidcommand.llm.ModelRouter
 import ai.droidcommand.llm.RegisteredProvider
 import ai.droidcommand.llm.anthropic.AnthropicLlmProvider
+import ai.droidcommand.llm.google.GeminiLlmProvider
+import ai.droidcommand.llm.groq.GroqLlmProvider
 import ai.droidcommand.llm.openai.OpenAiLlmProvider
 import ai.droidcommand.remote.HttpTransport
 
@@ -60,8 +62,8 @@ object LlmProviderFactory {
      * [configured]'s `config.provider` (case-insensitive, matching
      * [MultiLlmConfigLoader]'s own case-insensitive `_TYPE`/`_CAPABILITIES`
      * parsing), paired with [configured]'s own [ConfiguredLlmProvider.info]
-     * into a [RegisteredProvider]. Only `"anthropic"`/`"openai"` are
-     * recognized — the only two concrete providers this repository has;
+     * into a [RegisteredProvider]. Only `"anthropic"`/`"openai"`/`"google"` (alias
+     * `"gemini"`)/`"groq"` are recognized — the only concrete providers this repository has;
      * anything else throws [UnknownLlmProviderException] naming both the
      * bad value and the known set, rather than silently skipping it.
      */
@@ -69,8 +71,10 @@ object LlmProviderFactory {
         val provider = when (configured.config.provider.lowercase()) {
             "anthropic" -> AnthropicLlmProvider(configured.config, transport)
             "openai" -> OpenAiLlmProvider(configured.config, transport)
+            "google", "gemini" -> GeminiLlmProvider(configured.config, transport)
+            "groq" -> GroqLlmProvider(configured.config, transport)
             else -> throw UnknownLlmProviderException(
-                "Unknown provider '${configured.config.provider}' for '${configured.info.id}'; expected one of anthropic, openai",
+                "Unknown provider '${configured.config.provider}' for '${configured.info.id}'; expected one of anthropic, openai, google (alias gemini), groq",
             )
         }
         return RegisteredProvider(configured.info, provider)
