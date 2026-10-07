@@ -113,6 +113,13 @@ DroidCommand AI
 │                            https://api.groq.com/openai base URL; no
 │                            duplicated wire logic. Mock-server tested only.
 │
+├── core-templates           PromptTemplate/TemplateEngine ({{var}} expansion),
+│                            Skill/SkillApplier, bundled 20 templates + 5
+│                            skills, idempotent seeding (2026-10-07, Phase 3,
+│                            JVM half only). In-memory stores only; Room
+│                            storage and the bottom-sheet pickers are Android
+│                            and NOT built.
+│
 ├── core-llm-local           LocalLlmProvider (2026-10-07, Phase 2, JVM slice only) —
 │                            ProviderType.LOCAL StreamingLlmProvider over an
 │                            InferenceBackend seam; ModelRepository with
