@@ -19,6 +19,7 @@ class ModelBenchmark(private val nanoTime: () -> Long = System::nanoTime) {
         backend.load(modelPath, contextTokens)
         val t1 = nanoTime()
         var count = 0
+        var t2 = t1
         try {
             backend.generate(
                 GenerationRequest(null, listOf(Message(Role.USER, "Count from one to one hundred.")), maxTokens, 0.0),
@@ -26,10 +27,11 @@ class ModelBenchmark(private val nanoTime: () -> Long = System::nanoTime) {
                 count++
                 true
             }
+            // Stop the clock before unload(): releasing a native model can take real time and is not generation.
+            t2 = nanoTime()
         } finally {
             backend.unload()
         }
-        val t2 = nanoTime()
         val genSeconds = (t2 - t1) / 1e9
         return BenchmarkResult((t1 - t0) / 1_000_000, count, if (genSeconds > 0) count / genSeconds else 0.0)
     }

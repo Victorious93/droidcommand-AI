@@ -401,7 +401,7 @@ against a local mock server, never a live API.
 ---
 
 ### Phase 2 — Local Model Inference (llama.cpp / GGUF)
-**Status:** IN PROGRESS — JVM slice `core-llm-local` merged (fake-backend tested); native llama.cpp/JNI BLOCKED (no NDK). Distribution decided: dynamic feature module (see 2026-10-07 addendum).
+**Status:** JVM SLICE ON `main` (PR #119, 2026-10-07; reviewed and fixed 2026-10-07g) — `core-llm-local` (`LocalLlmProvider`, SHA-256-verifying `ModelRepository`, `BackendSelector`, `ModelBenchmark`) tested against FAKE backends only. NO llama.cpp, JNI, NDK build or real inference exists; the Android/NDK half is NOT STARTED and BLOCKED (no NDK). Not wired into `core-llm-factory` or the app. Distribution decided: dynamic feature module (see 2026-10-07 addendum).
 **Branch:** `feature/phase-2-local-inference`
 **Depends on:** Phase 1
 
@@ -618,7 +618,7 @@ environment does not have — see the excluded-module comment at the bottom of
 | core-llm-google | JVM | IMPLEMENTED (mock-tested, not live-verified) |
 | core-llm-groq | JVM | IMPLEMENTED (mock-tested, not live-verified) |
 | core-conversations | Android (Room) | ON DISK, opt-in (8 Robolectric tests pass; never run on a device) |
-| core-llm-local | Android + NDK | PLANNED (Phase 2) |
+| core-llm-local | JVM (backend seam) | IMPLEMENTED (JVM slice, fake-backend tested; no llama.cpp/JNI/NDK) |
 | core-voice | Android | PLANNED (Phase 4) |
 
 **Correction to earlier drafts of this table:** the 2026-09-14 draft
