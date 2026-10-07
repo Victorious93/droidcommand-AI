@@ -7,9 +7,14 @@
 // `./gradlew :core-conversations:test` (and a connectedAndroidTest for the
 // DAO) has actually passed.
 plugins {
-    id("com.android.library") version "8.7.2"
-    id("org.jetbrains.kotlin.android") version "2.4.10"
-    id("com.google.devtools.ksp") version "2.4.10-1.0.28"
+    id("com.android.library")
+    id("org.jetbrains.kotlin.android")
+    id("com.google.devtools.ksp")
+}
+
+repositories {
+    google()
+    mavenCentral()
 }
 
 android {
@@ -25,9 +30,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
-    kotlinOptions {
-        jvmTarget = "21"
-    }
 }
 
 dependencies {
@@ -37,4 +39,8 @@ dependencies {
     testImplementation(kotlin("test"))
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
+}
+
+kotlin {
+    jvmToolchain(21)
 }
