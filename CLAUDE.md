@@ -401,7 +401,7 @@ against a local mock server, never a live API.
 ---
 
 ### Phase 2 — Local Model Inference (llama.cpp / GGUF)
-**Status:** NOT STARTED
+**Status:** IN PROGRESS — JVM slice `core-llm-local` merged (fake-backend tested); native llama.cpp/JNI BLOCKED (no NDK). Distribution decided: dynamic feature module (see 2026-10-07 addendum).
 **Branch:** `feature/phase-2-local-inference`
 **Depends on:** Phase 1
 
@@ -471,7 +471,7 @@ downloaded model SHA-256-checked before load.
 ---
 
 ### Phase 3 — Prompt Templates + Skill Builder
-**Status:** NOT STARTED
+**Status:** IN PROGRESS — JVM half `core-templates` done (in-memory only); Room storage and pickers NOT STARTED (need Android SDK). `Skill` kept separate from `Persona` (see 2026-10-07 addendum).
 **Branch:** `feature/phase-3-templates-skills`
 **Depends on:** Phase 1
 
