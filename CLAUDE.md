@@ -608,8 +608,6 @@ environment does not have — see the excluded-module comment at the bottom of
 | core-hackerai | JVM | IMPLEMENTED |
 | core-pentest-swarm | JVM | IMPLEMENTED |
 | core-rootforge | JVM | IMPLEMENTED (passive operations only; 2026-10-07) |
-| app | Android | ON DISK, EXCLUDED (not build-verified — no Android SDK) |
-
 | app | Android | ON DISK, opt-in via includeAndroid (assembleDebug verified 2026-10-07; never run on a device) |
 | core-llm-google | JVM | IMPLEMENTED (mock-tested, not live-verified) |
 | core-llm-groq | JVM | IMPLEMENTED (mock-tested, not live-verified) |
