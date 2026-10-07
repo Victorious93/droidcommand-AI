@@ -60,6 +60,32 @@ re-verifying something.
   layers have any real code backing them), and the entry's own priority
   recommendation is `CAP-001` (Context Manager) as the correct next build
   target, per the roadmap's own P0-first dependency-ordering rule.
+- **`docs/KAI_INTEGRATION.md`** / **`docs/KAI_INTEGRATION_PLAN.md`** /
+  **`docs/CAPABILITY_REPAIR_AUDIT.md`** — the project owner's "integrate
+  `Victorious93/Kai`'s useful capabilities into DCA" prompt and its
+  corrected-intent follow-up (2026-10-07). The map document holds one
+  `KAI-###` row per capability (chat, memory, personality, provider
+  routing, local inference, MCP client, skills, tasks/heartbeat, Linux
+  sandbox, Kai Build, generated UI, personal tools, data portability,
+  Splinterlands), each read against Kai's own `docs/features/*.md` and
+  decided against DCA's existing architecture — **architectural
+  independence with selective, licensed reuse**, not a merge: DCA's build
+  and runtime do not require a Kai checkout or running Kai service, and
+  nothing here claims a formal clean-room process (Kai's docs/source were
+  read directly; adaptation is tracked with attribution instead — see
+  that document's own Licensing section for why the distinction matters).
+  The plan document maps the capability map onto 6 dependency-ordered
+  phases, all NOT STARTED except Phase 0's one concrete, tested item: `core-mcp.McpToolServer`'s
+  executor is now typed as `core-agent.ToolRunner` (so it accepts
+  `core-security.SecureToolExecutor`, not only the bare `ToolExecutor`),
+  and a JSON array/object MCP tool-call argument is now preserved as its
+  JSON text form instead of silently dropped. The repair-audit document
+  is a self-audit against the corrected intent, written in the same
+  session as the map/plan (there was no prior commit to recover) — it
+  found and fixed one real defect (the clean-room mischaracterization
+  above) and no others. Same governance gate as the Consumer Product
+  Roadmap below applies: Phase 1 onward needs the owner's go-ahead before
+  implementation starts.
 
 ## What's already been verified (don't re-derive)
 
