@@ -21,6 +21,7 @@ dependencies {
     implementation(project(":core-prompt-regen"))
     implementation(project(":core-tools-metasploit"))
     implementation(project(":core-tools-setoolkit"))
+    implementation(project(":core-rootforge"))
     testImplementation(kotlin("test"))
 }
 

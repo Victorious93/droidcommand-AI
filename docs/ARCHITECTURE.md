@@ -1144,3 +1144,17 @@ contract/logic; the fleet apps themselves are out of scope for
 device-only component named PLANNED/BLOCKED elsewhere in this doc.
 VictorSuite is the one fleet member with no dedicated bridge module at
 all, by design — see its row above.
+
+## 9. RootForge node client (added 2026-10-07 — RF-DCA-1)
+
+`core-rootforge` is a JVM module wired into `settings.gradle.kts` and `cli`. It is **not** a
+companion APK module and is outside Section 8's `DependencyGuard`/AIDL model by design:
+RootForge OS is an independent product that DCA may optionally control. Full record:
+`docs/ROOTFORGE_INTEGRATION.md`.
+
+| Component | Status | Notes |
+|---|---|---|
+| core-rootforge | IMPLEMENTED (passive operations only) | `BridgeRequest`/`BridgeResponse` (protocol major 1), `RootForgeNodeConfig` (pinned SSH host key, exact `node_id`), `SshRootForgeTransport` (system OpenSSH, strict host-key pinning), `ProcessRootForgeTransport`, `RootForgeClient` (checks correlation id, protocol major, node identity), `RootForgeNodeRegistry` (exact-id lookup, no fail-over), `rootforge_capabilities` / `rootforge_list_devices` tools (`SENSITIVE`, `REMOTE_CONTROL`). JVM/CLI only — no Android SSH transport. Unit tests plus a real-OpenSSH integration test against RootForge's actual bridge (opt-in via `ROOTFORGE_IT_NODES_FILE`). |
+| `cli` RootForge wiring | IMPLEMENTED | Opt-in via `DROIDCOMMAND_CLI_ROOTFORGE_NODES_FILE`; unset registers nothing. |
+| Build/job/artifact/terminal/flash operations | MISSING | Not exposed; see the doc's gates. |
+| `ExecutionRouter` exact-node selection | MISSING | Not needed by the passive slice. |

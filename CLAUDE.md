@@ -89,8 +89,11 @@ re-verifying something.
 
 ## What's already been verified (don't re-derive)
 
-- This is a 24-module pure-Kotlin/JVM Gradle project (confirmed directly
-  against `settings.gradle.kts` 2026-10-06; the enumeration that follows
+- This is a 25-module pure-Kotlin/JVM Gradle project (confirmed directly
+  against `settings.gradle.kts` 2026-10-07 — `core-rootforge`, the optional
+  RootForge node client, is the 25th and was added after the 2026-10-06
+  count of 24; the enumeration below predates it, and was first confirmed
+  2026-10-06; the enumeration that follows
   stops at the 20th module, `core-prompt-regen` — the four security-tooling
   modules `core-tools-metasploit`, `core-tools-setoolkit`, `core-hackerai`
   and `core-pentest-swarm` came after it and are listed in the Consumer
@@ -310,7 +313,7 @@ faith, per findings noted inline.
   audit's VERIFIED IMPLEMENTED/PARTIAL/STUB/MISSING grading). Never mark
   something IMPLEMENTED unless `./gradlew test` passes for that
   module/slice; state exactly what was tested and what was not.
-- **Preserve all existing modules.** The 24 modules currently in
+- **Preserve all existing modules.** The 24 modules (plus `core-rootforge`, added 2026-10-07 — 25 total) currently in
   `settings.gradle.kts` (`core-agent`, `core-llm`, `core-security`,
   `core-config`, `core-remote`, `core-build`, `core-tools-android`,
   `core-shell`, `core-apk-lifecycle`, `core-root`, `core-termux`,
@@ -356,7 +359,7 @@ scaffold" entry in PR #104 for the full record.
 
 **Acceptance (still unmet):** `./gradlew :app:assembleDebug` succeeds; app
 launches on an emulator (API 26+) with stub screens; `./gradlew test` still
-passes across all 24 existing JVM modules (zero regressions in anything above).
+passes across all existing JVM modules (24 when this was written; 25 with `core-rootforge`) (zero regressions in anything above).
 This requires a real Android SDK — it cannot be verified in this JVM-only
 environment. The module inventory table below records `app` as
 ON DISK, EXCLUDED rather than IMPLEMENTED for exactly this reason.
@@ -572,7 +575,7 @@ this project had specifically evaluated them.
 
 ### Current module inventory (verified against `settings.gradle.kts`, 2026-09-29)
 
-24 modules are wired into the build via `include(...)` in
+25 modules are wired into the build via `include(...)` in
 `settings.gradle.kts`. `app/` also exists on disk with real source but is
 deliberately **not** in `settings.gradle.kts` (gated on an Android SDK this
 environment does not have — see the excluded-module comment at the bottom of
@@ -604,6 +607,7 @@ environment does not have — see the excluded-module comment at the bottom of
 | core-tools-setoolkit | JVM | IMPLEMENTED |
 | core-hackerai | JVM | IMPLEMENTED |
 | core-pentest-swarm | JVM | IMPLEMENTED |
+| core-rootforge | JVM | IMPLEMENTED (passive operations only; 2026-10-07) |
 | app | Android | ON DISK, EXCLUDED (not build-verified — no Android SDK) |
 | core-llm-google | JVM | IMPLEMENTED (mock-tested, not live-verified) |
 | core-llm-groq | JVM | IMPLEMENTED (mock-tested, not live-verified) |
@@ -624,6 +628,17 @@ Re-verify against `settings.gradle.kts` before trusting this table further
 into the future, per this file's own standing rule.
 
 ---
+
+## RootForge OS (external node — NOT a companion)
+
+`core-rootforge` (2026-10-07) lets DCA optionally ask an independently installed RootForge
+OS machine questions (capabilities, attached adb/fastboot devices) over an SSH-carried JSON
+protocol. RootForge is an independent product: it is **exempt from the companion
+`DependencyGuard`** and from the AIDL/signature-permission model below — never add either to
+it. Read `docs/ROOTFORGE_INTEGRATION.md` before touching the module; the canonical protocol
+lives in the `rootforge-os` repo (`docs/DROIDCOMMAND_INTEGRATION.md`). Only passive reads
+exist; flashing, restore, builds, jobs and terminals are deliberately absent until RootForge
+repairs the gates listed there.
 
 ## Companion APK Integration
 
