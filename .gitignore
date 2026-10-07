@@ -5,3 +5,6 @@
 *.iml
 .idea/
 local.properties
+
+# Locally built APKs handed to the user for sideloading; never commit binaries.
+/dist/

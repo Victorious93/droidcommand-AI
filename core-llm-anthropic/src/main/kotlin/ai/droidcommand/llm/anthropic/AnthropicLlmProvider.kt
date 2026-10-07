@@ -16,13 +16,13 @@ import ai.droidcommand.remote.RemoteClient
 import ai.droidcommand.remote.RemoteEndpoint
 import ai.droidcommand.remote.RemoteResult
 import ai.droidcommand.remote.ServerSentEventParser
+import ai.droidcommand.remote.isTimeoutFailure
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import java.net.http.HttpTimeoutException
 
 /**
  * A real [LlmProvider] backed by Anthropic's Messages API, built on
@@ -280,7 +280,7 @@ class AnthropicLlmProvider(
         failure.statusCode == 401 || failure.statusCode == 403 -> LlmError.Authentication(failure.reason)
         failure.statusCode == 429 || failure.statusCode in 500..599 -> LlmError.ModelUnavailable(failure.reason)
         failure.statusCode != null -> LlmError.InvalidResponse(failure.reason)
-        failure.cause is HttpTimeoutException -> LlmError.Timeout(failure.reason)
+        failure.cause.isTimeoutFailure() -> LlmError.Timeout(failure.reason)
         else -> LlmError.Network(failure.reason)
     }
 

@@ -6,6 +6,13 @@ import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.app.approval.ComposeApprovalPrompt
+import ai.droidcommand.app.security.createAndroidSecretsVault
+import ai.droidcommand.agent.ConversationStore
+import ai.droidcommand.config.EncryptedSecretsVault
+import ai.droidcommand.conversations.RoomConversationStore
+import ai.droidcommand.remote.HttpTransport
+import ai.droidcommand.remote.HttpUrlConnectionTransport
+import android.content.Context
 import ai.droidcommand.metasploit.MetasploitTool
 import ai.droidcommand.metasploit.NullMetasploitExecutor
 import ai.droidcommand.root.NullRootExecutor
@@ -24,6 +31,7 @@ import ai.droidcommand.termux.TermuxTool
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -71,6 +79,20 @@ object AppModule {
         register(MetasploitTool(NullMetasploitExecutor()))
         register(SetTool(NullSetExecutor()))
     }
+
+    /** Phase 1: Keystore-backed secrets (API keys). UNBUILT — see security/AndroidSecretsVault.kt. */
+    @Provides
+    @Singleton
+    fun provideSecretsVault(@ApplicationContext context: Context): EncryptedSecretsVault = createAndroidSecretsVault(context)
+
+    @Provides
+    @Singleton
+    fun provideConversationStore(@ApplicationContext context: Context): ConversationStore = RoomConversationStore.create(context)
+
+    /** java.net.http (JdkHttpTransport) does not exist on Android; HttpURLConnection does. */
+    @Provides
+    @Singleton
+    fun provideHttpTransport(): HttpTransport = HttpUrlConnectionTransport()
 
     @Provides
     @Singleton

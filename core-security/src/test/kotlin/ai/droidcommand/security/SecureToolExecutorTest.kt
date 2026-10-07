@@ -121,7 +121,13 @@ class SecureToolExecutorTest {
     fun `a reason-only approval prompt still receives the reason through the default method`() {
         val spec = ToolSpec(name = "delete-app", description = "d", securityLevel = SecurityLevel.SENSITIVE)
         var seenReason: String? = null
-        val (secure, _, _, _) = newHarness(spec, SecurityPolicy(), approvalPrompt = ApprovalPrompt { seenReason = it; true })
+        val (secure, _, _, _) = newHarness(
+            spec, SecurityPolicy(),
+            approvalPrompt = ApprovalPrompt {
+                seenReason = it
+                true
+            },
+        )
 
         secure.run("delete-app", mapOf("package" to "x"))
 
