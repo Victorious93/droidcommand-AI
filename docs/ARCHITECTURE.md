@@ -27,7 +27,7 @@ DroidCommand AI
 │                            near-black palette, bordered cards, bubble chat, 4-tab bottom
 │                            bar: Chat/Tools/Memory/Settings; Home stub removed). UNVERIFIED —
 │                            not compiled (no Android SDK/AGP here). See audit addendum.
-│                            Updated 2026-10-08o: Plan and Logs tabs added (6-tab bar). Plan =
+│                            Updated 2026-10-08p: Plan and Logs tabs added (6-tab bar). Plan =
 │                            one Forge objective via core-agent.PlanRunner; Logs = read-only
 │                            view of a now-wired JsonFileAuditLog. Plan history is in-memory
 │                            only. UNVERIFIED on-device; JVM parts tested. See audit addendum.
@@ -148,6 +148,25 @@ DroidCommand AI
 │                            entitlement) and FeatureGate. JVM, stdlib only,
 │                            5 unit tests. NO Play Billing Library glue, no
 │                            UI, no feature is actually gated yet.
+│
+├── core-websearch           WebSearchClient / WebSearchResult / WebSearchOutcome
+│                            (2026-10-08, Phase 4 web-search half only) —
+│                            BraveWebSearchClient (X-Subscription-Token header)
+│                            as primary, SerpApiWebSearchClient (api_key query
+│                            param) as fallback, composed by
+│                            FallbackWebSearchClient, matching the Consumer
+│                            Roadmap's "Brave primary, SerpAPI fallback"
+│                            wording exactly. Built on core-remote's
+│                            RemoteClient/JdkHttpTransport (reused, not a new
+│                            HTTP client, per that phase's own instruction);
+│                            kotlinx.serialization wire types kept private and
+│                            separate from the public WebSearchResult contract,
+│                            same pattern as core-llm-openai/-google. 13 unit
+│                            tests against a local mock HttpServer only — never
+│                            a live Brave/SerpAPI call or a real key. NOT wired
+│                            into cli, core-agent's ToolRegistry, or :app's chat
+│                            toolbar yet; the STT/TTS half of Phase 4
+│                            (core-voice) is Android-only and still NOT STARTED.
 │
 ├── core-templates           PromptTemplate/TemplateEngine ({{var}} expansion),
 │                            Skill/SkillApplier, bundled 20 templates + 5

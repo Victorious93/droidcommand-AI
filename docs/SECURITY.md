@@ -54,7 +54,7 @@ duplicate:
   entries could hide the exact action it exists to prove happened).
   `AuditEventType` already includes `SECRET_ACCESSED`/`SECRET_REVOKED`
   alongside the access/grant/approval events.
-  *Updated 2026-10-08o:* `:app` now wires a `JsonFileAuditLog` (app-private `filesDir/audit/audit.jsonl`)
+  *Updated 2026-10-08p:* `:app` now wires a `JsonFileAuditLog` (app-private `filesDir/audit/audit.jsonl`)
   into its `SecureToolExecutor` and the Plan runner's per-run executors, and shows it read-only in a Logs
   screen. Append-only by design, so the app offers no clear button; at the default 10,000-event capacity
   it fails closed (sensitive actions refused). Not run on a device.
