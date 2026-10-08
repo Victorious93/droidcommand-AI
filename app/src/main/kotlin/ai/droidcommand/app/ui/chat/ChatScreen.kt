@@ -16,6 +16,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +61,15 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             }
             OutlinedButton(onClick = viewModel::newChat, enabled = !state.sending) { Text("New chat") }
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Text("Memory", style = MaterialTheme.typography.bodyMedium)
+            Switch(checked = state.memoryEnabled, onCheckedChange = viewModel::setMemoryEnabled)
+            OutlinedButton(
+                onClick = viewModel::rememberConversation,
+                enabled = state.memoryEnabled && !state.remembering && !state.sending,
+            ) { Text(if (state.remembering) "…" else "Remember this chat") }
+        }
+        state.memoryMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         OutlinedTextField(
             value = state.model,
             onValueChange = viewModel::setModel,

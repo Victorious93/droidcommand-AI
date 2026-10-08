@@ -32,6 +32,7 @@ fun HomeScreen(navController: NavHostController) {
         )
         Button(onClick = { navController.navigate(Routes.TOOLS) }) { Text("Tools") }
         Button(onClick = { navController.navigate(Routes.CHAT) }) { Text("Chat (stub)") }
+        Button(onClick = { navController.navigate(Routes.MEMORY) }) { Text("Memory") }
         Button(onClick = { navController.navigate(Routes.SETTINGS) }) { Text("Settings (stub)") }
     }
 }

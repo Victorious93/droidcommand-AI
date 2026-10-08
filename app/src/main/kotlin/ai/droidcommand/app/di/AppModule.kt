@@ -1,20 +1,21 @@
 package ai.droidcommand.app.di
 
 import ai.droidcommand.agent.AgentStateMachine
+import ai.droidcommand.agent.ConversationStore
+import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.app.approval.ComposeApprovalPrompt
 import ai.droidcommand.app.security.createAndroidSecretsVault
-import ai.droidcommand.agent.ConversationStore
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.conversations.RoomConversationStore
-import ai.droidcommand.remote.HttpTransport
-import ai.droidcommand.remote.HttpUrlConnectionTransport
-import android.content.Context
+import ai.droidcommand.knowledge.android.RoomKnowledgeGraph
 import ai.droidcommand.metasploit.MetasploitTool
 import ai.droidcommand.metasploit.NullMetasploitExecutor
+import ai.droidcommand.remote.HttpTransport
+import ai.droidcommand.remote.HttpUrlConnectionTransport
 import ai.droidcommand.root.NullRootExecutor
 import ai.droidcommand.root.RootTool
 import ai.droidcommand.security.ApprovalPrompt
@@ -28,6 +29,7 @@ import ai.droidcommand.shell.ShellSecurityPolicy
 import ai.droidcommand.shell.ShellTool
 import ai.droidcommand.termux.NullTermuxExecutor
 import ai.droidcommand.termux.TermuxTool
+import android.content.Context
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -88,6 +90,11 @@ object AppModule {
     @Provides
     @Singleton
     fun provideConversationStore(@ApplicationContext context: Context): ConversationStore = RoomConversationStore.create(context)
+
+    /** Knowledge-graph K1/K4: the on-device store the Memory screen views and chat optionally reads/writes. */
+    @Provides
+    @Singleton
+    fun provideKnowledgeGraph(@ApplicationContext context: Context): KnowledgeGraph = RoomKnowledgeGraph.open(context)
 
     /** java.net.http (JdkHttpTransport) does not exist on Android; HttpURLConnection does. */
     @Provides

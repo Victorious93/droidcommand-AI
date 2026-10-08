@@ -47,7 +47,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
-
 }
 
 dependencies {
@@ -58,6 +57,7 @@ dependencies {
     implementation(project(":core-security"))
     implementation(project(":core-config"))
     implementation(project(":core-conversations"))
+    implementation(project(":core-knowledge-android"))
     implementation(project(":core-llm"))
     implementation(project(":core-remote"))
     implementation(project(":core-llm-factory"))

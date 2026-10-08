@@ -1,6 +1,6 @@
-# Knowledge Graph in the APK — scoping (Option A chosen 2026-10-08; K1, K2 and K3 built)
+# Knowledge Graph in the APK — scoping (Option A chosen 2026-10-08; K1-K4 built (Option A complete))
 
-Date: 2026-10-08. Status: **Option A chosen by the owner; K1 (storage), K2 (retrieval) and K3 (extraction) built; K4 (UI) not started.** The text below is the original proposal, kept as written. Per this
+Date: 2026-10-08. Status: **Option A chosen by the owner; K1 (storage), K2 (retrieval), K3 (extraction) and K4 (Memory UI + chat wiring) built — Option A complete.** The text below is the original proposal, kept as written. Per this
 repo's precedent (every CAP slice was scoped before building) and `CLAUDE.md`'s "one phase at a time,
 owner approves" rule, no code starts until the questions in §6 are answered.
 
@@ -130,3 +130,10 @@ until then everything is graded "JVM/Robolectric-tested, never run on a device".
   addendum 2026-10-08k. **K4 (UI)** remains: a view/delete screen and an extraction trigger control, plus
   the user-facing on/off gate for both reading and remembering. The owner asked that K4 use
   `Victorious93/opendroid` as a UI reference.
+- **2026-10-08 — K4 built** (owner: "Start K4 using opendroid as the reference"). `:app` gains a Memory
+  screen (view/delete/clear-all, reached from Home), a DI-provided `RoomKnowledgeGraph`, and a default-off
+  "Memory" toggle in chat that wires K2 reading + K3 remembering into `ChatSession`. opendroid's
+  `MemoryScreen` (Apache-2.0) was the UI reference; idioms adapted, no source copied. `MemoryController` is
+  unit-tested; the rest is compile-only (no device). See audit addendum 2026-10-08l. **Option A is now
+  complete (K1-K4).** Still intentionally absent, each needing its own decision: automatic/background
+  extraction (B/C in §4), fact editing, an entity/edge ceiling and pruning, and any on-device run.
