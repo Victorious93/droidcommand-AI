@@ -3,47 +3,41 @@ package ai.droidcommand.app.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 
-// Dark-only for now, by explicit request — no light scheme, no dynamic-color branch,
-// no theme toggle. All `MaterialTheme.colorScheme.*`/`MaterialTheme.typography.*` call
-// sites in this module (ChatScreen, SettingsScreen, SetToolScreen, MetasploitScreen,
-// HomeScreen, ToolsScreen, ToolRunStatusCard) are unchanged — they read through
-// whatever scheme MaterialTheme is given, so wrapping the app in this one composable
-// repaints every existing screen without touching their own source.
+// Dark-only, by explicit request — no light scheme, no dynamic-color branch, no theme toggle.
+// Every `MaterialTheme.colorScheme.*` call site in this module reads through this scheme, so
+// wrapping the app in it repaints each screen; the OpenDroid-style extras (neon title, cyan
+// label, purple user bubble) are the named constants in Color.kt, used by `ui.components`.
 private val DroidCommandDarkColorScheme = darkColorScheme(
-    primary = AccentTeal,
-    onPrimary = OnAccentTeal,
-    primaryContainer = AccentTealDark,
-    onPrimaryContainer = AccentTeal,
-    secondary = SlateSecondary,
-    onSecondary = SurfaceDarkest,
-    secondaryContainer = SlateSecondaryContainer,
-    onSecondaryContainer = OnSlateSecondaryContainer,
-    tertiary = SlateSecondary,
-    onTertiary = SurfaceDarkest,
-    background = SurfaceDarkest,
-    onBackground = OnSurfaceDark,
+    primary = AccentGreenButton,
+    onPrimary = OnAccentDark,
+    primaryContainer = AccentGreenContainer,
+    onPrimaryContainer = AccentNeonGreen,
+    secondary = AccentPurple,
+    onSecondary = TextPrimary,
+    secondaryContainer = UserBubbleDark,
+    onSecondaryContainer = TextPrimary,
+    tertiary = AccentCyan,
+    onTertiary = OnAccentDark,
+    background = BackgroundDark,
+    onBackground = TextPrimary,
     surface = SurfaceDark,
-    onSurface = OnSurfaceDark,
-    surfaceVariant = SurfaceDarkElevated,
-    onSurfaceVariant = OnSurfaceVariantDark,
+    onSurface = TextPrimary,
+    surfaceVariant = CardDark,
+    onSurfaceVariant = TextSecondary,
     surfaceContainer = SurfaceDark,
-    surfaceContainerLow = SurfaceDarkest,
-    surfaceContainerHigh = SurfaceDarkElevated,
-    surfaceContainerHighest = SurfaceDarkElevated2,
-    outline = OutlineDark,
-    outlineVariant = OutlineDark,
-    error = ErrorDark,
-    onError = OnErrorDark,
-    errorContainer = ErrorContainerDark,
-    onErrorContainer = OnErrorContainerDark,
+    surfaceContainerLow = BackgroundDark,
+    surfaceContainerHigh = CardDark,
+    surfaceContainerHighest = CardDark,
+    outline = BorderDark,
+    outlineVariant = BorderDark,
+    error = AccentRed,
+    onError = TextPrimary,
+    errorContainer = Color(0xFF3A1210),
+    onErrorContainer = Color(0xFFFFB4AB),
 )
 
-/**
- * App-wide theme. Wrap [MainActivity]'s content in this instead of a bare
- * `MaterialTheme { }` to replace Compose's baseline purple Material 3 scheme
- * with a neutral dark/teal one everywhere in the app.
- */
 @Composable
 fun DroidCommandTheme(content: @Composable () -> Unit) {
     MaterialTheme(

@@ -2,36 +2,27 @@ package ai.droidcommand.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Dark theme, neutral accent — replaces Compose/Material3's baseline purple defaults
-// (visible pre-change on every screen: SetToolScreen's filled chips, the Settings
-// "Save" button). Accent is a desaturated teal, not a brand color; there is no brand
-// palette defined anywhere in this repo today.
+// Visual language follows `Victorious93/opendroid`'s app (near-black surfaces, neon-green
+// accent, cyan labels, purple user bubbles, bordered cards). Hex values are matched to its
+// published dark palette and screenshots; no source was copied.
 
-// Neutral surfaces — near-black, not pure black (keeps elevation visible via tonal
-// overlay without relying on a shadow, which Compose dark themes render poorly).
-val SurfaceDarkest = Color(0xFF101214)
-val SurfaceDark = Color(0xFF17191C)
-val SurfaceDarkElevated = Color(0xFF1F2227)
-val SurfaceDarkElevated2 = Color(0xFF2A2E34)
-val OutlineDark = Color(0xFF3A3F46)
-val OnSurfaceDark = Color(0xFFE2E4E7)
-val OnSurfaceVariantDark = Color(0xFFA9AFB8)
+// Surfaces
+val BackgroundDark = Color(0xFF080C10)
+val SurfaceDark = Color(0xFF0D1117)
+val CardDark = Color(0xFF161B22)
+val BorderDark = Color(0xFF30363D)
+val NavBarDark = Color(0xFF0E2A24)
 
-// Accent — teal, not purple. One hue used consistently for primary actions
-// (Save/Launch buttons, selected chips, focus rings) across every screen.
-val AccentTeal = Color(0xFF4FC3BE)
-val AccentTealDark = Color(0xFF1C3B3A)
-val OnAccentTeal = Color(0xFF00312E)
+// Text
+val TextPrimary = Color(0xFFF0F6FC)
+val TextSecondary = Color(0xFF8B949E)
 
-// Secondary — cool slate grey, used for less prominent selected state (e.g.
-// unselected-but-focused chips) so not everything reads as "primary".
-val SlateSecondary = Color(0xFF9AA7B4)
-val SlateSecondaryContainer = Color(0xFF34404A)
-val OnSlateSecondaryContainer = Color(0xFFD4DEE8)
-
-// Error stays Material's standard red family — no reason to reinvent it, and the
-// existing `MaterialTheme.colorScheme.error` usage in ChatScreen should stay legible.
-val ErrorDark = Color(0xFFFFB4AB)
-val OnErrorDark = Color(0xFF690005)
-val ErrorContainerDark = Color(0xFF93000A)
-val OnErrorContainerDark = Color(0xFFFFDAD6)
+// Accents. Neon is for thin marks, titles and selection; the calmer green fills large buttons.
+val AccentNeonGreen = Color(0xFF00FF88)
+val AccentGreenButton = Color(0xFF00C46A)
+val AccentGreenContainer = Color(0xFF0F3D2A)
+val AccentCyan = Color(0xFF00F0FF)
+val AccentPurple = Color(0xFF8A2BE2)
+val UserBubbleDark = Color(0xFF2A1646)
+val AccentRed = Color(0xFFFF3B30)
+val OnAccentDark = Color(0xFF04120B)
