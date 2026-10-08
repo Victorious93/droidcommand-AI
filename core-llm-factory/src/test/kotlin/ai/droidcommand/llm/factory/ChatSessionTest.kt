@@ -52,11 +52,27 @@ class ChatSessionTest {
 
     private fun sse(vararg chunks: String) = chunks.joinToString("") { "data: $it\n\n" } + "data: [DONE]\n\n"
 
+    /** Like [start] but the status can vary per request (e.g. 200 for the chat turn, 401 for the extraction). */
+    private fun startRouting(status: () -> Int = { 200 }, body: (String) -> String): String {
+        val s = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server = s
+        s.createContext("/") { ex ->
+            val req = ex.requestBody.readBytes().toString(Charsets.UTF_8)
+            val code = status()
+            val bytes = body(req).toByteArray()
+            ex.sendResponseHeaders(code, bytes.size.toLong())
+            ex.responseBody.use { it.write(bytes) }
+        }
+        s.start()
+        return "http://127.0.0.1:${s.address.port}"
+    }
+
     private fun session(
         base: String,
         store: InMemoryConversationStore = InMemoryConversationStore(),
         vaultKey: String? = key,
         knowledge: GraphRetriever? = null,
+        graph: ai.droidcommand.agent.KnowledgeGraph? = null,
     ): Triple<ChatSession, InMemoryConversationStore, InMemorySecretsVault> {
         val vault = InMemorySecretsVault()
         vaultKey?.let {
@@ -68,7 +84,7 @@ class ChatSessionTest {
             val p: LlmProvider = if (spec.id == "google") GeminiLlmProvider(c, JdkHttpTransport(), requireHttps = false) else GroqLlmProvider(c, JdkHttpTransport(), requireHttps = false)
             p
         }
-        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge), store, vault)
+        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge, knowledgeGraph = graph), store, vault)
     }
 
     @Test
@@ -210,5 +226,74 @@ class ChatSessionTest {
         val base = start { sse("""{"choices":[{"delta":{"content":"fine"}}]}""") }
         val (chat, _, _) = session(base, knowledge = GraphRetriever(broken))
         assertEquals(ChatResult.Reply("fine"), chat.send(groq, "", "router?"))
+    }
+
+    // ---- K3: user-triggered extraction into the graph ----
+
+    /** A non-streaming JSON reply, as the extraction provider expects (complete(), not SSE). */
+    private fun graphJson() =
+        """{"choices":[{"message":{"content":"{\"entities\":[{\"key\":\"r\",\"type\":\"DEVICE\",\"label\":\"Home Router\",\"properties\":{}}],\"relationships\":[]}"}}]}"""
+
+    @Test
+    fun `rememberConversation extracts with the last provider and saves to the graph`() {
+        val graph = InMemoryKnowledgeGraph()
+        // First call: a streamed chat turn. Second call: the extraction (non-streaming JSON).
+        var call = 0
+        val base = startRouting { if (call++ == 0) sse("""{"choices":[{"delta":{"content":"hi"}}]}""") else graphJson() }
+        val (chat, _, _) = session(base, graph = graph)
+
+        assertEquals(ChatResult.Reply("hi"), chat.send(groq, "", "my router is slow"))
+        val result = chat.rememberConversation()
+
+        assertEquals(MemoryResult.Saved(1, 0), result)
+        assertEquals(listOf("Home Router"), graph.searchEntities("router").map { it.label })
+    }
+
+    @Test
+    fun `rememberConversation does nothing before any successful turn or with no graph configured`() {
+        val base = start { graphJson() }
+        val (noGraph, _, _) = session(base)
+        assertEquals(MemoryResult.NothingToRemember, noGraph.rememberConversation())
+
+        val (withGraph, _, _) = session(base, graph = InMemoryKnowledgeGraph())
+        assertEquals(MemoryResult.NothingToRemember, withGraph.rememberConversation(), "no successful turn yet")
+    }
+
+    @Test
+    fun `an empty extraction result reports nothing to remember and writes nothing`() {
+        val graph = InMemoryKnowledgeGraph()
+        var call = 0
+        val empty = """{"choices":[{"message":{"content":"{\"entities\":[],\"relationships\":[]}"}}]}"""
+        val base = startRouting { if (call++ == 0) sse("""{"choices":[{"delta":{"content":"ok"}}]}""") else empty }
+        val (chat, _, _) = session(base, graph = graph)
+        chat.send(groq, "", "nothing notable here")
+        assertEquals(MemoryResult.NothingToRemember, chat.rememberConversation())
+        assertTrue(graph.searchEntities("").isEmpty())
+    }
+
+    @Test
+    fun `a provider failure during remember is a scrubbed failure and leaves the graph empty`() {
+        val graph = InMemoryKnowledgeGraph()
+        var call = 0
+        val base = startRouting(status = { if (call == 0) 200 else 401 }) {
+            if (call++ == 0) sse("""{"choices":[{"delta":{"content":"ok"}}]}""") else """error key $key leaked"""
+        }
+        val (chat, _, _) = session(base, graph = graph)
+        chat.send(groq, "", "remember this")
+        val result = chat.rememberConversation()
+        assertIs<MemoryResult.Failure>(result)
+        assertFalse(result.message.contains(key), "key must be scrubbed from: ${result.message}")
+        assertTrue(graph.searchEntities("").isEmpty())
+    }
+
+    @Test
+    fun `reset clears the remembered provider so remember does nothing again`() {
+        val graph = InMemoryKnowledgeGraph()
+        var call = 0
+        val base = startRouting { if (call++ == 0) sse("""{"choices":[{"delta":{"content":"hi"}}]}""") else graphJson() }
+        val (chat, _, _) = session(base, graph = graph)
+        chat.send(groq, "", "my router")
+        chat.reset()
+        assertEquals(MemoryResult.NothingToRemember, chat.rememberConversation())
     }
 }

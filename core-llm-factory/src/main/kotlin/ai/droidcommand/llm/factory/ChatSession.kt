@@ -3,12 +3,16 @@ package ai.droidcommand.llm.factory
 import ai.droidcommand.agent.ConversationContext
 import ai.droidcommand.agent.ConversationStore
 import ai.droidcommand.agent.GraphRetriever
+import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.agent.Message
 import ai.droidcommand.agent.Role
 import ai.droidcommand.config.ConfiguredLlmProvider
 import ai.droidcommand.config.SecretsVault
 import ai.droidcommand.llm.AiProviderInfo
+import ai.droidcommand.llm.GraphExtractionResult
+import ai.droidcommand.llm.GraphExtractionService
 import ai.droidcommand.llm.LlmConfig
+import ai.droidcommand.llm.LlmGraphExtractor
 import ai.droidcommand.llm.LlmProvider
 import ai.droidcommand.llm.LlmRequest
 import ai.droidcommand.llm.LlmResponse
@@ -24,6 +28,19 @@ sealed class ChatResult {
 }
 
 /**
+ * Outcome of [ChatSession.rememberConversation]. [Saved.entityCount] is how many entities were written
+ * to the knowledge graph. [Failure.message] never contains the API key.
+ */
+sealed class MemoryResult {
+    data class Saved(val entityCount: Int, val relationshipCount: Int) : MemoryResult()
+
+    /** The model found nothing worth remembering, or there was no conversation yet. */
+    data object NothingToRemember : MemoryResult()
+
+    data class Failure(val message: String) : MemoryResult()
+}
+
+/**
  * One persisted chat conversation against a BYOK cloud provider — the testable core of the Phase 1
  * chat screen, kept free of Android types so it runs (and is tested) on the JVM.
  *
@@ -35,6 +52,10 @@ sealed class ChatResult {
  *
  * [providerFor] is injectable so tests can point at a local `http://` server (the default factory
  * enforces https).
+ *
+ * [knowledgeGraph] (off when `null`, the default) is the store [rememberConversation] writes to — see
+ * that method. It is separate from [knowledge] (which reads a graph into each message): a caller may wire
+ * reading, writing, both, or neither.
  *
  * [knowledge] (off when `null`, the default) adds saved knowledge-graph notes relevant to each message.
  * They go into that request's final user message, not the system prompt: they are derived from the
@@ -58,10 +79,17 @@ class ChatSession(
         ).provider
     },
     private val knowledge: GraphRetriever? = null,
+    private val knowledgeGraph: KnowledgeGraph? = null,
 ) {
     // Loaded on first use, not at construction: a Room-backed store throws on the main thread, and a
     // caller (an Android ViewModel) constructs this there. Every public method may touch storage.
     private var loaded: ConversationContext? = null
+
+    // The provider+model of the most recent successful turn. rememberConversation() extracts with the
+    // SAME provider, which already received the full conversation in that turn, so remembering adds no
+    // new recipient of the user's text. null until the first successful send.
+    private var lastSpec: CloudProviderSpec? = null
+    private var lastModel: String? = null
     private val context: ConversationContext
         get() = loaded ?: (store.load(conversationId) ?: ConversationContext(systemPrompt)).also { loaded = it }
 
@@ -96,10 +124,51 @@ class ChatSession(
                 if (response.content.isBlank()) return ChatResult.Failure("The model returned an empty reply.")
                 context.append(Role.USER, text).append(Role.ASSISTANT, response.content)
                 store.save(conversationId, context)
+                lastSpec = spec
+                lastModel = config.model
                 ChatResult.Reply(response.content)
             }
             is LlmResponse.ToolCall -> ChatResult.Failure("The model asked to call a tool, which chat does not support.")
             is LlmResponse.Error -> ChatResult.Failure(scrub(response.error.message, key))
+        }
+    }
+
+    /**
+     * Extracts knowledge-graph entities/relationships from the current conversation and saves them to
+     * [knowledgeGraph]. User-triggered only: nothing calls this automatically. Uses the provider+model of
+     * the most recent successful [send] — that provider already saw the whole conversation in that turn,
+     * so remembering sends the user's text to no new party. Returns [MemoryResult.NothingToRemember] when
+     * no graph is configured, no successful turn has happened yet, the conversation is empty, or the model
+     * finds nothing worth keeping. A provider or parse failure is a [MemoryResult.Failure] with the key
+     * scrubbed; the conversation and the graph are unchanged on failure.
+     *
+     * Blocks on the network and storage: call it off the main thread.
+     */
+    @Synchronized
+    fun rememberConversation(): MemoryResult {
+        val graph = knowledgeGraph ?: return MemoryResult.NothingToRemember
+        val spec = lastSpec
+        val model = lastModel
+        if (spec == null || model == null || context.messages.isEmpty()) return MemoryResult.NothingToRemember
+        val key = vault.getSecret(spec.secretId)
+        if (key.isNullOrBlank()) return MemoryResult.Failure("No API key for ${spec.label}. Add one in Settings.")
+
+        val config = LlmConfig(provider = spec.id, model = model, authToken = { vault.getSecret(spec.secretId) })
+        val service = GraphExtractionService(LlmGraphExtractor(providerFor(spec, config)), graph)
+        val result = try {
+            service.extractAndSave(context, source = conversationId)
+        } catch (e: Exception) {
+            return MemoryResult.Failure(scrub("Could not save memory: ${e.message ?: e.javaClass.simpleName}", key))
+        }
+        return when (result) {
+            is GraphExtractionResult.Success ->
+                if (result.entities.isEmpty()) {
+                    MemoryResult.NothingToRemember
+                } else {
+                    MemoryResult.Saved(result.entities.size, result.relationships.size)
+                }
+            is GraphExtractionResult.Malformed -> MemoryResult.Failure("The model's reply could not be read as memory.")
+            is GraphExtractionResult.ProviderFailed -> MemoryResult.Failure(scrub(result.error.message, key))
         }
     }
 
@@ -108,6 +177,8 @@ class ChatSession(
     fun reset() {
         store.delete(conversationId)
         loaded = ConversationContext(systemPrompt)
+        lastSpec = null
+        lastModel = null
     }
 
     private fun scrub(message: String, key: String): String =

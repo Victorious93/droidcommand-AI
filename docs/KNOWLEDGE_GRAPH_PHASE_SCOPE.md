@@ -1,6 +1,6 @@
-# Knowledge Graph in the APK — scoping (Option A chosen 2026-10-08; K1 and K2 built)
+# Knowledge Graph in the APK — scoping (Option A chosen 2026-10-08; K1, K2 and K3 built)
 
-Date: 2026-10-08. Status: **Option A chosen by the owner; K1 (storage) and K2 (retrieval) built; K3-K4 not started.** The text below is the original proposal, kept as written. Per this
+Date: 2026-10-08. Status: **Option A chosen by the owner; K1 (storage), K2 (retrieval) and K3 (extraction) built; K4 (UI) not started.** The text below is the original proposal, kept as written. Per this
 repo's precedent (every CAP slice was scoped before building) and `CLAUDE.md`'s "one phase at a time,
 owner approves" rule, no code starts until the questions in §6 are answered.
 
@@ -121,3 +121,12 @@ until then everything is graded "JVM/Robolectric-tested, never run on a device".
   `core-llm-factory.ChatSession` (off by default). Notes go into the request's user turn, never the system
   prompt, and are never saved into the conversation. See audit addendum 2026-10-08j. K3 (extraction) still
   needs Q2 answered (cloud vs local-only); K4 (UI) needs Q3.
+- **2026-10-08 — owner answered the open questions with "U choose".** Decisions, both reversible:
+  **Q2 (extraction provider/trigger):** extraction runs on the provider of the most recent successful chat
+  turn (which already saw the whole conversation) and only on an explicit user action; local-only was
+  rejected as it would disable the feature for everyone without local inference. **Q3 (view/delete UI):**
+  yes, users will be able to view and delete remembered data (built in K4). **K3 built:**
+  `ChatSession.rememberConversation()` + optional `knowledgeGraph` param (off by default). See audit
+  addendum 2026-10-08k. **K4 (UI)** remains: a view/delete screen and an extraction trigger control, plus
+  the user-facing on/off gate for both reading and remembering. The owner asked that K4 use
+  `Victorious93/opendroid` as a UI reference.
