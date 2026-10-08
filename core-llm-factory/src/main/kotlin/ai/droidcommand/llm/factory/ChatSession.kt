@@ -2,6 +2,7 @@ package ai.droidcommand.llm.factory
 
 import ai.droidcommand.agent.ConversationContext
 import ai.droidcommand.agent.ConversationStore
+import ai.droidcommand.agent.GraphRetriever
 import ai.droidcommand.agent.Message
 import ai.droidcommand.agent.Role
 import ai.droidcommand.config.ConfiguredLlmProvider
@@ -33,7 +34,15 @@ sealed class ChatResult {
  * untrusted text that could echo a credential.
  *
  * [providerFor] is injectable so tests can point at a local `http://` server (the default factory
- * enforces https). [history], [send] and [reset] block on storage and the network: call them off the main thread. Not safe for concurrent
+ * enforces https).
+ *
+ * [knowledge] (off when `null`, the default) adds saved knowledge-graph notes relevant to each message.
+ * They go into that request's final user message, not the system prompt: they are derived from the
+ * user's own conversations, so they get user-level trust, not system authority. They are added per
+ * request only and never saved into the conversation, so history holds exactly what the user typed. If
+ * retrieval throws, the turn proceeds without notes rather than failing.
+ *
+ * [history], [send] and [reset] block on storage and the network: call them off the main thread. Not safe for concurrent
  * sends (calls are serialized).
  */
 class ChatSession(
@@ -48,6 +57,7 @@ class ChatSession(
             transport,
         ).provider
     },
+    private val knowledge: GraphRetriever? = null,
 ) {
     // Loaded on first use, not at construction: a Room-backed store throws on the main thread, and a
     // caller (an Android ViewModel) constructs this there. Every public method may touch storage.
@@ -66,7 +76,14 @@ class ChatSession(
         if (key.isNullOrBlank()) return ChatResult.Failure("No API key for ${spec.label}. Add one in Settings.")
 
         val config = LlmConfig(provider = spec.id, model = model.trim().ifEmpty { spec.defaultModel }, authToken = { vault.getSecret(spec.secretId) })
-        val request = LlmRequest(systemPrompt = context.systemPrompt, messages = context.messages + Message(Role.USER, text))
+        // Exception, not Throwable: an Error (e.g. OutOfMemoryError) should not be silently swallowed.
+        val notes = try {
+            knowledge?.retrieveContext(text)
+        } catch (e: Exception) {
+            null
+        }
+        val outgoing = if (notes == null) text else "$notes\n\n$text"
+        val request = LlmRequest(systemPrompt = context.systemPrompt, messages = context.messages + Message(Role.USER, outgoing))
 
         val response = try {
             providerFor(spec, config).completeStreaming(request, onDelta)

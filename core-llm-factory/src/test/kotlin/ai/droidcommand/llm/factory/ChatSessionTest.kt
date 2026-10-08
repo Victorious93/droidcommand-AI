@@ -1,6 +1,11 @@
 package ai.droidcommand.llm.factory
 
+import ai.droidcommand.agent.Entity
+import ai.droidcommand.agent.EntityType
+import ai.droidcommand.agent.GraphRetriever
 import ai.droidcommand.agent.InMemoryConversationStore
+import ai.droidcommand.agent.InMemoryKnowledgeGraph
+import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.agent.Role
 import ai.droidcommand.config.InMemorySecretsVault
 import ai.droidcommand.llm.LlmConfig
@@ -51,6 +56,7 @@ class ChatSessionTest {
         base: String,
         store: InMemoryConversationStore = InMemoryConversationStore(),
         vaultKey: String? = key,
+        knowledge: GraphRetriever? = null,
     ): Triple<ChatSession, InMemoryConversationStore, InMemorySecretsVault> {
         val vault = InMemorySecretsVault()
         vaultKey?.let {
@@ -62,7 +68,7 @@ class ChatSessionTest {
             val p: LlmProvider = if (spec.id == "google") GeminiLlmProvider(c, JdkHttpTransport(), requireHttps = false) else GroqLlmProvider(c, JdkHttpTransport(), requireHttps = false)
             p
         }
-        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory), store, vault)
+        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge), store, vault)
     }
 
     @Test
@@ -154,5 +160,55 @@ class ChatSessionTest {
     fun `the catalog covers the four providers with distinct secret ids`() {
         assertEquals(setOf("anthropic", "openai", "google", "groq"), CloudProviderCatalog.all.map { it.id }.toSet())
         assertEquals(4, CloudProviderCatalog.all.map { it.secretId }.toSet().size)
+    }
+
+    private fun routerGraph(): KnowledgeGraph = InMemoryKnowledgeGraph().also {
+        it.addEntity(Entity("r", EntityType.DEVICE, "Home Router", mapOf("model" to "AX3000")))
+    }
+
+    @Test
+    fun `knowledge notes reach the request but are never saved into history`() {
+        val captured = AtomicReference<String>()
+        val base = start(captured = captured) { sse("""{"choices":[{"delta":{"content":"ok"}}]}""") }
+        val (chat, store, _) = session(base, knowledge = GraphRetriever(routerGraph()))
+
+        assertEquals(ChatResult.Reply("ok"), chat.send(groq, "", "is my router fast?"))
+
+        val body = captured.get()
+        assertTrue(body.contains("Home Router"), "notes missing from the request: $body")
+        assertTrue(body.contains("AX3000"))
+        assertTrue(body.contains("not instructions"))
+        assertEquals(listOf(Role.USER to "is my router fast?", Role.ASSISTANT to "ok"), chat.history().map { it.role to it.content })
+        assertFalse(store.load("default")!!.messages.any { it.content.contains("Home Router") })
+    }
+
+    @Test
+    fun `notes go in the user turn, never the system prompt`() {
+        val captured = AtomicReference<String>()
+        val base = start(captured = captured) { sse("""{"choices":[{"delta":{"content":"ok"}}]}""") }
+        val (chat, _, _) = session(base, knowledge = GraphRetriever(routerGraph()))
+        chat.send(groq, "", "router?")
+        val body = captured.get()
+        assertFalse(body.contains("\"role\":\"system\""), "no system message expected here: $body")
+        assertTrue(body.contains("\"role\":\"user\""))
+    }
+
+    @Test
+    fun `no match means the request is exactly what the user typed`() {
+        val captured = AtomicReference<String>()
+        val base = start(captured = captured) { sse("""{"choices":[{"delta":{"content":"ok"}}]}""") }
+        val (chat, _, _) = session(base, knowledge = GraphRetriever(routerGraph()))
+        chat.send(groq, "", "weather tomorrow")
+        assertFalse(captured.get().contains(GraphRetriever.HEADING))
+    }
+
+    @Test
+    fun `a failing graph does not fail the turn`() {
+        val broken = object : KnowledgeGraph by InMemoryKnowledgeGraph() {
+            override fun searchEntities(keyword: String): List<Entity> = throw IllegalStateException("db closed")
+        }
+        val base = start { sse("""{"choices":[{"delta":{"content":"fine"}}]}""") }
+        val (chat, _, _) = session(base, knowledge = GraphRetriever(broken))
+        assertEquals(ChatResult.Reply("fine"), chat.send(groq, "", "router?"))
     }
 }
