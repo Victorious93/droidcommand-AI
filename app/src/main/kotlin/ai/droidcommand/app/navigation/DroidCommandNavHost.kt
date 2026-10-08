@@ -15,8 +15,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
@@ -53,7 +53,7 @@ private data class Tab(val route: String, val label: String, val icon: ImageVect
 // The four top-level destinations. OpenDroid's bar also has Plan/Macros/Logs; those features do
 // not exist in this app, so no tabs are shown for them.
 private val tabs = listOf(
-    Tab(Routes.CHAT, "Chat", Icons.Filled.Chat),
+    Tab(Routes.CHAT, "Chat", Icons.AutoMirrored.Filled.Chat),
     Tab(Routes.TOOLS, "Tools", Icons.Filled.Build),
     Tab(Routes.MEMORY, "Memory", Icons.Filled.Star),
     Tab(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
