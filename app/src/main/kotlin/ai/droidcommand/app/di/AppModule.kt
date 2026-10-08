@@ -1,6 +1,7 @@
 package ai.droidcommand.app.di
 
 import ai.droidcommand.agent.AgentStateMachine
+import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
@@ -10,6 +11,7 @@ import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.agent.ConversationStore
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.conversations.RoomConversationStore
+import ai.droidcommand.knowledge.android.RoomKnowledgeGraph
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.remote.HttpUrlConnectionTransport
 import android.content.Context
@@ -88,6 +90,11 @@ object AppModule {
     @Provides
     @Singleton
     fun provideConversationStore(@ApplicationContext context: Context): ConversationStore = RoomConversationStore.create(context)
+
+    /** Knowledge-graph phase K1 storage. Backs K2 (retrieval), K3 (extraction) and K4 (the Memory screen) — see docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md. */
+    @Provides
+    @Singleton
+    fun provideKnowledgeGraph(@ApplicationContext context: Context): KnowledgeGraph = RoomKnowledgeGraph.open(context)
 
     /** java.net.http (JdkHttpTransport) does not exist on Android; HttpURLConnection does. */
     @Provides

@@ -1,8 +1,14 @@
-# Knowledge Graph in the APK — scoping (Option A chosen 2026-10-08; K1, K2 and K3 built)
+# Knowledge Graph in the APK — scoping (Option A chosen 2026-10-08; K1-K4 built)
 
-Date: 2026-10-08. Status: **Option A chosen by the owner; K1 (storage), K2 (retrieval) and K3 (extraction) built; K4 (UI) not started.** The text below is the original proposal, kept as written. Per this
-repo's precedent (every CAP slice was scoped before building) and `CLAUDE.md`'s "one phase at a time,
-owner approves" rule, no code starts until the questions in §6 are answered.
+Date: 2026-10-08. Status: **Option A chosen by the owner; K1 (storage), K2 (retrieval), K3 (extraction)
+and K4 (the Memory UI + chat wiring) all built.** The text below is the original proposal, kept as
+written. Per this repo's precedent (every CAP slice was scoped before building) and `CLAUDE.md`'s "one
+phase at a time, owner approves" rule, no code started until the questions in §6 were answered.
+
+**Correction, same day:** PR #132's title and description claimed "K3 + K4", but its actual merged diff
+(checked directly against `main`) was K3 only — `ChatSession.rememberConversation()` and its tests, no
+`MemoryController`/`MemoryViewModel`/`MemoryScreen`, no `:app` wiring. K4 did not exist on `main` until a
+later same-day session built it for real; see the audit addendum below for what that session verified.
 
 ## 1. What exists today (each point checked against the repo on 2026-10-08)
 
@@ -127,6 +133,13 @@ until then everything is graded "JVM/Robolectric-tested, never run on a device".
   rejected as it would disable the feature for everyone without local inference. **Q3 (view/delete UI):**
   yes, users will be able to view and delete remembered data (built in K4). **K3 built:**
   `ChatSession.rememberConversation()` + optional `knowledgeGraph` param (off by default). See audit
-  addendum 2026-10-08k. **K4 (UI)** remains: a view/delete screen and an extraction trigger control, plus
-  the user-facing on/off gate for both reading and remembering. The owner asked that K4 use
-  `Victorious93/opendroid` as a UI reference.
+  addendum 2026-10-08k.
+- **K4 built (2026-10-08, a later same-day session — see the correction at the top of this file about
+  PR #132's own K4 claim):** `MemoryController` (Android-free, plain-JUnit-tested in `:app`, over
+  `KnowledgeGraph.searchEntities("")` for "list all") + `MemoryViewModel`/`MemoryScreen` (compile-only,
+  never run on a device) — a card list, per-row delete, a confirm dialog gating "Clear all", and an empty
+  state. `AppModule` provides a singleton `RoomKnowledgeGraph` via `KnowledgeGraph`. `ChatViewModel` now
+  takes that `KnowledgeGraph`, reads a persisted "Memory" toggle (default off, `chat_prefs`) once at
+  construction, and only then wires K2 reading (`GraphRetriever`) and K3 writing into its `ChatSession`;
+  `ChatScreen` gained the toggle switch and a "Remember this chat" button. A new Home "Memory" button
+  reaches the screen. This completes K1-K4 of Option A.

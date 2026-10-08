@@ -31,10 +31,13 @@ re-verifying something.
   stale the way an earlier draft of this file's module count did.
 - **`docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md`** — scoping for putting the existing knowledge graph into the APK: what exists, the real gaps,
   options A/B/C, risks and the owner questions. Owner chose Option A (2026-10-08); K1 (Room storage,
-  `core-knowledge-android`), K2 (`GraphRetriever` + `ChatSession` `knowledge` param) and K3
-  (`ChatSession.rememberConversation()` + `knowledgeGraph` param) are built, all off by default. K4 (UI:
-  view/delete + extraction trigger + on/off gate) remains; owner asked it use `Victorious93/opendroid` as a
-  UI reference. Read it before
+  `core-knowledge-android`), K2 (`GraphRetriever` + `ChatSession` `knowledge` param), K3
+  (`ChatSession.rememberConversation()` + `knowledgeGraph` param) and K4 (the `:app` Memory screen,
+  `MemoryController`/`MemoryViewModel`, and `ChatViewModel`'s persisted on/off gate + "Remember this
+  chat" button) are all built. **Note on PR #132:** that PR's title/description claimed "K3 + K4", but
+  its actual merged diff was K3 only — no `MemoryController`/`MemoryScreen`/`:app` wiring existed on
+  `main` until a later session built K4 for real (see the audit addendum correcting this). Don't trust a
+  PR description's claim of what shipped without checking the actual diff. Read this doc before
   starting any graph/memory work.
 - **`docs/HACKERAI_SOURCE_AUDIT.md`** — a focused audit (2026-09-26) of
   `Victorious93/hackeraiETC` ("HackerAI"), the project owner's other repo,
