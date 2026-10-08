@@ -57,6 +57,7 @@ include(":core-hackerai")
 include(":core-pentest-swarm")
 include(":core-rootforge")
 include(":core-billing")
+include(":core-websearch")
 
 // Android modules are opt-in: they need an Android SDK, which JVM-only environments (CI, cloud
 // sessions) do not have. In Android Studio, add `includeAndroid=true` to your USER-level

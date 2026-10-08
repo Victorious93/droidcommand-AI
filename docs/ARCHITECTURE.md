@@ -145,6 +145,25 @@ DroidCommand AI
 │                            5 unit tests. NO Play Billing Library glue, no
 │                            UI, no feature is actually gated yet.
 │
+├── core-websearch           WebSearchClient / WebSearchResult / WebSearchOutcome
+│                            (2026-10-08, Phase 4 web-search half only) —
+│                            BraveWebSearchClient (X-Subscription-Token header)
+│                            as primary, SerpApiWebSearchClient (api_key query
+│                            param) as fallback, composed by
+│                            FallbackWebSearchClient, matching the Consumer
+│                            Roadmap's "Brave primary, SerpAPI fallback"
+│                            wording exactly. Built on core-remote's
+│                            RemoteClient/JdkHttpTransport (reused, not a new
+│                            HTTP client, per that phase's own instruction);
+│                            kotlinx.serialization wire types kept private and
+│                            separate from the public WebSearchResult contract,
+│                            same pattern as core-llm-openai/-google. 13 unit
+│                            tests against a local mock HttpServer only — never
+│                            a live Brave/SerpAPI call or a real key. NOT wired
+│                            into cli, core-agent's ToolRegistry, or :app's chat
+│                            toolbar yet; the STT/TTS half of Phase 4
+│                            (core-voice) is Android-only and still NOT STARTED.
+│
 ├── core-templates           PromptTemplate/TemplateEngine ({{var}} expansion),
 │                            Skill/SkillApplier, bundled 20 templates + 5
 │                            skills, idempotent seeding (2026-10-07, Phase 3,
