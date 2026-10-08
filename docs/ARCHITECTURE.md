@@ -123,9 +123,17 @@ DroidCommand AI
 ├── core-templates           PromptTemplate/TemplateEngine ({{var}} expansion),
 │                            Skill/SkillApplier, bundled 20 templates + 5
 │                            skills, idempotent seeding (2026-10-07, Phase 3,
-│                            JVM half only). In-memory stores only; Room
-│                            storage and the bottom-sheet pickers are Android
-│                            and NOT built.
+│                            JVM half only). In-memory stores only; the
+│                            Room-backed stores are core-templates-android.
+│
+├── core-templates-android   Room-backed TemplateStore / SkillStore (2026-10-08, Phase 3
+│                            Android half, storage only). Opt-in (includeAndroid),
+│                            minSdk 26. Built-ins cannot be deleted (seeding would
+│                            resurrect them); edits survive re-seeding; unknown stored
+│                            enum values read back as safe defaults. 9 Robolectric
+│                            tests incl. close/reopen of a file-backed DB, one
+│                            mutation-checked. NOT run on a device; no pickers, no
+│                            fill-in form, not wired into :app.
 │
 ├── core-llm-local-android   Phase 2 native half (B: native build, C: JNI backend, D: Vulkan).
 │                            Android library (opt-in, includeAndroid, minSdk 28).
