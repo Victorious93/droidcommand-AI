@@ -1,6 +1,6 @@
-# Knowledge Graph in the APK — scoping (Option A chosen 2026-10-08; only K1 built)
+# Knowledge Graph in the APK — scoping (Option A chosen 2026-10-08; K1 and K2 built)
 
-Date: 2026-10-08. Status: **Option A chosen by the owner; K1 (storage) built; K2-K4 not started.** The text below is the original proposal, kept as written. Per this
+Date: 2026-10-08. Status: **Option A chosen by the owner; K1 (storage) and K2 (retrieval) built; K3-K4 not started.** The text below is the original proposal, kept as written. Per this
 repo's precedent (every CAP slice was scoped before building) and `CLAUDE.md`'s "one phase at a time,
 owner approves" rule, no code starts until the questions in §6 are answered.
 
@@ -115,3 +115,9 @@ until then everything is graded "JVM/Robolectric-tested, never run on a device".
 - **K1 built (2026-10-08):** `core-knowledge-android` — a Room-backed `KnowledgeGraph`. 11 Robolectric tests,
   including a differential test against `InMemoryKnowledgeGraph` over 25 seeded random operation sequences
   (150 operations each) and two mutation checks. Never run on a device. See audit addendum 2026-10-08i.
+- **2026-10-08 — owner said "Proceed"** after being told K2 would run on the recommended defaults. K2 reads
+  the graph only, so none of the open questions constrain it. **K2 built:** `core-agent.GraphRetriever`
+  (deterministic seed/expand/budget policy, no LLM) and an optional `knowledge` parameter on
+  `core-llm-factory.ChatSession` (off by default). Notes go into the request's user turn, never the system
+  prompt, and are never saved into the conversation. See audit addendum 2026-10-08j. K3 (extraction) still
+  needs Q2 answered (cloud vs local-only); K4 (UI) needs Q3.
