@@ -142,8 +142,10 @@ DroidCommand AI
 │                            searchEntities is an O(n) Kotlin substring match.
 │                            11 Robolectric tests, two mutation-checked. NOT run on a
 │                            device. Retrieval (K2) lives in core-agent.GraphRetriever and
-│                            ChatSession's optional `knowledge` parameter; no extraction
-│                            trigger, no UI, not wired into :app (see the scoping doc).
+│                            ChatSession's `knowledge` param; extraction (K3) is
+│                            ChatSession.rememberConversation() + its `knowledgeGraph`
+│                            param (both off by default). No UI (K4), not wired into
+│                            :app (see the scoping doc).
 │
 ├── core-llm-local-android   Phase 2 native half (B: native build, C: JNI backend, D: Vulkan).
 │                            Android library (opt-in, includeAndroid, minSdk 28).

@@ -31,8 +31,10 @@ re-verifying something.
   stale the way an earlier draft of this file's module count did.
 - **`docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md`** — scoping for putting the existing knowledge graph into the APK: what exists, the real gaps,
   options A/B/C, risks and the owner questions. Owner chose Option A (2026-10-08); K1 (Room storage,
-  `core-knowledge-android`) and K2 (`GraphRetriever` + `ChatSession` `knowledge` param, off by default) are built.
-  K3 (extraction) and K4 (UI) wait on the unanswered questions in its §6/§8. Read it before
+  `core-knowledge-android`), K2 (`GraphRetriever` + `ChatSession` `knowledge` param) and K3
+  (`ChatSession.rememberConversation()` + `knowledgeGraph` param) are built, all off by default. K4 (UI:
+  view/delete + extraction trigger + on/off gate) remains; owner asked it use `Victorious93/opendroid` as a
+  UI reference. Read it before
   starting any graph/memory work.
 - **`docs/HACKERAI_SOURCE_AUDIT.md`** — a focused audit (2026-09-26) of
   `Victorious93/hackeraiETC` ("HackerAI"), the project owner's other repo,
