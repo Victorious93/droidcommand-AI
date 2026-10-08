@@ -554,6 +554,83 @@ embedding model downloads independently of chat models.
 
 ---
 
+### Phase 6 — Subscription Accounts (BYOK Alternative)
+**Status:** SCOPED, NOT STARTED — scoping requested by the owner 2026-10-08
+(off the Social-Engineer Toolkit/Settings screenshots asking for "login for
+subscriptions, not just API keys"); no code written for this phase.
+**Branch:** `feature/phase-6-subscriptions` (not yet created)
+**Depends on:** Phase 1 (cloud providers — a subscription is a second,
+parallel way to reach the same `LlmProvider` call sites Phase 1 already
+wires)
+
+**Note on numbering:** this is the Consumer Product Roadmap's own Phase 6,
+unrelated to `docs/ARCHITECTURE.md` §8's "Phase 3 / Phase 4 / Phase 6" label
+for the companion-APK work — that numbering comes from a different, older
+phase scheme for the companion app fleet. Don't conflate the two.
+
+Today `core-config.SecretsVault`/`SettingsScreen` only support BYOK: the user
+supplies their own Anthropic/OpenAI/Google/Groq key, stored in
+`KeystoreSecretsVault`. "Login for subscriptions" means an account the user
+signs into that entitles them to use the app without supplying their own
+key, metered against a paid plan — a different model entirely. **This is new
+product infrastructure, not a UI change**: nothing resembling an account
+system, payment processor, or token-proxy server exists anywhere in this
+25-module codebase today. An earlier draft of this roadmap named exactly
+this ("Subscription / proxy backend") as out of scope — see the correction
+to that table below.
+
+Two real shapes, not mutually exclusive, with very different engineering
+cost:
+
+**Option A — Google Play Billing only.** Subscriptions sold entirely through
+the Play Store; entitlement checked on-device via the Play Billing Library
+(`purchaseState`, `acknowledgePurchase`). No login, no payment processor of
+our own — Google is both the identity provider (the signed-in Play account)
+and the processor. A new `core-billing` module would query entitlement and,
+if granted, substitute a server-held key for the user's own BYOK key — which
+immediately raises the problem this option alone doesn't solve: **a
+server-held key still has to live somewhere the client can reach it**,
+meaning either (a) a backend anyway, purely as a key-vending/LLM-proxy
+endpoint (so a raw provider key is never embedded in or fetched
+unauthenticated into the APK), or (b) accepting a shared production key
+baked into the client, which is not a real security posture. Option A alone
+avoids building our own login/identity system (Play already provides that);
+it does not by itself avoid needing a backend if the product promise is
+"subscribe and the app just works without your own key."
+
+**Option B — Full account system + LLM-proxy backend.** Email/password or
+OAuth (Google/Apple Sign-In) login against a server we run; that server
+holds the real provider API keys, meters usage per account/plan, and proxies
+chat requests (`LlmProvider`'s existing request/response shapes could be
+reused as the wire format, since the client already speaks them). Payment
+via Play Billing (mobile) and/or Stripe (if a web account-management surface
+is ever wanted). This is the only option that actually delivers "log in, no
+API key needed, works across devices" — and it is real, multi-week
+infrastructure: an auth provider, an accounts/entitlements database, a
+metering/rate-limit layer, and a proxy service deployed and operated
+somewhere with its own on-call/security surface (it would hold every
+subscriber's effective LLM spend behind one set of provider keys — a
+meaningfully higher-value attack target than today's per-user BYOK vault).
+None of this exists in `core-*` today; it would not live in this Gradle
+project at all except for the client-side login/billing UI and the
+proxy-aware `LlmProvider` implementation that talks to it.
+
+**Recommendation:** don't start Option A's entitlement-check code until one
+explicit decision is made up front — either (i) ship Option A standalone,
+gating something Play Billing alone can gate with no key substitution at all
+(e.g. a usage ceiling raise on BYOK, or Phase 2's heavier local-model
+downloads), or (ii) commit to also building Option B's proxy backend, with
+Option A's entitlement check becoming one input to it. Discovering "where
+does the server key live" only after Option A ships is the failure mode to
+avoid. This is a product/business decision this roadmap can describe but not
+make.
+
+**Acceptance:** not yet defined — to be written against whichever option is
+chosen, per this roadmap's own precedent of scoping each phase against the
+actual codebase before implementing, not in advance of that choice.
+
+---
+
 ### Out of scope (explicitly excluded)
 
 | Feature | Reason |
@@ -562,9 +639,14 @@ embedding model downloads independently of chat models.
 | Voice cloning | Needs a separate ML pipeline with no hook in this stack today |
 | On-device image generation | Separate diffusion runtime; scope creep |
 | Benchmark leaderboard UI | Not relevant to this project's scope |
-| Subscription / proxy backend | Business decision, not (yet) an engineering task |
 | NPU-specific kernels beyond OpenCL/Vulkan | Needs vendor-specific SDKs; deferred |
 | PR auto-generation for this roadmap's phases | Disabled — see Workflow rules above |
+
+**Correction (2026-10-08):** "Subscription / proxy backend" was listed here
+as out of scope in an earlier draft. It has since been scoped as **Phase 6**
+above, at the owner's request — removed from this table because it is no
+longer excluded, only not-yet-started pending the Option A/B decision that
+phase describes. Don't re-add it here without re-removing Phase 6.
 
 **Note on this table, not in the original draft:** the earlier version of
 this section named specific third-party products in a couple of these
