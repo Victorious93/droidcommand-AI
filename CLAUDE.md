@@ -29,6 +29,9 @@ re-verifying something.
   `:app` module (SAF, Android Keystore, Network Security Configuration).
   Update it as each gated item moves to IMPLEMENTED — don't let it go
   stale the way an earlier draft of this file's module count did.
+- **`docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md`** — scoping (2026-10-08, NOT approved, nothing built) for putting the
+  existing knowledge graph into the APK: what exists, the real gaps, options A/B/C, risks and the owner questions.
+  Read it before starting any graph/memory work.
 - **`docs/HACKERAI_SOURCE_AUDIT.md`** — a focused audit (2026-09-26) of
   `Victorious93/hackeraiETC` ("HackerAI"), the project owner's other repo,
   read against a migration brief that referred to it as "HackerGPT" (no
@@ -471,7 +474,7 @@ downloaded model SHA-256-checked before load.
 ---
 
 ### Phase 3 — Prompt Templates + Skill Builder
-**Status:** IN PROGRESS — JVM half `core-templates` done (in-memory only); Room storage and pickers NOT STARTED (need Android SDK). `Skill` kept separate from `Persona` (see 2026-10-07 addendum).
+**Status:** IN PROGRESS — JVM half `core-templates` and Room storage `core-templates-android` done (9 Robolectric tests; never run on a device). Pickers, fill-in form and chat-screen skill application NOT STARTED (need `:app` UI). `Skill` kept separate from `Persona` (see addenda).
 **Branch:** `feature/phase-3-templates-skills`
 **Depends on:** Phase 1
 
