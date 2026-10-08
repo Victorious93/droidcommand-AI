@@ -1,6 +1,10 @@
 package ai.droidcommand.app.ui.memory
 
 import ai.droidcommand.agent.Entity
+import ai.droidcommand.app.ui.components.DroidCard
+import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.theme.AccentCyan
+import ai.droidcommand.app.ui.theme.AccentRed
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,8 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -45,14 +48,15 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel()) {
     var confirmingClear by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Memory", style = MaterialTheme.typography.headlineMedium)
+        ScreenTitle("Persistent Memory")
         Text(
             "What DroidCommand AI has remembered from your conversations. Delete anything you don't " +
                 "want kept, or clear everything.",
             style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         when {
@@ -64,7 +68,11 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel()) {
                         MemoryRow(entity, onDelete = { viewModel.delete(entity.id) })
                     }
                 }
-                OutlinedButton(onClick = { confirmingClear = true }, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { confirmingClear = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentRed),
+                ) {
                     Text("Clear all")
                 }
             }
@@ -100,17 +108,17 @@ private fun EmptyMemoryState() {
 
 @Composable
 private fun MemoryRow(entity: Entity, onDelete: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    DroidCard {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(entity.type.name, style = MaterialTheme.typography.labelSmall, color = AccentCyan)
                 Text(entity.label, style = MaterialTheme.typography.bodyLarge)
-                Text(entity.type.name, style = MaterialTheme.typography.bodySmall)
             }
-            Button(onClick = onDelete) { Text("Delete") }
+            TextButton(onClick = onDelete) { Text("Delete", color = AccentRed) }
         }
     }
 }

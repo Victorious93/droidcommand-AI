@@ -23,6 +23,10 @@ regression) but means every capability below starts from PLANNED.
 DroidCommand AI
 │
 ├── app                      Android application module (UI shell, DI wiring).
+│                            Updated 2026-10-08m: UI restyled to OpenDroid's look (neon-green/
+│                            near-black palette, bordered cards, bubble chat, 4-tab bottom
+│                            bar: Chat/Tools/Memory/Settings; Home stub removed). UNVERIFIED —
+│                            not compiled (no Android SDK/AGP here). See audit addendum.
 │                            Updated 2026-09-28: a real Compose/Hilt Phase 0
 │                            scaffold now exists on disk (nav skeleton, stub
 │                            Home/Chat/Settings screens, and a real Tools
