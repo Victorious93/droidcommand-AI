@@ -401,7 +401,7 @@ against a local mock server, never a live API.
 ---
 
 ### Phase 2 — Local Model Inference (llama.cpp / GGUF)
-**Status:** JVM SLICE ON `main` (PR #119, 2026-10-07; reviewed and fixed 2026-10-07g) — `core-llm-local` (`LocalLlmProvider`, SHA-256-verifying `ModelRepository`, `BackendSelector`, `ModelBenchmark`) tested against FAKE backends only. NO llama.cpp, JNI, NDK build or real inference exists; the Android/NDK half is NOT STARTED and BLOCKED (no NDK). Not wired into `core-llm-factory` or the app. Distribution decided: dynamic feature module (see 2026-10-07 addendum).
+**Status:** JVM slice on `main` (PR #119, 2026-10-07; reviewed and fixed 2026-10-07g) — `core-llm-local` (`LocalLlmProvider`, SHA-256-verifying `ModelRepository`, `BackendSelector`, `ModelBenchmark`) tested against FAKE backends only. Android/NDK half, Phase A–C done (2026-10-08): `core-llm-local-android` fetches and builds llama.cpp (pinned b11484, CPU-only, arm64-v8a/x86_64 — `:assembleDebug` verified in an earlier session's container) and now has a JNI shim + `LlamaCppBackend` (`InferenceBackend`), verified only by host `g++ -fsyntax-only` against the real pinned headers in this session's container (no Android-SDK/network access here to attempt `:assembleDebug` — see the 2026-10-08 Phase C audit addendum). Still NO device/emulator/model has ever run real inference. Phase D (OpenCL/Vulkan) and Phase E (`connectedAndroidTest`) not started. Not wired into `core-llm-factory` or the app. Distribution decided: dynamic feature module (see 2026-10-07 addendum).
 **Branch:** `feature/phase-2-local-inference`
 **Depends on:** Phase 1
 

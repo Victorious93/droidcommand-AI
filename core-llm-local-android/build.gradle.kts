@@ -1,6 +1,7 @@
 // Phase 2 (Consumer Product Roadmap) — native llama.cpp build for ProviderType.LOCAL.
-// Opt-in via includeAndroid (needs an Android SDK + NDK). Phase B: builds llama.cpp only;
-// no JNI shim, no InferenceBackend implementation, no inference yet.
+// Opt-in via includeAndroid (needs an Android SDK + NDK). Phase B built llama.cpp itself;
+// Phase C (this) adds the JNI shim and LlamaCppBackend (InferenceBackend). Still no device/
+// emulator here, so no inference has actually been run — see docs/AUDIT_2026-09-05.md.
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
