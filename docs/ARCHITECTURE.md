@@ -113,6 +113,13 @@ DroidCommand AI
 │                            https://api.groq.com/openai base URL; no
 │                            duplicated wire logic. Mock-server tested only.
 │
+├── core-billing             Phase 6 Option A (2026-10-08): Plan/ProFeature/
+│                            Entitlement, EntitlementProvider (Null = FREE),
+│                            PlayEntitlementMapper (fail-closed purchase ->
+│                            entitlement) and FeatureGate. JVM, stdlib only,
+│                            5 unit tests. NO Play Billing Library glue, no
+│                            UI, no feature is actually gated yet.
+│
 ├── core-templates           PromptTemplate/TemplateEngine ({{var}} expansion),
 │                            Skill/SkillApplier, bundled 20 templates + 5
 │                            skills, idempotent seeding (2026-10-07, Phase 3,
