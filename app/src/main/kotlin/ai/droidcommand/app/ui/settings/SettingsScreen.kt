@@ -1,5 +1,8 @@
 package ai.droidcommand.app.ui.settings
 
+import ai.droidcommand.app.ui.components.DroidCard
+import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.components.SectionLabel
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.CloudProviderSpec
 import androidx.compose.foundation.layout.Arrangement
@@ -36,11 +39,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val status by viewModel.status.collectAsState()
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Settings", style = MaterialTheme.typography.headlineSmall)
-        Text("API keys (stored encrypted on this device)", style = MaterialTheme.typography.titleMedium)
+        ScreenTitle("Settings")
+        SectionLabel("API keys (stored encrypted on this device)")
         CloudProviderCatalog.all.forEach { provider ->
             ApiKeyRow(
                 provider = provider,
@@ -56,24 +59,26 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 private fun ApiKeyRow(provider: CloudProviderSpec, status: KeyStatus, onSave: (String) -> Unit, onClear: () -> Unit) {
     // Not rememberSaveable: a typed-but-unsaved key must not be written into the saved-instance Bundle.
     var input by remember { mutableStateOf("") }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(provider.label, style = MaterialTheme.typography.bodyLarge)
-        Text(statusText(status), style = MaterialTheme.typography.bodySmall)
-        OutlinedTextField(
-            value = input,
-            onValueChange = { input = it },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            label = { Text("API key") },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrect = false),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = {
-                onSave(input)
-                input = ""
-            }, enabled = input.isNotBlank()) { Text("Save") }
-            OutlinedButton(onClick = onClear, enabled = status != KeyStatus.NOT_SET) { Text("Remove") }
+    DroidCard {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(provider.label, style = MaterialTheme.typography.titleMedium)
+            Text(statusText(status), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedTextField(
+                value = input,
+                onValueChange = { input = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("API key") },
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrect = false),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = {
+                    onSave(input)
+                    input = ""
+                }, enabled = input.isNotBlank()) { Text("Save") }
+                OutlinedButton(onClick = onClear, enabled = status != KeyStatus.NOT_SET) { Text("Remove") }
+            }
         }
     }
 }
