@@ -23,8 +23,14 @@ set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 
 add_subdirectory("${LLAMA_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/llama.cpp")
 
-find_library(log-lib log)
-
 add_library(dca_llama_jni SHARED llama_jni.cpp)
-target_link_libraries(dca_llama_jni PRIVATE llama ${log-lib})
+target_link_libraries(dca_llama_jni PRIVATE llama)
+if(ANDROID)
+    find_library(log-lib log)
+    target_link_libraries(dca_llama_jni PRIVATE ${log-lib})
+else()
+    # Host (non-Android) build, used only by scripts/host-smoke-test.sh.
+    find_package(JNI REQUIRED)
+    target_include_directories(dca_llama_jni PRIVATE ${JNI_INCLUDE_DIRS})
+endif()
 set_target_properties(dca_llama_jni PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)

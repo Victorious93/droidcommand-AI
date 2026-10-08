@@ -45,6 +45,8 @@ android {
 
 dependencies {
     api(project(":core-llm-local"))
+    // LlamaCppBackend uses core-agent's Message/Role; core-llm-local only declares it as implementation.
+    api(project(":core-agent"))
 }
 
 kotlin {

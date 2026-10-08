@@ -144,7 +144,7 @@ Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeGenerate(
     }
 
     jclass sinkClass = env->GetObjectClass(sink);
-    jmethodID onTokenMethod = env->GetMethodID(sinkClass, "onToken", "(Ljava/lang/String;)Z");
+    jmethodID onTokenMethod = env->GetMethodID(sinkClass, "onToken", "([B)Z");
     if (onTokenMethod == nullptr) return; // GetMethodID already threw.
 
     // Build the llama_chat_message list: an optional system prompt first, then the turns.
@@ -226,7 +226,11 @@ Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeGenerate(
         std::string piece = tokenToPiece(dca->vocab, nextToken);
         ++generated;
         if (!piece.empty()) {
-            jstring jPiece = env->NewStringUTF(piece.c_str());
+            // Raw bytes, not NewStringUTF: a token can end in the middle of a multi-byte UTF-8
+            // character, and NewStringUTF (modified UTF-8) mangles or rejects a truncated sequence.
+            // The Kotlin side reassembles characters (Utf8StreamDecoder).
+            jbyteArray jPiece = env->NewByteArray(static_cast<jsize>(piece.size()));
+            env->SetByteArrayRegion(jPiece, 0, static_cast<jsize>(piece.size()), reinterpret_cast<const jbyte*>(piece.data()));
             keepGoing = env->CallBooleanMethod(sink, onTokenMethod, jPiece);
             env->DeleteLocalRef(jPiece);
             if (env->ExceptionCheck() || keepGoing == JNI_FALSE) break;

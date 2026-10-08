@@ -6,6 +6,7 @@ import ai.droidcommand.llm.local.BackendKind
 import ai.droidcommand.llm.local.GenerationRequest
 import ai.droidcommand.llm.local.InferenceBackend
 import ai.droidcommand.llm.local.InferenceException
+import ai.droidcommand.llm.local.Utf8StreamDecoder
 
 /**
  * [InferenceBackend] backed by the llama.cpp JNI shim ([llama_jni.cpp]). CPU only (matches the
@@ -39,6 +40,9 @@ class LlamaCppBackend : InferenceBackend {
         val turns = request.messages.filter { it.role != Role.SYSTEM }
         val roles = turns.map { roleName(it.role) }.toTypedArray()
         val contents = turns.map(Message::content).toTypedArray()
+        val emit = onToken
+        val decoder = Utf8StreamDecoder()
+        var stopped = false
         nativeGenerate(
             h,
             request.systemPrompt,
@@ -47,9 +51,20 @@ class LlamaCppBackend : InferenceBackend {
             request.maxTokens,
             request.temperature ?: DEFAULT_TEMPERATURE,
             object : TokenSink {
-                override fun onToken(token: String): Boolean = onToken(token)
+                override fun onToken(bytes: ByteArray): Boolean {
+                    // A token may end mid-character; only complete characters are forwarded.
+                    val text = decoder.push(bytes)
+                    if (text.isEmpty()) return true
+                    val keepGoing = emit(text)
+                    if (!keepGoing) stopped = true
+                    return keepGoing
+                }
             },
         )
+        if (!stopped) {
+            val tail = decoder.flush()
+            if (tail.isNotEmpty()) emit(tail)
+        }
     }
 
     override fun unload() {
@@ -100,10 +115,11 @@ class LlamaCppBackend : InferenceBackend {
 
 /**
  * Called from native code (`llama_jni.cpp`'s `CallBooleanMethod(sink, onToken, ...)`) once per
- * generated token. A dedicated interface rather than `(String) -> Boolean` directly: Kotlin
+ * generated token, with the token's raw bytes. A dedicated interface rather than `(String) -> Boolean` directly: Kotlin
  * function types compile to `kotlin.jvm.functions.Function1` with a boxed `Object invoke(Object)`,
  * which would need JNI-side unboxing; this keeps the native call signature primitive.
  */
 interface TokenSink {
-    fun onToken(token: String): Boolean
+    /** One token's raw UTF-8 bytes, which may end in the middle of a character. Return `false` to stop. */
+    fun onToken(bytes: ByteArray): Boolean
 }
