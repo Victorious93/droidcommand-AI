@@ -135,6 +135,15 @@ DroidCommand AI
 │                            mutation-checked. NOT run on a device; no pickers, no
 │                            fill-in form, not wired into :app.
 │
+├── core-knowledge-android   Room-backed KnowledgeGraph (2026-10-08, knowledge-graph K1,
+│                            storage only). Opt-in (includeAndroid), minSdk 26.
+│                            Same observable behavior as InMemoryKnowledgeGraph
+│                            (differential-tested); traversal/neighbors are indexed;
+│                            searchEntities is an O(n) Kotlin substring match.
+│                            11 Robolectric tests, two mutation-checked. NOT run on a
+│                            device. No retrieval wiring, no extraction trigger, no UI,
+│                            not wired into :app (see docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md).
+│
 ├── core-llm-local-android   Phase 2 native half (B: native build, C: JNI backend, D: Vulkan).
 │                            Android library (opt-in, includeAndroid, minSdk 28).
 │                            Fetches llama.cpp b11484 and Khronos Vulkan-Headers /
