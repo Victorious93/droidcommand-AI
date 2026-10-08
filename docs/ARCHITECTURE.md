@@ -27,6 +27,10 @@ DroidCommand AI
 │                            near-black palette, bordered cards, bubble chat, 4-tab bottom
 │                            bar: Chat/Tools/Memory/Settings; Home stub removed). UNVERIFIED —
 │                            not compiled (no Android SDK/AGP here). See audit addendum.
+│                            Updated 2026-10-08p: Plan and Logs tabs added (6-tab bar). Plan =
+│                            one Forge objective via core-agent.PlanRunner; Logs = read-only
+│                            view of a now-wired JsonFileAuditLog. Plan history is in-memory
+│                            only. UNVERIFIED on-device; JVM parts tested. See audit addendum.
 │                            Updated 2026-09-28: a real Compose/Hilt Phase 0
 │                            scaffold now exists on disk (nav skeleton, stub
 │                            Home/Chat/Settings screens, and a real Tools

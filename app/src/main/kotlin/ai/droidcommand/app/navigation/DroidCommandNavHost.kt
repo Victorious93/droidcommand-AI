@@ -1,7 +1,9 @@
 package ai.droidcommand.app.navigation
 
 import ai.droidcommand.app.ui.chat.ChatScreen
+import ai.droidcommand.app.ui.logs.LogsScreen
 import ai.droidcommand.app.ui.memory.MemoryScreen
+import ai.droidcommand.app.ui.plan.PlanScreen
 import ai.droidcommand.app.ui.settings.SettingsScreen
 import ai.droidcommand.app.ui.theme.AccentNeonGreen
 import ai.droidcommand.app.ui.theme.BackgroundDark
@@ -16,7 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
@@ -41,6 +45,8 @@ import androidx.navigation.compose.rememberNavController
 
 object Routes {
     const val CHAT = "chat"
+    const val PLAN = "plan"
+    const val LOGS = "logs"
     const val TOOLS = "tools"
     const val METASPLOIT = "tools/metasploit"
     const val SETOOLKIT = "tools/setoolkit"
@@ -50,12 +56,13 @@ object Routes {
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
 
-// The four top-level destinations. OpenDroid's bar also has Plan/Macros/Logs; those features do
-// not exist in this app, so no tabs are shown for them.
+// Same order as OpenDroid's bar, with Tools where its Macros tab is (this app has no macro UI).
 private val tabs = listOf(
     Tab(Routes.CHAT, "Chat", Icons.AutoMirrored.Filled.Chat),
-    Tab(Routes.TOOLS, "Tools", Icons.Filled.Build),
+    Tab(Routes.PLAN, "Plan", Icons.AutoMirrored.Filled.List),
     Tab(Routes.MEMORY, "Memory", Icons.Filled.Star),
+    Tab(Routes.TOOLS, "Tools", Icons.Filled.Build),
+    Tab(Routes.LOGS, "Logs", Icons.Filled.History),
     Tab(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
 )
 
@@ -79,6 +86,8 @@ fun DroidCommandNavHost(navController: NavHostController = rememberNavController
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(Routes.CHAT) { ChatScreen() }
+            composable(Routes.PLAN) { PlanScreen() }
+            composable(Routes.LOGS) { LogsScreen() }
             composable(Routes.TOOLS) { ToolsScreen(navController) }
             composable(Routes.METASPLOIT) { MetasploitScreen() }
             composable(Routes.SETOOLKIT) { SetToolScreen() }

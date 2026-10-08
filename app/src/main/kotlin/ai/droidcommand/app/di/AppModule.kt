@@ -20,6 +20,7 @@ import ai.droidcommand.metasploit.NullMetasploitExecutor
 import ai.droidcommand.root.NullRootExecutor
 import ai.droidcommand.root.RootTool
 import ai.droidcommand.security.ApprovalPrompt
+import ai.droidcommand.security.JsonFileAuditLog
 import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
@@ -114,6 +115,16 @@ object AppModule {
     @Singleton
     fun provideApprovalPrompt(composePrompt: ComposeApprovalPrompt): ApprovalPrompt = composePrompt
 
+    /**
+     * The on-device audit trail the Logs screen reads. Append-only JSON Lines under app-private storage;
+     * fails closed at its default capacity (10,000 events) — once full, further sensitive actions are
+     * refused rather than run unaudited, and there is deliberately no way to clear it from the app.
+     */
+    @Provides
+    @Singleton
+    fun provideAuditLog(@ApplicationContext context: Context): JsonFileAuditLog =
+        JsonFileAuditLog(context.filesDir.toPath().resolve("audit").resolve("audit.jsonl"))
+
     @Provides
     @Singleton
     fun provideToolRunner(
@@ -121,8 +132,9 @@ object AppModule {
         stateMachine: AgentStateMachine,
         policy: SecurityPolicy,
         approvalPrompt: ApprovalPrompt,
+        auditLog: JsonFileAuditLog,
     ): ToolRunner {
         val delegate = ToolExecutor(registry, stateMachine)
-        return SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(policy), approvalPrompt)
+        return SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(policy), approvalPrompt, auditLog = auditLog)
     }
 }
