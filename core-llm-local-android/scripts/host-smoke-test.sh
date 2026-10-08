@@ -32,4 +32,4 @@ cp="$here/build/tmp/kotlin-classes/debug:$root/core-llm-local/build/classes/kotl
 javac -cp "$cp" -d "$work/classes" "$here/scripts/host-smoke/Smoke.java"
 
 LD_LIBRARY_PATH="$work/host:$work/host/bin" \
-  java -Djava.library.path="$work/host" -cp "$work/classes:$cp" Smoke "$model" 2>&1 | grep -E '^(loaded|OUTPUT|pieces|early|MULTIBYTE|overflow|unloaded)'
+  java -Djava.library.path="$work/host" -cp "$work/classes:$cp" Smoke "$model" 2>&1 | grep -E '^(loaded|OUTPUT|pieces|early|MULTIBYTE|overflow|unloaded|probe|vulkan|opencl)'

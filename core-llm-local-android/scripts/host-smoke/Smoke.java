@@ -1,5 +1,7 @@
 import ai.droidcommand.agent.Message;
 import ai.droidcommand.agent.Role;
+import ai.droidcommand.llm.local.BackendKind;
+import ai.droidcommand.llm.local.DeviceCapabilities;
 import ai.droidcommand.llm.local.GenerationRequest;
 import ai.droidcommand.llm.local.InferenceException;
 import ai.droidcommand.llm.local.android.LlamaCppBackend;
@@ -49,5 +51,22 @@ public class Smoke {
         }
         b.unload();
         System.out.println("unloaded");
+
+        // Device probing and the no-silent-fallback rule against the real native registry. The host
+        // build has no GPU backend, so probing must report none and a Vulkan load must fail loudly.
+        DeviceCapabilities caps = LlamaCppBackend.Companion.probeCapabilities();
+        System.out.println("probe: vulkan=" + caps.getVulkanAvailable());
+        try {
+            new LlamaCppBackend(BackendKind.VULKAN).load(a[0], 512);
+            System.out.println("VULKAN LOAD SUCCEEDED (unexpected on this host)");
+        } catch (InferenceException e) {
+            System.out.println("vulkan-without-device -> InferenceException: " + e.getMessage());
+        }
+        try {
+            new LlamaCppBackend(BackendKind.OPENCL);
+            System.out.println("OPENCL ACCEPTED (unexpected)");
+        } catch (IllegalArgumentException e) {
+            System.out.println("opencl rejected: " + e.getMessage());
+        }
     }
 }

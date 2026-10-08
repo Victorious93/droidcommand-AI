@@ -127,37 +127,32 @@ DroidCommand AI
 │                            storage and the bottom-sheet pickers are Android
 │                            and NOT built.
 │
-├── core-llm-local-android   Phase 2 native build (Phase B, 2026-10-08) + JNI shim
-│                            (Phase C, 2026-10-08): Android library (opt-in,
-│                            includeAndroid) that fetches llama.cpp at pinned tag
-│                            b11484 / commit 5de7334 (verified by
-│                            scripts/fetch-llama-cpp.sh) and builds libllama +
-│                            libggml* via CMake for arm64-v8a and x86_64, CPU only.
-│                            Phase C adds llama_jni.cpp (load/generate/unload
-│                            against llama.cpp's public C API: chat-template
-│                            rendering, tokenize, greedy/temp+top-k/top-p sampling,
-│                            streaming detokenize) and LlamaCppBackend.kt
-│                            (InferenceBackend). Verified only by host g++
-│                            -fsyntax-only against the real pinned llama.h/ggml
-│                            headers (clean under -Wall -Wextra -Wpedantic) — this
-│                            container's network policy blocks dl.google.com, so
-│                            the Android Gradle Plugin itself cannot be resolved
-│                            here and :assembleDebug could not be attempted (not a
-│                            regression: a vanilla checkout's ./gradlew test fails
-│                            the same way in this container, Android modules
-│                            included or not). No compile against the Android NDK
-│                            toolchain, no link, no device/emulator, no inference
-│                            ever run.
+├── core-llm-local-android   Phase 2 native half (B: native build, C: JNI backend, D: Vulkan).
+│                            Android library (opt-in, includeAndroid, minSdk 28).
+│                            Fetches llama.cpp b11484 and Khronos Vulkan-Headers /
+│                            SPIRV-Headers vulkan-sdk-1.4.363.0, each pinned to a
+│                            verified commit (scripts/fetch-llama-cpp.sh); builds
+│                            libllama + libggml* + libggml-vulkan + the JNI shim for
+│                            arm64-v8a and x86_64. LlamaCppBackend (InferenceBackend)
+│                            supports CPU and VULKAN; probeCapabilities()/create()
+│                            read ggml's device registry. Token bytes cross JNI raw and
+│                            Kotlin reassembles UTF-8 (Utf8StreamDecoder). CPU inference
+│                            is verified for real on a Linux x86_64 HOST only
+│                            (scripts/host-smoke-test.sh). The VULKAN path is COMPILED
+│                            ONLY: no GPU, device or emulator has ever run it. No
+│                            OpenCL (deferred), no armeabi-v7a, not wired into :app.
 │
 ├── core-llm-local           LocalLlmProvider (2026-10-07, Phase 2, JVM slice only) —
 │                            ProviderType.LOCAL StreamingLlmProvider over an
 │                            InferenceBackend seam; ModelRepository with
 │                            SHA-256 verify-before-load; BackendSelector
-│                            (CPU/OpenCL/Vulkan); ModelBenchmark. Tested
-│                            against FAKE backends only. NO llama.cpp, JNI,
-│                            NDK or real inference exists — PLANNED/BLOCKED
-│                            (no Android SDK/NDK). Not wired into
-│                            core-llm-factory (needs an on-device backend).
+│                            (CPU/OpenCL/Vulkan); ModelBenchmark;
+│                            Utf8StreamDecoder. Pure JVM, tested against FAKE
+│                            backends; the real llama.cpp backend lives in
+│                            core-llm-local-android. core-llm-factory builds a
+│                            `local` provider from config when given
+│                            LocalProviderResources (2026-10-08e); no real
+│                            caller constructs those yet.
 │
 ├── core-llm-openai          OpenAiLlmProvider — a second real LlmProvider,
 │                            speaking the OpenAI Chat Completions API
