@@ -66,7 +66,7 @@ private fun ApiKeyRow(provider: CloudProviderSpec, status: KeyStatus, onSave: (S
             singleLine = true,
             label = { Text("API key") },
             visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrect = false),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = {

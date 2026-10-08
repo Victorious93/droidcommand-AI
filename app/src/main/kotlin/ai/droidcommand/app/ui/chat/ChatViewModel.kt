@@ -12,6 +12,7 @@ import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.llm.factory.MemoryResult
 import ai.droidcommand.remote.HttpTransport
 import android.content.Context
+import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -85,12 +86,12 @@ class ChatViewModel @Inject constructor(
     }
 
     fun selectProvider(provider: CloudProviderSpec) {
-        prefs.edit().putString(KEY_PROVIDER, provider.id).apply()
+        prefs.edit { putString(KEY_PROVIDER, provider.id) }
         mutableState.update { it.copy(provider = provider, model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel, error = null) }
     }
 
     fun setModel(model: String) {
-        prefs.edit().putString(modelKey(mutableState.value.provider), model).apply()
+        prefs.edit { putString(modelKey(mutableState.value.provider), model) }
         mutableState.update { it.copy(model = model) }
     }
 
@@ -125,7 +126,7 @@ class ChatViewModel @Inject constructor(
 
     /** Persists the on/off choice for the next time this screen is opened; does not reconfigure [session] now. */
     fun setMemoryEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_MEMORY, enabled).apply()
+        prefs.edit { putBoolean(KEY_MEMORY, enabled) }
         mutableState.update { it.copy(memoryEnabled = enabled) }
     }
 
