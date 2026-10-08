@@ -1,7 +1,7 @@
 // Phase 2 / Phase C: JNI bridge between LlamaCppBackend (Kotlin) and llama.cpp's public C API
 // (third_party/llama.cpp/include/llama.h, fetched by scripts/fetch-llama-cpp.sh). This file owns
-// every native call; no other translation unit in this module touches llama.h. CPU backend only
-// (matches CMakeLists.txt) — OpenCL/Vulkan is Phase D.
+// every native call; no other translation unit in this module touches llama.h. CPU always; Vulkan
+// when the library was built with it (Android, see CMakeLists.txt) — Phase D, compiled only.
 //
 // Lifetime: nativeLoad() returns an opaque jlong handle to a heap-allocated DcaContext; the
 // Kotlin side is responsible for calling nativeUnload() exactly once per successful nativeLoad()
@@ -17,6 +17,10 @@
 
 #include "llama.h"
 
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
+
 namespace {
 
 struct DcaContext {
@@ -27,8 +31,38 @@ struct DcaContext {
 
 std::once_flag g_backendInitFlag;
 
+void llamaLog(ggml_log_level level, const char* text, void* /*userData*/) {
+#ifdef __ANDROID__
+    int priority = level == GGML_LOG_LEVEL_ERROR ? ANDROID_LOG_ERROR
+                 : level == GGML_LOG_LEVEL_WARN  ? ANDROID_LOG_WARN
+                                                 : ANDROID_LOG_INFO;
+    __android_log_print(priority, "dca_llama", "%s", text);
+#else
+    (void)level;
+    (void)text;
+#endif
+}
+
 void ensureBackendInit() {
-    std::call_once(g_backendInitFlag, []() { llama_backend_init(); });
+    std::call_once(g_backendInitFlag, []() {
+        llama_log_set(llamaLog, nullptr);
+        llama_backend_init();
+    });
+}
+
+// Backend codes shared with Kotlin (LlamaCppBackend): 0 = CPU, 1 = Vulkan.
+constexpr jint kBackendCpu = 0;
+constexpr jint kBackendVulkan = 1;
+
+bool isGpu(ggml_backend_dev_t dev) {
+    const auto type = ggml_backend_dev_type(dev);
+    return type == GGML_BACKEND_DEVICE_TYPE_GPU || type == GGML_BACKEND_DEVICE_TYPE_IGPU;
+}
+
+// ggml names a device after its backend ("Vulkan0", ...). This prefix match is from reading the
+// ggml sources; it has not been observed on a real GPU.
+bool isVulkanDevice(ggml_backend_dev_t dev) {
+    return std::string(ggml_backend_dev_name(dev)).rfind("Vulkan", 0) == 0;
 }
 
 // Throws ai.droidcommand.llm.local.InferenceException(message, cause=null) and returns to the
@@ -102,13 +136,48 @@ std::string tokenToPiece(const llama_vocab* vocab, llama_token token) {
 
 extern "C" {
 
+// Bitmask of GPU backends that are compiled in AND have a device right now: 1 = Vulkan. It asks
+// ggml's device registry, so it reflects what can actually run, not what was requested.
+JNIEXPORT jint JNICALL
+Java_ai_droidcommand_llm_local_android_LlamaProbe_nativeProbe(JNIEnv* /*env*/, jclass /*clazz*/) {
+    ensureBackendInit();
+    jint mask = 0;
+    for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+        if (isGpu(dev) && isVulkanDevice(dev)) mask |= 1;
+    }
+    return mask;
+}
+
 JNIEXPORT jlong JNICALL
 Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeLoad(
-    JNIEnv* env, jobject /*thiz*/, jstring jModelPath, jint contextTokens) {
+    JNIEnv* env, jobject /*thiz*/, jstring jModelPath, jint contextTokens, jint backend) {
     ensureBackendInit();
 
-    const char* path = env->GetStringUTFChars(jModelPath, nullptr);
     llama_model_params modelParams = llama_model_default_params();
+    // `devices` is read during model load and must outlive that call.
+    std::vector<ggml_backend_dev_t> devices;
+    if (backend == kBackendCpu) {
+        modelParams.n_gpu_layers = 0;
+    } else if (backend == kBackendVulkan) {
+        for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+            ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+            if (isGpu(dev) && isVulkanDevice(dev)) devices.push_back(dev);
+        }
+        if (devices.empty()) {
+            // Fail loudly: silently running on the CPU would make a "GPU" benchmark meaningless.
+            throwInferenceException(env, "requested GPU backend has no usable device on this build/device");
+            return 0;
+        }
+        devices.push_back(nullptr); // the list is NULL-terminated
+        modelParams.devices = devices.data();
+        modelParams.n_gpu_layers = 999; // offload every layer
+    } else {
+        throwInferenceException(env, "unknown backend code " + std::to_string(backend));
+        return 0;
+    }
+
+    const char* path = env->GetStringUTFChars(jModelPath, nullptr);
     llama_model* model = llama_model_load_from_file(path, modelParams);
     env->ReleaseStringUTFChars(jModelPath, path);
     if (model == nullptr) {
@@ -144,7 +213,7 @@ Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeGenerate(
     }
 
     jclass sinkClass = env->GetObjectClass(sink);
-    jmethodID onTokenMethod = env->GetMethodID(sinkClass, "onToken", "(Ljava/lang/String;)Z");
+    jmethodID onTokenMethod = env->GetMethodID(sinkClass, "onToken", "([B)Z");
     if (onTokenMethod == nullptr) return; // GetMethodID already threw.
 
     // Build the llama_chat_message list: an optional system prompt first, then the turns.
@@ -226,7 +295,11 @@ Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeGenerate(
         std::string piece = tokenToPiece(dca->vocab, nextToken);
         ++generated;
         if (!piece.empty()) {
-            jstring jPiece = env->NewStringUTF(piece.c_str());
+            // Raw bytes, not NewStringUTF: a token can end in the middle of a multi-byte UTF-8
+            // character, and NewStringUTF (modified UTF-8) mangles or rejects a truncated sequence.
+            // The Kotlin side reassembles characters (Utf8StreamDecoder).
+            jbyteArray jPiece = env->NewByteArray(static_cast<jsize>(piece.size()));
+            env->SetByteArrayRegion(jPiece, 0, static_cast<jsize>(piece.size()), reinterpret_cast<const jbyte*>(piece.data()));
             keepGoing = env->CallBooleanMethod(sink, onTokenMethod, jPiece);
             env->DeleteLocalRef(jPiece);
             if (env->ExceptionCheck() || keepGoing == JNI_FALSE) break;

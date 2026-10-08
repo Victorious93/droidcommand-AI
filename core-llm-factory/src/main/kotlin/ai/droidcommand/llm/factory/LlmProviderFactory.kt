@@ -8,12 +8,16 @@ import ai.droidcommand.config.MultiLlmConfigLoader
 import ai.droidcommand.llm.AiProviderSelector
 import ai.droidcommand.llm.DefaultAiProviderSelector
 import ai.droidcommand.llm.LlmPlanner
+import ai.droidcommand.llm.LlmProvider
 import ai.droidcommand.llm.LocalFirstOrdering
 import ai.droidcommand.llm.ModelRouter
 import ai.droidcommand.llm.RegisteredProvider
 import ai.droidcommand.llm.anthropic.AnthropicLlmProvider
 import ai.droidcommand.llm.google.GeminiLlmProvider
 import ai.droidcommand.llm.groq.GroqLlmProvider
+import ai.droidcommand.llm.local.InferenceBackend
+import ai.droidcommand.llm.local.LocalLlmProvider
+import ai.droidcommand.llm.local.ModelRepository
 import ai.droidcommand.llm.openai.OpenAiLlmProvider
 import ai.droidcommand.remote.HttpTransport
 
@@ -25,6 +29,26 @@ import ai.droidcommand.remote.HttpTransport
  * construct.
  */
 class UnknownLlmProviderException(message: String) : IllegalStateException(message)
+
+/**
+ * A config entry named provider `local` but the caller did not supply what a local provider needs
+ * (a [LocalProviderResources]), or the entry's model is not registered in its [ModelRepository].
+ * Raised when the provider is built, not on its first request, so a misconfigured device fails at
+ * startup instead of in the middle of a conversation.
+ */
+class LocalProviderNotConfiguredException(message: String) : IllegalStateException(message)
+
+/**
+ * What the `local` provider needs that cannot come from a text config: the [repository] of known
+ * models (each with its expected SHA-256) and a [backendFactory] producing the on-device
+ * [InferenceBackend]. A factory, not an instance, because one native context holds exactly one
+ * model: every `local` config entry gets its own backend, so two entries cannot evict each other.
+ * Backends load lazily, so an unused entry costs no memory.
+ */
+class LocalProviderResources(
+    val repository: ModelRepository,
+    val backendFactory: () -> InferenceBackend,
+)
 
 /**
  * Closes the provider-construction half of "config-driven multi-provider
@@ -67,14 +91,19 @@ object LlmProviderFactory {
      * anything else throws [UnknownLlmProviderException] naming both the
      * bad value and the known set, rather than silently skipping it.
      */
-    fun build(configured: ConfiguredLlmProvider, transport: HttpTransport): RegisteredProvider {
+    fun build(
+        configured: ConfiguredLlmProvider,
+        transport: HttpTransport,
+        local: LocalProviderResources? = null,
+    ): RegisteredProvider {
         val provider = when (configured.config.provider.lowercase()) {
             "anthropic" -> AnthropicLlmProvider(configured.config, transport)
             "openai" -> OpenAiLlmProvider(configured.config, transport)
             "google", "gemini" -> GeminiLlmProvider(configured.config, transport)
             "groq" -> GroqLlmProvider(configured.config, transport)
+            "local" -> buildLocal(configured, local)
             else -> throw UnknownLlmProviderException(
-                "Unknown provider '${configured.config.provider}' for '${configured.info.id}'; expected one of anthropic, openai, google (alias gemini), groq",
+                "Unknown provider '${configured.config.provider}' for '${configured.info.id}'; expected one of anthropic, openai, google (alias gemini), groq, local",
             )
         }
         return RegisteredProvider(configured.info, provider)
@@ -87,16 +116,19 @@ object LlmProviderFactory {
      * the same fail-closed discipline `core-security` already applies
      * elsewhere in this codebase.
      */
-    fun buildAll(configured: List<ConfiguredLlmProvider>, transport: HttpTransport): List<RegisteredProvider> =
-        configured.map { build(it, transport) }
+    fun buildAll(
+        configured: List<ConfiguredLlmProvider>,
+        transport: HttpTransport,
+        local: LocalProviderResources? = null,
+    ): List<RegisteredProvider> = configured.map { build(it, transport, local) }
 
     /**
      * The one call a real caller actually wants: reads every configured
      * provider from [source] via [MultiLlmConfigLoader] and constructs all
      * of them over [transport] in a single step.
      */
-    fun load(source: ConfigSource, transport: HttpTransport): List<RegisteredProvider> =
-        buildAll(MultiLlmConfigLoader.load(source), transport)
+    fun load(source: ConfigSource, transport: HttpTransport, local: LocalProviderResources? = null): List<RegisteredProvider> =
+        buildAll(MultiLlmConfigLoader.load(source), transport, local)
 
     /**
      * [load]s [source] and wraps the result in a real [AiProviderSelector] —
@@ -111,7 +143,8 @@ object LlmProviderFactory {
         source: ConfigSource,
         transport: HttpTransport,
         tokenBudgetManager: TokenBudgetManager? = null,
-    ): AiProviderSelector = DefaultAiProviderSelector(load(source, transport), tokenBudgetManager)
+        local: LocalProviderResources? = null,
+    ): AiProviderSelector = DefaultAiProviderSelector(load(source, transport, local), tokenBudgetManager)
 
     /**
      * [load]s [source] and wraps the result in a real [ModelRouter], ordered
@@ -124,8 +157,8 @@ object LlmProviderFactory {
      * unconfigured [source] surfaces as that same `IllegalArgumentException`
      * here, not a silently-empty router.
      */
-    fun createModelRouter(source: ConfigSource, transport: HttpTransport): ModelRouter =
-        ModelRouter(LocalFirstOrdering.order(load(source, transport)))
+    fun createModelRouter(source: ConfigSource, transport: HttpTransport, local: LocalProviderResources? = null): ModelRouter =
+        ModelRouter(LocalFirstOrdering.order(load(source, transport, local)))
 
     /**
      * [createModelRouter]s [source] and wraps the result in a real
@@ -145,6 +178,20 @@ object LlmProviderFactory {
      * ready-to-pass-in [Planner], with no new type and no change to
      * `core-agent` needed or made.
      */
-    fun createPlanner(source: ConfigSource, transport: HttpTransport): Planner =
-        LlmPlanner(createModelRouter(source, transport))
+    fun createPlanner(source: ConfigSource, transport: HttpTransport, local: LocalProviderResources? = null): Planner =
+        LlmPlanner(createModelRouter(source, transport, local))
+
+    private fun buildLocal(configured: ConfiguredLlmProvider, local: LocalProviderResources?): LlmProvider {
+        val id = configured.info.id
+        val resources = local ?: throw LocalProviderNotConfiguredException(
+            "Provider '$id' is 'local' but no LocalProviderResources (model repository + backend factory) was supplied",
+        )
+        val modelId = configured.config.model
+        if (resources.repository.get(modelId) == null) {
+            throw LocalProviderNotConfiguredException(
+                "Provider '$id' names model '$modelId', which is not registered in the ModelRepository",
+            )
+        }
+        return LocalLlmProvider(modelId, resources.repository, resources.backendFactory(), configured.config)
+    }
 }

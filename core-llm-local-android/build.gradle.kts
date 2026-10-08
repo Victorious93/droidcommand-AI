@@ -18,7 +18,10 @@ android {
     ndkVersion = "28.2.13676358"
 
     defaultConfig {
-        minSdk = 26
+        // 28, not 26: ggml-vulkan calls Vulkan 1.1 entry points (vkGetPhysicalDeviceFeatures2) and
+        // the NDK's libvulkan.so stub only exports them from API 28. :app (minSdk 26) cannot depend
+        // on this module as is; the app is expected to offer local inference only on API 28+.
+        minSdk = 28
         ndk {
             // armeabi-v7a is deliberately not listed until a build of it is proven.
             abiFilters += listOf("arm64-v8a", "x86_64")
@@ -45,6 +48,10 @@ android {
 
 dependencies {
     api(project(":core-llm-local"))
+    // LlamaCppBackend uses core-agent's Message/Role; core-llm-local only declares it as implementation.
+    api(project(":core-agent"))
+    testImplementation(kotlin("test"))
+    testImplementation("junit:junit:4.13.2")
 }
 
 kotlin {
