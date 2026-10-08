@@ -555,7 +555,8 @@ embedding model downloads independently of chat models.
 ---
 
 ### Phase 6 — Subscription Accounts (BYOK Alternative)
-**Status:** SCOPED, NOT STARTED — scoping requested by the owner 2026-10-08
+**Decision (2026-10-08):** Option A, standalone — a Play subscription unlocks a "Pro" tier on top of BYOK (local-model downloads, document RAG, extended templates/skills). No key substitution, no backend. JVM slice `core-billing` done; Play Billing Library glue + UI NOT STARTED.
+**Status:** IN PROGRESS (JVM slice only) — scoping requested by the owner 2026-10-08
 (off the Social-Engineer Toolkit/Settings screenshots asking for "login for
 subscriptions, not just API keys"); no code written for this phase.
 **Branch:** `feature/phase-6-subscriptions` (not yet created)
