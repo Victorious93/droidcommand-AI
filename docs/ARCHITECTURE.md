@@ -33,6 +33,27 @@ DroidCommand AI
 │                            and NOT build-verified — gated on an Android
 │                            SDK this environment does not have, same as
 │                            before this update.
+│                            Updated 2026-10-08 (knowledge-graph K4, correcting
+│                            PR #132's own K4 claim — see core-knowledge-android's
+│                            row): new ai.droidcommand.app.memory.MemoryController
+│                            (Android-free; delete/clearAll cascade over
+│                            KnowledgeGraph.searchEntities("") for "list all") +
+│                            MemoryViewModel/MemoryScreen (a card list, per-row
+│                            delete, a confirm dialog gating "Clear all", an
+│                            empty state; compile-only, never run on a device).
+│                            AppModule now provides a singleton RoomKnowledgeGraph
+│                            as KnowledgeGraph. ChatViewModel takes it, reads a
+│                            persisted "Memory" toggle (default off) once at
+│                            construction, and only then wires K2's GraphRetriever
+│                            and K3's rememberConversation() into its ChatSession;
+│                            ChatScreen gained the toggle and a "Remember this
+│                            chat" button. A new Home "Memory" button reaches the
+│                            screen. 4 new plain-JUnit MemoryControllerTest cases
+│                            (the app module's first unit tests) — not run here;
+│                            this container cannot resolve the Android Gradle
+│                            Plugin at all (dl.google.com denied — see audit
+│                            addendum 2026-10-08k), so nothing in :app has ever
+│                            been compiled, including this change.
 │
 ├── cli                      Pure Kotlin/JVM device-free CLI entrypoint
 │                            (added 2026-09-12). Dispatches Pilot
@@ -144,8 +165,11 @@ DroidCommand AI
 │                            device. Retrieval (K2) lives in core-agent.GraphRetriever and
 │                            ChatSession's `knowledge` param; extraction (K3) is
 │                            ChatSession.rememberConversation() + its `knowledgeGraph`
-│                            param (both off by default). No UI (K4), not wired into
-│                            :app (see the scoping doc).
+│                            param (both off by default). K4 (view/delete UI + the
+│                            chat on/off gate) is in :app — see that row. PR #132's
+│                            title claimed K4 was built in that PR; the merged diff was
+│                            K3 only, so this file's K4 status below is what a later
+│                            session actually built and is the state to trust.
 │
 ├── core-llm-local-android   Phase 2 native half (B: native build, C: JNI backend, D: Vulkan).
 │                            Android library (opt-in, includeAndroid, minSdk 28).

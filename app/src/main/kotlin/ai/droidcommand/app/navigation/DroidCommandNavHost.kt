@@ -2,6 +2,7 @@ package ai.droidcommand.app.navigation
 
 import ai.droidcommand.app.ui.chat.ChatScreen
 import ai.droidcommand.app.ui.home.HomeScreen
+import ai.droidcommand.app.ui.memory.MemoryScreen
 import ai.droidcommand.app.ui.settings.SettingsScreen
 import ai.droidcommand.app.ui.tools.ToolsScreen
 import ai.droidcommand.app.ui.tools.metasploit.MetasploitScreen
@@ -19,6 +20,7 @@ object Routes {
     const val METASPLOIT = "tools/metasploit"
     const val SETOOLKIT = "tools/setoolkit"
     const val SETTINGS = "settings"
+    const val MEMORY = "memory"
 }
 
 /**
@@ -36,5 +38,6 @@ fun DroidCommandNavHost(navController: NavHostController = rememberNavController
         composable(Routes.METASPLOIT) { MetasploitScreen() }
         composable(Routes.SETOOLKIT) { SetToolScreen() }
         composable(Routes.SETTINGS) { SettingsScreen() }
+        composable(Routes.MEMORY) { MemoryScreen() }
     }
 }

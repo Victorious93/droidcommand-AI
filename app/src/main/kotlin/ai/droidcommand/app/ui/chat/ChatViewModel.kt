@@ -1,12 +1,15 @@
 package ai.droidcommand.app.ui.chat
 
 import ai.droidcommand.agent.ConversationStore
+import ai.droidcommand.agent.GraphRetriever
+import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.agent.Role
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.llm.factory.ChatResult
 import ai.droidcommand.llm.factory.ChatSession
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.CloudProviderSpec
+import ai.droidcommand.llm.factory.MemoryResult
 import ai.droidcommand.remote.HttpTransport
 import android.content.Context
 import androidx.lifecycle.ViewModel
@@ -31,22 +34,38 @@ data class ChatUiState(
     val streaming: String = "",
     val sending: Boolean = false,
     val error: String? = null,
+    val memoryEnabled: Boolean = false,
+    val memoryStatus: String? = null,
 )
 
 /**
  * Compiles; never run on a device. All chat logic lives in the JVM-tested
  * [ai.droidcommand.llm.factory.ChatSession]; this class only owns UI state and threading. The
  * provider/model choice (not secret) is remembered in plain SharedPreferences; API keys are not.
+ *
+ * Knowledge-graph phases K2/K3: the Memory toggle (persisted, default off) is read once at
+ * construction and decides whether [session] reads from and writes to [graph] for its whole
+ * lifetime — it takes effect on the next screen visit, not live, the same restraint
+ * [MemoryViewModel][ai.droidcommand.app.ui.memory.MemoryViewModel] does not need since it has no
+ * per-request behavior to reconfigure.
  */
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     vault: EncryptedSecretsVault,
     store: ConversationStore,
     transport: HttpTransport,
+    graph: KnowledgeGraph,
     @ApplicationContext context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
-    private val session = ChatSession(vault, store, transport = transport)
+    private val memoryEnabled = prefs.getBoolean(KEY_MEMORY, false)
+    private val session = ChatSession(
+        vault,
+        store,
+        transport = transport,
+        knowledge = if (memoryEnabled) GraphRetriever(graph) else null,
+        knowledgeGraph = if (memoryEnabled) graph else null,
+    )
 
     private val mutableState = MutableStateFlow(initialState())
     val state: StateFlow<ChatUiState> = mutableState.asStateFlow()
@@ -54,7 +73,7 @@ class ChatViewModel @Inject constructor(
     private fun initialState(): ChatUiState {
         val provider = CloudProviderCatalog.byId(prefs.getString(KEY_PROVIDER, null).orEmpty()) ?: CloudProviderCatalog.all.first()
         val model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel
-        return ChatUiState(provider = provider, model = model)
+        return ChatUiState(provider = provider, model = model, memoryEnabled = memoryEnabled)
     }
 
     init {
@@ -104,9 +123,30 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** Persists the on/off choice for the next time this screen is opened; does not reconfigure [session] now. */
+    fun setMemoryEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_MEMORY, enabled).apply()
+        mutableState.update { it.copy(memoryEnabled = enabled) }
+    }
+
+    /** K3: extracts and saves the current conversation to the knowledge graph, using the last-used provider. */
+    fun rememberChat() {
+        if (mutableState.value.sending) return
+        mutableState.update { it.copy(memoryStatus = "Remembering…") }
+        viewModelScope.launch(Dispatchers.IO) {
+            val status = when (val result = session.rememberConversation()) {
+                is MemoryResult.Saved -> "Remembered ${result.entityCount} fact(s)."
+                is MemoryResult.NothingToRemember -> "Nothing new to remember."
+                is MemoryResult.Failure -> result.message
+            }
+            mutableState.update { it.copy(memoryStatus = status) }
+        }
+    }
+
     private fun modelKey(provider: CloudProviderSpec) = "model.${provider.id}"
 
     private companion object {
         const val KEY_PROVIDER = "provider"
+        const val KEY_MEMORY = "memory_enabled"
     }
 }
