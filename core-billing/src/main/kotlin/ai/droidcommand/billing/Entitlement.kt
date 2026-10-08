@@ -22,7 +22,9 @@ data class PurchaseSnapshot(
 )
 
 data class Entitlement(val plan: Plan, val expiresAt: Instant? = null) {
-    companion object { val FREE = Entitlement(Plan.FREE) }
+    companion object {
+        val FREE = Entitlement(Plan.FREE)
+    }
 }
 
 /** Source of the current entitlement. The real Play Billing implementation is Android-only and not built yet. */
