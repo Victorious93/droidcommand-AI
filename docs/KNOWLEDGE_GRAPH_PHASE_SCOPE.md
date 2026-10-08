@@ -1,6 +1,6 @@
-# Knowledge Graph in the APK — scoping (NOT approved, NOT started)
+# Knowledge Graph in the APK — scoping (Option A chosen 2026-10-08; only K1 built)
 
-Date: 2026-10-08. Status: **proposal for the owner's decision.** Nothing below is implemented. Per this
+Date: 2026-10-08. Status: **Option A chosen by the owner; K1 (storage) built; K2-K4 not started.** The text below is the original proposal, kept as written. Per this
 repo's precedent (every CAP slice was scoped before building) and `CLAUDE.md`'s "one phase at a time,
 owner approves" rule, no code starts until the questions in §6 are answered.
 
@@ -100,3 +100,18 @@ reinforcement, promotion) on top of the same store. Larger and gated on the Kai 
 
 Acceptance for the whole phase would need a device (Phase 5/E-style) to claim anything about real behavior;
 until then everything is graded "JVM/Robolectric-tested, never run on a device".
+
+## 8. Decision log
+
+- **2026-10-08 — owner answered question 1 with "A" (Option A).** Questions 2-5 were not answered.
+  Only **K1** was built, because it involves no extraction, no privacy surface and no retrieval policy.
+  For the open questions, the defaults below are Claude's recommendations, NOT decisions; K2/K3 should not
+  start until the owner confirms or changes them:
+  - Q2 extraction: user-initiated only (implied by Option A); cloud-provider use and a local-only
+    restriction undecided.
+  - Q3 users can view and delete what is remembered: recommended yes; undecided.
+  - Q4 storage: a new module — done for K1 (`core-knowledge-android`).
+  - Q5 ordering vs KAI-002 and Phase 3 UI: undecided.
+- **K1 built (2026-10-08):** `core-knowledge-android` — a Room-backed `KnowledgeGraph`. 11 Robolectric tests,
+  including a differential test against `InMemoryKnowledgeGraph` over 25 seeded random operation sequences
+  (150 operations each) and two mutation checks. Never run on a device. See audit addendum 2026-10-08i.

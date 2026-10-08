@@ -29,9 +29,10 @@ re-verifying something.
   `:app` module (SAF, Android Keystore, Network Security Configuration).
   Update it as each gated item moves to IMPLEMENTED — don't let it go
   stale the way an earlier draft of this file's module count did.
-- **`docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md`** — scoping (2026-10-08, NOT approved, nothing built) for putting the
-  existing knowledge graph into the APK: what exists, the real gaps, options A/B/C, risks and the owner questions.
-  Read it before starting any graph/memory work.
+- **`docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md`** — scoping for putting the existing knowledge graph into the APK: what exists, the real gaps,
+  options A/B/C, risks and the owner questions. Owner chose Option A (2026-10-08); only K1 (Room storage,
+  `core-knowledge-android`) is built. K2-K4 wait on the unanswered questions in its §6/§8. Read it before
+  starting any graph/memory work.
 - **`docs/HACKERAI_SOURCE_AUDIT.md`** — a focused audit (2026-09-26) of
   `Victorious93/hackeraiETC` ("HackerAI"), the project owner's other repo,
   read against a migration brief that referred to it as "HackerGPT" (no
