@@ -15,6 +15,7 @@ dependencies {
     implementation(project(":core-llm-openai"))
     implementation(project(":core-llm-google"))
     implementation(project(":core-llm-groq"))
+    implementation(project(":core-llm-local"))
     testImplementation(kotlin("test"))
 }
 
