@@ -64,6 +64,7 @@ include(":core-rootforge")
 if (providers.gradleProperty("includeAndroid").orNull == "true") {
     include(":app")
     include(":core-conversations")
+    include(":core-llm-local-android")
 }
 
 // The following modules are part of the target architecture (see

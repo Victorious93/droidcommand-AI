@@ -120,6 +120,14 @@ DroidCommand AI
 │                            storage and the bottom-sheet pickers are Android
 │                            and NOT built.
 │
+├── core-llm-local-android   Phase 2 native build (2026-10-08, Phase B only): Android
+│                            library (opt-in, includeAndroid) that fetches llama.cpp
+│                            at pinned tag b11484 / commit 5de7334 (verified by
+│                            scripts/fetch-llama-cpp.sh) and builds libllama +
+│                            libggml* via CMake for arm64-v8a and x86_64, CPU only.
+│                            NO JNI shim, NO InferenceBackend implementation, NO
+│                            inference ever run. Compiled-only.
+│
 ├── core-llm-local           LocalLlmProvider (2026-10-07, Phase 2, JVM slice only) —
 │                            ProviderType.LOCAL StreamingLlmProvider over an
 │                            InferenceBackend seam; ModelRepository with

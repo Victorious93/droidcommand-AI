@@ -8,3 +8,7 @@ local.properties
 
 # Locally built APKs handed to the user for sideloading; never commit binaries.
 /dist/
+
+# llama.cpp is fetched at a pinned commit by core-llm-local-android/scripts/fetch-llama-cpp.sh
+/core-llm-local-android/third_party/
+/core-llm-local-android/.cxx/
