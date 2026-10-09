@@ -85,6 +85,8 @@ class ChatSessionTest {
         documents: ai.droidcommand.rag.DocumentRetriever? = null,
         memory: MemoryRetriever? = null,
         memoryScopes: Set<String> = emptySet(),
+        memoryWriter: MemoryWriter? = null,
+        memoryWriteScope: String = "",
     ): Triple<ChatSession, InMemoryConversationStore, InMemorySecretsVault> {
         val vault = InMemorySecretsVault()
         vaultKey?.let {
@@ -96,7 +98,7 @@ class ChatSessionTest {
             val p: LlmProvider = if (spec.id == "google") GeminiLlmProvider(c, JdkHttpTransport(), requireHttps = false) else GroqLlmProvider(c, JdkHttpTransport(), requireHttps = false)
             p
         }
-        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge, knowledgeGraph = graph, webSearch = search, documents = documents, memory = memory, memoryScopes = memoryScopes), store, vault)
+        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge, knowledgeGraph = graph, webSearch = search, documents = documents, memory = memory, memoryScopes = memoryScopes, memoryWriter = memoryWriter, memoryWriteScope = memoryWriteScope), store, vault)
     }
 
     @Test
@@ -383,6 +385,34 @@ class ChatSessionTest {
 
         assertEquals(MemoryResult.Saved(1, 0), result)
         assertEquals(listOf("Home Router"), graph.searchEntities("router").map { it.label })
+    }
+
+    @Test
+    fun `rememberConversation with a memory writer stores an unverified model memory in the write scope`() {
+        val g = InMemoryKnowledgeGraph()
+        val legacy = InMemoryKnowledgeGraph()
+        var call = 0
+        val base = startRouting { if (call++ == 0) sse("""{"choices":[{"delta":{"content":"hi"}}]}""") else graphJson() }
+        val (chat, _, _) = session(base, graph = legacy, memoryWriter = MemoryWriter(g), memoryWriteScope = "project:dca")
+
+        chat.send(groq, "", "my router is slow")
+        assertEquals(MemoryResult.Saved(1, 0), chat.rememberConversation())
+
+        val meta = ai.droidcommand.agent.memory.MemoryMetadata.from(g.searchEntities("router").single())!!
+        assertEquals("project:dca", meta.scope)
+        assertEquals(ai.droidcommand.agent.memory.Verification.MODEL_INFERRED, meta.verification)
+        assertEquals(emptyList(), legacy.searchEntities(""), "writer path must not also write the plain graph")
+    }
+
+    @Test
+    fun `a memory writer without a write scope fails closed and writes nothing`() {
+        val g = InMemoryKnowledgeGraph()
+        var call = 0
+        val base = startRouting { if (call++ == 0) sse("""{"choices":[{"delta":{"content":"hi"}}]}""") else graphJson() }
+        val (chat, _, _) = session(base, memoryWriter = MemoryWriter(g))
+        chat.send(groq, "", "my router is slow")
+        assertIs<MemoryResult.Failure>(chat.rememberConversation())
+        assertEquals(emptyList(), g.searchEntities(""))
     }
 
     @Test

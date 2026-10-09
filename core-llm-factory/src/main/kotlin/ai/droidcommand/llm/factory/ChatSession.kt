@@ -7,6 +7,7 @@ import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.agent.Message
 import ai.droidcommand.agent.Role
 import ai.droidcommand.agent.memory.MemoryRetriever
+import ai.droidcommand.agent.memory.MemoryWriter
 import ai.droidcommand.config.ConfiguredLlmProvider
 import ai.droidcommand.config.SecretsVault
 import ai.droidcommand.llm.AiProviderInfo
@@ -17,6 +18,7 @@ import ai.droidcommand.llm.LlmGraphExtractor
 import ai.droidcommand.llm.LlmProvider
 import ai.droidcommand.llm.LlmRequest
 import ai.droidcommand.llm.LlmResponse
+import ai.droidcommand.llm.MemoryExtractionService
 import ai.droidcommand.llm.ProviderType
 import ai.droidcommand.llm.completeStreaming
 import ai.droidcommand.llm.local.LocalLlmProvider
@@ -75,6 +77,12 @@ sealed class MemoryResult {
  * reference data, goes into the final user message only, per request, never saved into the conversation.
  * If retrieval throws, the turn proceeds without it. Reading only: nothing here writes to memory.
  *
+ * [memoryWriter] (off when `null`, the default) makes [rememberConversation] store what the model extracts
+ * through the Second Brain write pipeline (`MemoryWriter`: secret/personal-data screening, duplicate and
+ * conflict handling, model-claims-are-never-verified) into [memoryWriteScope], instead of writing straight
+ * into [knowledgeGraph]. When both are set, [memoryWriter] wins. Extracted relationships are not stored on
+ * this path (see [MemoryExtractionService]).
+ *
  * [webSearch] (off when `null`, the default) backs the per-message `useWebSearch` flag on [send]. When the
  * flag is set, the user's message text is sent to that search provider and the top results are added to
  * that request's final user message, framed as untrusted third-party text — user turn, not system prompt,
@@ -111,6 +119,8 @@ class ChatSession(
     private val memory: MemoryRetriever? = null,
     private val memoryScopes: Set<String> = emptySet(),
     private val memoryBudgetTokens: Int = DEFAULT_MEMORY_BUDGET_TOKENS,
+    private val memoryWriter: MemoryWriter? = null,
+    private val memoryWriteScope: String = "",
 ) {
     // Loaded on first use, not at construction: a Room-backed store throws on the main thread, and a
     // caller (an Android ViewModel) constructs this there. Every public method may touch storage.
@@ -265,7 +275,7 @@ class ChatSession(
      */
     @Synchronized
     fun rememberConversation(): MemoryResult {
-        val graph = knowledgeGraph ?: return MemoryResult.NothingToRemember
+        if (memoryWriter == null && knowledgeGraph == null) return MemoryResult.NothingToRemember
         val spec = lastSpec
         val model = lastModel
         if (spec == null || model == null || context.messages.isEmpty()) {
@@ -279,7 +289,9 @@ class ChatSession(
         if (key.isNullOrBlank()) return MemoryResult.Failure("No API key for ${spec.label}. Add one in Settings.")
 
         val config = LlmConfig(provider = spec.id, model = model, authToken = { vault.getSecret(spec.secretId) })
-        val service = GraphExtractionService(LlmGraphExtractor(providerFor(spec, config)), graph)
+        val extractor = LlmGraphExtractor(providerFor(spec, config))
+        if (memoryWriter != null) return rememberViaMemoryWriter(extractor, memoryWriter, key)
+        val service = GraphExtractionService(extractor, knowledgeGraph!!)
         val result = try {
             service.extractAndSave(context, source = conversationId)
         } catch (e: Exception) {
@@ -292,6 +304,21 @@ class ChatSession(
                 } else {
                     MemoryResult.Saved(result.entities.size, result.relationships.size)
                 }
+            is GraphExtractionResult.Malformed -> MemoryResult.Failure("The model's reply could not be read as memory.")
+            is GraphExtractionResult.ProviderFailed -> MemoryResult.Failure(scrub(result.error.message, key))
+        }
+    }
+
+    private fun rememberViaMemoryWriter(extractor: LlmGraphExtractor, writer: MemoryWriter, key: String): MemoryResult {
+        if (memoryWriteScope.isBlank()) return MemoryResult.Failure("No memory scope is configured.")
+        val (result, outcome) = try {
+            MemoryExtractionService(extractor, writer, memoryWriteScope).extractAndStore(context, source = conversationId)
+        } catch (e: Exception) {
+            return MemoryResult.Failure(scrub("Could not save memory: ${e.message ?: e.javaClass.simpleName}", key))
+        }
+        return when (result) {
+            is GraphExtractionResult.Success ->
+                if (outcome == null || outcome.stored == 0) MemoryResult.NothingToRemember else MemoryResult.Saved(outcome.stored, 0)
             is GraphExtractionResult.Malformed -> MemoryResult.Failure("The model's reply could not be read as memory.")
             is GraphExtractionResult.ProviderFailed -> MemoryResult.Failure(scrub(result.error.message, key))
         }
