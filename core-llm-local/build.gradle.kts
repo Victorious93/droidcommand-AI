@@ -9,6 +9,7 @@ repositories {
 dependencies {
     implementation(project(":core-agent"))
     implementation(project(":core-llm"))
+    api(project(":core-rag"))
     testImplementation(kotlin("test"))
 }
 
