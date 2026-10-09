@@ -138,3 +138,28 @@ Owner approved V2 and then asked for all remaining Phase 4 voice work. Status pe
 
 **Bugs the tests found:** `NeuralTextToSpeech` reported a truncated utterance as completed when the sink refused audio (fixed; regression test `a_sink_that_refuses_audio_stops_synthesis`).
 
+
+## 7. Update 2026-10-09g — the "left undone" items
+
+Owner decisions: **no GPL** in the model catalog; voice approvals are **deny-by-voice, approve on screen**.
+This session had a real Android SDK (installed from dl.google.com) but no device or emulator.
+
+| Item | State now |
+|---|---|
+| `:app` linked to `core-voice-neural-android` | **DONE — `:app:assembleDebug` and `:app:lintDebug` pass.** Never run on a device. `VoiceRuntime` (cached SHA-256 check) feeds `VoiceFeatures`; neural voice and wake word are offered only when their model is installed |
+| Voice approvals → app gate | **DONE, deny-only.** `VoiceApprovalPrompt` + a per-request, cancellable `ComposeApprovalPrompt`. 12 JVM tests. No real-microphone run |
+| Model catalog | **DONE (no GPL):** wake word `kws-zipformer-gigaspeech-3.3m` and voice `tts-vits-ljs` (below) |
+| Archive installs | **DONE, JVM-tested** (7 tests) + opt-in live test `VOICE_LIVE_CATALOG=1` passed (~19 s, both archives, real `HttpsFileDownloader`) |
+| Kokoro | **DEFERRED.** Needs espeak-ng data or a lexicon route whose license is not cleared; one voice should be proven on a device first |
+| Dynamic-feature packaging | **NOT STARTED, by decision.** Measured: universal debug APK 20.0 -> 149.8 MB; arm64 native libs ~31.6 MB. Needs a bundle build + device to design properly |
+
+**Catalog provenance** (official sherpa-onnx GitHub release, fetched 2026-10-09; licenses are what each README declares, not audited, training-data terms not checked):
+
+| Model | Archive | Size | Archive SHA-256 |
+|---|---|---|---|
+| KWS zipformer gigaspeech 3.3M (int8 used) | `releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2` | 17.6 MB | `f170013b...6561a` |
+| VITS LJ Speech | `releases/download/tts-models/vits-ljs.tar.bz2` | 109 MB | `78f7df44...b31a` |
+
+Per-file digests are in `VoiceModelCatalog.kt`. **Off-device check** (sherpa-onnx 1.13.8 Python wheel, same version as the AAR): the voice synthesized audio; the wake word detected 3 of 3 synthesized keyword phrases and 0 of 1 non-keyword phrase. Synthetic speech only — no real microphone, no real-world false-accept/reject rate. sherpa-onnx logged "Unknown token" for some lexicon characters, so a few sounds may be dropped.
+
+**Still unverified:** everything on a device — TTS playback through `AudioTrack`, `AudioRecord` capture, the wake-word foreground service on Android 12+/14, `POST_NOTIFICATIONS` (not requested at runtime, so the notification may be hidden on 13+), SpeechRecognizer from a worker thread, latency, battery, voice quality. The wake phrases are the nine that ship with the model (e.g. "hello world", "hey siri"); a custom phrase needs its own tokenization.

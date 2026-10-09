@@ -192,15 +192,18 @@ DroidCommand AI
 │                            JVM-tested with fakes. 2026-10-09f adds VoiceModelRepository
 │                            (SHA-256-verified downloads), WakeWordController +
 │                            AudioWakeWordDetector (counted mic holds), VoiceApprovalProvider
-│                            (deny-biased, challenge word, audited; NOT wired into :app's
-│                            approval gate) and VoiceSettings — 61 JVM tests in total.
+│                            (deny-biased, challenge word, audited) and VoiceSettings.
+│                            2026-10-09g: VoiceModelRepository installs from pinned .tar.bz2
+│                            archives; VoiceModelCatalog (no-GPL: KWS wake word + LJ Speech
+│                            voice); live-download test passed. 75 JVM tests in total.
 │
 ├── core-voice-neural-android  SherpaOnnxSynthesizer (VITS/Piper over the PREBUILT
 │                            sherpa-onnx v1.13.8 release AAR, SHA-256-pinned by
 │                            scripts/fetch-sherpa-onnx.sh) + AudioTrackSink, plus
 │                            SherpaKeywordEngine / AudioRecordSource / WakeWordService (V3).
-│                            ON DISK, UNVERIFIED: the two sherpa adapters compile against the
-│                            real classes.jar; nothing has run. NOT linked into :app yet.
+│                            ASSEMBLES (2026-10-09g, real Android SDK): linked into :app,
+│                            :app:assembleDebug passes. NEVER RUN on a device/emulator.
+│                            Universal debug APK 20.0 -> 149.8 MB (4 ABIs; arm64 libs ~31.6 MB).
 │
 ├── core-templates           PromptTemplate/TemplateEngine ({{var}} expansion),
 │                            Skill/SkillApplier, bundled 20 templates + 5
