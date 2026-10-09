@@ -22,6 +22,7 @@ android {
         // the NDK's libvulkan.so stub only exports them from API 28. :app (minSdk 26) cannot depend
         // on this module as is; the app is expected to offer local inference only on API 28+.
         minSdk = 28
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             // armeabi-v7a is deliberately not listed until a build of it is proven.
             abiFilters += listOf("arm64-v8a", "x86_64")
@@ -52,6 +53,9 @@ dependencies {
     api(project(":core-agent"))
     testImplementation(kotlin("test"))
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation(kotlin("test"))
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
 }
 
 kotlin {
