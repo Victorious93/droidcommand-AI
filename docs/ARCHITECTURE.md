@@ -294,8 +294,13 @@ DroidCommand AI
 │                            query/passage scored above an unrelated one; repeat calls
 │                            were identical; unload ran. Pooling resolved to the
 │                            model's own MEAN (GGUF pooling_type=1). The Kotlin wrapper
-│                            (LlamaCppEmbeddingBackend.kt) is NOT compiled or run (no
-│                            Android SDK here), and nothing has run on a device.
+│                            (LlamaCppEmbeddingBackend.kt) uses no Android API: it was
+│                            compiled unmodified with the project's Kotlin compiler and
+│                            run on the host through LocalEmbedder (2026-10-09q,
+│                            single-threaded). The Android library build (AGP/NDK) and
+│                            any device run are unverified. Retrieval quality was
+│                            measured once with this model (2026-10-09r): good at
+│                            128-word chunks, weak at the 512-word default.
 │
 ├── core-llm-local           LocalLlmProvider (2026-10-07, Phase 2, JVM slice only) —
 │                            ProviderType.LOCAL StreamingLlmProvider over an
