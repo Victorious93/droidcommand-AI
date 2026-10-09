@@ -7,6 +7,10 @@ import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.app.approval.ComposeApprovalPrompt
+import ai.droidcommand.app.approval.VoiceApprovalPrompt
+import ai.droidcommand.voice.android.AndroidSpeechToText
+import ai.droidcommand.voice.android.AndroidTextToSpeech
+import ai.droidcommand.voice.android.SharedPreferencesVoiceSettingsStore
 import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.agent.ConversationStore
 import ai.droidcommand.config.EncryptedSecretsVault
@@ -111,9 +115,29 @@ object AppModule {
     fun provideSecurityPolicy(): SecurityPolicy =
         SecurityPolicy(grantedCategories = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK))
 
+    /**
+     * The gate every approval-requiring tool goes through. Voice approvals are off by default, in which case
+     * this is exactly the on-screen dialog; when the user turns them on, voice can read the request aloud and
+     * refuse it, but never approve it (see [VoiceApprovalPrompt]). The speech engines are created on first voice use
+     * and the setting is re-read on every request, so toggling it takes effect immediately.
+     */
     @Provides
     @Singleton
-    fun provideApprovalPrompt(composePrompt: ComposeApprovalPrompt): ApprovalPrompt = composePrompt
+    fun provideApprovalPrompt(
+        composePrompt: ComposeApprovalPrompt,
+        auditLog: JsonFileAuditLog,
+        @ApplicationContext context: Context,
+    ): ApprovalPrompt {
+        val store = SharedPreferencesVoiceSettingsStore(context)
+        // Created on the first approval that actually uses voice, then reused (a TextToSpeech binding per approval would leak).
+        val io by lazy { VoiceApprovalPrompt.engineIo(AndroidSpeechToText(context), AndroidTextToSpeech(context)) }
+        return VoiceApprovalPrompt(
+            screen = composePrompt,
+            io = { io },
+            auditLog = auditLog,
+            settings = { store.load().approval },
+        )
+    }
 
     /**
      * The on-device audit trail the Logs screen reads. Append-only JSON Lines under app-private storage;

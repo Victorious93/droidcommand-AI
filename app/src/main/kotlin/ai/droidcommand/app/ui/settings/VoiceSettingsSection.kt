@@ -56,14 +56,14 @@ fun VoiceSettingsSection(viewModel: VoiceSettingsViewModel = hiltViewModel()) {
         title = "Voice approvals",
         checked = s.approval.enabled,
         enabled = true,
-        note = "Lets you say \"deny\" to refuse an action. Not yet connected to the approval prompt in this build.",
+        note = "When an action asks for approval, the request is read aloud and you can say \"deny\" to refuse it. Approving always needs the on-screen button. Off by default.",
         onChange = viewModel::setApprovals,
     )
     ToggleCard(
         title = "Allow approving by voice",
         checked = s.approval.allowApproveByVoice,
-        enabled = s.approval.enabled,
-        note = "Only for reversible actions, and only after a spoken challenge word. Anyone within earshot could say it. Destructive actions always need the screen.",
+        enabled = false,
+        note = "Not available: every action that asks for approval in this app is treated as destructive, and destructive actions can only be approved on screen.",
         onChange = viewModel::setApproveByVoice,
     )
     SectionLabel("Voice models")
