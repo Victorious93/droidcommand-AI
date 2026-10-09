@@ -159,7 +159,11 @@ DroidCommand AI
 │                            history. Also PlainTextDocument (strict .txt/.md loader)
 │                            and FileVectorStore (JVM file-persisted VectorStore,
 │                            atomic write, loud failure on a corrupt file;
-│                            2026-10-09k). 19 core-rag + 2 ChatSession tests.
+│                            2026-10-09k). Embedder also has embedQuery (2026-10-09n):
+│                            the default treats a query as a passage, but an asymmetric
+│                            model overrides it (LocalEmbedder's documentPrefix/
+│                            queryPrefix, for nomic's search_document:/search_query:);
+│                            DocumentRetriever embeds queries through it.
 │                            LlamaCppEmbeddingBackend (core-llm-local-android,
 │                            2026-10-09l) now backs the EmbeddingBackend seam with
 │                            real JNI entrypoints, compiled and linked against the
@@ -167,7 +171,7 @@ DroidCommand AI
 │                            ever actually been computed (no model available; see
 │                            that module's row). NO PDF extraction, NO Room
 │                            persistence, NO :app attach UI yet — see the
-│                            2026-10-09i/j/k/l addenda.
+│                            2026-10-09i/j/k/l/n addenda.
 │
 ├── core-websearch           WebSearchClient / WebSearchResult / WebSearchOutcome
 │                            (2026-10-08, Phase 4 web-search half only) —
@@ -269,21 +273,27 @@ DroidCommand AI
 │                            (scripts/host-smoke-test.sh). The VULKAN path is COMPILED
 │                            ONLY: no GPU, device or emulator has ever run it. No
 │                            OpenCL (deferred), no armeabi-v7a, not wired into :app.
-│                            Phase 5 (2026-10-09l): LlamaCppEmbeddingBackend
-│                            (core-llm-local's EmbeddingBackend) — a second, separate
-│                            native context (`DcaEmbeddingContext` in the same
-│                            llama_jni.cpp, embeddings=true, LLAMA_POOLING_TYPE_MEAN,
-│                            CPU only) added alongside the existing chat-generation
-│                            entrypoints. Compiled AND LINKED for real against the
-│                            pinned llama.cpp on a Linux x86_64 host (cmake build of
-│                            dca_llama_jni; exported symbols and shared-lib deps
-│                            confirmed with nm/ldd) — stronger than a syntax-only
-│                            check, but no embedding GGUF model has been run through
-│                            it: HuggingFace is blocked by this environment's egress
-│                            policy, so no real model could be downloaded for an
-│                            end-to-end smoke test (host-smoke-test.sh's own model
-│                            comes from HF). Status: COMPILED AND LINKED — NOT
-│                            RUNTIME VERIFIED.
+│                            Phase 5 (2026-10-09l, review fixes 2026-10-09n):
+│                            LlamaCppEmbeddingBackend (core-llm-local's
+│                            EmbeddingBackend) — a second, separate native context
+│                            (`DcaEmbeddingContext` in the same llama_jni.cpp,
+│                            embeddings=true, CPU only) added alongside the existing
+│                            chat-generation entrypoints. Pooling is left
+│                            LLAMA_POOLING_TYPE_UNSPECIFIED so each model's own
+│                            trained pooling applies (mean for nomic, CLS for
+│                            BGE/E5) — an earlier revision forced MEAN, which
+│                            mis-pools a CLS model. load/embed/unload are
+│                            @Synchronized (unload frees the native context; a racing
+│                            embed would be a use-after-free). Compiled AND LINKED for
+│                            real against the pinned llama.cpp on a Linux x86_64 host
+│                            (cmake build of dca_llama_jni; exported symbols and
+│                            shared-lib deps confirmed with nm/ldd) — stronger than a
+│                            syntax-only check, but no embedding GGUF model has been
+│                            run through it: HuggingFace is blocked by this
+│                            environment's egress policy, so no real model could be
+│                            downloaded for an end-to-end smoke test
+│                            (host-smoke-test.sh's own model comes from HF). Status:
+│                            COMPILED AND LINKED — NOT RUNTIME VERIFIED.
 │
 ├── core-llm-local           LocalLlmProvider (2026-10-07, Phase 2, JVM slice only) —
 │                            ProviderType.LOCAL StreamingLlmProvider over an

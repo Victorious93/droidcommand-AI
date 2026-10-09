@@ -44,4 +44,32 @@ class LocalEmbedderTest {
         assertNotNull(r.retrieveContext("cat?"))
         assertEquals(null, r.retrieveContext("dog?"))
     }
+
+    @Test
+    fun `document and query prefixes are prepended to the backend input`() {
+        val seen = mutableListOf<String>()
+        val backend = FakeEmbeddingBackend { t ->
+            seen += t
+            floatArrayOf(1f, 0f)
+        }
+        val e = LocalEmbedder(backend, documentPrefix = "search_document: ", queryPrefix = "search_query: ")
+        e.embed(listOf("a passage"))
+        e.embedQuery("a question")
+        assertEquals(listOf("search_document: a passage", "search_query: a question"), seen)
+    }
+
+    @Test
+    fun `default prefixes leave text unchanged and embedQuery matches embed`() {
+        val seen = mutableListOf<String>()
+        val e = LocalEmbedder(
+            FakeEmbeddingBackend { t ->
+                seen += t
+                floatArrayOf(3f, 4f)
+            },
+        )
+        val viaEmbed = e.embed(listOf("hello")).single()
+        val viaQuery = e.embedQuery("hello")
+        assertContentEquals(viaEmbed, viaQuery)
+        assertEquals(listOf("hello", "hello"), seen)
+    }
 }
