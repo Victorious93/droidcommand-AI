@@ -30,7 +30,10 @@ class CloudPlannerFactoryTest {
     @Test
     fun `missing key yields MissingKey naming the provider and never calling the provider factory`() {
         var built = false
-        val result = CloudPlannerFactory.create(InMemorySecretsVault(), groq, "m", noTransport) { _, c -> built = true; FakeProvider(c, LlmResponse.Text("x")) }
+        val result = CloudPlannerFactory.create(InMemorySecretsVault(), groq, "m", noTransport) { _, c ->
+            built = true
+            FakeProvider(c, LlmResponse.Text("x"))
+        }
 
         assertIs<PlannerResult.MissingKey>(result)
         assertEquals("No API key for ${groq.label}. Add one in Settings.", result.message)
@@ -66,7 +69,10 @@ class CloudPlannerFactoryTest {
         val vault = InMemorySecretsVault().apply { putSecret(groq.secretId, "sk-test") }
         var seen: LlmConfig? = null
 
-        CloudPlannerFactory.create(vault, groq, "  ", noTransport) { _, c -> seen = c; FakeProvider(c, LlmResponse.Text("x")) }
+        CloudPlannerFactory.create(vault, groq, "  ", noTransport) { _, c ->
+            seen = c
+            FakeProvider(c, LlmResponse.Text("x"))
+        }
 
         assertEquals(groq.defaultModel, seen!!.model)
     }
@@ -75,7 +81,10 @@ class CloudPlannerFactoryTest {
     fun `the key is read lazily so a key rotated after creation is picked up`() {
         val vault = InMemorySecretsVault().apply { putSecret(groq.secretId, "old") }
         var seen: LlmConfig? = null
-        CloudPlannerFactory.create(vault, groq, "m", noTransport) { _, c -> seen = c; FakeProvider(c, LlmResponse.Text("x")) }
+        CloudPlannerFactory.create(vault, groq, "m", noTransport) { _, c ->
+            seen = c
+            FakeProvider(c, LlmResponse.Text("x"))
+        }
 
         vault.putSecret(groq.secretId, "new")
 
