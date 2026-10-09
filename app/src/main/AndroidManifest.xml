@@ -6,6 +6,17 @@
          needs a permission. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Phase 4 voice input. Requested at runtime only when the user taps the mic; denial degrades to a
+         message, never a crash. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Android 11+ package visibility: SpeechRecognizer.isRecognitionAvailable() and TextToSpeech need to
+         see the device's recognition/TTS services. -->
+    <queries>
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
+        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+    </queries>
+
     <!-- Phase 4 — Companion APK signature permissions.
          protectionLevel="signature" means only apps signed with the same key as
          DroidCommand AI (i.e. only DCA itself) can hold and use these permissions.

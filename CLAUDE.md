@@ -519,7 +519,7 @@ every request; `./gradlew test` passes with no regressions.
 ---
 
 ### Phase 4 — Voice Input/Output + Web Search
-**Status:** NOT STARTED
+**Status:** ON DISK — web search (`core-websearch`, `ChatSession` toggle) and voice logic (`core-voice`) JVM-tested; `core-voice-android` wrappers and `:app` toolbar/mic/speak/Settings glue UNBUILT (no Android SDK) and never run on a device. See the 2026-10-09b/c audit addenda.
 **Branch:** `feature/phase-4-voice-websearch`
 **Depends on:** Phase 2, Phase 3
 

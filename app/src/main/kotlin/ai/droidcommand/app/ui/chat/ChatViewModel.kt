@@ -12,6 +12,11 @@ import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.llm.factory.MemoryResult
 import ai.droidcommand.llm.factory.WebSearchCatalog
 import ai.droidcommand.remote.HttpTransport
+import ai.droidcommand.voice.SpeakMode
+import ai.droidcommand.voice.VoiceController
+import ai.droidcommand.voice.VoiceState
+import ai.droidcommand.voice.android.AndroidSpeechToText
+import ai.droidcommand.voice.android.AndroidTextToSpeech
 import android.content.Context
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
@@ -42,6 +47,11 @@ data class ChatUiState(
     val webSearchEnabled: Boolean = false,
     /** Non-fatal note from the last turn (e.g. web search failed and the reply is ungrounded). */
     val notice: String? = null,
+    val speakMode: SpeakMode = SpeakMode.OFF,
+    val voice: VoiceState = VoiceState(),
+    val micAvailable: Boolean = true,
+    /** Dictated text waiting for the screen to append to the input field; cleared by [ChatViewModel.consumePendingInput]. */
+    val pendingInput: String? = null,
 )
 
 /**
@@ -74,13 +84,16 @@ class ChatViewModel @Inject constructor(
         webSearch = WebSearchCatalog.clientFor(vault, transport),
     )
 
+    private val tts = AndroidTextToSpeech(context)
+    private val voice = VoiceController(AndroidSpeechToText(context), tts) { v -> mutableState.update { it.copy(voice = v) } }
+
     private val mutableState = MutableStateFlow(initialState())
     val state: StateFlow<ChatUiState> = mutableState.asStateFlow()
 
     private fun initialState(): ChatUiState {
         val provider = CloudProviderCatalog.byId(prefs.getString(KEY_PROVIDER, null).orEmpty()) ?: CloudProviderCatalog.all.first()
         val model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel
-        return ChatUiState(provider = provider, model = model, memoryEnabled = memoryEnabled, webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false))
+        return ChatUiState(provider = provider, model = model, memoryEnabled = memoryEnabled, webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false), speakMode = speakModeFromPrefs(), micAvailable = voice.sttAvailable)
     }
 
     init {
@@ -116,7 +129,7 @@ class ChatViewModel @Inject constructor(
                         streaming = "",
                         sending = false,
                         notice = result.notice,
-                    )
+                    ).also { voice.onReply(result.text, it.speakMode) }
                     is ChatResult.Failure -> it.copy(streaming = "", sending = false, error = result.message)
                 }
             }
@@ -157,11 +170,47 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** Mic button. [micPermitted] is the current RECORD_AUDIO grant; a denial shows a message and does nothing else. */
+    fun toggleMic(micPermitted: Boolean) {
+        if (mutableState.value.voice.listening) {
+            voice.stopListening()
+        } else {
+            voice.startListening(micPermitted) { text -> mutableState.update { it.copy(pendingInput = text) } }
+        }
+    }
+
+    fun consumePendingInput() = mutableState.update { it.copy(pendingInput = null) }
+
+    fun cycleSpeakMode() {
+        val next = SpeakMode.entries[(mutableState.value.speakMode.ordinal + 1) % SpeakMode.entries.size]
+        prefs.edit { putString(KEY_SPEAK_MODE, next.name) }
+        if (next == SpeakMode.OFF) voice.stopSpeaking()
+        mutableState.update { it.copy(speakMode = next) }
+    }
+
+    /** Tap-to-speak (and manual replay in any mode): reads the latest assistant reply aloud, or stops if already speaking. */
+    fun speakLastReply() {
+        if (mutableState.value.voice.speaking) return voice.stopSpeaking()
+        mutableState.value.lines.lastOrNull { !it.fromUser }?.let { voice.speak(it.text) }
+    }
+
+    fun dismissVoiceError() = voice.clearError()
+
+    override fun onCleared() {
+        voice.stopListening()
+        voice.stopSpeaking()
+        tts.shutdown()
+    }
+
+    private fun speakModeFromPrefs(): SpeakMode =
+        runCatching { SpeakMode.valueOf(prefs.getString(KEY_SPEAK_MODE, null).orEmpty()) }.getOrDefault(SpeakMode.OFF)
+
     private fun modelKey(provider: CloudProviderSpec) = "model.${provider.id}"
 
     private companion object {
         const val KEY_PROVIDER = "provider"
         const val KEY_MEMORY = "memory_enabled"
         const val KEY_WEB_SEARCH = "web_search_enabled"
+        const val KEY_SPEAK_MODE = "speak_mode"
     }
 }

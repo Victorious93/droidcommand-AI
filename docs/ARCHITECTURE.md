@@ -179,6 +179,14 @@ DroidCommand AI
 │                            of Phase 4 (core-voice) is Android-only and still NOT
 │                            STARTED.
 │
+├── core-voice               VoiceController / SpeechToText / TextToSpeechEngine seams,
+│                            SpeechText.clean (2026-10-09c, Phase 4 voice half) —
+│                            pure JVM, Null* fail-closed engines; permission denial,
+│                            unavailable or throwing engines degrade to a message.
+│                            9 JVM tests. core-voice-android (SpeechRecognizer /
+│                            TextToSpeech wrappers, partly adapted from OpenDroid,
+│                            Apache-2.0) and the :app mic/speak UI are UNBUILT.
+│
 ├── core-templates           PromptTemplate/TemplateEngine ({{var}} expansion),
 │                            Skill/SkillApplier, bundled 20 templates + 5
 │                            skills, idempotent seeding (2026-10-07, Phase 3,
