@@ -560,7 +560,7 @@ denial.
 ---
 
 ### Phase 5 — Document Q&A (RAG)
-**Status:** NOT STARTED
+**Status:** IN PROGRESS — JVM slice `core-rag` (chunker, in-memory cosine store, `DocumentRetriever`, `ChatSession` `documents` param) tested with a fake keyword embedder only (2026-10-09i). No real embedding model, PDF extraction, Room storage or `:app` UI.
 **Branch:** `feature/phase-5-document-rag`
 **Depends on:** Phase 2
 

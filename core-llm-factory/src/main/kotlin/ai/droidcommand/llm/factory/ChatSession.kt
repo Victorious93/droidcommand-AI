@@ -18,6 +18,7 @@ import ai.droidcommand.llm.LlmRequest
 import ai.droidcommand.llm.LlmResponse
 import ai.droidcommand.llm.ProviderType
 import ai.droidcommand.llm.completeStreaming
+import ai.droidcommand.rag.DocumentRetriever
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.websearch.WebSearchClient
 import ai.droidcommand.websearch.WebSearchOutcome
@@ -73,6 +74,12 @@ sealed class MemoryResult {
  * from the roadmap's "system context" wording). Results are per request only and never saved into the
  * conversation. A failed search never fails the turn: the reply is returned with a [ChatResult.Reply.notice].
  *
+ * [documents] (off when `null`, the default) adds the passages of the user's attached documents most relevant
+ * to each message. Like web results they are untrusted file content, so they go into that request's final
+ * user message (not the system prompt), per request only, never saved into the conversation. The embedder
+ * runs on this device; document text is only sent onward as part of the prompt to the chat provider. If
+ * retrieval throws, the turn proceeds without excerpts rather than failing.
+ *
  * [history], [send] and [reset] block on storage and the network: call them off the main thread. Not safe for concurrent
  * sends (calls are serialized).
  */
@@ -91,6 +98,7 @@ class ChatSession(
     private val knowledge: GraphRetriever? = null,
     private val knowledgeGraph: KnowledgeGraph? = null,
     private val webSearch: WebSearchClient? = null,
+    private val documents: DocumentRetriever? = null,
 ) {
     // Loaded on first use, not at construction: a Room-backed store throws on the main thread, and a
     // caller (an Android ViewModel) constructs this there. Every public method may touch storage.
@@ -127,6 +135,11 @@ class ChatSession(
         } catch (e: Exception) {
             null
         }
+        val excerpts = try {
+            documents?.retrieveContext(text)
+        } catch (e: Exception) {
+            null
+        }
         var notice: String? = null
         val web = if (useWebSearch) {
             when {
@@ -139,7 +152,7 @@ class ChatSession(
         } else {
             null
         }
-        val outgoing = listOfNotNull(web, notes, text).joinToString("\n\n")
+        val outgoing = listOfNotNull(web, excerpts, notes, text).joinToString("\n\n")
         val request = LlmRequest(systemPrompt = context.systemPrompt, messages = context.messages + Message(Role.USER, outgoing))
 
         val response = try {

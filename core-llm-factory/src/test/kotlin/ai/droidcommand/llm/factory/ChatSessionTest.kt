@@ -77,6 +77,7 @@ class ChatSessionTest {
         knowledge: GraphRetriever? = null,
         graph: ai.droidcommand.agent.KnowledgeGraph? = null,
         search: WebSearchClient? = null,
+        documents: ai.droidcommand.rag.DocumentRetriever? = null,
     ): Triple<ChatSession, InMemoryConversationStore, InMemorySecretsVault> {
         val vault = InMemorySecretsVault()
         vaultKey?.let {
@@ -88,7 +89,7 @@ class ChatSessionTest {
             val p: LlmProvider = if (spec.id == "google") GeminiLlmProvider(c, JdkHttpTransport(), requireHttps = false) else GroqLlmProvider(c, JdkHttpTransport(), requireHttps = false)
             p
         }
-        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge, knowledgeGraph = graph, webSearch = search), store, vault)
+        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge, knowledgeGraph = graph, webSearch = search, documents = documents), store, vault)
     }
 
     @Test
@@ -380,5 +381,37 @@ class ChatSessionTest {
         chat.send(groq, "", "my router")
         chat.reset()
         assertEquals(MemoryResult.NothingToRemember, chat.rememberConversation())
+    }
+
+    @Test
+    fun `attached document excerpts reach the request but are not saved in history`() {
+        val seen = AtomicReference<String>()
+        val base = start(captured = seen) { sse("""{"choices":[{"delta":{"content":"ok"}}]}""") }
+        val embedder = object : ai.droidcommand.rag.Embedder {
+            override fun embed(texts: List<String>) = texts.map { floatArrayOf(if ("zebra" in it) 1f else 0f, 1f) }
+        }
+        val docs = ai.droidcommand.rag.DocumentRetriever(embedder)
+        docs.index("notes.txt", "the zebra crossing is on main street")
+        val (chat, store, _) = session(base, documents = docs)
+
+        val result = chat.send(groq, "", "where is the zebra crossing")
+
+        assertIs<ChatResult.Reply>(result)
+        assertTrue("zebra crossing is on main street" in seen.get())
+        assertTrue(ai.droidcommand.rag.DocumentRetriever.HEADING in seen.get())
+        assertEquals("where is the zebra crossing", store.load("default")!!.messages.first().content)
+    }
+
+    @Test
+    fun `a throwing document retriever does not fail the turn`() {
+        val base = start { sse("""{"choices":[{"delta":{"content":"ok"}}]}""") }
+        val boom = object : ai.droidcommand.rag.Embedder {
+            override fun embed(texts: List<String>): List<FloatArray> = if (texts.single() == "hi") error("embedder down") else listOf(floatArrayOf(1f))
+        }
+        val docs = ai.droidcommand.rag.DocumentRetriever(boom)
+        docs.index("d", "some text")
+        val (chat, _, _) = session(base, documents = docs)
+
+        assertEquals(ChatResult.Reply("ok"), chat.send(groq, "", "hi"))
     }
 }

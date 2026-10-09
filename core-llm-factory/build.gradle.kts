@@ -17,6 +17,7 @@ dependencies {
     implementation(project(":core-llm-groq"))
     implementation(project(":core-llm-local"))
     api(project(":core-websearch"))
+    api(project(":core-rag"))
     testImplementation(kotlin("test"))
 }
 

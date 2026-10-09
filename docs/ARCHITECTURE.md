@@ -149,6 +149,17 @@ DroidCommand AI
 │                            5 unit tests. NO Play Billing Library glue, no
 │                            UI, no feature is actually gated yet.
 │
+├── core-rag                 Embedder (seam only) / TextChunker (512-word windows,
+│                            64 overlap — words, not model tokens) / VectorStore +
+│                            InMemoryVectorStore (brute-force cosine) /
+│                            DocumentRetriever (2026-10-09, Phase 5 JVM slice).
+│                            ChatSession takes an optional `documents` retriever and
+│                            adds the top passages to the final user message framed as
+│                            untrusted file content, per request, never saved to
+│                            history. 8 core-rag + 2 ChatSession tests. NO real
+│                            embedding model, NO PDF extraction, NO Room persistence,
+│                            NO :app attach UI yet — see the 2026-10-09i addendum.
+│
 ├── core-websearch           WebSearchClient / WebSearchResult / WebSearchOutcome
 │                            (2026-10-08, Phase 4 web-search half only) —
 │                            BraveWebSearchClient (X-Subscription-Token header)
