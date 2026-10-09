@@ -377,19 +377,24 @@ faith, per findings noted inline.
 ---
 
 ### Phase 0 — Android App Shell (Foundation)
-**Status:** ON DISK — `:app:assembleDebug` VERIFIED 2026-10-07 (2026-10-07e addendum); NOT launched/tested on a device or emulator. Android modules are opt-in: add `includeAndroid=true` to user-level `~/.gradle/gradle.properties` and set `ANDROID_HOME`.
-**Branch:** `feature/phase-0-android-shell` (merged to `main` via PR #104)
-**Depends on:** nothing new — wires to existing `core-llm`, `core-agent`, `core-config`
+**Status:** ON DISK — `:app:assembleDebug` VERIFIED 2026-10-07 (2026-10-07e addendum) and independently
+re-verified 2026-10-09 in a different container (2026-10-09t addendum), which also ran the full
+`./gradlew test --continue` across all Android modules for the first time (1838 tests, 0 failures/errors) —
+NOT launched/tested on a device or emulator (no emulator/device has ever been available in this environment,
+per both sessions). Android modules are opt-in: add `includeAndroid=true` to user-level
+`~/.gradle/gradle.properties` and set `ANDROID_HOME` (a per-session SDK install does not persist across
+containers — see the 2026-10-09t addendum for the exact install steps a fresh session needs to repeat).
 
 The `app/` module exists on disk with real Kotlin/Compose/Hilt source
 (Hilt DI, Compose navigation, stub screens for Chat/Home/Settings/Tools
 including the Metasploit and SET UI stubs). It is **not** included in
-`settings.gradle.kts` because this JVM-only environment has no Android
-SDK/AGP. It has never been build-verified — `./gradlew :app:assembleDebug`
-has not been run against it; the plugin/dependency versions in
-`app/build.gradle.kts` are best-effort starting points, not build-confirmed.
-See `docs/AUDIT_2026-09-05.md`'s `app/` row and the "Phase 0 Compose app
-scaffold" entry in PR #104 for the full record.
+`settings.gradle.kts` by default because most sessions in this JVM-only environment have no Android
+SDK/AGP — it builds successfully when a session does. The paragraph that used to say "it has never been
+build-verified" was stale even before 2026-10-09t's re-verification (2026-10-07e had already verified it);
+don't trust this paragraph's age without checking the addenda trail. See `docs/AUDIT_2026-09-05.md`'s `app/`
+row and the "Phase 0 Compose app scaffold" entry in PR #104 for the full record.
+**Branch:** `feature/phase-0-android-shell` (merged to `main` via PR #104)
+**Depends on:** nothing new — wires to existing `core-llm`, `core-agent`, `core-config`
 
 **Acceptance (still unmet):** `./gradlew :app:assembleDebug` succeeds; app
 launches on an emulator (API 26+) with stub screens; `./gradlew test` still
@@ -560,7 +565,7 @@ denial.
 ---
 
 ### Phase 5 — Document Q&A (RAG)
-**Status:** IN PROGRESS — JVM slice `core-rag` (chunker, cosine store, `FileVectorStore`, `DocumentRetriever`, strict plain-text loader, `ChatSession` `documents` param) and the `LocalEmbedder` seam are JVM-tested with FAKE embedders only (2026-10-09i–k). `LlamaCppEmbeddingBackend` (JNI, `core-llm-local-android`): the native shim is RUNTIME VERIFIED on a host with a real model (nomic-embed-text-v1.5 Q4_K_M, 768-dim, 2026-10-09o); the Kotlin wrapper was also compiled unmodified with the project's Kotlin compiler and run on the host (it uses no Android API; 2026-10-09q), but the Android library build and any device run are unverified. Retrieval was measured with the real model on 8 documents / 50 questions (2026-10-09t, harness in `core-llm-local-android/scripts/host-rag-eval/`; it corrects the smaller 2026-10-09r check): roughly tied with a word-overlap baseline at 128/256-word chunks, worse at the 512-word default, and the default `minScore` of 0.2 filters nothing with this model. PDF text: the platform `PdfRenderer` exposes `getTextContents()` only on newer Android (present in the Android 15 framework build, absent in Android 14; device/extension availability unverified, 2026-10-09s). Still missing: PDF extraction, Room storage, `:app` attach UI, grounded-answer test with a real model. See the 2026-10-09m reconciliation and the 2026-10-09n review fixes (use-after-free, model-own pooling, nomic query/document prefixes).
+**Status:** IN PROGRESS — JVM slice `core-rag` (chunker, cosine store, `FileVectorStore`, `DocumentRetriever`, strict plain-text loader, `ChatSession` `documents` param) and the `LocalEmbedder` seam are JVM-tested with FAKE embedders only (2026-10-09i–k). `LlamaCppEmbeddingBackend` (JNI, `core-llm-local-android`): the native shim is RUNTIME VERIFIED on a host with a real model (nomic-embed-text-v1.5 Q4_K_M, 768-dim, 2026-10-09o); the Kotlin wrapper was also compiled unmodified with the project's Kotlin compiler and run on the host (it uses no Android API; 2026-10-09q), but the Android library build and any device run are unverified. Retrieval was measured with the real model on 8 documents / 50 questions (2026-10-09u, harness in `core-llm-local-android/scripts/host-rag-eval/`; it corrects the smaller 2026-10-09r check): roughly tied with a word-overlap baseline at 128/256-word chunks, worse at the 512-word default, and the default `minScore` of 0.2 filters nothing with this model. PDF text: the platform `PdfRenderer` exposes `getTextContents()` only on newer Android (present in the Android 15 framework build, absent in Android 14; device/extension availability unverified, 2026-10-09s). Still missing: PDF extraction, Room storage, `:app` attach UI, grounded-answer test with a real model. See the 2026-10-09m reconciliation and the 2026-10-09n review fixes (use-after-free, model-own pooling, nomic query/document prefixes).
 **Branch:** `feature/phase-5-document-rag`
 **Depends on:** Phase 2
 
@@ -725,7 +730,7 @@ environment does not have — see the excluded-module comment at the bottom of
 | core-hackerai | JVM | IMPLEMENTED |
 | core-pentest-swarm | JVM | IMPLEMENTED |
 | core-rootforge | JVM | IMPLEMENTED (passive operations only; 2026-10-07) |
-| app | Android | ON DISK, opt-in via includeAndroid (assembleDebug verified 2026-10-07; never run on a device) |
+| app | Android | ON DISK, opt-in via includeAndroid (assembleDebug verified 2026-10-07, re-verified 2026-10-09t with a clean full `test` run across all Android modules; never run on a device) |
 | core-llm-google | JVM | IMPLEMENTED (mock-tested, not live-verified) |
 | core-llm-groq | JVM | IMPLEMENTED (mock-tested, not live-verified) |
 | core-conversations | Android (Room) | ON DISK, opt-in (8 Robolectric tests pass; never run on a device) |
