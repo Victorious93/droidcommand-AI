@@ -58,6 +58,7 @@ include(":core-pentest-swarm")
 include(":core-rootforge")
 include(":core-billing")
 include(":core-websearch")
+include(":core-voice")
 
 // Android modules are opt-in: they need an Android SDK, which JVM-only environments (CI, cloud
 // sessions) do not have. In Android Studio, add `includeAndroid=true` to your USER-level
@@ -69,6 +70,7 @@ if (providers.gradleProperty("includeAndroid").orNull == "true") {
     include(":core-templates-android")
     include(":core-knowledge-android")
     include(":core-llm-local-android")
+    include(":core-voice-android")
 }
 
 // The following modules are part of the target architecture (see

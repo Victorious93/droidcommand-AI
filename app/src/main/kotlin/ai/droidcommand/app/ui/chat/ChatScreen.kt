@@ -13,6 +13,10 @@ import ai.droidcommand.app.ui.theme.TextPrimary
 import ai.droidcommand.app.ui.theme.TextSecondary
 import ai.droidcommand.app.ui.theme.UserBubbleDark
 import ai.droidcommand.llm.factory.CloudProviderCatalog
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +33,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import ai.droidcommand.voice.SpeakMode
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -75,6 +84,24 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val listState = rememberLazyListState()
     val rows = state.lines + if (state.streaming.isNotEmpty()) listOf(ChatLine(false, state.streaming)) else emptyList()
 
+    val context = LocalContext.current
+    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        viewModel.toggleMic(granted)
+    }
+    val onMic = {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            viewModel.toggleMic(true)
+        } else {
+            micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+    LaunchedEffect(state.pendingInput) {
+        state.pendingInput?.let {
+            input = if (input.isBlank()) it else input.trimEnd() + " " + it
+            viewModel.consumePendingInput()
+        }
+    }
+
     LaunchedEffect(rows.size, state.streaming) {
         if (rows.isNotEmpty()) listState.animateScrollToItem(rows.lastIndex)
     }
@@ -115,6 +142,13 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
 
+        state.voice.error?.let {
+            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.clickable(onClick = viewModel::dismissVoiceError).padding(vertical = 4.dp))
+        }
+        if (state.voice.listening && state.voice.partial.isNotEmpty()) {
+            Text(state.voice.partial, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+        }
+
         state.notice?.let {
             Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
@@ -122,6 +156,14 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         InputBar(
             webSearchEnabled = state.webSearchEnabled,
             onToggleWebSearch = { viewModel.setWebSearchEnabled(!state.webSearchEnabled) },
+            speakMode = state.speakMode,
+            onCycleSpeakMode = viewModel::cycleSpeakMode,
+            speaking = state.voice.speaking,
+            canSpeak = state.lines.any { !it.fromUser },
+            onSpeakLast = viewModel::speakLastReply,
+            listening = state.voice.listening,
+            micEnabled = state.micAvailable && !state.sending,
+            onMic = onMic,
             value = input,
             onValueChange = { input = it },
             canSend = !state.sending && input.isNotBlank(),
@@ -235,6 +277,14 @@ private fun MessageBubble(line: ChatLine) {
 private fun InputBar(
     webSearchEnabled: Boolean,
     onToggleWebSearch: () -> Unit,
+    speakMode: SpeakMode,
+    onCycleSpeakMode: () -> Unit,
+    speaking: Boolean,
+    canSpeak: Boolean,
+    onSpeakLast: () -> Unit,
+    listening: Boolean,
+    micEnabled: Boolean,
+    onMic: () -> Unit,
     value: String,
     onValueChange: (String) -> Unit,
     canSend: Boolean,
@@ -242,12 +292,20 @@ private fun InputBar(
 ) {
     // Toolbar row above the input: the web-search toggle. When on, each message's text is sent to the
     // configured search provider (Brave/SerpAPI) before the model call — hence the explicit label.
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(
             selected = webSearchEnabled,
             onClick = onToggleWebSearch,
             label = { Text(if (webSearchEnabled) "Web search: on" else "Web search: off") },
         )
+        FilterChip(
+            selected = speakMode != SpeakMode.OFF,
+            onClick = onCycleSpeakMode,
+            label = { Text("Speak: " + speakMode.name.lowercase()) },
+        )
+        if (speakMode == SpeakMode.TAP || speaking) {
+            OutlinedButton(onClick = onSpeakLast, enabled = canSpeak || speaking) { Text(if (speaking) "Stop" else "Speak reply") }
+        }
     }
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
@@ -269,6 +327,13 @@ private fun InputBar(
                 cursorColor = AccentNeonGreen,
             ),
         )
+        IconButton(onClick = onMic, enabled = micEnabled) {
+            Icon(
+                if (listening) Icons.Filled.Stop else Icons.Filled.Mic,
+                contentDescription = if (listening) "Stop dictation" else "Dictate",
+                tint = if (listening) AccentNeonGreen else TextSecondary,
+            )
+        }
         IconButton(
             onClick = onSend,
             enabled = canSend,
