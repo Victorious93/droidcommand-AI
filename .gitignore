@@ -12,3 +12,6 @@ local.properties
 # llama.cpp is fetched at a pinned commit by core-llm-local-android/scripts/fetch-llama-cpp.sh
 /core-llm-local-android/third_party/
 /core-llm-local-android/.cxx/
+
+# Prebuilt sherpa-onnx AAR is fetched + SHA-256-verified by core-voice-neural-android/scripts/fetch-sherpa-onnx.sh
+/core-voice-neural-android/libs/

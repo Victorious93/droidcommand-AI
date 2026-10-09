@@ -62,6 +62,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 onClear = { viewModel.clearSearchKey(slot) },
             )
         }
+        VoiceSettingsSection()
     }
 }
 

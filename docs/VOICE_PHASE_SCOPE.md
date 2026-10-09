@@ -1,6 +1,6 @@
 # Voice follow-on scope: neural TTS, wake word, voice approvals
 
-**Date:** 2026-10-09. **Status:** SCOPING ONLY — no code written, nothing built or run.
+**Date:** 2026-10-09. **Status:** SCOPING, then BUILT 2026-10-09e/f — see §6 for what exists and what does not. The sections above are the original plan and are left as written.
 **Follows:** Phase 4 (`core-voice`, `core-voice-android`; audit addendum 2026-10-09c), which
 deliberately left out ElevenLabs cloud TTS, wake-word detection and voice approvals.
 **Gate:** per the Consumer Roadmap rules, nothing here starts until the owner approves a slice.
@@ -113,3 +113,28 @@ arm64-v8a would carry roughly 32 MB of native libs (sum of the listed arm64 file
 1. Approve V1 (JVM seam) as the first slice? (Recommended — small, testable, no regret.)
 2. Is a GPL-licensed component acceptable, or must the engine avoid espeak-ng? That could rule out Piper/Kokoro via sherpa-onnx.
 3. Wake word and voice approvals: build at all, or keep out of scope? Voice approvals is the riskiest item and the easiest to drop.
+
+## 6. What was built (2026-10-09e/f) — read this before the plan above
+
+Owner approved V2 and then asked for all remaining Phase 4 voice work. Status per item, honestly:
+
+| Item | State |
+|---|---|
+| V1 engine seam (`NeuralTextToSpeech`, `FallbackTextToSpeech`, `TtsEngineChoice`, `selectTts`) | **IMPLEMENTED — JVM-tested** (gradle) |
+| `VoiceModelRepository` (SHA-256-verified, atomic, resumable; `HttpsFileDownloader`) | **IMPLEMENTED — JVM-tested** with a fake downloader; the real `HttpsFileDownloader` has never touched a server |
+| V2 `SherpaOnnxSynthesizer`, `AudioTrackSink` | ON DISK, UNVERIFIED. Synthesizer **compiles against the real v1.13.8 `classes.jar`** (direct `kotlinc`, stub `AssetManager`); `AudioTrackSink` not compiled; nothing has run |
+| V3 wake word: `WakeWordController`/`AudioWakeWordDetector` | **IMPLEMENTED — JVM-tested** |
+| V3 `SherpaKeywordEngine`, `AudioRecordSource`, `WakeWordService` | ON DISK, UNVERIFIED. Keyword engine compiles against the real `classes.jar` (**answers §3 V3's open question: `KeywordSpotter` is in the Android AAR's Kotlin API**; that it works on a device is unverified). Service/recorder not compiled |
+| V4 voice approvals: `VoiceApprovalProvider`, `VoiceApprovalParser`, `EngineVoiceApprovalIo` | **IMPLEMENTED — JVM-tested; NOT connected to the app's approval gate** (see below) |
+| `VoiceSettings`, prefs store, Settings "Voice" section | ON DISK, UNBUILT (`:app` not compiled here); settings model is JVM-tested |
+
+**Deliberately not done, with reasons**
+- **`:app` is not linked to `core-voice-neural-android`.** That would add a ~48 MB native AAR (via a `flatDir` repo that `:app` would also need) to an app whose `:app:assembleDebug` last passed in an earlier session; I cannot build here to prove it still passes. `VoiceFeatures()` is all-false, so the Settings screen shows neural voice and wake word as unavailable and `normalized()` keeps them off. Linking is: add the dependency + `flatDir` in `:app`, pass the real engines, set the two flags.
+- **Voice approvals are not wired into `SecureToolExecutor`.** `:app` approves through `ComposeApprovalPrompt` (a boolean `ApprovalPrompt`); `VoiceApprovalProvider` is an `ApprovalProvider`. Bridging them changes the security gate and needs a device to test. The Settings switches for it are persisted but inert and say so.
+- **No voice/wake-word model catalog is registered.** Each entry needs a pinned URL + SHA-256 and a license check (espeak-ng/GPL question in §5 is still open). `VoiceModel.license` is mandatory so it cannot be skipped.
+- **Kokoro / other model types** and **dynamic-feature packaging** are not started; the AAR ships as an ordinary library.
+- Wake phrase is not user-typed: sherpa's keywords file must be pre-tokenized, so it ships with the keyword model.
+- Android 12+ blocks starting a microphone foreground service from the background; `WakeWordService.start` only catches the failure.
+
+**Bugs the tests found:** `NeuralTextToSpeech` reported a truncated utterance as completed when the sink refused audio (fixed; regression test `a_sink_that_refuses_audio_stops_synthesis`).
+

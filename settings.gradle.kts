@@ -71,6 +71,7 @@ if (providers.gradleProperty("includeAndroid").orNull == "true") {
     include(":core-knowledge-android")
     include(":core-llm-local-android")
     include(":core-voice-android")
+    include(":core-voice-neural-android")
 }
 
 // The following modules are part of the target architecture (see

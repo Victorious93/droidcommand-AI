@@ -12,11 +12,15 @@ import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.llm.factory.MemoryResult
 import ai.droidcommand.llm.factory.WebSearchCatalog
 import ai.droidcommand.remote.HttpTransport
+import ai.droidcommand.voice.NullTextToSpeech
 import ai.droidcommand.voice.SpeakMode
 import ai.droidcommand.voice.VoiceController
+import ai.droidcommand.voice.VoiceFeatures
 import ai.droidcommand.voice.VoiceState
 import ai.droidcommand.voice.android.AndroidSpeechToText
 import ai.droidcommand.voice.android.AndroidTextToSpeech
+import ai.droidcommand.voice.android.SharedPreferencesVoiceSettingsStore
+import ai.droidcommand.voice.selectTts
 import android.content.Context
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
@@ -85,7 +89,10 @@ class ChatViewModel @Inject constructor(
     )
 
     private val tts = AndroidTextToSpeech(context)
-    private val voice = VoiceController(AndroidSpeechToText(context), tts) { v -> mutableState.update { it.copy(voice = v) } }
+    // The neural engine is not linked into this build (VoiceFeatures() is all-false), so normalized() always yields
+    // SYSTEM and selectTts returns the system voice. Link :core-voice-neural-android and pass its engine here.
+    private val voiceSettings = SharedPreferencesVoiceSettingsStore(context).load().normalized(VoiceFeatures())
+    private val voice = VoiceController(AndroidSpeechToText(context), selectTts(voiceSettings.ttsEngine, NullTextToSpeech(), tts)) { v -> mutableState.update { it.copy(voice = v) } }
 
     private val mutableState = MutableStateFlow(initialState())
     val state: StateFlow<ChatUiState> = mutableState.asStateFlow()
