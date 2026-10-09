@@ -11,13 +11,25 @@ import kotlin.test.assertTrue
 class NeuralTextToSpeechTest {
     private class FakeSink : AudioSink {
         val events = java.util.Collections.synchronizedList(mutableListOf<String>())
+
         @Volatile var writeResult = true
+
         @Volatile var finishResult = true
 
-        override fun open(sampleRate: Int) { events += "open:$sampleRate" }
-        override fun write(samples: FloatArray): Boolean { events += "write:${samples.size}"; return writeResult }
-        override fun finish(): Boolean { events += "finish"; return finishResult }
-        override fun abort() { events += "abort" }
+        override fun open(sampleRate: Int) {
+            events += "open:$sampleRate"
+        }
+        override fun write(samples: FloatArray): Boolean {
+            events += "write:${samples.size}"
+            return writeResult
+        }
+        override fun finish(): Boolean {
+            events += "finish"
+            return finishResult
+        }
+        override fun abort() {
+            events += "abort"
+        }
     }
 
     private class FakeSynth(
@@ -48,7 +60,10 @@ class NeuralTextToSpeechTest {
         val q = LinkedBlockingQueue<Boolean>()
         val cb: (Boolean) -> Unit = { q.add(it) }
         fun next(): Boolean = q.poll(5, TimeUnit.SECONDS) ?: error("onDone never called")
-        fun assertNoMore() { Thread.sleep(50); assertTrue(q.isEmpty(), "onDone called more than once") }
+        fun assertNoMore() {
+            Thread.sleep(50)
+            assertTrue(q.isEmpty(), "onDone called more than once")
+        }
     }
 
     private fun engine(synth: NeuralSynthesizer, sink: AudioSink) = NeuralTextToSpeech(synth, sink)

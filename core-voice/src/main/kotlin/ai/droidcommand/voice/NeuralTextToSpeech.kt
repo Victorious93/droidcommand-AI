@@ -88,6 +88,7 @@ class NeuralTextToSpeech(
 
     private fun run(mine: Long, text: String, onDone: (Boolean) -> Unit) {
         var wrote = false
+        var refused = false
         var ok = false
         try {
             if (!cancelled(mine)) {
@@ -97,10 +98,11 @@ class NeuralTextToSpeech(
                         false
                     } else {
                         wrote = true
-                        sink.write(chunk)
+                        sink.write(chunk).also { accepted -> if (!accepted) refused = true }
                     }
                 }
-                ok = !cancelled(mine) && wrote && sink.finish()
+                // A refused write means the utterance was cut short, so it must not be reported as completed.
+                ok = !cancelled(mine) && !refused && wrote && sink.finish()
             }
         } catch (_: Exception) {
             if (!wrote && !cancelled(mine)) broken = true

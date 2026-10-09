@@ -7,6 +7,8 @@ repositories {
 }
 
 dependencies {
+    // ApprovalProvider/ApprovalRequest/AuditLog are part of VoiceApprovalProvider's public surface.
+    api(project(":core-security"))
     testImplementation(kotlin("test"))
 }
 

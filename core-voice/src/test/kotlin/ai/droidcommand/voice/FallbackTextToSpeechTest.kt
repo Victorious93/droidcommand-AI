@@ -18,7 +18,9 @@ class FallbackTextToSpeechTest {
             onDone(true)
         }
 
-        override fun stop() { stops++ }
+        override fun stop() {
+            stops++
+        }
     }
 
     @Test

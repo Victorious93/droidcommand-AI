@@ -28,6 +28,9 @@ class VoiceController(
     private var session = 0L
     private var speech = 0L
 
+    /** Current state, for callers (e.g. the wake-word controller) that decide based on it. */
+    fun snapshot(): VoiceState = synchronized(lock) { state }
+
     val sttAvailable: Boolean get() = stt.available
     val ttsAvailable: Boolean get() = tts.available
 
