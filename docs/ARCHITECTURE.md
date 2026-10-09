@@ -186,6 +186,16 @@ DroidCommand AI
 │                            9 JVM tests. core-voice-android (SpeechRecognizer /
 │                            TextToSpeech wrappers, partly adapted from OpenDroid,
 │                            Apache-2.0) and the :app mic/speak UI are UNBUILT.
+│                            2026-10-09e (V1+V2 seam): NeuralTextToSpeech (streams a
+│                            NeuralSynthesizer into an AudioSink, cancel-safe, exactly-once
+│                            onDone), FallbackTextToSpeech / TtsEngineChoice / selectTts —
+│                            JVM-tested with fakes (see audit addendum for the count).
+│
+├── core-voice-neural-android  SherpaOnnxSynthesizer (VITS/Piper over the PREBUILT
+│                            sherpa-onnx v1.13.8 release AAR, SHA-256-pinned by
+│                            scripts/fetch-sherpa-onnx.sh) + AudioTrackSink. ON DISK,
+│                            UNVERIFIED: never compiled or run (no Android SDK here).
+│                            No model download, no :app picker yet.
 │
 ├── core-templates           PromptTemplate/TemplateEngine ({{var}} expansion),
 │                            Skill/SkillApplier, bundled 20 templates + 5
