@@ -288,12 +288,14 @@ DroidCommand AI
 │                            real against the pinned llama.cpp on a Linux x86_64 host
 │                            (cmake build of dca_llama_jni; exported symbols and
 │                            shared-lib deps confirmed with nm/ldd) — stronger than a
-│                            syntax-only check, but no embedding GGUF model has been
-│                            run through it: HuggingFace is blocked by this
-│                            environment's egress policy, so no real model could be
-│                            downloaded for an end-to-end smoke test
-│                            (host-smoke-test.sh's own model comes from HF). Status:
-│                            COMPILED AND LINKED — NOT RUNTIME VERIFIED.
+│                            syntax-only check. Status (2026-10-09o): the NATIVE shim
+│                            is RUNTIME VERIFIED ON A HOST — real nomic-embed-text-v1.5
+│                            Q4_K_M produced 768-dim, finite embeddings; related
+│                            query/passage scored above an unrelated one; repeat calls
+│                            were identical; unload ran. Pooling resolved to the
+│                            model's own MEAN (GGUF pooling_type=1). The Kotlin wrapper
+│                            (LlamaCppEmbeddingBackend.kt) is NOT compiled or run (no
+│                            Android SDK here), and nothing has run on a device.
 │
 ├── core-llm-local           LocalLlmProvider (2026-10-07, Phase 2, JVM slice only) —
 │                            ProviderType.LOCAL StreamingLlmProvider over an

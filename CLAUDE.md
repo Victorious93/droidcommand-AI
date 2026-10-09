@@ -560,7 +560,7 @@ denial.
 ---
 
 ### Phase 5 — Document Q&A (RAG)
-**Status:** IN PROGRESS — JVM slice `core-rag` (chunker, cosine store, `FileVectorStore`, `DocumentRetriever`, strict plain-text loader, `ChatSession` `documents` param) and the `LocalEmbedder` seam are JVM-tested with FAKE embedders only (2026-10-09i–k). `LlamaCppEmbeddingBackend` (JNI, `core-llm-local-android`) is COMPILED AND LINKED on a host against pinned llama.cpp but NO embedding has ever been computed — no model reachable (2026-10-09l). Still missing: PDF extraction, Room storage, `:app` attach UI, grounded-answer test with a real model. See the 2026-10-09m reconciliation and the 2026-10-09n review fixes (use-after-free, model-own pooling, nomic query/document prefixes).
+**Status:** IN PROGRESS — JVM slice `core-rag` (chunker, cosine store, `FileVectorStore`, `DocumentRetriever`, strict plain-text loader, `ChatSession` `documents` param) and the `LocalEmbedder` seam are JVM-tested with FAKE embedders only (2026-10-09i–k). `LlamaCppEmbeddingBackend` (JNI, `core-llm-local-android`): the native shim is RUNTIME VERIFIED on a host with a real model (nomic-embed-text-v1.5 Q4_K_M, 768-dim, 2026-10-09o); the Kotlin wrapper is not compiled or run (no Android SDK), and nothing has run on a device. Still missing: PDF extraction, Room storage, `:app` attach UI, grounded-answer test with a real model. See the 2026-10-09m reconciliation and the 2026-10-09n review fixes (use-after-free, model-own pooling, nomic query/document prefixes).
 **Branch:** `feature/phase-5-document-rag`
 **Depends on:** Phase 2
 
