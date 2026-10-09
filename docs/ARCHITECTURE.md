@@ -189,13 +189,18 @@ DroidCommand AI
 │                            2026-10-09e (V1+V2 seam): NeuralTextToSpeech (streams a
 │                            NeuralSynthesizer into an AudioSink, cancel-safe, exactly-once
 │                            onDone), FallbackTextToSpeech / TtsEngineChoice / selectTts —
-│                            JVM-tested with fakes (see audit addendum for the count).
+│                            JVM-tested with fakes. 2026-10-09f adds VoiceModelRepository
+│                            (SHA-256-verified downloads), WakeWordController +
+│                            AudioWakeWordDetector (counted mic holds), VoiceApprovalProvider
+│                            (deny-biased, challenge word, audited; NOT wired into :app's
+│                            approval gate) and VoiceSettings — 61 JVM tests in total.
 │
 ├── core-voice-neural-android  SherpaOnnxSynthesizer (VITS/Piper over the PREBUILT
 │                            sherpa-onnx v1.13.8 release AAR, SHA-256-pinned by
-│                            scripts/fetch-sherpa-onnx.sh) + AudioTrackSink. ON DISK,
-│                            UNVERIFIED: never compiled or run (no Android SDK here).
-│                            No model download, no :app picker yet.
+│                            scripts/fetch-sherpa-onnx.sh) + AudioTrackSink, plus
+│                            SherpaKeywordEngine / AudioRecordSource / WakeWordService (V3).
+│                            ON DISK, UNVERIFIED: the two sherpa adapters compile against the
+│                            real classes.jar; nothing has run. NOT linked into :app yet.
 │
 ├── core-templates           PromptTemplate/TemplateEngine ({{var}} expansion),
 │                            Skill/SkillApplier, bundled 20 templates + 5
