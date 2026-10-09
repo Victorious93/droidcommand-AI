@@ -145,6 +145,12 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         state.voice.error?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.clickable(onClick = viewModel::dismissVoiceError).padding(vertical = 4.dp))
         }
+        state.wakeWord.error?.let {
+            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+        }
+        if (state.wakeWord.listeningForWakeWord) {
+            Text("Wake word on: the microphone is listening for the wake phrase.", color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+        }
         if (state.voice.listening && state.voice.partial.isNotEmpty()) {
             Text(state.voice.partial, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }

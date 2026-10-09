@@ -11,17 +11,23 @@ import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.llm.factory.MemoryResult
 import ai.droidcommand.llm.factory.WebSearchCatalog
+import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.remote.HttpTransport
-import ai.droidcommand.voice.NullTextToSpeech
 import ai.droidcommand.voice.SpeakMode
 import ai.droidcommand.voice.VoiceController
-import ai.droidcommand.voice.VoiceFeatures
 import ai.droidcommand.voice.VoiceState
+import ai.droidcommand.voice.WakeWordController
+import ai.droidcommand.voice.WakeWordState
 import ai.droidcommand.voice.android.AndroidSpeechToText
 import ai.droidcommand.voice.android.AndroidTextToSpeech
 import ai.droidcommand.voice.android.SharedPreferencesVoiceSettingsStore
+import ai.droidcommand.voice.neural.WakeWordHost
+import ai.droidcommand.voice.neural.WakeWordService
 import ai.droidcommand.voice.selectTts
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -53,6 +59,7 @@ data class ChatUiState(
     val notice: String? = null,
     val speakMode: SpeakMode = SpeakMode.OFF,
     val voice: VoiceState = VoiceState(),
+    val wakeWord: WakeWordState = WakeWordState(),
     val micAvailable: Boolean = true,
     /** Dictated text waiting for the screen to append to the input field; cleared by [ChatViewModel.consumePendingInput]. */
     val pendingInput: String? = null,
@@ -75,7 +82,8 @@ class ChatViewModel @Inject constructor(
     store: ConversationStore,
     transport: HttpTransport,
     graph: KnowledgeGraph,
-    @ApplicationContext context: Context,
+    private val runtime: VoiceRuntime,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
     private val memoryEnabled = prefs.getBoolean(KEY_MEMORY, false)
@@ -89,10 +97,22 @@ class ChatViewModel @Inject constructor(
     )
 
     private val tts = AndroidTextToSpeech(context)
-    // The neural engine is not linked into this build (VoiceFeatures() is all-false), so normalized() always yields
-    // SYSTEM and selectTts returns the system voice. Link :core-voice-neural-android and pass its engine here.
-    private val voiceSettings = SharedPreferencesVoiceSettingsStore(context).load().normalized(VoiceFeatures())
-    private val voice = VoiceController(AndroidSpeechToText(context), selectTts(voiceSettings.ttsEngine, NullTextToSpeech(), tts)) { v -> mutableState.update { it.copy(voice = v) } }
+    private val voiceStore = SharedPreferencesVoiceSettingsStore(context)
+
+    // Saved settings were already normalized against the installed models when they were saved. The neural engine
+    // reports itself unavailable until its model is installed and verified, and selectTts wraps it in a fallback
+    // to the system voice, so a missing model never leaves replies silent.
+    private val voice = VoiceController(
+        AndroidSpeechToText(context),
+        selectTts(voiceStore.load().ttsEngine, runtime.neuralTts(), tts),
+    ) { v ->
+        mutableState.update { it.copy(voice = v) }
+        wake?.onVoiceState(v)
+    }
+
+    private fun micPermitted() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+    private var wake: WakeWordController? = null
 
     private val mutableState = MutableStateFlow(initialState())
     val state: StateFlow<ChatUiState> = mutableState.asStateFlow()
@@ -104,6 +124,7 @@ class ChatViewModel @Inject constructor(
     }
 
     init {
+        startWakeWordIfEnabled()
         // History comes from Room, which refuses main-thread access: load it on the IO dispatcher.
         viewModelScope.launch(Dispatchers.IO) {
             val lines = runCatching { session.history() }.getOrDefault(emptyList()).map { ChatLine(it.role == Role.USER, it.content) }
@@ -203,7 +224,42 @@ class ChatViewModel @Inject constructor(
 
     fun dismissVoiceError() = voice.clearError()
 
+    /**
+     * Wake word is opt-in (off by default), needs its model installed and RECORD_AUDIO, and lives only as long as
+     * this screen's ViewModel: leaving the chat stops it and its notification. A detection can only start dictation
+     * (see [WakeWordController]); it never sends, runs a tool or approves anything.
+     */
+    private fun startWakeWordIfEnabled() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val features = runtime.refresh() // hashes the model files: must not run on the main thread
+            val settings = voiceStore.load().normalized(features)
+            if (!settings.wakeWord.enabled || !features.wakeWord) return@launch
+            val controller = WakeWordController(
+                runtime.wakeWordDetector(),
+                voice,
+                micPermitted = ::micPermitted,
+                onTranscript = { text -> mutableState.update { it.copy(pendingInput = text) } },
+                onChange = { w -> mutableState.update { it.copy(wakeWord = w) } },
+            )
+            wake = controller
+            WakeWordHost.hold = controller::hold
+            WakeWordHost.release = controller::release
+            WakeWordHost.onStopRequested = {
+                controller.setEnabled(false)
+                voiceStore.save(voiceStore.load().let { it.copy(wakeWord = it.wakeWord.copy(enabled = false)) })
+            }
+            controller.setEnabled(true)
+            if (mutableState.value.wakeWord.enabled) WakeWordService.start(context, settings.wakeWord.listenWhenScreenOff)
+        }
+    }
+
     override fun onCleared() {
+        wake?.setEnabled(false)
+        wake = null
+        WakeWordHost.hold = null
+        WakeWordHost.release = null
+        WakeWordHost.onStopRequested = null
+        WakeWordService.stop(context)
         voice.stopListening()
         voice.stopSpeaking()
         tts.shutdown()

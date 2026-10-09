@@ -35,14 +35,14 @@ fun VoiceSettingsSection(viewModel: VoiceSettingsViewModel = hiltViewModel()) {
                 OutlinedButton(onClick = { viewModel.setEngine(TtsEngineChoice.SYSTEM) }, enabled = s.ttsEngine != TtsEngineChoice.SYSTEM) { Text("System voice") }
                 OutlinedButton(onClick = { viewModel.setEngine(TtsEngineChoice.NEURAL) }, enabled = ui.features.neuralTts && s.ttsEngine != TtsEngineChoice.NEURAL) { Text("Neural voice") }
             }
-            Note(if (ui.features.neuralTts) "Neural voice falls back to the system voice if its model is missing." else "Neural voice is not included in this build.")
+            Note(if (ui.features.neuralTts) "Neural voice falls back to the system voice if its model is missing." else "Download the English voice under Voice models to use it.")
         }
     }
     ToggleCard(
         title = "Wake word",
         checked = s.wakeWord.enabled,
         enabled = ui.features.wakeWord,
-        note = if (ui.features.wakeWord) "Keeps the microphone on and shows a notification while listening. Audio is not recorded or sent." else "Wake word is not included in this build.",
+        note = if (ui.features.wakeWord) "Keeps the microphone on and shows a notification while listening. Audio is not recorded or sent." else "Download the wake word model under Voice models to use it.",
         onChange = viewModel::setWakeWord,
     )
     ToggleCard(
@@ -68,7 +68,7 @@ fun VoiceSettingsSection(viewModel: VoiceSettingsViewModel = hiltViewModel()) {
     )
     SectionLabel("Voice models")
     if (ui.models.isEmpty()) {
-        Note("No voice models are configured in this build.")
+        Note("No voice models are listed.")
     }
     ui.models.forEach { m ->
         DroidCard {
