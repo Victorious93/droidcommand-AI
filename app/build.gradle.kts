@@ -65,6 +65,7 @@ dependencies {
     implementation(project(":core-security"))
     implementation(project(":core-config"))
     implementation(project(":core-conversations"))
+    implementation(project(":core-rag-android"))
     implementation(project(":core-knowledge-android"))
     implementation(project(":core-llm"))
     implementation(project(":core-remote"))

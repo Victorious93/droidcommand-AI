@@ -11,7 +11,10 @@ import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.llm.factory.MemoryResult
 import ai.droidcommand.llm.factory.WebSearchCatalog
+import ai.droidcommand.app.documents.DocumentRuntime
 import ai.droidcommand.app.voice.VoiceRuntime
+import ai.droidcommand.rag.AttachResult
+import ai.droidcommand.rag.DocumentInfo
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.voice.SpeakMode
 import ai.droidcommand.voice.VoiceController
@@ -28,7 +31,9 @@ import ai.droidcommand.voice.selectTts
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.OpenableColumns
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
@@ -67,6 +72,13 @@ data class ChatUiState(
     val micAvailable: Boolean = true,
     /** Dictated text waiting for the screen to append to the input field; cleared by [ChatViewModel.consumePendingInput]. */
     val pendingInput: String? = null,
+    /** Documents attached for Q&A. Their relevant passages are added to every message while attached. */
+    val documents: List<DocumentInfo> = emptyList(),
+    /** False while no on-device embedding model is installed: attaching is disabled and says why. */
+    val documentsAvailable: Boolean = false,
+    val attachingDocument: Boolean = false,
+    /** Outcome of the last attach/remove, shown under the toolbar. */
+    val documentStatus: String? = null,
 )
 
 /**
@@ -87,6 +99,7 @@ class ChatViewModel @Inject constructor(
     transport: HttpTransport,
     graph: KnowledgeGraph,
     private val runtime: VoiceRuntime,
+    private val documentRuntime: DocumentRuntime,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
@@ -98,6 +111,7 @@ class ChatViewModel @Inject constructor(
         knowledge = if (memoryEnabled) GraphRetriever(graph) else null,
         knowledgeGraph = if (memoryEnabled) graph else null,
         webSearch = WebSearchCatalog.clientFor(vault, transport),
+        documents = documentRuntime.retriever,
     )
 
     private val tts = AndroidTextToSpeech(context)
@@ -132,6 +146,11 @@ class ChatViewModel @Inject constructor(
 
     init {
         startWakeWordIfEnabled()
+        // The document index is a Room database: open and read it off the main thread.
+        viewModelScope.launch(Dispatchers.IO) {
+            val docs = runCatching { documentRuntime.attacher.list() }.getOrDefault(emptyList())
+            mutableState.update { it.copy(documents = docs, documentsAvailable = documentRuntime.embedderAvailable()) }
+        }
         // History comes from Room, which refuses main-thread access: load it on the IO dispatcher.
         viewModelScope.launch(Dispatchers.IO) {
             val lines = runCatching { session.history() }.getOrDefault(emptyList()).map { ChatLine(it.role == Role.USER, it.content) }
@@ -170,6 +189,48 @@ class ChatViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Attach button result: reads the picked file (bounded), extracts text (PDF or plain text/Markdown), embeds
+     * and indexes it on this device. Nothing is sent anywhere by attaching; the relevant passages are sent to
+     * the chat provider only as part of later messages. Runs off the main thread (embedding is slow).
+     */
+    fun attachDocument(uri: Uri) {
+        if (mutableState.value.attachingDocument) return
+        mutableState.update { it.copy(attachingDocument = true, documentStatus = "Reading document…") }
+        viewModelScope.launch(Dispatchers.IO) {
+            val status: String
+            val result = runCatching {
+                val name = displayName(uri)
+                val stream = context.contentResolver.openInputStream(uri) ?: error("The file could not be opened.")
+                documentRuntime.attacher.attach(name, stream)
+            }
+            val docs = runCatching { documentRuntime.attacher.list() }.getOrDefault(mutableState.value.documents)
+            status = result.fold(
+                onSuccess = { r ->
+                    when (r) {
+                        is AttachResult.Attached -> "Attached ${r.info.name} (${r.info.chunkCount} passages)."
+                        is AttachResult.Failed -> r.message
+                    }
+                },
+                onFailure = { "Could not attach the document: ${it.message ?: it.javaClass.simpleName}" },
+            )
+            mutableState.update { it.copy(attachingDocument = false, documents = docs, documentStatus = status) }
+        }
+    }
+
+    fun removeDocument(docId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val failure = runCatching { documentRuntime.attacher.remove(docId) }.exceptionOrNull()
+            val docs = runCatching { documentRuntime.attacher.list() }.getOrDefault(mutableState.value.documents)
+            mutableState.update { it.copy(documents = docs, documentStatus = failure?.let { f -> "Could not remove it: ${f.message}" }) }
+        }
+    }
+
+    private fun displayName(uri: Uri): String =
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        } ?: uri.lastPathSegment ?: "document"
 
     fun newChat() {
         if (mutableState.value.sending) return

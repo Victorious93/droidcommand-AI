@@ -68,6 +68,7 @@ include(":core-rag")
 if (providers.gradleProperty("includeAndroid").orNull == "true") {
     include(":app")
     include(":core-conversations")
+    include(":core-rag-android")
     include(":core-templates-android")
     include(":core-knowledge-android")
     include(":core-llm-local-android")

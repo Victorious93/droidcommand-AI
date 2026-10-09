@@ -28,11 +28,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.ui.platform.LocalContext
@@ -41,6 +43,7 @@ import ai.droidcommand.voice.SpeakMode
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -94,6 +97,10 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     }
     LaunchedEffect(state.askNotificationPermission) {
         if (state.askNotificationPermission) notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+    // Storage Access Framework picker: the user picks one file, the app gets read access to just that file.
+    val documentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(viewModel::attachDocument)
     }
     val onMic = {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
@@ -166,7 +173,16 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
 
+        state.documentStatus?.let {
+            Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+        }
+
         InputBar(
+            documents = state.documents,
+            documentsAvailable = state.documentsAvailable,
+            attachingDocument = state.attachingDocument,
+            onAttachDocument = { documentLauncher.launch(arrayOf("application/pdf", "text/*", "application/octet-stream")) },
+            onRemoveDocument = viewModel::removeDocument,
             webSearchEnabled = state.webSearchEnabled,
             onToggleWebSearch = { viewModel.setWebSearchEnabled(!state.webSearchEnabled) },
             speakMode = state.speakMode,
@@ -288,6 +304,11 @@ private fun MessageBubble(line: ChatLine) {
 
 @Composable
 private fun InputBar(
+    documents: List<ai.droidcommand.rag.DocumentInfo>,
+    documentsAvailable: Boolean,
+    attachingDocument: Boolean,
+    onAttachDocument: () -> Unit,
+    onRemoveDocument: (String) -> Unit,
     webSearchEnabled: Boolean,
     onToggleWebSearch: () -> Unit,
     speakMode: SpeakMode,
@@ -303,6 +324,28 @@ private fun InputBar(
     canSend: Boolean,
     onSend: () -> Unit,
 ) {
+    // Document Q&A: attached files' relevant passages are added to each message while they stay attached.
+    // Indexing happens on this device; the passages go to the chat provider only inside later messages.
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedButton(onClick = onAttachDocument, enabled = documentsAvailable && !attachingDocument) {
+            Text(if (attachingDocument) "Indexing…" else "Attach document")
+        }
+        if (!documentsAvailable) {
+            Text("Needs the on-device embedding model (not installed).", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    if (documents.isNotEmpty()) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+            items(documents, key = { it.docId }) { doc ->
+                InputChip(
+                    selected = false,
+                    onClick = { onRemoveDocument(doc.docId) },
+                    label = { Text(doc.name, maxLines = 1) },
+                    trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Remove ${doc.name}") },
+                )
+            }
+        }
+    }
     // Toolbar row above the input: the web-search toggle. When on, each message's text is sent to the
     // configured search provider (Brave/SerpAPI) before the model call — hence the explicit label.
     Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

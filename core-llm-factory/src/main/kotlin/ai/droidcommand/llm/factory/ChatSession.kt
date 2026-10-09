@@ -19,6 +19,7 @@ import ai.droidcommand.llm.LlmRequest
 import ai.droidcommand.llm.LlmResponse
 import ai.droidcommand.llm.ProviderType
 import ai.droidcommand.llm.completeStreaming
+import ai.droidcommand.llm.local.LocalLlmProvider
 import ai.droidcommand.rag.DocumentRetriever
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.websearch.WebSearchClient
@@ -106,6 +107,7 @@ class ChatSession(
     private val knowledgeGraph: KnowledgeGraph? = null,
     private val webSearch: WebSearchClient? = null,
     private val documents: DocumentRetriever? = null,
+    private val local: LocalProviderResources? = null,
     private val memory: MemoryRetriever? = null,
     private val memoryScopes: Set<String> = emptySet(),
     private val memoryBudgetTokens: Int = DEFAULT_MEMORY_BUDGET_TOKENS,
@@ -119,6 +121,10 @@ class ChatSession(
     // new recipient of the user's text. null until the first successful send.
     private var lastSpec: CloudProviderSpec? = null
     private var lastModel: String? = null
+    private var usedLocal = false
+
+    // One provider per on-device model id, kept so the model stays loaded between turns.
+    private val localProviders = HashMap<String, LocalLlmProvider>()
     private val context: ConversationContext
         get() = loaded ?: (store.load(conversationId) ?: ConversationContext(systemPrompt)).also { loaded = it }
 
@@ -133,12 +139,69 @@ class ChatSession(
         useWebSearch: Boolean = false,
         onDelta: (String) -> Unit = {},
     ): ChatResult {
-        val text = userText.trim()
-        if (text.isEmpty()) return ChatResult.Failure("Message is empty.")
+        if (userText.isBlank()) return ChatResult.Failure("Message is empty.")
         val key = vault.getSecret(spec.secretId)
         if (key.isNullOrBlank()) return ChatResult.Failure("No API key for ${spec.label}. Add one in Settings.")
 
         val config = LlmConfig(provider = spec.id, model = model.trim().ifEmpty { spec.defaultModel }, authToken = { vault.getSecret(spec.secretId) })
+        return turn({ providerFor(spec, config) }, key, userText.trim(), useWebSearch, onDelta) {
+            lastSpec = spec
+            lastModel = config.model
+            usedLocal = false
+        }
+    }
+
+    /**
+     * One turn against an on-device model registered in the [local] resources' repository — same history,
+     * same document/knowledge/web handling as [send], so a conversation can move between cloud and local
+     * models turn by turn (the stored conversation is shared; only the provider changes). The model is
+     * SHA-256-verified by the repository before it loads, and stays loaded between turns (one provider per
+     * model id, kept until [close]). No API key is involved.
+     *
+     * Privacy: switching to local does not retroactively keep earlier cloud turns private, and a later cloud
+     * turn sends the whole history, local turns included, to that cloud provider. After a local turn
+     * [rememberConversation] has no provider to use and reports a failure rather than silently picking a
+     * cloud one.
+     */
+    @Synchronized
+    fun sendLocal(
+        modelId: String,
+        userText: String,
+        useWebSearch: Boolean = false,
+        onDelta: (String) -> Unit = {},
+    ): ChatResult {
+        if (userText.isBlank()) return ChatResult.Failure("Message is empty.")
+        val resources = local ?: return ChatResult.Failure("On-device models are not available on this device.")
+        if (resources.repository.get(modelId) == null) return ChatResult.Failure("Unknown on-device model '$modelId'.")
+        return turn(
+            { localProviders.getOrPut(modelId) { LocalLlmProvider(modelId, resources.repository, resources.backendFactory()) } },
+            key = null,
+            userText.trim(),
+            useWebSearch,
+            onDelta,
+        ) {
+            lastSpec = null
+            lastModel = null
+            usedLocal = true
+        }
+    }
+
+    /** Releases every loaded on-device model; the next local turn reloads (and re-verifies) it. */
+    @Synchronized
+    fun close() {
+        localProviders.values.forEach { it.close() }
+        localProviders.clear()
+    }
+
+    /** Shared turn logic. [key] is the secret to scrub from errors and to withhold from search (null for local). */
+    private fun turn(
+        provider: () -> LlmProvider,
+        key: String?,
+        text: String,
+        useWebSearch: Boolean,
+        onDelta: (String) -> Unit,
+        onSuccess: () -> Unit,
+    ): ChatResult {
         // Exception, not Throwable: an Error (e.g. OutOfMemoryError) should not be silently swallowed.
         val notes = try {
             knowledge?.retrieveContext(text)
@@ -171,7 +234,7 @@ class ChatSession(
         val request = LlmRequest(systemPrompt = context.systemPrompt, messages = context.messages + Message(Role.USER, outgoing))
 
         val response = try {
-            providerFor(spec, config).completeStreaming(request, onDelta)
+            provider().completeStreaming(request, onDelta)
         } catch (e: Exception) {
             return ChatResult.Failure(scrub("Request failed: ${e.message ?: e.javaClass.simpleName}", key))
         }
@@ -181,8 +244,7 @@ class ChatSession(
                 if (response.content.isBlank()) return ChatResult.Failure("The model returned an empty reply.")
                 context.append(Role.USER, text).append(Role.ASSISTANT, response.content)
                 store.save(conversationId, context)
-                lastSpec = spec
-                lastModel = config.model
+                onSuccess()
                 ChatResult.Reply(response.content, notice)
             }
             is LlmResponse.ToolCall -> ChatResult.Failure("The model asked to call a tool, which chat does not support.")
@@ -206,7 +268,13 @@ class ChatSession(
         val graph = knowledgeGraph ?: return MemoryResult.NothingToRemember
         val spec = lastSpec
         val model = lastModel
-        if (spec == null || model == null || context.messages.isEmpty()) return MemoryResult.NothingToRemember
+        if (spec == null || model == null || context.messages.isEmpty()) {
+            return if (usedLocal && context.messages.isNotEmpty()) {
+                MemoryResult.Failure("The last reply came from an on-device model; remembering needs a cloud provider turn first.")
+            } else {
+                MemoryResult.NothingToRemember
+            }
+        }
         val key = vault.getSecret(spec.secretId)
         if (key.isNullOrBlank()) return MemoryResult.Failure("No API key for ${spec.label}. Add one in Settings.")
 
@@ -236,10 +304,11 @@ class ChatSession(
         loaded = ConversationContext(systemPrompt)
         lastSpec = null
         lastModel = null
+        usedLocal = false
     }
 
     /** Returns (formatted block or null, failure notice or null). Never throws for a provider failure. */
-    private fun searchBlock(client: WebSearchClient, text: String, chatKey: String): Pair<String?, String?> {
+    private fun searchBlock(client: WebSearchClient, text: String, chatKey: String?): Pair<String?, String?> {
         val query = text.take(MAX_SEARCH_QUERY_CHARS)
         val outcome = try {
             client.search(query, SEARCH_RESULT_COUNT)
@@ -262,8 +331,8 @@ class ChatSession(
 
     private fun oneLine(s: String, max: Int) = s.replace(Regex("\\s+"), " ").trim().take(max)
 
-    private fun scrub(message: String, key: String): String =
-        if (key.length >= MIN_REDACTABLE_KEY_LENGTH) message.replace(key, "[redacted]") else message
+    private fun scrub(message: String, key: String?): String =
+        if (key != null && key.length >= MIN_REDACTABLE_KEY_LENGTH) message.replace(key, "[redacted]") else message
 
     companion object {
         const val DEFAULT_CONVERSATION_ID = "default"
