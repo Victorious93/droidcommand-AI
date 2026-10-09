@@ -76,9 +76,29 @@ Design rule, same as OpenDroid's: the voice layer **cannot grant new authorizati
 
 V2/V3 need native code this environment can't compile. Per the new standing rule in `CLAUDE.md`, consume
 sherpa-onnx's **published prebuilt Android release artifacts** rather than building from source: pin an exact
-version, record its SHA-256 and release URL, and check the licenses first (§2). Exact artifact names and
-versions are NOT yet looked up — do that at V2 start, from the project's official release page. A prebuilt
+version, record its SHA-256 and release URL, and check the licenses first (§2). A prebuilt
 library still leaves the feature unverified until it runs on a device.
+
+**Looked up 2026-10-09 (V2 start), from the official release page**
+`https://github.com/k2-fsa/sherpa-onnx/releases/tag/v1.13.8` (marked "Latest"; the page shows "10 Sep",
+year not shown). Asset names and digests were read from the release's asset listing; the first row
+was then re-verified by downloading it and running `sha256sum` (matched).
+
+| Asset | Size | SHA-256 | Use |
+|---|---|---|---|
+| `sherpa-onnx-1.13.8.aar` | 47.8 MB | `633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96` | **Candidate for V2.** Verified contents: `classes.jar` + `jni/{arm64-v8a,armeabi-v7a,x86,x86_64}/` with `libonnxruntime.so`, `libsherpa-onnx-{c-api,cxx-api,jni}.so` |
+| `sherpa-onnx-static-link-onnxruntime-1.13.8.aar` | 36.9 MB | `b22c3fc1b6a45666d28892bb2f7694beeb77a8362d7ebd77c1a5431ec9435471` | Alternative; not inspected |
+| `sherpa-onnx-v1.13.8-android.tar.bz2` | 44 MB | `2ff63469a71cb6009aa2e3ed5f4a670f8abdcbe4bb9ffd23776afc792a6b4f44` | Raw jniLibs tarball; not inspected |
+| `sherpa-onnx-1.13.8-rknn.aar` | 25.4 MB | `33489f8d…0fc876` | Rockchip NPU only — not relevant |
+| `*-android-*-termux-{shared,static}.tar.bz2` | 15–165 MB | (on release page) | Termux CLI binaries — not relevant to an APK |
+
+Not verified: the digests for every row except the first (read from the page, not re-hashed); the
+asset list was truncated in the fetch, so other assets may exist; Maven Central coordinates were not
+checked (the docs host was unreachable from this environment) — consuming the release AAR directly
+is what was verified. License: the repo's `LICENSE` at tag v1.13.8 is Apache-2.0 (read directly).
+Bundled `libonnxruntime.so` (ONNX Runtime is MIT upstream [Likely, not checked]) and every voice
+model/espeak-ng data remain unchecked. The AAR is ~48 MB across four ABIs; an APK split to
+arm64-v8a would carry roughly 32 MB of native libs (sum of the listed arm64 files) before models.
 
 ## 4. Honest limits
 
