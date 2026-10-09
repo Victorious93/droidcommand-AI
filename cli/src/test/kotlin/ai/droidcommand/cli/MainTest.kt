@@ -43,6 +43,7 @@ class MainTest {
                 "build_project",
                 "run_metasploit_module",
                 "run_setoolkit_attack",
+                "web_search",
             ),
             specs.map { it.name },
         )

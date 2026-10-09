@@ -169,12 +169,13 @@ DroidCommand AI
 │                            gate as every other network-reaching CLI tool):
 │                            NullWebSearchClient unless DROIDCOMMAND_CLI_BRAVE_API_KEY
 │                            and/or DROIDCOMMAND_CLI_SERPAPI_API_KEY is set
-│                            (webSearchClientFor, cli/WebSearchCommands.kt). NOT YET
-│                            BUILD-VERIFIED — see the 2026-10-09 audit addendum
-│                            (Maven Central 429s blocked every gradle attempt this
-│                            session). Still NOT wired into :app's chat toolbar; the
-│                            STT/TTS half of Phase 4 (core-voice) is Android-only
-│                            and still NOT STARTED.
+│                            (webSearchClientFor, cli/WebSearchCommands.kt).
+│                            `./gradlew :core-websearch:test :cli:test` and the full
+│                            suite (minus core-mcp, an unrelated pre-existing network
+│                            gap) BUILD SUCCESSFUL — see the 2026-10-09 audit addendum.
+│                            Still NOT wired into :app's chat toolbar; the STT/TTS half
+│                            of Phase 4 (core-voice) is Android-only and still NOT
+│                            STARTED.
 │
 ├── core-templates           PromptTemplate/TemplateEngine ({{var}} expansion),
 │                            Skill/SkillApplier, bundled 20 templates + 5
