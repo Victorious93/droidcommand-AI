@@ -190,6 +190,24 @@ If the branch's own PR has already merged before you start new work,
 restart the branch from `origin/main` (`git fetch origin main && git
 checkout -B <branch> origin/main`) rather than stacking on stale history.
 
+## When something isn't buildable in this environment (owner standing rule, 2026-10-09)
+
+If a needed component can't be built here (Android SDK/NDK, native libs, model runtimes), don't stall
+and don't fake it: **use an already-built application's or library's published, prebuilt package**
+(release AAR/`.so`/JAR/APK) instead of compiling it. Guardrails, because "prebuilt" changes the risks,
+not the honesty rules:
+
+- **Pin and verify.** Pin an exact released version and record its SHA-256 (and source repo/release URL)
+  in the addendum. Fetch only from the project's official release channel; never an unofficial mirror.
+- **License first.** Check the package's license (and bundled components' licenses) before adding it.
+  This repo has no `LICENSE` file, and GPL/AGPL code must not be linked in without an explicit owner
+  decision (see the `android-code-studio` GPLv3 note above). Keep attribution.
+- **Isolate behind a seam.** Consume it through an existing interface (e.g. `TextToSpeechEngine`) so the
+  JVM tests still run against fakes and the dependency stays swappable.
+- **Status stays honest.** A prebuilt dependency makes the build possible, not the feature verified:
+  anything that hasn't run on a device/emulator stays ON DISK / UNVERIFIED in the audit.
+- **Record it** in `docs/ARCHITECTURE.md` and a dated audit addendum, like any other component.
+
 ## Still open
 
 - The `CAP-###` reconciliation is done (see above) — don't re-run it from
