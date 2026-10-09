@@ -1,0 +1,47 @@
+# Raw output of run.sh, 2026-10-09. Model: nomic-embed-text-v1.5.Q4_K_M.gguf (SHA-256 d4e388894e09cf3816e8b0896d81d265b55e7a9fff9ab03fe8bf4ef5e11295ac)
+# Corpus pinned at commit 12fde171483fd5bcba1cf950efe29bd7200b0de1. Host x86_64 CPU build of llama.cpp b11484. Single run; the model and chunker are deterministic.
+docs=8 answerable questions=50 unrelated questions=15 words/doc=COMPANION_PROTOCOL.md:1505, docs/ROOTFORGE_INTEGRATION.md:550, docs/SECURITY.md:1367, docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md:1612, docs/CORE_BUILD.md:2388, docs/VOICE_PHASE_SCOPE.md:2214, README.md:2236, docs/CAPABILITY_ROADMAP_PROMPT.md:4283
+
+== prefixed chunk=512/64  chunks=39{COMPANION_PROTOCOL.md=4, docs/ROOTFORGE_INTEGRATION.md=2, docs/SECURITY.md=3, docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md=4, docs/CORE_BUILD.md=6, docs/VOICE_PHASE_SCOPE.md=5, README.md=5, docs/CAPABILITY_ROADMAP_PROMPT.md=10}
+   real:      top1=20/50 top3=40/50 MRR=0.624
+   word-overlap: top1=35/50 top3=48/50 MRR=0.822
+   best-chunk score  on-topic: min=0.551 p10=0.589 median=0.641 | unrelated(far): median=0.507 p90=0.548 max=0.568 | same-domain(near): median=0.563 p90=0.591 max=0.616
+   minScore -> answer delivered in top-4 | false excerpt far | near:  0.20: 92% | 100% | 100%  0.50: 92% | 56% | 100%  0.55: 84% | 9% | 55%  0.60: 60% | 0% | 8%  0.65: 28% | 0% | 0%
+
+== prefixed chunk=256/32  chunks=74{COMPANION_PROTOCOL.md=7, docs/ROOTFORGE_INTEGRATION.md=3, docs/SECURITY.md=6, docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md=8, docs/CORE_BUILD.md=11, docs/VOICE_PHASE_SCOPE.md=10, README.md=10, docs/CAPABILITY_ROADMAP_PROMPT.md=19}
+   real:      top1=32/50 top3=42/50 MRR=0.753
+   word-overlap: top1=28/50 top3=44/50 MRR=0.717
+   best-chunk score  on-topic: min=0.552 p10=0.630 median=0.676 | unrelated(far): median=0.522 p90=0.564 max=0.612 | same-domain(near): median=0.579 p90=0.608 max=0.627
+   minScore -> answer delivered in top-4 | false excerpt far | near:  0.20: 88% | 100% | 100%  0.50: 88% | 79% | 100%  0.55: 88% | 23% | 78%  0.60: 80% | 1% | 15%  0.65: 60% | 0% | 0%
+
+== prefixed chunk=128/16  chunks=148{COMPANION_PROTOCOL.md=14, docs/ROOTFORGE_INTEGRATION.md=5, docs/SECURITY.md=13, docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md=15, docs/CORE_BUILD.md=22, docs/VOICE_PHASE_SCOPE.md=20, README.md=20, docs/CAPABILITY_ROADMAP_PROMPT.md=39}
+   real:      top1=29/50 top3=43/50 MRR=0.725
+   word-overlap: top1=28/50 top3=41/50 MRR=0.713
+   best-chunk score  on-topic: min=0.616 p10=0.645 median=0.701 | unrelated(far): median=0.545 p90=0.584 max=0.614 | same-domain(near): median=0.605 p90=0.627 max=0.651
+   minScore -> answer delivered in top-4 | false excerpt far | near:  0.20: 88% | 100% | 100%  0.50: 88% | 81% | 100%  0.55: 88% | 40% | 98%  0.60: 88% | 5% | 58%  0.65: 72% | 0% | 3%
+   per-doc COMPANION_PROTOCOL.md                    top1=6/8 top3=7/8
+   per-doc docs/ROOTFORGE_INTEGRATION.md            top1=6/6 top3=6/6
+   per-doc docs/SECURITY.md                         top1=2/6 top3=5/6
+   per-doc docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md      top1=2/6 top3=5/6
+   per-doc docs/CORE_BUILD.md                       top1=3/6 top3=4/6
+   per-doc docs/VOICE_PHASE_SCOPE.md                top1=4/6 top3=6/6
+   per-doc README.md                                top1=3/6 top3=4/6
+   per-doc docs/CAPABILITY_ROADMAP_PROMPT.md        top1=3/6 top3=6/6
+
+== no-prefix chunk=512/64  chunks=39{COMPANION_PROTOCOL.md=4, docs/ROOTFORGE_INTEGRATION.md=2, docs/SECURITY.md=3, docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md=4, docs/CORE_BUILD.md=6, docs/VOICE_PHASE_SCOPE.md=5, README.md=5, docs/CAPABILITY_ROADMAP_PROMPT.md=10}
+   real:      top1=21/50 top3=44/50 MRR=0.644
+   word-overlap: top1=35/50 top3=49/50 MRR=0.824
+   best-chunk score  on-topic: min=0.502 p10=0.534 median=0.586 | unrelated(far): median=0.406 p90=0.459 max=0.483 | same-domain(near): median=0.487 p90=0.525 max=0.568
+   minScore -> answer delivered in top-4 | false excerpt far | near:  0.20: 96% | 100% | 100%  0.50: 92% | 0% | 40%  0.55: 58% | 0% | 3%  0.60: 26% | 0% | 0%  0.65: 8% | 0% | 0%
+
+== no-prefix chunk=256/32  chunks=74{COMPANION_PROTOCOL.md=7, docs/ROOTFORGE_INTEGRATION.md=3, docs/SECURITY.md=6, docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md=8, docs/CORE_BUILD.md=11, docs/VOICE_PHASE_SCOPE.md=10, README.md=10, docs/CAPABILITY_ROADMAP_PROMPT.md=19}
+   real:      top1=27/50 top3=39/50 MRR=0.683
+   word-overlap: top1=28/50 top3=44/50 MRR=0.721
+   best-chunk score  on-topic: min=0.524 p10=0.563 median=0.611 | unrelated(far): median=0.421 p90=0.472 max=0.515 | same-domain(near): median=0.496 p90=0.533 max=0.577
+   minScore -> answer delivered in top-4 | false excerpt far | near:  0.20: 86% | 100% | 100%  0.50: 84% | 3% | 45%  0.55: 72% | 0% | 3%  0.60: 44% | 0% | 0%  0.65: 18% | 0% | 0%
+
+== no-prefix chunk=128/16  chunks=148{COMPANION_PROTOCOL.md=14, docs/ROOTFORGE_INTEGRATION.md=5, docs/SECURITY.md=13, docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md=15, docs/CORE_BUILD.md=22, docs/VOICE_PHASE_SCOPE.md=20, README.md=20, docs/CAPABILITY_ROADMAP_PROMPT.md=39}
+   real:      top1=26/50 top3=41/50 MRR=0.689
+   word-overlap: top1=30/50 top3=41/50 MRR=0.723
+   best-chunk score  on-topic: min=0.518 p10=0.585 median=0.634 | unrelated(far): median=0.435 p90=0.484 max=0.522 | same-domain(near): median=0.525 p90=0.551 max=0.604
+   minScore -> answer delivered in top-4 | false excerpt far | near:  0.20: 88% | 100% | 100%  0.50: 88% | 4% | 78%  0.55: 82% | 0% | 13%  0.60: 68% | 0% | 3%  0.65: 42% | 0% | 0%

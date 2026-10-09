@@ -1,0 +1,51 @@
+# doc path <TAB> question <TAB> fragment that must appear in a retrieved chunk (whitespace-normalised)
+COMPANION_PROTOCOL.md	What happens if the main app gets uninstalled while an add-on is still present?	If DCA is absent
+COMPANION_PROTOCOL.md	Why are plain text payloads used across the service boundary rather than typed objects?	do not require changes to the AIDL file
+COMPANION_PROTOCOL.md	How often does the core re-run the availability probe for a companion?	30_000L
+COMPANION_PROTOCOL.md	What status is reported when a companion is present but unresponsive?	installed but not responding
+COMPANION_PROTOCOL.md	How do I compile the Go executable for 64-bit ARM phones?	make build-android-arm64
+COMPANION_PROTOCOL.md	What goes wrong when interface definition files drift apart between repositories?	Binder interface mismatch
+COMPANION_PROTOCOL.md	Which behaviours still need physical hardware and have never been exercised?	Requires Android device
+COMPANION_PROTOCOL.md	Why is the signature-level permission stronger than a regular one?	only grant these permissions
+docs/ROOTFORGE_INTEGRATION.md	What stops the client from silently trusting a different machine if the server's identity key changes?	never re-learned automatically
+docs/ROOTFORGE_INTEGRATION.md	Why can't the phone app use the current way of reaching the remote machine?	Android has no such
+docs/ROOTFORGE_INTEGRATION.md	Which setting switches the remote-machine feature on for the command-line tool?	DROIDCOMMAND_CLI_ROOTFORGE_NODES_FILE
+docs/ROOTFORGE_INTEGRATION.md	Which kinds of operations are deliberately not offered yet?	backup/restore, flashing
+docs/ROOTFORGE_INTEGRATION.md	What keeps the Kotlin data types and the other product's protocol version from drifting apart?	must change together with
+docs/ROOTFORGE_INTEGRATION.md	How many network sessions are opened for each call?	One SSH connection per request
+docs/SECURITY.md	Why does a one-use permission survive when the operation it was meant for fails?	a failed attempt never burns a
+docs/SECURITY.md	What happens to a sensitive action when the activity record cannot be written?	than run unaudited
+docs/SECURITY.md	Which outcomes of a confirmation request are told apart so a caller can refuse correctly?	can default-deny on each correctly
+docs/SECURITY.md	How should documents the user picks from outside the app be accessed instead of turning their address into a file path?	arbitrary URI into a raw filesystem path
+docs/SECURITY.md	Can a spoken command approve a risky request?	voice can never
+docs/SECURITY.md	What are the rules for repeating failed web requests?	auth or confirmation failures
+docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md	Why is stored memory text treated as a possible attack path when it is put into prompts?	untrusted-input path
+docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md	What kind of matching does entity lookup use, and why is that a limitation?	Search is literal substring only
+docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md	Where in the request do retrieved notes go, and are they kept afterwards?	are never saved into the conversation
+docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md	Which approach was advised against until reading from the store had proven useful?	Not recommended until A's retrieval is proven useful
+docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md	Which provider performs the extraction, according to the delegated decision?	provider of the most recent successful chat
+docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md	What goes wrong if extraction invents incorrect information?	that then bias every answer
+docs/CORE_BUILD.md	What checks are applied to each file the builder reports having produced?	declared size match its real size
+docs/CORE_BUILD.md	Why does an absolute path argument not get past the path check?	returns an absolute argument
+docs/CORE_BUILD.md	How is the order of workspace lifecycle states enforced?	rejects any transition outside
+docs/CORE_BUILD.md	Besides mobile packages, which kinds of output file does the model support?	AAB`/`JAR`/`ZIP`
+docs/CORE_BUILD.md	What mistake did the first version of the result validation contain?	never checked the path was actually
+docs/CORE_BUILD.md	Why is there no database behind the build log events?	No persistence layer exists anywhere in this repository
+docs/VOICE_PHASE_SCOPE.md	Did the company named in the request release a free open-source speech engine?	no evidence that ElevenLabs has released
+docs/VOICE_PHASE_SCOPE.md	Is the local neural speech engine expected to be cheaper on the processor than the built-in one?	will almost certainly use less CPU and
+docs/VOICE_PHASE_SCOPE.md	Which risk levels can never be approved by voice?	require on-screen confirmation, no exceptions
+docs/VOICE_PHASE_SCOPE.md	Why is not knowing who is speaking a problem for spoken approvals?	anyone in earshot
+docs/VOICE_PHASE_SCOPE.md	What is the wake-word listener allowed to start?	never starts an action itself
+docs/VOICE_PHASE_SCOPE.md	How much native library weight would a single-architecture package carry?	roughly 32 MB of native libs
+README.md	How are API credentials kept from being held in memory for long?	read from the source fresh on every call
+README.md	What defect did the network client's round-trip test uncover?	header names are case-insensitive
+README.md	When both certificate pinning and client certificates are set, which one decides how the server is validated?	pinning wins for validating the server
+README.md	Is the other project a build dependency?	never a build or runtime dependency
+README.md	How does the retry logic treat client-side error status codes?	never retrying a 4xx
+README.md	What happens to a tool the policy denied even if the model asked for it?	matter what an LLM or planner requested
+docs/CAPABILITY_ROADMAP_PROMPT.md	What exact wording must be used when something cannot be tested in the current environment?	IMPLEMENTED — NOT RUNTIME VERIFIED
+docs/CAPABILITY_ROADMAP_PROMPT.md	What are the preset context allowances called, for small devices?	(lightweight, mobile-first)
+docs/CAPABILITY_ROADMAP_PROMPT.md	Which kind of information gets first priority when trimming context?	1. Current task
+docs/CAPABILITY_ROADMAP_PROMPT.md	Is it acceptable to swap real functionality for stand-ins in shipped code?	mocks except inside explicitly isolated tests
+docs/CAPABILITY_ROADMAP_PROMPT.md	What single question should the platform be able to answer about its surroundings?	What can I do in this environment
+docs/CAPABILITY_ROADMAP_PROMPT.md	How should the roadmap text be changed if the plan evolves?	append a dated addendum section
