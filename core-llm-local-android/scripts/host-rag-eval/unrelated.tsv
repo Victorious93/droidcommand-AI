@@ -1,0 +1,16 @@
+# category <TAB> question. 'far' = unrelated to any document; 'near' = same technical domain but not covered by these documents.
+far	What is the capital city of Australia?
+far	How do I bake sourdough bread?
+far	Who won the 1998 football world cup?
+far	At what temperature does water boil at sea level?
+far	How does photosynthesis work in plants?
+far	What is the tallest mountain on Earth?
+far	How do you say good morning in French?
+far	When should tomatoes be planted?
+far	Who wrote the play Hamlet?
+far	How many players are on a basketball team?
+near	How do I set up a Kubernetes cluster with three nodes?
+near	Which database index type is best for geospatial queries?
+near	How do I train a convolutional neural network for image classification?
+near	What is the difference between TCP and UDP?
+near	How do I configure a GitHub Actions matrix build for Windows?
