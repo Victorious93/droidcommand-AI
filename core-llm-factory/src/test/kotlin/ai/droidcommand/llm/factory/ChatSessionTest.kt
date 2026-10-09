@@ -6,6 +6,11 @@ import ai.droidcommand.agent.GraphRetriever
 import ai.droidcommand.agent.InMemoryConversationStore
 import ai.droidcommand.agent.InMemoryKnowledgeGraph
 import ai.droidcommand.agent.KnowledgeGraph
+import ai.droidcommand.agent.memory.MemoryCandidate
+import ai.droidcommand.agent.memory.MemoryClass
+import ai.droidcommand.agent.memory.MemoryRetriever
+import ai.droidcommand.agent.memory.MemoryWriter
+import ai.droidcommand.agent.memory.Origin
 import ai.droidcommand.agent.Role
 import ai.droidcommand.config.InMemorySecretsVault
 import ai.droidcommand.llm.LlmConfig
@@ -78,6 +83,8 @@ class ChatSessionTest {
         graph: ai.droidcommand.agent.KnowledgeGraph? = null,
         search: WebSearchClient? = null,
         documents: ai.droidcommand.rag.DocumentRetriever? = null,
+        memory: MemoryRetriever? = null,
+        memoryScopes: Set<String> = emptySet(),
     ): Triple<ChatSession, InMemoryConversationStore, InMemorySecretsVault> {
         val vault = InMemorySecretsVault()
         vaultKey?.let {
@@ -89,7 +96,7 @@ class ChatSessionTest {
             val p: LlmProvider = if (spec.id == "google") GeminiLlmProvider(c, JdkHttpTransport(), requireHttps = false) else GroqLlmProvider(c, JdkHttpTransport(), requireHttps = false)
             p
         }
-        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge, knowledgeGraph = graph, webSearch = search, documents = documents), store, vault)
+        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge, knowledgeGraph = graph, webSearch = search, documents = documents, memory = memory, memoryScopes = memoryScopes), store, vault)
     }
 
     @Test
@@ -231,6 +238,49 @@ class ChatSessionTest {
         val base = start { sse("""{"choices":[{"delta":{"content":"fine"}}]}""") }
         val (chat, _, _) = session(base, knowledge = GraphRetriever(broken))
         assertEquals(ChatResult.Reply("fine"), chat.send(groq, "", "router?"))
+    }
+
+    // ---- Second Brain memory (read side) ----
+
+    private fun memoryGraph(): KnowledgeGraph = InMemoryKnowledgeGraph().also { g ->
+        val w = MemoryWriter(g)
+        fun add(title: String, content: String, scope: String) =
+            w.write(MemoryCandidate(title, content, MemoryClass.PROJECT, scope, Origin.USER))
+        add("Deploy target", "Production deploys go to the staging cluster first", "project:dca")
+        add("Other project deploy", "Other project deploys straight to prod", "project:other")
+    }
+
+    @Test
+    fun `memories in an allowed scope reach the user turn, other scopes never do, and history stays clean`() {
+        val captured = AtomicReference<String>()
+        val base = start(captured = captured) { sse("""{"choices":[{"delta":{"content":"ok"}}]}""") }
+        val (chat, store, _) = session(base, memory = MemoryRetriever(memoryGraph()), memoryScopes = setOf("project:dca"))
+        assertEquals(ChatResult.Reply("ok"), chat.send(groq, "", "where do deploys go?"))
+        val body = captured.get()
+        assertTrue(body.contains("staging cluster"), body)
+        assertTrue(body.contains("untrusted reference data"))
+        assertFalse(body.contains("straight to prod"), "out-of-scope memory leaked: $body")
+        assertFalse(body.contains("\"role\":\"system\""))
+        assertFalse(store.load("default")!!.messages.any { it.content.contains("staging cluster") })
+    }
+
+    @Test
+    fun `empty memory scopes retrieve nothing`() {
+        val captured = AtomicReference<String>()
+        val base = start(captured = captured) { sse("""{"choices":[{"delta":{"content":"ok"}}]}""") }
+        val (chat, _, _) = session(base, memory = MemoryRetriever(memoryGraph()))
+        chat.send(groq, "", "where do deploys go?")
+        assertFalse(captured.get().contains("staging cluster"))
+    }
+
+    @Test
+    fun `a failing memory graph does not fail the turn`() {
+        val broken = object : KnowledgeGraph by InMemoryKnowledgeGraph() {
+            override fun searchEntities(keyword: String): List<Entity> = throw IllegalStateException("db closed")
+        }
+        val base = start { sse("""{"choices":[{"delta":{"content":"fine"}}]}""") }
+        val (chat, _, _) = session(base, memory = MemoryRetriever(broken), memoryScopes = setOf("global"))
+        assertEquals(ChatResult.Reply("fine"), chat.send(groq, "", "deploys?"))
     }
 
     // ---- Phase 4: per-message web search ----
