@@ -17,6 +17,7 @@ import ai.droidcommand.voice.SpeakMode
 import ai.droidcommand.voice.VoiceController
 import ai.droidcommand.voice.VoiceState
 import ai.droidcommand.voice.WakeWordController
+import ai.droidcommand.voice.WakeWordSettings
 import ai.droidcommand.voice.WakeWordState
 import ai.droidcommand.voice.android.AndroidSpeechToText
 import ai.droidcommand.voice.android.AndroidTextToSpeech
@@ -27,6 +28,7 @@ import ai.droidcommand.voice.selectTts
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
@@ -60,6 +62,8 @@ data class ChatUiState(
     val speakMode: SpeakMode = SpeakMode.OFF,
     val voice: VoiceState = VoiceState(),
     val wakeWord: WakeWordState = WakeWordState(),
+    /** The screen should show the POST_NOTIFICATIONS prompt now, then call [ChatViewModel.onNotificationPermissionResult]. */
+    val askNotificationPermission: Boolean = false,
     val micAvailable: Boolean = true,
     /** Dictated text waiting for the screen to append to the input field; cleared by [ChatViewModel.consumePendingInput]. */
     val pendingInput: String? = null,
@@ -113,6 +117,9 @@ class ChatViewModel @Inject constructor(
     private fun micPermitted() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     private var wake: WakeWordController? = null
+
+    /** Wake-word settings held while the POST_NOTIFICATIONS prompt is on screen. */
+    @Volatile private var awaitingNotificationAnswer: WakeWordSettings? = null
 
     private val mutableState = MutableStateFlow(initialState())
     val state: StateFlow<ChatUiState> = mutableState.asStateFlow()
@@ -234,23 +241,47 @@ class ChatViewModel @Inject constructor(
             val features = runtime.refresh() // hashes the model files: must not run on the main thread
             val settings = voiceStore.load().normalized(features)
             if (!settings.wakeWord.enabled || !features.wakeWord) return@launch
-            val controller = WakeWordController(
-                runtime.wakeWordDetector(),
-                voice,
-                micPermitted = ::micPermitted,
-                onTranscript = { text -> mutableState.update { it.copy(pendingInput = text) } },
-                onChange = { w -> mutableState.update { it.copy(wakeWord = w) } },
-            )
-            wake = controller
-            WakeWordHost.hold = controller::hold
-            WakeWordHost.release = controller::release
-            WakeWordHost.onStopRequested = {
-                controller.setEnabled(false)
-                voiceStore.save(voiceStore.load().let { it.copy(wakeWord = it.wakeWord.copy(enabled = false)) })
+            if (shouldAskNotificationPermission(Build.VERSION.SDK_INT, notificationsPermitted())) {
+                // Ask first so the "microphone is on" notification can show; the screen answers via onNotificationPermissionResult.
+                awaitingNotificationAnswer = settings.wakeWord
+                mutableState.update { it.copy(askNotificationPermission = true) }
+            } else {
+                startWakeWord(settings.wakeWord)
             }
-            controller.setEnabled(true)
-            if (mutableState.value.wakeWord.enabled) WakeWordService.start(context, settings.wakeWord.listenWhenScreenOff)
         }
+    }
+
+    /** The screen's answer to the POST_NOTIFICATIONS prompt. Wake word starts either way; a denial is stated, not hidden. */
+    fun onNotificationPermissionResult(granted: Boolean) {
+        val settings = awaitingNotificationAnswer
+        awaitingNotificationAnswer = null
+        mutableState.update {
+            it.copy(askNotificationPermission = false, notice = if (granted) it.notice else NOTIFICATIONS_DENIED_NOTICE)
+        }
+        if (settings != null) viewModelScope.launch(Dispatchers.IO) { startWakeWord(settings) }
+    }
+
+    private fun notificationsPermitted() =
+        Build.VERSION.SDK_INT < NOTIFICATION_PERMISSION_MIN_SDK ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    private fun startWakeWord(settings: WakeWordSettings) {
+        val controller = WakeWordController(
+            runtime.wakeWordDetector(),
+            voice,
+            micPermitted = ::micPermitted,
+            onTranscript = { text -> mutableState.update { it.copy(pendingInput = text) } },
+            onChange = { w -> mutableState.update { it.copy(wakeWord = w) } },
+        )
+        wake = controller
+        WakeWordHost.hold = controller::hold
+        WakeWordHost.release = controller::release
+        WakeWordHost.onStopRequested = {
+            controller.setEnabled(false)
+            voiceStore.save(voiceStore.load().let { it.copy(wakeWord = it.wakeWord.copy(enabled = false)) })
+        }
+        controller.setEnabled(true)
+        if (mutableState.value.wakeWord.enabled) WakeWordService.start(context, settings.listenWhenScreenOff)
     }
 
     override fun onCleared() {

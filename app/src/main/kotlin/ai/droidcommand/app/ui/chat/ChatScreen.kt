@@ -88,6 +88,13 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         viewModel.toggleMic(granted)
     }
+    // Android 13+: ask for POST_NOTIFICATIONS when the wake word is about to start, so its notification can show.
+    val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        viewModel.onNotificationPermissionResult(granted)
+    }
+    LaunchedEffect(state.askNotificationPermission) {
+        if (state.askNotificationPermission) notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
     val onMic = {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             viewModel.toggleMic(true)
