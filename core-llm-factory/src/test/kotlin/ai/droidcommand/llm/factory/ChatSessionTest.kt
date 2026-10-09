@@ -13,6 +13,9 @@ import ai.droidcommand.llm.LlmProvider
 import ai.droidcommand.llm.google.GeminiLlmProvider
 import ai.droidcommand.llm.groq.GroqLlmProvider
 import ai.droidcommand.remote.JdkHttpTransport
+import ai.droidcommand.websearch.WebSearchClient
+import ai.droidcommand.websearch.WebSearchOutcome
+import ai.droidcommand.websearch.WebSearchResult
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicReference
@@ -73,6 +76,7 @@ class ChatSessionTest {
         vaultKey: String? = key,
         knowledge: GraphRetriever? = null,
         graph: ai.droidcommand.agent.KnowledgeGraph? = null,
+        search: WebSearchClient? = null,
     ): Triple<ChatSession, InMemoryConversationStore, InMemorySecretsVault> {
         val vault = InMemorySecretsVault()
         vaultKey?.let {
@@ -84,7 +88,7 @@ class ChatSessionTest {
             val p: LlmProvider = if (spec.id == "google") GeminiLlmProvider(c, JdkHttpTransport(), requireHttps = false) else GroqLlmProvider(c, JdkHttpTransport(), requireHttps = false)
             p
         }
-        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge, knowledgeGraph = graph), store, vault)
+        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge, knowledgeGraph = graph, webSearch = search), store, vault)
     }
 
     @Test
@@ -226,6 +230,87 @@ class ChatSessionTest {
         val base = start { sse("""{"choices":[{"delta":{"content":"fine"}}]}""") }
         val (chat, _, _) = session(base, knowledge = GraphRetriever(broken))
         assertEquals(ChatResult.Reply("fine"), chat.send(groq, "", "router?"))
+    }
+
+    // ---- Phase 4: per-message web search ----
+
+    private class FakeSearch(private val outcome: WebSearchOutcome) : WebSearchClient {
+        val queries = mutableListOf<String>()
+        override fun search(query: String, count: Int): WebSearchOutcome {
+            queries += query
+            return outcome
+        }
+    }
+
+    private val hits = WebSearchOutcome.Success(listOf(WebSearchResult("Kotlin 2.4", "https://kotl.in/x", "Released\n  today")))
+
+    @Test
+    fun `search results reach the user turn as untrusted text and are never saved`() {
+        val captured = AtomicReference<String>()
+        val base = start(captured = captured) { sse("""{"choices":[{"delta":{"content":"ok"}}]}""") }
+        val fake = FakeSearch(hits)
+        val (chat, store, _) = session(base, search = fake)
+
+        assertEquals(ChatResult.Reply("ok"), chat.send(groq, "", "kotlin news", useWebSearch = true))
+
+        val body = captured.get()
+        assertEquals(listOf("kotlin news"), fake.queries)
+        assertTrue(body.contains("Kotlin 2.4") && body.contains("https://kotl.in/x") && body.contains("Released today"))
+        assertTrue(body.contains("not instructions"))
+        assertFalse(body.contains("\"role\":\"system\""))
+        assertFalse(store.load("default")!!.messages.any { it.content.contains("Kotlin 2.4") })
+    }
+
+    @Test
+    fun `without the flag no search is made even if a client is configured`() {
+        val captured = AtomicReference<String>()
+        val base = start(captured = captured) { sse("""{"choices":[{"delta":{"content":"ok"}}]}""") }
+        val fake = FakeSearch(hits)
+        val (chat, _, _) = session(base, search = fake)
+        chat.send(groq, "", "kotlin news")
+        assertTrue(fake.queries.isEmpty())
+        assertFalse(captured.get().contains(ChatSession.WEB_HEADING))
+    }
+
+    @Test
+    fun `a failed or empty search still answers and reports a notice`() {
+        val base = start { sse("""{"choices":[{"delta":{"content":"ok"}}]}""") }
+        val (failing, _, _) = session(base, search = FakeSearch(WebSearchOutcome.Failure("HTTP 401", 401)))
+        val failed = failing.send(groq, "", "q", useWebSearch = true)
+        assertIs<ChatResult.Reply>(failed)
+        assertEquals("ok", failed.text)
+        assertTrue(failed.notice!!.contains("HTTP 401"))
+
+        val (empty, _, _) = session(base, search = FakeSearch(WebSearchOutcome.Success(emptyList())))
+        assertTrue((empty.send(groq, "", "q", useWebSearch = true) as ChatResult.Reply).notice!!.contains("no results"))
+
+        val (none, _, _) = session(base)
+        assertTrue((none.send(groq, "", "q", useWebSearch = true) as ChatResult.Reply).notice!!.contains("not available"))
+    }
+
+    @Test
+    fun `a throwing search client does not fail the turn and long queries are capped`() {
+        val base = start { sse("""{"choices":[{"delta":{"content":"ok"}}]}""") }
+        val queries = mutableListOf<String>()
+        val boom = object : WebSearchClient {
+            override fun search(query: String, count: Int): WebSearchOutcome {
+                queries += query
+                throw IllegalStateException("socket closed")
+            }
+        }
+        val (chat, _, _) = session(base, search = boom)
+        val result = chat.send(groq, "", "x".repeat(1000), useWebSearch = true)
+        assertIs<ChatResult.Reply>(result)
+        assertTrue(result.notice!!.contains("socket closed"))
+        assertEquals(300, queries.single().length)
+    }
+
+    @Test
+    fun `the catalog client fails cleanly with no keys and makes no request`() {
+        val vault = InMemorySecretsVault()
+        val outcome = WebSearchCatalog.clientFor(vault, JdkHttpTransport()).search("anything")
+        assertIs<WebSearchOutcome.Failure>(outcome)
+        assertEquals(2, WebSearchCatalog.all.map { it.secretId }.distinct().size)
     }
 
     // ---- K3: user-triggered extraction into the graph ----

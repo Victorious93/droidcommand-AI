@@ -65,6 +65,7 @@ dependencies {
     implementation(project(":core-llm"))
     implementation(project(":core-remote"))
     implementation(project(":core-llm-factory"))
+    implementation(project(":core-websearch"))
     implementation(project(":core-shell"))
     implementation(project(":core-root"))
     implementation(project(":core-termux"))

@@ -4,7 +4,7 @@ import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import ai.droidcommand.app.ui.components.SectionLabel
 import ai.droidcommand.llm.factory.CloudProviderCatalog
-import ai.droidcommand.llm.factory.CloudProviderSpec
+import ai.droidcommand.llm.factory.WebSearchCatalog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,6 +38,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val status by viewModel.status.collectAsState()
+    val searchStatus by viewModel.searchStatus.collectAsState()
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -46,22 +47,31 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         SectionLabel("API keys (stored encrypted on this device)")
         CloudProviderCatalog.all.forEach { provider ->
             ApiKeyRow(
-                provider = provider,
+                label = provider.label,
                 status = status[provider] ?: KeyStatus.NOT_SET,
                 onSave = { viewModel.save(provider, it) },
                 onClear = { viewModel.clear(provider) },
+            )
+        }
+        SectionLabel("Web search keys (optional — used only when the chat Web search toggle is on)")
+        WebSearchCatalog.all.forEach { slot ->
+            ApiKeyRow(
+                label = slot.label,
+                status = searchStatus[slot] ?: KeyStatus.NOT_SET,
+                onSave = { viewModel.saveSearchKey(slot, it) },
+                onClear = { viewModel.clearSearchKey(slot) },
             )
         }
     }
 }
 
 @Composable
-private fun ApiKeyRow(provider: CloudProviderSpec, status: KeyStatus, onSave: (String) -> Unit, onClear: () -> Unit) {
+private fun ApiKeyRow(label: String, status: KeyStatus, onSave: (String) -> Unit, onClear: () -> Unit) {
     // Not rememberSaveable: a typed-but-unsaved key must not be written into the saved-instance Bundle.
     var input by remember { mutableStateOf("") }
     DroidCard {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(provider.label, style = MaterialTheme.typography.titleMedium)
+            Text(label, style = MaterialTheme.typography.titleMedium)
             Text(statusText(status), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(
                 value = input,

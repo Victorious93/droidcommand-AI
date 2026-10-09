@@ -10,6 +10,7 @@ import ai.droidcommand.llm.factory.ChatSession
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.llm.factory.MemoryResult
+import ai.droidcommand.llm.factory.WebSearchCatalog
 import ai.droidcommand.remote.HttpTransport
 import android.content.Context
 import androidx.core.content.edit
@@ -37,6 +38,10 @@ data class ChatUiState(
     val error: String? = null,
     val memoryEnabled: Boolean = false,
     val memoryStatus: String? = null,
+    /** Chat-toolbar toggle; off by default because turning it on sends the message text to the search provider. */
+    val webSearchEnabled: Boolean = false,
+    /** Non-fatal note from the last turn (e.g. web search failed and the reply is ungrounded). */
+    val notice: String? = null,
 )
 
 /**
@@ -66,6 +71,7 @@ class ChatViewModel @Inject constructor(
         transport = transport,
         knowledge = if (memoryEnabled) GraphRetriever(graph) else null,
         knowledgeGraph = if (memoryEnabled) graph else null,
+        webSearch = WebSearchCatalog.clientFor(vault, transport),
     )
 
     private val mutableState = MutableStateFlow(initialState())
@@ -74,7 +80,7 @@ class ChatViewModel @Inject constructor(
     private fun initialState(): ChatUiState {
         val provider = CloudProviderCatalog.byId(prefs.getString(KEY_PROVIDER, null).orEmpty()) ?: CloudProviderCatalog.all.first()
         val model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel
-        return ChatUiState(provider = provider, model = model, memoryEnabled = memoryEnabled)
+        return ChatUiState(provider = provider, model = model, memoryEnabled = memoryEnabled, webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false))
     }
 
     init {
@@ -98,9 +104,9 @@ class ChatViewModel @Inject constructor(
     fun send(text: String) {
         val current = mutableState.value
         if (current.sending || text.isBlank()) return
-        mutableState.update { it.copy(sending = true, streaming = "", error = null) }
+        mutableState.update { it.copy(sending = true, streaming = "", error = null, notice = null) }
         viewModelScope.launch(Dispatchers.IO) {
-            val result = session.send(current.provider, current.model, text) { delta ->
+            val result = session.send(current.provider, current.model, text, useWebSearch = current.webSearchEnabled) { delta ->
                 mutableState.update { it.copy(streaming = it.streaming + delta) }
             }
             mutableState.update {
@@ -109,6 +115,7 @@ class ChatViewModel @Inject constructor(
                         lines = it.lines + ChatLine(true, text.trim()) + ChatLine(false, result.text),
                         streaming = "",
                         sending = false,
+                        notice = result.notice,
                     )
                     is ChatResult.Failure -> it.copy(streaming = "", sending = false, error = result.message)
                 }
@@ -122,6 +129,12 @@ class ChatViewModel @Inject constructor(
             session.reset()
             mutableState.update { it.copy(lines = emptyList(), streaming = "", error = null) }
         }
+    }
+
+    /** Takes effect on the very next message (unlike Memory, it is a per-request flag, not session wiring). */
+    fun setWebSearchEnabled(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_WEB_SEARCH, enabled) }
+        mutableState.update { it.copy(webSearchEnabled = enabled) }
     }
 
     /** Persists the on/off choice for the next time this screen is opened; does not reconfigure [session] now. */
@@ -149,5 +162,6 @@ class ChatViewModel @Inject constructor(
     private companion object {
         const val KEY_PROVIDER = "provider"
         const val KEY_MEMORY = "memory_enabled"
+        const val KEY_WEB_SEARCH = "web_search_enabled"
     }
 }
