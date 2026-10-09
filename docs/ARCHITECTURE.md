@@ -156,9 +156,12 @@ DroidCommand AI
 │                            ChatSession takes an optional `documents` retriever and
 │                            adds the top passages to the final user message framed as
 │                            untrusted file content, per request, never saved to
-│                            history. 8 core-rag + 2 ChatSession tests. NO real
+│                            history. Also PlainTextDocument (strict .txt/.md loader)
+│                            and FileVectorStore (JVM file-persisted VectorStore,
+│                            atomic write, loud failure on a corrupt file;
+│                            2026-10-09k). 19 core-rag + 2 ChatSession tests. NO real
 │                            embedding model, NO PDF extraction, NO Room persistence,
-│                            NO :app attach UI yet — see the 2026-10-09i addendum.
+│                            NO :app attach UI yet — see the 2026-10-09i/j/k addenda.
 │
 ├── core-websearch           WebSearchClient / WebSearchResult / WebSearchOutcome
 │                            (2026-10-08, Phase 4 web-search half only) —

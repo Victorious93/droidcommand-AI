@@ -9,7 +9,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Test-only bag-of-keywords embedder: one dimension per keyword. Not a real embedding model. */
-private class KeywordEmbedder(private val vocab: List<String>) : Embedder {
+internal class KeywordEmbedder(private val vocab: List<String>) : Embedder {
     var calls = 0
 
     override fun embed(texts: List<String>): List<FloatArray> {
