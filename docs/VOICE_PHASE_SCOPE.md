@@ -147,7 +147,7 @@ This session had a real Android SDK (installed from dl.google.com) but no device
 | Item | State now |
 |---|---|
 | `:app` linked to `core-voice-neural-android` | **DONE — `:app:assembleDebug` and `:app:lintDebug` pass.** Never run on a device. `VoiceRuntime` (cached SHA-256 check) feeds `VoiceFeatures`; neural voice and wake word are offered only when their model is installed |
-| Voice approvals → app gate | **DONE, deny-only.** `VoiceApprovalPrompt` + a per-request, cancellable `ComposeApprovalPrompt`. 12 JVM tests. No real-microphone run |
+| Voice approvals → app gate | **DONE, deny-only.** `VoiceApprovalPrompt` + a per-request, cancellable `ComposeApprovalPrompt`. 11 JVM tests (6 prompt, 5 bridge). No real-microphone run |
 | Model catalog | **DONE (no GPL):** wake word `kws-zipformer-gigaspeech-3.3m` and voice `tts-vits-ljs` (below) |
 | Archive installs | **DONE, JVM-tested** (7 tests) + opt-in live test `VOICE_LIVE_CATALOG=1` passed (~19 s, both archives, real `HttpsFileDownloader`) |
 | Kokoro | **DEFERRED.** Needs espeak-ng data or a lexicon route whose license is not cleared; one voice should be proven on a device first |
@@ -162,4 +162,14 @@ This session had a real Android SDK (installed from dl.google.com) but no device
 
 Per-file digests are in `VoiceModelCatalog.kt`. **Off-device check** (sherpa-onnx 1.13.8 Python wheel, same version as the AAR): the voice synthesized audio; the wake word detected 3 of 3 synthesized keyword phrases and 0 of 1 non-keyword phrase. Synthetic speech only — no real microphone, no real-world false-accept/reject rate. sherpa-onnx logged "Unknown token" for some lexicon characters, so a few sounds may be dropped.
 
-**Still unverified:** everything on a device — TTS playback through `AudioTrack`, `AudioRecord` capture, the wake-word foreground service on Android 12+/14, `POST_NOTIFICATIONS` (not requested at runtime, so the notification may be hidden on 13+), SpeechRecognizer from a worker thread, latency, battery, voice quality. The wake phrases are the nine that ship with the model (e.g. "hello world", "hey siri"); a custom phrase needs its own tokenization.
+**Still unverified:** everything on a device — TTS playback through `AudioTrack`, `AudioRecord` capture, the wake-word foreground service on Android 12+/14, `POST_NOTIFICATIONS` (now requested at runtime — see below — but the prompt itself has never been shown on a device), SpeechRecognizer from a worker thread, latency, battery, voice quality. The wake phrases are the nine that ship with the model (e.g. "hello world", "hey siri"); a custom phrase needs its own tokenization.
+
+### 7a. POST_NOTIFICATIONS at runtime (2026-10-09h)
+
+On Android 13+ (API 33) the wake-word foreground service still runs without the permission, but its "microphone is on"
+notification is hidden. `ChatViewModel` now sets `askNotificationPermission` when wake word is about to start and the
+permission is missing; `ChatScreen` shows the system prompt and reports the answer via `onNotificationPermissionResult`.
+Wake word starts **either way**; on denial the screen states that the notification is hidden (the on-screen
+"wake word on" line still shows). The decision rule (`shouldAskNotificationPermission`) is JVM-tested (1 test). `:app:assembleDebug`,
+`:app:lintDebug` and `:app:testDebugUnitTest` pass. **Not seen on a device:** the prompt, the denied path, and Android's
+behaviour after repeated denials (the system stops showing the dialog; the app then just takes the denied path).
