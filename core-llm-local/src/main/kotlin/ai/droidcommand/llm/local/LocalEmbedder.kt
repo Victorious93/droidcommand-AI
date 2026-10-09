@@ -5,7 +5,8 @@ import kotlin.math.sqrt
 
 /**
  * Backend seam for a GGUF embedding model (e.g. nomic-embed-text), loaded separately from the chat model.
- * No JNI implementation exists yet — only fakes — so this is a contract, not a working feature.
+ * The only real implementation, `core-llm-local-android.LlamaCppEmbeddingBackend`, is compiled and linked but has never
+ * computed an embedding; everything in this module's tests uses fakes.
  */
 interface EmbeddingBackend {
     /** Loads the embedding GGUF at [modelPath]. Throws [InferenceException] on failure. */
