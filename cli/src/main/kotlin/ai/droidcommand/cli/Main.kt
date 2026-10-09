@@ -39,6 +39,7 @@ import ai.droidcommand.shell.ProcessBuilderShellExecutor
 import ai.droidcommand.shell.ShellSecurityPolicy
 import ai.droidcommand.shell.ShellTool
 import ai.droidcommand.termux.TermuxTool
+import ai.droidcommand.websearch.WebSearchTool
 import java.nio.file.Path
 import kotlin.system.exitProcess
 
@@ -142,14 +143,23 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * `IMPLEMENTED — NOT RUNTIME VERIFIED` in practice, the same honesty label `AdbTermuxExecutor`
  * already carries for the identical reason.
  *
+ * `web_search` (the Consumer Roadmap's Phase 4 web-search half,
+ * `core-websearch`) is registered the same opt-in way via
+ * [webSearchClientFor]: [ai.droidcommand.websearch.NullWebSearchClient] unless
+ * `DROIDCOMMAND_CLI_BRAVE_API_KEY`/`DROIDCOMMAND_CLI_SERPAPI_API_KEY` is set, in
+ * which case it reaches the real Brave/SerpAPI endpoint over [transport] — still
+ * `SENSITIVE`/`PermissionCategory.NETWORK`, so it goes through the same approval
+ * gate as every other tool here regardless of which client backs it.
+ *
  * No [ai.droidcommand.security.GrantStore]/[ai.droidcommand.security.AuditLog] is
- * wired: none of these six tools declares a `grantCapability`, and this CLI is one command per process
+ * wired: none of these seven tools declares a `grantCapability`, and this CLI is one command per process
  * invocation with no persistence across runs, so an in-memory audit log nobody ever reads back
  * would be inert plumbing — a named follow-up, not silently added.
  */
 internal fun buildSession(
     approvalPrompt: ApprovalPrompt = ConsoleApprovalPrompt,
     device: AdbDeviceConfig? = AdbDeviceConfig.fromEnvironment(),
+    transport: HttpTransport = JdkHttpTransport(),
 ): CliSession {
     val rootForge = rootForgeTools()
     val registry = ToolRegistry().apply {
@@ -160,6 +170,7 @@ internal fun buildSession(
         register(BuildTool(buildPipeline(), ::buildRequestFromInput))
         register(MetasploitTool(metasploitExecutorFor()))
         register(SetTool(setExecutorFor()))
+        register(WebSearchTool(webSearchClientFor(transport)))
         rootForge.forEach { register(it) }
     }
     val stateMachine = AgentStateMachine()
@@ -303,8 +314,14 @@ internal fun printUsage() {
         DROIDCOMMAND_CLI_SHELL_ALLOWED_EXECUTABLES; otherwise both fail without running
         anything. Every call still needs explicit approval regardless of either switch.
 
+        web_search reaches a real Brave Search/SerpAPI endpoint only when
+        DROIDCOMMAND_CLI_BRAVE_API_KEY and/or DROIDCOMMAND_CLI_SERPAPI_API_KEY is set
+        (both set tries Brave first, falling back to SerpAPI on failure); with neither
+        set it fails without making any network call. Still requires approval either way.
+
         Examples:
           pilot echo text=hello
+          pilot web_search query="droidcommand ai" count=5
           forge "Echo the word hello"
           regenerate-prompt "fix the login bug" --target claude
           device-serve --bind 0.0.0.0:7100 --name "My laptop" --discoverable

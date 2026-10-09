@@ -163,10 +163,18 @@ DroidCommand AI
 │                            separate from the public WebSearchResult contract,
 │                            same pattern as core-llm-openai/-google. 13 unit
 │                            tests against a local mock HttpServer only — never
-│                            a live Brave/SerpAPI call or a real key. NOT wired
-│                            into cli, core-agent's ToolRegistry, or :app's chat
-│                            toolbar yet; the STT/TTS half of Phase 4
-│                            (core-voice) is Android-only and still NOT STARTED.
+│                            a live Brave/SerpAPI call or a real key. Wired into
+│                            cli (2026-10-09) as the new `web_search` Tool
+│                            (SENSITIVE/PermissionCategory.NETWORK, same approval
+│                            gate as every other network-reaching CLI tool):
+│                            NullWebSearchClient unless DROIDCOMMAND_CLI_BRAVE_API_KEY
+│                            and/or DROIDCOMMAND_CLI_SERPAPI_API_KEY is set
+│                            (webSearchClientFor, cli/WebSearchCommands.kt). NOT YET
+│                            BUILD-VERIFIED — see the 2026-10-09 audit addendum
+│                            (Maven Central 429s blocked every gradle attempt this
+│                            session). Still NOT wired into :app's chat toolbar; the
+│                            STT/TTS half of Phase 4 (core-voice) is Android-only
+│                            and still NOT STARTED.
 │
 ├── core-templates           PromptTemplate/TemplateEngine ({{var}} expansion),
 │                            Skill/SkillApplier, bundled 20 templates + 5

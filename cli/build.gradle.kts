@@ -22,6 +22,7 @@ dependencies {
     implementation(project(":core-tools-metasploit"))
     implementation(project(":core-tools-setoolkit"))
     implementation(project(":core-rootforge"))
+    implementation(project(":core-websearch"))
     testImplementation(kotlin("test"))
 }
 
