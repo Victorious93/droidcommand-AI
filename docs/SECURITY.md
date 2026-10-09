@@ -144,8 +144,17 @@ JVM-only core modules now:
   "Allow" with hidden detail — and must not treat prior conversational
   consent as approval for a materially different later request. This is
   the UI layer on top of `ApprovalFlow`'s already-real `ApprovalRequest`/
-  `ApprovalResponse` types; the UI itself doesn't exist yet (`:app` is
-  PLANNED).
+  `ApprovalResponse` types. `:app`'s `ComposeApprovalPrompt` dialog is the
+  surface (2026-10-09g: now per-request, cancellable and serialized).
+- **Voice approvals (2026-10-09g).** Optional, OFF by default. When on, the
+  request is read aloud and the user may say "deny"; **voice can never
+  approve in this build** — `VoiceApprovalPrompt` classifies every request
+  `RiskTier.DESTRUCTIVE`, outside `VoiceApprovalProvider.VOICE_APPROVABLE`
+  (owner decision). Fail closed on deny/timeout/unavailable/error; voice
+  decisions are audited before they are returned. With the setting off the
+  gate is unchanged. Known limits: no speaker verification; the voice path
+  adds a 120 s timeout the screen-only path does not have; not exercised
+  with a real microphone.
 
 ## Design note: per-tool `validate()` vs. externalized policy
 
@@ -171,7 +180,8 @@ document.
       implemented**; no Android SDK to build against.
 - [ ] Dangerous-operation confirmation, approval expiry, request binding,
       denial/cancellation — **covered today** by `ApprovalFlow` at the
-      JVM layer; UI surface not yet implemented.
+      JVM layer; on-screen dialog exists in `:app` (builds; never run on a
+      device); optional voice-deny added 2026-10-09g (see above).
 - [ ] API-key/secret handling via Keystore, prompt exclusion, redacted
       transport — **partially covered** (`SecretsVault` interface exists;
       Keystore-backed implementation is Phase 1 work).

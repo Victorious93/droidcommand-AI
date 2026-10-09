@@ -45,9 +45,12 @@ class NeuralTextToSpeechTest {
 
         override fun synthesize(text: String, onChunk: (FloatArray) -> Boolean) {
             if (failBefore) error("model corrupt")
-            entered?.countDown()
             for ((i, c) in chunks.withIndex()) {
-                if (i == 1) gate?.await(5, TimeUnit.SECONDS)
+                if (i == 1) {
+                    // Signalled only once chunk 0 has been delivered, so a test's stop() cannot overtake it.
+                    entered?.countDown()
+                    gate?.await(5, TimeUnit.SECONDS)
+                }
                 if (!onChunk(c)) return
                 delivered++
                 if (failAfterFirst && i == 0) error("native error")

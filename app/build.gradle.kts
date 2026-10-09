@@ -28,6 +28,10 @@ plugins {
 repositories {
     google()
     mavenCentral()
+    // The prebuilt sherpa-onnx AAR is a local file (fetched + SHA-256-verified by
+    // core-voice-neural-android/scripts/fetch-sherpa-onnx.sh); a module's own repositories{} block is not
+    // inherited by its consumers, so this app has to be able to resolve it too.
+    flatDir { dirs("../core-voice-neural-android/libs") }
 }
 
 android {
@@ -67,6 +71,7 @@ dependencies {
     implementation(project(":core-llm-factory"))
     implementation(project(":core-websearch"))
     implementation(project(":core-voice-android"))
+    implementation(project(":core-voice-neural-android"))
     implementation(project(":core-shell"))
     implementation(project(":core-root"))
     implementation(project(":core-termux"))

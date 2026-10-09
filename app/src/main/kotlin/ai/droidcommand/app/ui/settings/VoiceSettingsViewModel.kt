@@ -1,12 +1,10 @@
 package ai.droidcommand.app.ui.settings
 
-import ai.droidcommand.voice.HttpsFileDownloader
+import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.voice.InstallResult
 import ai.droidcommand.voice.TtsEngineChoice
 import ai.droidcommand.voice.VoiceApprovalSettings
 import ai.droidcommand.voice.VoiceFeatures
-import ai.droidcommand.voice.VoiceModelRepository
-import ai.droidcommand.voice.VoiceModelStatus
 import ai.droidcommand.voice.VoiceSettings
 import ai.droidcommand.voice.WakeWordSettings
 import ai.droidcommand.voice.android.SharedPreferencesVoiceSettingsStore
@@ -21,7 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.io.File
 import javax.inject.Inject
 
 data class VoiceModelRow(
@@ -40,22 +37,28 @@ data class VoiceSettingsUi(
 )
 
 /**
- * UNBUILT/UNTESTED (no Android SDK here). Persists voice choices and manages downloadable voice models.
- * [features] is all-false because `:core-voice-neural-android` is NOT linked into this app yet — the screen
- * therefore shows neural voice and wake word as unavailable, and [VoiceSettings.normalized] keeps them off.
- * No voice-model catalog is registered either: adding one is a deliberate, license-checked step
- * (docs/VOICE_PHASE_SCOPE.md). Voice approvals are persisted but NOT yet connected to the security gate.
+ * Compiles; never run on a device. Persists voice choices and manages downloadable voice models.
+ * [VoiceSettingsUi.features] come from [VoiceRuntime]: neural voice and wake word are offered exactly when
+ * their model is installed and SHA-256-verified, and [VoiceSettings.normalized] keeps them off otherwise.
+ * Verification hashes the model files, so it runs on the IO dispatcher; until it finishes everything neural
+ * shows as unavailable rather than guessing.
  */
 @HiltViewModel
 class VoiceSettingsViewModel @Inject constructor(
     @ApplicationContext context: Context,
+    private val runtime: VoiceRuntime,
 ) : ViewModel() {
-    private val features = VoiceFeatures()
     private val store = SharedPreferencesVoiceSettingsStore(context)
-    private val repository = VoiceModelRepository(File(context.filesDir, "voice-models"), HttpsFileDownloader())
+    private val repository = runtime.repository
 
-    private val mutableState = MutableStateFlow(VoiceSettingsUi(store.load().normalized(features), features, rows()))
+    private val mutableState = MutableStateFlow(
+        VoiceSettingsUi(store.load().normalized(runtime.features()), runtime.features(), rows()),
+    )
     val state: StateFlow<VoiceSettingsUi> = mutableState.asStateFlow()
+
+    init {
+        reverify()
+    }
 
     fun setEngine(choice: TtsEngineChoice) = change { it.copy(ttsEngine = choice) }
 
@@ -71,24 +74,40 @@ class VoiceSettingsViewModel @Inject constructor(
         update(id) { it.copy(busy = true, message = null) }
         viewModelScope.launch(Dispatchers.IO) {
             val result = repository.install(id)
+            val features = runtime.refresh()
             update(id) {
                 when (result) {
                     is InstallResult.Installed -> it.copy(busy = false, installed = true)
                     is InstallResult.Failed -> it.copy(busy = false, message = result.reason)
                 }
             }
+            applyFeatures(features)
         }
     }
 
     fun delete(id: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val ok = repository.delete(id)
-            update(id) { it.copy(installed = !ok && it.installed, message = if (ok) null else "Could not delete all files") }
+            val features = runtime.refresh()
+            update(id) { it.copy(installed = runtime.isInstalled(id), message = if (ok) null else "Could not delete all files") }
+            applyFeatures(features)
         }
     }
 
+    private fun reverify() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val features = runtime.refresh()
+            mutableState.update { ui -> ui.copy(models = ui.models.map { it.copy(installed = runtime.isInstalled(it.id)) }) }
+            applyFeatures(features)
+        }
+    }
+
+    /** Shows (does not persist) the settings as they will actually take effect now that the models are known. */
+    private fun applyFeatures(features: ai.droidcommand.voice.VoiceFeatures) =
+        mutableState.update { it.copy(features = features, settings = store.load().normalized(features)) }
+
     private fun change(edit: (VoiceSettings) -> VoiceSettings) {
-        val next = edit(mutableState.value.settings).normalized(features)
+        val next = edit(mutableState.value.settings).normalized(mutableState.value.features)
         store.save(next)
         mutableState.update { it.copy(settings = next) }
     }
@@ -96,7 +115,5 @@ class VoiceSettingsViewModel @Inject constructor(
     private fun update(id: String, edit: (VoiceModelRow) -> VoiceModelRow) =
         mutableState.update { ui -> ui.copy(models = ui.models.map { if (it.id == id) edit(it) else it }) }
 
-    private fun rows(): List<VoiceModelRow> = repository.list().map {
-        VoiceModelRow(it.id, it.displayName, it.license, repository.status(it.id) is VoiceModelStatus.Verified)
-    }
+    private fun rows(): List<VoiceModelRow> = repository.list().map { VoiceModelRow(it.id, it.displayName, it.license, installed = runtime.isInstalled(it.id)) }
 }

@@ -35,14 +35,14 @@ fun VoiceSettingsSection(viewModel: VoiceSettingsViewModel = hiltViewModel()) {
                 OutlinedButton(onClick = { viewModel.setEngine(TtsEngineChoice.SYSTEM) }, enabled = s.ttsEngine != TtsEngineChoice.SYSTEM) { Text("System voice") }
                 OutlinedButton(onClick = { viewModel.setEngine(TtsEngineChoice.NEURAL) }, enabled = ui.features.neuralTts && s.ttsEngine != TtsEngineChoice.NEURAL) { Text("Neural voice") }
             }
-            Note(if (ui.features.neuralTts) "Neural voice falls back to the system voice if its model is missing." else "Neural voice is not included in this build.")
+            Note(if (ui.features.neuralTts) "Neural voice falls back to the system voice if its model is missing." else "Download the English voice under Voice models to use it.")
         }
     }
     ToggleCard(
         title = "Wake word",
         checked = s.wakeWord.enabled,
         enabled = ui.features.wakeWord,
-        note = if (ui.features.wakeWord) "Keeps the microphone on and shows a notification while listening. Audio is not recorded or sent." else "Wake word is not included in this build.",
+        note = if (ui.features.wakeWord) "Keeps the microphone on and shows a notification while listening. Audio is not recorded or sent." else "Download the wake word model under Voice models to use it.",
         onChange = viewModel::setWakeWord,
     )
     ToggleCard(
@@ -56,19 +56,19 @@ fun VoiceSettingsSection(viewModel: VoiceSettingsViewModel = hiltViewModel()) {
         title = "Voice approvals",
         checked = s.approval.enabled,
         enabled = true,
-        note = "Lets you say \"deny\" to refuse an action. Not yet connected to the approval prompt in this build.",
+        note = "When an action asks for approval, the request is read aloud and you can say \"deny\" to refuse it. Approving always needs the on-screen button. Off by default.",
         onChange = viewModel::setApprovals,
     )
     ToggleCard(
         title = "Allow approving by voice",
         checked = s.approval.allowApproveByVoice,
-        enabled = s.approval.enabled,
-        note = "Only for reversible actions, and only after a spoken challenge word. Anyone within earshot could say it. Destructive actions always need the screen.",
+        enabled = false,
+        note = "Not available: every action that asks for approval in this app is treated as destructive, and destructive actions can only be approved on screen.",
         onChange = viewModel::setApproveByVoice,
     )
     SectionLabel("Voice models")
     if (ui.models.isEmpty()) {
-        Note("No voice models are configured in this build.")
+        Note("No voice models are listed.")
     }
     ui.models.forEach { m ->
         DroidCard {
