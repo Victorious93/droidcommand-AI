@@ -72,6 +72,14 @@ Design rule, same as OpenDroid's: the voice layer **cannot grant new authorizati
 - Every voice decision goes through `AuditLog` tagged as voice-originated.
 - Parser is strict (exact phrases), unrecognised input = deny/no-op, never fuzzy-match to "yes".
 
+## 3a. Prebuilt-package rule (owner, 2026-10-09)
+
+V2/V3 need native code this environment can't compile. Per the new standing rule in `CLAUDE.md`, consume
+sherpa-onnx's **published prebuilt Android release artifacts** rather than building from source: pin an exact
+version, record its SHA-256 and release URL, and check the licenses first (§2). Exact artifact names and
+versions are NOT yet looked up — do that at V2 start, from the project's official release page. A prebuilt
+library still leaves the feature unverified until it runs on a device.
+
 ## 4. Honest limits
 
 - This environment has no Android SDK, device, or model: V1 can be JVM-tested here; V2–V4 cannot be
