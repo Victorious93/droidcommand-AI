@@ -3,12 +3,20 @@ package ai.droidcommand.rag
 import kotlin.math.sqrt
 
 /**
- * Turns text into fixed-length vectors. The real implementation (a small dedicated GGUF embedding model
- * run through the local-inference backend) does NOT exist yet: this is the seam, and nothing in this module
- * claims otherwise. Implementations must return exactly one vector per input, all of the same dimension.
+ * Turns text into fixed-length vectors. Implementations must return exactly one vector per input, all of
+ * the same dimension — and [embedQuery] must produce a vector of that same dimension too.
  */
 interface Embedder {
+    /** Embeds document/passage text for indexing. One vector per input, all the same dimension. */
     fun embed(texts: List<String>): List<FloatArray>
+
+    /**
+     * Embeds a search query. The default treats a query exactly like a passage (symmetric models), but a
+     * model with an asymmetric query/document representation overrides this — e.g. nomic-embed-text, whose
+     * model card requires a `search_query:` prefix on queries and `search_document:` on passages, so a query
+     * embedded as a passage retrieves worse. Returns one vector of the same dimension as [embed].
+     */
+    fun embedQuery(text: String): FloatArray = embed(listOf(text)).single()
 }
 
 /** One slice of a document. [index] is its position within [docId]. */
@@ -127,7 +135,7 @@ class DocumentRetriever(
 
     fun retrieveContext(question: String): String? {
         if (!hasDocuments() || question.isBlank()) return null
-        val q = embedder.embed(listOf(question)).singleOrNull() ?: return null
+        val q = embedder.embedQuery(question)
         val hits = store.search(q, topK).filter { it.score >= minScore }
         if (hits.isEmpty()) return null
         return buildString {

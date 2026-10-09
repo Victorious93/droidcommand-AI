@@ -23,12 +23,25 @@ interface EmbeddingBackend {
  * product agree and model scale differences don't matter). Fails loudly rather than returning bad data:
  * an empty or non-finite vector, or a dimension that changes between calls, throws [InferenceException],
  * because silently indexing garbage would make retrieval quietly wrong.
+ *
+ * [documentPrefix]/[queryPrefix] are prepended to passage and query text respectively before the backend
+ * sees them. Both default to "" (symmetric models, no prefix). They exist because some embedding models
+ * are asymmetric: nomic-embed-text's model card, for instance, requires `search_document: ` on indexed
+ * passages and `search_query: ` on queries, and embedding a query without its prefix retrieves worse.
+ * The prefix is model-specific, so it is configured here rather than baked into the native backend.
  */
-class LocalEmbedder(private val backend: EmbeddingBackend) : Embedder {
+class LocalEmbedder(
+    private val backend: EmbeddingBackend,
+    private val documentPrefix: String = "",
+    private val queryPrefix: String = "",
+) : Embedder {
     private var dimension: Int? = null
 
     @Synchronized
-    override fun embed(texts: List<String>): List<FloatArray> = texts.map { normalise(backend.embed(it)) }
+    override fun embed(texts: List<String>): List<FloatArray> = texts.map { normalise(backend.embed(documentPrefix + it)) }
+
+    @Synchronized
+    override fun embedQuery(text: String): FloatArray = normalise(backend.embed(queryPrefix + text))
 
     private fun normalise(raw: FloatArray): FloatArray {
         if (raw.isEmpty()) throw InferenceException("Embedding model returned an empty vector.")

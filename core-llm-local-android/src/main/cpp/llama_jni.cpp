@@ -342,11 +342,14 @@ Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeUnload(JNIEnv* /*en
 
 // Phase 5 (core-rag): backs LlamaCppEmbeddingBackend (ai.droidcommand.llm.local.EmbeddingBackend).
 // CPU only — the embedding models this seam targets (e.g. nomic-embed-text, ~270MB) are small
-// enough that GPU offload is not worth the extra code path. Pooling is fixed to MEAN rather than
-// read from the model (LLAMA_POOLING_TYPE_UNSPECIFIED would default to the model's own hparams,
-// but core-rag's cosine-similarity use needs exactly one fixed-size vector per call regardless of
-// which embedding model is loaded); attention type is left UNSPECIFIED so llama.cpp still applies
-// a non-causal mask for encoder-only architectures (e.g. BERT-family models) on its own.
+// enough that GPU offload is not worth the extra code path. Pooling is left UNSPECIFIED so
+// llama.cpp applies the model's OWN trained pooling type from the GGUF hparams (mean for
+// nomic-embed-text, CLS for BGE/E5-family models). Forcing MEAN here — as an earlier revision did —
+// silently mis-pools a CLS-trained model and degrades its embeddings; any proper embedding GGUF
+// declares a non-NONE pooling type, so llama_get_embeddings_seq() below still returns one
+// fixed-size vector per call (and nativeEmbed throws a clear error if a model declares NONE, e.g. a
+// generative model misused as an embedder). Attention type is left UNSPECIFIED so llama.cpp still
+// applies a non-causal mask for encoder-only architectures (e.g. BERT-family models) on its own.
 JNIEXPORT jlong JNICALL
 Java_ai_droidcommand_llm_local_android_LlamaCppEmbeddingBackend_nativeLoad(
     JNIEnv* env, jobject /*thiz*/, jstring jModelPath, jint contextTokens) {
@@ -369,13 +372,16 @@ Java_ai_droidcommand_llm_local_android_LlamaCppEmbeddingBackend_nativeLoad(
     }
 
     llama_context_params ctxParams = llama_context_default_params();
-    ctxParams.n_ctx = static_cast<uint32_t>(std::max(contextTokens, 1));
+    // Clamp to the model's trained context: a short-context embedder (e.g. 512 positions) must not be
+    // asked for more. nativeEmbed already rejects text that tokenizes past n_ctx.
+    const int32_t trainCtx = llama_model_n_ctx_train(model);
+    ctxParams.n_ctx = static_cast<uint32_t>(std::max(1, trainCtx > 0 ? std::min(contextTokens, trainCtx) : contextTokens));
     ctxParams.n_batch = ctxParams.n_ctx;
     // Non-causal (encoder-style) models require the ubatch to equal the batch; causal models
     // accept this too, so it is set unconditionally rather than branching on model architecture.
     ctxParams.n_ubatch = ctxParams.n_batch;
     ctxParams.embeddings = true;
-    ctxParams.pooling_type = LLAMA_POOLING_TYPE_MEAN;
+    ctxParams.pooling_type = LLAMA_POOLING_TYPE_UNSPECIFIED;
     llama_context* ctx = llama_init_from_model(model, ctxParams);
     if (ctx == nullptr) {
         llama_model_free(model);
@@ -436,7 +442,9 @@ Java_ai_droidcommand_llm_local_android_LlamaCppEmbeddingBackend_nativeEmbed(
         throwInferenceException(env, "llama.cpp returned no sequence embedding for this model/pooling type");
         return nullptr;
     }
-    int32_t nEmbd = llama_model_n_embd(dca->model);
+    // n_embd_out, not n_embd: llama.cpp sizes the returned embedding by n_embd_out (they differ for
+    // models with an output projection), and its own embedding example reads that many floats.
+    int32_t nEmbd = llama_model_n_embd_out(dca->model);
     jfloatArray result = env->NewFloatArray(nEmbd);
     if (result == nullptr) return nullptr; // NewFloatArray already threw (OutOfMemoryError).
     env->SetFloatArrayRegion(result, 0, nEmbd, embd);
