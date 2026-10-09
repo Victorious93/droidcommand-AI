@@ -149,6 +149,14 @@ DroidCommand AI
 │                            5 unit tests. NO Play Billing Library glue, no
 │                            UI, no feature is actually gated yet.
 │
+├── core-rag-android         (2026-10-09x, opt-in via includeAndroid) RoomVectorStore
+│                            (VectorStore + DocumentLibrary over Room, schema v1
+│                            exported; memory-cached brute-force cosine) and
+│                            PdfBoxTextExtractor (pdfbox-android 2.0.27.0, Apache-2.0).
+│                            Robolectric-tested (10 tests); NEVER run on a device.
+│                            core-rag gained PdfTextExtractor, DocumentReader (sniffs
+│                            PDF by content, bounded) and DocumentAttacher.
+│
 ├── core-rag                 Embedder (seam only) / TextChunker (512-word windows,
 │                            64 overlap — words, not model tokens) / VectorStore +
 │                            InMemoryVectorStore (brute-force cosine) /
