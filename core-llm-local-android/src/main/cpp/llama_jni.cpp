@@ -2,11 +2,14 @@
 // (third_party/llama.cpp/include/llama.h, fetched by scripts/fetch-llama-cpp.sh). This file owns
 // every native call; no other translation unit in this module touches llama.h. CPU always; Vulkan
 // when the library was built with it (Android, see CMakeLists.txt) — Phase D, compiled only.
+// Phase 5: also backs LlamaCppEmbeddingBackend (ai.droidcommand.llm.local.EmbeddingBackend) —
+// its own DcaEmbeddingContext/nativeLoad/nativeEmbed/nativeUnload, never mixed with chat generation.
 //
-// Lifetime: nativeLoad() returns an opaque jlong handle to a heap-allocated DcaContext; the
-// Kotlin side is responsible for calling nativeUnload() exactly once per successful nativeLoad()
-// (LocalLlmProvider.close() already serializes this). A load failure never leaks: on any error
-// after llama_model_load_from_file() succeeds, this file frees what it allocated before throwing.
+// Lifetime: nativeLoad() returns an opaque jlong handle to a heap-allocated DcaContext (or
+// DcaEmbeddingContext for the embedding entrypoints); the Kotlin side is responsible for calling
+// nativeUnload() exactly once per successful nativeLoad() (LocalLlmProvider.close() already
+// serializes this for chat). A load failure never leaks: on any error after
+// llama_model_load_from_file() succeeds, this file frees what it allocated before throwing.
 #include <jni.h>
 
 #include <algorithm>
@@ -24,6 +27,15 @@
 namespace {
 
 struct DcaContext {
+    llama_model* model = nullptr;
+    llama_context* ctx = nullptr;
+    const llama_vocab* vocab = nullptr;
+};
+
+// Separate from DcaContext (chat generation): an embedding context is loaded with
+// ctxParams.embeddings = true and a fixed pooling type, which a generation context never sets,
+// and the two are never mixed under one handle type.
+struct DcaEmbeddingContext {
     llama_model* model = nullptr;
     llama_context* ctx = nullptr;
     const llama_vocab* vocab = nullptr;
@@ -80,6 +92,13 @@ void throwInferenceException(JNIEnv* env, const std::string& message) {
 }
 
 void freeContext(DcaContext* dca) {
+    if (dca == nullptr) return;
+    if (dca->ctx != nullptr) llama_free(dca->ctx);
+    if (dca->model != nullptr) llama_model_free(dca->model);
+    delete dca;
+}
+
+void freeEmbeddingContext(DcaEmbeddingContext* dca) {
     if (dca == nullptr) return;
     if (dca->ctx != nullptr) llama_free(dca->ctx);
     if (dca->model != nullptr) llama_model_free(dca->model);
@@ -319,6 +338,115 @@ Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeGenerate(
 JNIEXPORT void JNICALL
 Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeUnload(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
     freeContext(reinterpret_cast<DcaContext*>(handle));
+}
+
+// Phase 5 (core-rag): backs LlamaCppEmbeddingBackend (ai.droidcommand.llm.local.EmbeddingBackend).
+// CPU only — the embedding models this seam targets (e.g. nomic-embed-text, ~270MB) are small
+// enough that GPU offload is not worth the extra code path. Pooling is fixed to MEAN rather than
+// read from the model (LLAMA_POOLING_TYPE_UNSPECIFIED would default to the model's own hparams,
+// but core-rag's cosine-similarity use needs exactly one fixed-size vector per call regardless of
+// which embedding model is loaded); attention type is left UNSPECIFIED so llama.cpp still applies
+// a non-causal mask for encoder-only architectures (e.g. BERT-family models) on its own.
+JNIEXPORT jlong JNICALL
+Java_ai_droidcommand_llm_local_android_LlamaCppEmbeddingBackend_nativeLoad(
+    JNIEnv* env, jobject /*thiz*/, jstring jModelPath, jint contextTokens) {
+    ensureBackendInit();
+
+    llama_model_params modelParams = llama_model_default_params();
+    modelParams.n_gpu_layers = 0;
+
+    const char* path = env->GetStringUTFChars(jModelPath, nullptr);
+    llama_model* model = llama_model_load_from_file(path, modelParams);
+    env->ReleaseStringUTFChars(jModelPath, path);
+    if (model == nullptr) {
+        throwInferenceException(env, "llama.cpp failed to load the embedding model file");
+        return 0;
+    }
+    if (llama_model_has_encoder(model) && llama_model_has_decoder(model)) {
+        llama_model_free(model);
+        throwInferenceException(env, "encoder-decoder models are not supported for embeddings");
+        return 0;
+    }
+
+    llama_context_params ctxParams = llama_context_default_params();
+    ctxParams.n_ctx = static_cast<uint32_t>(std::max(contextTokens, 1));
+    ctxParams.n_batch = ctxParams.n_ctx;
+    // Non-causal (encoder-style) models require the ubatch to equal the batch; causal models
+    // accept this too, so it is set unconditionally rather than branching on model architecture.
+    ctxParams.n_ubatch = ctxParams.n_batch;
+    ctxParams.embeddings = true;
+    ctxParams.pooling_type = LLAMA_POOLING_TYPE_MEAN;
+    llama_context* ctx = llama_init_from_model(model, ctxParams);
+    if (ctx == nullptr) {
+        llama_model_free(model);
+        throwInferenceException(env, "llama.cpp failed to create an embedding context");
+        return 0;
+    }
+
+    auto* dca = new DcaEmbeddingContext();
+    dca->model = model;
+    dca->ctx = ctx;
+    dca->vocab = llama_model_get_vocab(model);
+    return reinterpret_cast<jlong>(dca);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_ai_droidcommand_llm_local_android_LlamaCppEmbeddingBackend_nativeEmbed(
+    JNIEnv* env, jobject /*thiz*/, jlong handle, jstring jText) {
+    auto* dca = reinterpret_cast<DcaEmbeddingContext*>(handle);
+    if (dca == nullptr) {
+        throwInferenceException(env, "embed() called with no loaded model");
+        return nullptr;
+    }
+
+    const char* chars = env->GetStringUTFChars(jText, nullptr);
+    std::string text(chars);
+    env->ReleaseStringUTFChars(jText, chars);
+
+    std::vector<llama_token> tokens = tokenize(dca->vocab, text, /*addSpecial=*/true);
+    if (tokens.empty()) {
+        throwInferenceException(env, "tokenization produced no tokens");
+        return nullptr;
+    }
+    if (tokens.size() > static_cast<size_t>(llama_n_ctx(dca->ctx))) {
+        throwInferenceException(env, "text is longer than the embedding model's context window");
+        return nullptr;
+    }
+
+    llama_batch batch = llama_batch_init(static_cast<int32_t>(tokens.size()), 0, 1);
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        batch.token[i] = tokens[i];
+        batch.pos[i] = static_cast<llama_pos>(i);
+        batch.n_seq_id[i] = 1;
+        batch.seq_id[i][0] = 0;
+        batch.logits[i] = 1; // embeddings: every token's output feeds the pooled sequence vector.
+    }
+    batch.n_tokens = static_cast<int32_t>(tokens.size());
+
+    llama_memory_clear(llama_get_memory(dca->ctx), /*data=*/true);
+    int32_t rc = llama_decode(dca->ctx, batch);
+    llama_batch_free(batch);
+    if (rc != 0) {
+        throwInferenceException(env, "llama_decode failed while computing the embedding");
+        return nullptr;
+    }
+
+    const float* embd = llama_get_embeddings_seq(dca->ctx, /*seq_id=*/0);
+    if (embd == nullptr) {
+        throwInferenceException(env, "llama.cpp returned no sequence embedding for this model/pooling type");
+        return nullptr;
+    }
+    int32_t nEmbd = llama_model_n_embd(dca->model);
+    jfloatArray result = env->NewFloatArray(nEmbd);
+    if (result == nullptr) return nullptr; // NewFloatArray already threw (OutOfMemoryError).
+    env->SetFloatArrayRegion(result, 0, nEmbd, embd);
+    return result;
+}
+
+JNIEXPORT void JNICALL
+Java_ai_droidcommand_llm_local_android_LlamaCppEmbeddingBackend_nativeUnload(
+    JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+    freeEmbeddingContext(reinterpret_cast<DcaEmbeddingContext*>(handle));
 }
 
 } // extern "C"
