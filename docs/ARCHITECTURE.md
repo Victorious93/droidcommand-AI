@@ -149,6 +149,12 @@ DroidCommand AI
 │                            5 unit tests. NO Play Billing Library glue, no
 │                            UI, no feature is actually gated yet.
 │
+├── core-rag-android         Phase 5 Android half (opt-in via includeAndroid, minSdk 26): RoomVectorStore +
+│                            DocumentLibrary (Room, schema v1 exported) and PdfBoxTextExtractor (pdfbox-android
+│                            2.0.27.0; text only, no OCR). 10 Robolectric tests; never run on a device. :app wires it
+│                            via DocumentRuntime, but Attach stays disabled until an EmbedderProvider is supplied
+│                            (the real embedder is in minSdk-28 core-llm-local-android; decision open).
+│
 ├── core-rag                 Embedder (seam only) / TextChunker (512-word windows,
 │                            64 overlap — words, not model tokens) / VectorStore +
 │                            InMemoryVectorStore (brute-force cosine) /
