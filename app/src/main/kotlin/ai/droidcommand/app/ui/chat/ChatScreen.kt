@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -114,7 +115,13 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
 
+        state.notice?.let {
+            Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+        }
+
         InputBar(
+            webSearchEnabled = state.webSearchEnabled,
+            onToggleWebSearch = { viewModel.setWebSearchEnabled(!state.webSearchEnabled) },
             value = input,
             onValueChange = { input = it },
             canSend = !state.sending && input.isNotBlank(),
@@ -225,7 +232,23 @@ private fun MessageBubble(line: ChatLine) {
 }
 
 @Composable
-private fun InputBar(value: String, onValueChange: (String) -> Unit, canSend: Boolean, onSend: () -> Unit) {
+private fun InputBar(
+    webSearchEnabled: Boolean,
+    onToggleWebSearch: () -> Unit,
+    value: String,
+    onValueChange: (String) -> Unit,
+    canSend: Boolean,
+    onSend: () -> Unit,
+) {
+    // Toolbar row above the input: the web-search toggle. When on, each message's text is sent to the
+    // configured search provider (Brave/SerpAPI) before the model call — hence the explicit label.
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        FilterChip(
+            selected = webSearchEnabled,
+            onClick = onToggleWebSearch,
+            label = { Text(if (webSearchEnabled) "Web search: on" else "Web search: off") },
+        )
+    }
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

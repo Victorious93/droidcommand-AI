@@ -16,6 +16,7 @@ dependencies {
     implementation(project(":core-llm-google"))
     implementation(project(":core-llm-groq"))
     implementation(project(":core-llm-local"))
+    api(project(":core-websearch"))
     testImplementation(kotlin("test"))
 }
 

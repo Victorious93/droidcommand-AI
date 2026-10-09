@@ -173,7 +173,9 @@ DroidCommand AI
 │                            `./gradlew :core-websearch:test :cli:test` and the full
 │                            suite (minus core-mcp, an unrelated pre-existing network
 │                            gap) BUILD SUCCESSFUL — see the 2026-10-09 audit addendum.
-│                            Still NOT wired into :app's chat toolbar; the STT/TTS half
+│                            :app chat toolbar toggle ON DISK, UNBUILT (2026-10-09b):
+│                            ChatSession(webSearch, send(useWebSearch)) is JVM-tested;
+│                            Compose glue + Settings key rows are not compiled. The STT/TTS half
 │                            of Phase 4 (core-voice) is Android-only and still NOT
 │                            STARTED.
 │
