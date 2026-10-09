@@ -1,0 +1,87 @@
+# Voice follow-on scope: neural TTS, wake word, voice approvals
+
+**Date:** 2026-10-09. **Status:** SCOPING ONLY — no code written, nothing built or run.
+**Follows:** Phase 4 (`core-voice`, `core-voice-android`; audit addendum 2026-10-09c), which
+deliberately left out ElevenLabs cloud TTS, wake-word detection and voice approvals.
+**Gate:** per the Consumer Roadmap rules, nothing here starts until the owner approves a slice.
+
+## 0. Correction to the request's premise
+
+The request asked for an open-source tool *from ElevenLabs* as the replacement. A web search
+(2026-10-09) found no evidence that ElevenLabs has released an open-source TTS model or tool; results
+covered only its commercial platform and client SDKs. **Do not plan around that.** What the request is
+really after — a free, local, more efficient alternative to a paid cloud TTS — is available from
+unrelated open-source projects, below.
+
+## 1. Why this changes the earlier exclusion
+
+The audit excluded ElevenLabs because it "would send reply text to a third party". A local neural
+engine sends nothing off-device, so the privacy objection disappears and the capability can be offered
+in the same `TextToSpeechEngine` seam (`core-voice/VoiceEngines.kt`) with no change to `VoiceController`.
+The remaining costs are APK/model size, CPU/battery, and licensing (§2).
+
+## 2. TTS engine options
+
+| Option | What it is | Fit | Unverified / risk |
+|---|---|---|---|
+| **sherpa-onnx (k2-fsa) hosting Kokoro or Piper voices** — RECOMMENDED | One Apache-2.0 runtime (license confirmed from package-registry listings) that also does STT, VAD and keyword spotting; Kokoro-82M and Piper models run on Android through it (third-party app and 1.10.x Android demo seen in search results) | Single native dependency can cover TTS **and** wake word | Per-voice model licenses are separate from the runtime's and must each be checked. sherpa-onnx's espeak-ng phonemizer is, to my recollection, GPLv3 [Likely, not verified] — this repo has no `LICENSE` file, so confirm before shipping. Real-time factor on mid-range phones is unmeasured. |
+| Piper standalone | Small, fast VITS voices | Lowest CPU cost | Upstream project moved/relicensed [Likely GPL-3.0 for the maintained fork — verify]; same espeak-ng question |
+| Kokoro-82M | Higher quality, heavier | Best quality per MB | Larger and slower than Piper; verify real-time factor on-device |
+| Keep system `TextToSpeech` | Already built | Zero size cost | Quality is whatever the vendor ships |
+
+**Recommendation:** add sherpa-onnx as an *optional* engine behind `TextToSpeechEngine`, defaulting to
+the system voice. Start with one Piper voice (smallest) and add Kokoro only if measured speed allows.
+Do not call it "more efficient" than system TTS: system TTS will almost certainly use less CPU and
+storage; the gain is voice quality and consistency, not efficiency [Likely].
+
+## 3. Build plan (dependency-ordered)
+
+**V1 — Engine seam, JVM only (buildable here).**
+Add `TtsEngineChoice` (SYSTEM / NEURAL) and a selector in `core-voice`; extend `VoiceController` tests
+for engine fallback (neural unavailable or model missing → system voice → silent, never a crash).
+Define a `VoiceModelRepository` contract reusing the SHA-256-verified download pattern from
+`core-llm-local.ModelRepository` (do not invent a second download strategy; Phase 2/5 note says model
+downloads share one).
+
+**V2 — Android neural TTS (needs Android SDK; ON DISK/UNVERIFIED until built).**
+`SherpaOnnxTextToSpeech : TextToSpeechEngine` in a new dynamic-feature or companion-delivered module,
+following the Phase 2 distribution decision (on-demand dynamic feature) so users who never enable it
+download nothing. Audio via `AudioTrack` with streaming chunks; `stop()` must cancel mid-synthesis.
+Settings: engine picker, voice picker, download/delete model.
+
+**V3 — Wake word (own gate; always-on mic).**
+`WakeWordDetector` seam in `core-voice` (JVM, fake-tested): emits `Detected` only; never starts an
+action itself — it only triggers the existing `VoiceController.startListening`. Android impl via
+sherpa-onnx keyword spotting [Android KWS support specifically NOT confirmed — check repo examples
+first; fallback candidates are openWakeWord (Apache-2.0 [Likely]) or a commercial SDK needing a key,
+which conflicts with the free requirement].
+Requires a foreground service with a visible notification (Android 14+ microphone foreground-service
+type), explicit opt-in, off by default, a persistent on-screen indicator, no audio retained or sent
+anywhere, and pause on screen-off unless the user opts in. Battery cost is unmeasured.
+
+**V4 — Voice approvals (own gate; security-sensitive).**
+Design rule, same as OpenDroid's: the voice layer **cannot grant new authorization by itself**. Concretely:
+- It may only answer a *currently pending* `ApprovalRequest` (`core-security/ApprovalFlow.kt`), matched
+  by `requestId`; it cannot create grants or touch `GrantStore`.
+- Allowed for `RiskTier.READ_ONLY` and `REVERSIBLE` only if the owner opts in; **always** deny-able by
+  voice; `DESTRUCTIVE` and `IRREVERSIBLE` require on-screen confirmation, no exceptions.
+- No speaker verification exists, so anyone in earshot — or audio played by the device's own TTS or
+  another app — can speak "yes". Mitigations: never listen for approval while TTS is speaking, read
+  back the exact operation and require a second distinct confirmation phrase, short timeout
+  (`ApprovalRequest.timeoutMs` already maps to `TimedOut` → deny).
+- Every voice decision goes through `AuditLog` tagged as voice-originated.
+- Parser is strict (exact phrases), unrecognised input = deny/no-op, never fuzzy-match to "yes".
+
+## 4. Honest limits
+
+- This environment has no Android SDK, device, or model: V1 can be JVM-tested here; V2–V4 cannot be
+  compiled or run here and must be recorded as ON DISK/UNVERIFIED, not IMPLEMENTED.
+- No latency, battery, APK-size or voice-quality numbers exist yet. Every efficiency claim above is
+  an expectation, not a measurement.
+- Licenses (espeak-ng, each voice model) are unverified and gate shipping.
+
+## 5. Owner decisions needed
+
+1. Approve V1 (JVM seam) as the first slice? (Recommended — small, testable, no regret.)
+2. Is a GPL-licensed component acceptable, or must the engine avoid espeak-ng? That could rule out Piper/Kokoro via sherpa-onnx.
+3. Wake word and voice approvals: build at all, or keep out of scope? Voice approvals is the riskiest item and the easiest to drop.
