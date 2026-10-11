@@ -71,7 +71,7 @@ class ModelResumeTest {
     fun `an interrupted install keeps the prefix and the next call finishes it`() {
         val d = dir()
         val first = repo(d).install("m", ResumingFake(dieAfter = 70_000))
-        assertEquals(ModelInstallResult.Failed("connection reset"), first)
+        assertEquals(ModelInstallResult.Failed("connection reset", retryable = true), first)
         assertEquals(70_000L, File(d, "m.gguf.part").length())
 
         val fake = ResumingFake()

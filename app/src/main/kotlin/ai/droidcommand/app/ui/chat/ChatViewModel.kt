@@ -12,6 +12,8 @@ import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.llm.factory.MemoryResult
 import ai.droidcommand.llm.factory.WebSearchCatalog
 import ai.droidcommand.app.documents.DocumentRuntime
+import ai.droidcommand.app.documents.DownloadOutcome
+import ai.droidcommand.app.documents.EmbedderDownloadSupervisor
 import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.llm.local.ModelInstallResult
 import ai.droidcommand.rag.AttachResult
@@ -251,29 +253,41 @@ class ChatViewModel @Inject constructor(
 
     fun confirmMeteredEmbedderDownload() {
         mutableState.update { it.copy(confirmMeteredDownload = false) }
-        startEmbedderDownload()
+        startEmbedderDownload(allowMetered = true)
     }
 
     fun dismissMeteredEmbedderDownload() {
         mutableState.update { it.copy(confirmMeteredDownload = false) }
     }
 
-    private fun startEmbedderDownload() {
+    private fun startEmbedderDownload(allowMetered: Boolean = false) {
         if (mutableState.value.embedderDownloadBytes != null) return
         embedderDownloadCancelled = false
         mutableState.update { it.copy(embedderDownloadBytes = 0, documentStatus = "Downloading the embedding model from huggingface.co…") }
         viewModelScope.launch(Dispatchers.IO) {
-            val result = runCatching {
-                documentRuntime.installEmbedder({ bytes -> mutableState.update { it.copy(embedderDownloadBytes = bytes) } }, { embedderDownloadCancelled })
+            val supervisor = EmbedderDownloadSupervisor(documentRuntime::installEmbedder, networkLinks::activeLink)
+            val outcome = runCatching {
+                supervisor.run(
+                    allowMetered = allowMetered,
+                    userCancelled = { embedderDownloadCancelled },
+                    onProgress = { bytes -> mutableState.update { it.copy(embedderDownloadBytes = bytes) } },
+                    onRetrying = { message -> mutableState.update { it.copy(documentStatus = message) } },
+                )
             }
             val ready = runCatching { documentRuntime.embedderAvailable() }.getOrDefault(false)
+            val result = (outcome.getOrNull() as? DownloadOutcome.Finished)?.result
+            val paused = outcome.getOrNull() == DownloadOutcome.PausedForMetered && !ready
             val status = when {
                 ready -> "Embedding model ready. You can attach documents."
-                result.isFailure -> "Download failed: ${result.exceptionOrNull()?.message ?: "unknown error"}"
-                result.getOrNull() is ModelInstallResult.Failed -> "Download failed: ${(result.getOrNull() as ModelInstallResult.Failed).reason}. Tap Download again to resume."
+                paused -> "Paused: the connection is metered. Confirm to continue from where it stopped."
+                outcome.isFailure -> "Download failed: ${outcome.exceptionOrNull()?.message ?: "unknown error"}"
+                result is ModelInstallResult.Failed -> "Download failed: ${result.reason}. Tap Download again to resume."
+                result == null -> "Download cancelled. Tap Download to resume."
                 else -> documentRuntime.embedderProblem ?: "The embedding model is installed but could not be loaded."
             }
-            mutableState.update { it.copy(embedderDownloadBytes = null, documentsAvailable = ready, documentStatus = status) }
+            mutableState.update {
+                it.copy(embedderDownloadBytes = null, documentsAvailable = ready, documentStatus = status, confirmMeteredDownload = paused)
+            }
         }
     }
 
