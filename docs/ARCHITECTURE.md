@@ -327,6 +327,10 @@ DroidCommand AI
 │                            with a fake downloader; the real Hub download was run once
 │                            (DCA_NETWORK_TESTS=1). :app's DocumentRuntime/Chat screen use it
 │                            for the Download button; that glue compiles, never run on a device.
+│                            2026-10-11b: resume — an interrupted install keeps its .part
+│                            file and HttpsModelDownloader continues with an HTTP Range
+│                            request (200 = restart, 416 = discard). :app asks before
+│                            downloading on a metered network (ACCESS_NETWORK_STATE).
 │
 ├── core-llm-openai          OpenAiLlmProvider — a second real LlmProvider,
 │                            speaking the OpenAI Chat Completions API

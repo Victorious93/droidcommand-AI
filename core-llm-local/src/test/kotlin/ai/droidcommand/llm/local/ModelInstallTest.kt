@@ -85,13 +85,13 @@ class ModelInstallTest {
     }
 
     @Test
-    fun `a failed download leaves the previous file and no part file`() {
+    fun `a failed download leaves the previous file and keeps the part file for resuming`() {
         val d = dir()
         File(d, "m.gguf").writeBytes("corrupt".toByteArray())
         val r = repo(d).install("m", FakeDownloader(failWith = IOException("connection reset")))
         assertEquals(ModelInstallResult.Failed("connection reset"), r)
         assertEquals("corrupt", File(d, "m.gguf").readText())
-        assertFalse(File(d, "m.gguf.part").exists())
+        assertTrue(File(d, "m.gguf.part").exists())
     }
 
     @Test
@@ -144,6 +144,26 @@ class ModelInstallTest {
         val repo = ModelRepository(d).also { it.register(spec.metadata) }
         val r = repo.install(spec.metadata.id, HttpsModelDownloader())
         assertIs<ModelInstallResult.Installed>(r, r.toString())
+        assertTrue(repo.verify(spec.metadata.id) is ModelCheck.Verified)
+        d.deleteRecursively()
+    }
+
+    /** Cancels the real download after ~5 MB, then resumes it through the Hub's CDN redirect (needs Range to survive the redirect). */
+    @Test
+    fun `the real catalog model resumes an interrupted download from the Hub`() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getenv("DCA_NETWORK_TESTS") == "1")
+        val d = dir()
+        val spec = EmbeddingModelCatalog.NOMIC_EMBED_TEXT_V1_5_Q4_K_M
+        val repo = ModelRepository(d).also { it.register(spec.metadata) }
+        var seen = 0L
+        val first = repo.install(spec.metadata.id, HttpsModelDownloader(), { seen = it }, { seen > 5_000_000 })
+        assertIs<ModelInstallResult.Failed>(first)
+        val partial = File(d, spec.metadata.fileName + ".part").length()
+        assertTrue(partial in 5_000_000..20_000_000, "partial file kept: $partial")
+        var resumedFirst = -1L
+        val second = repo.install(spec.metadata.id, HttpsModelDownloader(), { if (resumedFirst < 0) resumedFirst = it })
+        assertIs<ModelInstallResult.Installed>(second, second.toString())
+        assertTrue(resumedFirst > partial, "progress continued from the prefix, not from zero: $resumedFirst")
         assertTrue(repo.verify(spec.metadata.id) is ModelCheck.Verified)
         d.deleteRecursively()
     }

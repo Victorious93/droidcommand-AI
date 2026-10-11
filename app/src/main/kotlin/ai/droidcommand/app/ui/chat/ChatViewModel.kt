@@ -32,6 +32,8 @@ import ai.droidcommand.voice.selectTts
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
@@ -81,6 +83,8 @@ data class ChatUiState(
     /** Bytes of the embedding model downloaded so far, or null when no download is running. */
     val embedderDownloadBytes: Long? = null,
     val embedderDownloadMegabytes: Long = 0,
+    /** True while the user is being asked to confirm downloading the embedding model over a metered (mobile) connection. */
+    val confirmMeteredDownload: Boolean = false,
     /** Outcome of the last attach/remove, shown under the toolbar. */
     val documentStatus: String? = null,
 )
@@ -232,8 +236,38 @@ class ChatViewModel @Inject constructor(
 
     @Volatile private var embedderDownloadCancelled = false
 
-    /** Download-button handler: fetches the pinned embedding model (SHA-256-checked) and then enables attaching. */
+    /** Network class of the active connection: no network, unmetered (e.g. Wi-Fi), or metered (mobile data, hotspot). */
+    private enum class Link { NONE, UNMETERED, METERED }
+
+    private fun activeLink(): Link {
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return Link.UNMETERED
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return Link.NONE) ?: return Link.NONE
+        return if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) Link.UNMETERED else Link.METERED
+    }
+
+    /**
+     * Download-button handler. On a metered connection it first asks for confirmation (the model is large);
+     * [confirmMeteredEmbedderDownload] proceeds. An earlier interrupted download is resumed, not restarted.
+     */
     fun downloadEmbedder() {
+        if (mutableState.value.embedderDownloadBytes != null) return
+        when (activeLink()) {
+            Link.NONE -> mutableState.update { it.copy(documentStatus = "No network connection. Connect and try again; a partial download is kept and resumed.") }
+            Link.METERED -> mutableState.update { it.copy(confirmMeteredDownload = true) }
+            Link.UNMETERED -> startEmbedderDownload()
+        }
+    }
+
+    fun confirmMeteredEmbedderDownload() {
+        mutableState.update { it.copy(confirmMeteredDownload = false) }
+        startEmbedderDownload()
+    }
+
+    fun dismissMeteredEmbedderDownload() {
+        mutableState.update { it.copy(confirmMeteredDownload = false) }
+    }
+
+    private fun startEmbedderDownload() {
         if (mutableState.value.embedderDownloadBytes != null) return
         embedderDownloadCancelled = false
         mutableState.update { it.copy(embedderDownloadBytes = 0, documentStatus = "Downloading the embedding model from huggingface.co…") }
@@ -245,7 +279,7 @@ class ChatViewModel @Inject constructor(
             val status = when {
                 ready -> "Embedding model ready. You can attach documents."
                 result.isFailure -> "Download failed: ${result.exceptionOrNull()?.message ?: "unknown error"}"
-                result.getOrNull() is ModelInstallResult.Failed -> "Download failed: ${(result.getOrNull() as ModelInstallResult.Failed).reason}"
+                result.getOrNull() is ModelInstallResult.Failed -> "Download failed: ${(result.getOrNull() as ModelInstallResult.Failed).reason}. Tap Download again to resume."
                 else -> documentRuntime.embedderProblem ?: "The embedding model is installed but could not be loaded."
             }
             mutableState.update { it.copy(embedderDownloadBytes = null, documentsAvailable = ready, documentStatus = status) }

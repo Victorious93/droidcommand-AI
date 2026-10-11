@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import ai.droidcommand.voice.SpeakMode
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -175,6 +176,16 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
 
         state.documentStatus?.let {
             Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+        }
+
+        if (state.confirmMeteredDownload) {
+            AlertDialog(
+                onDismissRequest = viewModel::dismissMeteredEmbedderDownload,
+                title = { Text("Use mobile data?") },
+                text = { Text("You are on a metered connection. The embedding model is about ${state.embedderDownloadMegabytes} MB. If it is interrupted, the next attempt resumes where it stopped.") },
+                confirmButton = { TextButton(onClick = viewModel::confirmMeteredEmbedderDownload) { Text("Download") } },
+                dismissButton = { TextButton(onClick = viewModel::dismissMeteredEmbedderDownload) { Text("Not now") } },
+            )
         }
 
         InputBar(
