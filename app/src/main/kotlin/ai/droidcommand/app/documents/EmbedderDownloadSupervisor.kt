@@ -59,7 +59,10 @@ class EmbedderDownloadSupervisor(
             val result = if (now == NetworkLink.NONE) {
                 ModelInstallResult.Failed("No network connection", retryable = true)
             } else {
-                install({ bytes -> progressed = true; onProgress(bytes) }, cancelled)
+                install({ bytes ->
+                    progressed = true
+                    onProgress(bytes)
+                }, cancelled)
             }
 
             if (result is ModelInstallResult.Installed) return DownloadOutcome.Finished(result)

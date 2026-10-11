@@ -15,9 +15,6 @@ import ai.droidcommand.security.JsonFileAuditLog
 import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
-import java.util.concurrent.atomic.AtomicBoolean
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,6 +22,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * [runs] is newest first; the first entry is the in-flight run while [running] is true, otherwise the

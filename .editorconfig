@@ -24,3 +24,9 @@ ktlint_standard_multiline-expression-wrapping = disabled
 ktlint_standard_string-template-indent = disabled
 ktlint_standard_function-signature = disabled
 ktlint_standard_blank-line-before-declaration = disabled
+# Dagger/Hilt `class X @Inject constructor(...)` is the idiom everywhere in :app; the rule would re-indent whole class bodies.
+ktlint_standard_annotation = disabled
+
+# Jetpack Compose names @Composable functions in PascalCase by convention (Kotlin API guidelines allow it for
+# functions that act like constructors); ktlint's function-naming rule must not flag them.
+ktlint_function_naming_ignore_when_annotated_with = Composable

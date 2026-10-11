@@ -9,7 +9,10 @@ import kotlin.test.assertNull
 class ComposeApprovalPromptTest {
     private fun ask(prompt: ComposeApprovalPrompt, reason: String, handle: ApprovalHandle = ApprovalHandle()): Pair<Thread, AtomicReference<Boolean?>> {
         val out = AtomicReference<Boolean?>(null)
-        val t = Thread { out.set(prompt.requestApproval(reason, handle)) }.apply { isDaemon = true; start() }
+        val t = Thread { out.set(prompt.requestApproval(reason, handle)) }.apply {
+            isDaemon = true
+            start()
+        }
         return t to out
     }
 
