@@ -56,7 +56,10 @@ class VoiceApprovalPromptTest {
 
     private fun ask(p: VoiceApprovalPrompt): Pair<Thread, AtomicReference<Boolean?>> {
         val out = AtomicReference<Boolean?>(null)
-        val t = Thread { out.set(p.requestApproval("run_shell", mapOf("cmd" to "ls"), "needs confirmation")) }.apply { isDaemon = true; start() }
+        val t = Thread { out.set(p.requestApproval("run_shell", mapOf("cmd" to "ls"), "needs confirmation")) }.apply {
+            isDaemon = true
+            start()
+        }
         return t to out
     }
 

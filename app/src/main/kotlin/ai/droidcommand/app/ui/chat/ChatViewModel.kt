@@ -4,6 +4,10 @@ import ai.droidcommand.agent.ConversationStore
 import ai.droidcommand.agent.GraphRetriever
 import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.agent.Role
+import ai.droidcommand.app.documents.DocumentRuntime
+import ai.droidcommand.app.documents.DownloadOutcome
+import ai.droidcommand.app.documents.EmbedderDownloadSupervisor
+import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.llm.factory.ChatResult
 import ai.droidcommand.llm.factory.ChatSession
@@ -11,10 +15,6 @@ import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.llm.factory.MemoryResult
 import ai.droidcommand.llm.factory.WebSearchCatalog
-import ai.droidcommand.app.documents.DocumentRuntime
-import ai.droidcommand.app.documents.DownloadOutcome
-import ai.droidcommand.app.documents.EmbedderDownloadSupervisor
-import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.llm.local.ModelInstallResult
 import ai.droidcommand.rag.AttachResult
 import ai.droidcommand.rag.DocumentInfo

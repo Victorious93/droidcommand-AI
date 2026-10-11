@@ -1,13 +1,13 @@
 package ai.droidcommand.app.approval
 
 import ai.droidcommand.security.ApprovalPrompt
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.locks.ReentrantLock
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.concurrent.withLock
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 
 data class PendingApproval(val reason: String)
 

@@ -1,15 +1,15 @@
 package ai.droidcommand.app
 
+import ai.droidcommand.app.approval.ApprovalHost
+import ai.droidcommand.app.approval.ComposeApprovalPrompt
+import ai.droidcommand.app.navigation.DroidCommandNavHost
+import ai.droidcommand.app.ui.theme.DroidCommandTheme
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import ai.droidcommand.app.approval.ApprovalHost
-import ai.droidcommand.app.approval.ComposeApprovalPrompt
-import ai.droidcommand.app.navigation.DroidCommandNavHost
-import ai.droidcommand.app.ui.theme.DroidCommandTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
