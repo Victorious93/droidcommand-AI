@@ -40,7 +40,7 @@ android {
 
     defaultConfig {
         applicationId = "ai.droidcommand.app"
-        minSdk = 26
+        minSdk = 28
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0-phase0"
@@ -66,6 +66,7 @@ dependencies {
     implementation(project(":core-config"))
     implementation(project(":core-conversations"))
     implementation(project(":core-rag-android"))
+    implementation(project(":core-llm-local-android"))
     implementation(project(":core-knowledge-android"))
     implementation(project(":core-llm"))
     implementation(project(":core-remote"))
