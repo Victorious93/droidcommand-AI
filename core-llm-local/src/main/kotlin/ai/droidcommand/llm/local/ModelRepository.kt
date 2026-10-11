@@ -74,9 +74,10 @@ class ModelRepository(private val modelsDir: File) {
 
     /**
      * Downloads [id] from its registered [ModelMetadata.url] unless it already verifies. Never throws for an
-     * expected failure (network, disk, cancellation, bad digest): the result says why, any `.part` file is
-     * deleted, and a previously verified file is never replaced by an unverified one. Blocking and disk/network
-     * heavy: call off the main thread. [onProgress] receives bytes downloaded so far in this call.
+     * expected failure (network, disk, cancellation, bad digest): the result says why, and a previously verified
+     * file is never replaced by an unverified one. A download interrupted by a network error or cancellation keeps
+     * its `.part` file and the next call resumes it; a wrong size or digest deletes it. Blocking and disk/network
+     * heavy: call off the main thread. [onProgress] receives total bytes on disk so far, including a resumed prefix.
      */
     @Synchronized
     fun install(
@@ -96,12 +97,19 @@ class ModelRepository(private val modelsDir: File) {
         }
         if (cancelled()) return ModelInstallResult.Failed("Cancelled")
         val part = File(modelsDir, meta.fileName + ".part")
+        // A `.part` file left by an interrupted call is resumed, unless it is already larger than the expected size.
+        if (needed != null && part.length() > needed) part.delete()
+        var keepPart = false
         try {
-            var done = 0L
-            downloader.download(url, part, needed ?: DEFAULT_MAX_BYTES, { n ->
-                done += n
-                onProgress(done)
-            }, cancelled)
+            var done = if (part.isFile) part.length() else 0L
+            if (needed == null || done < needed) {
+                keepPart = true // network/disk/cancel failures keep the prefix for the next call
+                downloader.download(url, part, needed ?: DEFAULT_MAX_BYTES, { n ->
+                    done += n
+                    onProgress(done)
+                }, cancelled)
+            }
+            keepPart = false // from here the file is complete and judged: a bad one is discarded
             if (needed != null && part.length() != needed) {
                 return ModelInstallResult.Failed("Downloaded ${part.length()} bytes, expected $needed; file discarded")
             }
@@ -112,7 +120,7 @@ class ModelRepository(private val modelsDir: File) {
         } catch (e: IOException) {
             return ModelInstallResult.Failed(e.message ?: e.javaClass.simpleName)
         } finally {
-            part.delete()
+            if (!keepPart) part.delete()
         }
     }
 

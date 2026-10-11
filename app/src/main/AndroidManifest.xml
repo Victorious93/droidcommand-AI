@@ -6,6 +6,10 @@
          needs a permission. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Normal-protection permission: lets the embedding-model download ask whether the active network is
+         metered, so it can confirm before using mobile data. It reveals nothing beyond that flag. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- Phase 4 voice input. Requested at runtime only when the user taps the mic; denial degrades to a
          message, never a crash. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
