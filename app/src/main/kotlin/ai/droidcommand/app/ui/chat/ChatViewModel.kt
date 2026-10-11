@@ -32,8 +32,6 @@ import ai.droidcommand.voice.selectTts
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
@@ -236,14 +234,7 @@ class ChatViewModel @Inject constructor(
 
     @Volatile private var embedderDownloadCancelled = false
 
-    /** Network class of the active connection: no network, unmetered (e.g. Wi-Fi), or metered (mobile data, hotspot). */
-    private enum class Link { NONE, UNMETERED, METERED }
-
-    private fun activeLink(): Link {
-        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return Link.UNMETERED
-        val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return Link.NONE) ?: return Link.NONE
-        return if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) Link.UNMETERED else Link.METERED
-    }
+    private val networkLinks by lazy { NetworkLinkChecker(context) }
 
     /**
      * Download-button handler. On a metered connection it first asks for confirmation (the model is large);
@@ -251,10 +242,10 @@ class ChatViewModel @Inject constructor(
      */
     fun downloadEmbedder() {
         if (mutableState.value.embedderDownloadBytes != null) return
-        when (activeLink()) {
-            Link.NONE -> mutableState.update { it.copy(documentStatus = "No network connection. Connect and try again; a partial download is kept and resumed.") }
-            Link.METERED -> mutableState.update { it.copy(confirmMeteredDownload = true) }
-            Link.UNMETERED -> startEmbedderDownload()
+        when (networkLinks.activeLink()) {
+            NetworkLink.NONE -> mutableState.update { it.copy(documentStatus = "No network connection. Connect and try again; a partial download is kept and resumed.") }
+            NetworkLink.METERED -> mutableState.update { it.copy(confirmMeteredDownload = true) }
+            NetworkLink.UNMETERED -> startEmbedderDownload()
         }
     }
 
