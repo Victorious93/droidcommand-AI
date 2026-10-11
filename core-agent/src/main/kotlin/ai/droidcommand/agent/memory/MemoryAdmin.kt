@@ -55,7 +55,8 @@ class MemoryAdmin(
                     origin = Origin.USER,
                     verification = if (r.meta.verification == Verification.SUPERSEDED) Verification.SUPERSEDED else Verification.USER_ASSERTED,
                     sensitivity = c.sensitivity,
-                    summary = null, // a stale summary of the old text must not outlive the edit
+                    // a stale summary of the old text must not outlive the edit
+                    summary = null,
                 ).toProperties(),
             ),
         )

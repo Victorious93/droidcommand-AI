@@ -74,7 +74,8 @@ class RefusalDiagnosticsTest {
     @Test
     fun `the attempt limit stops loops regardless of prompt changes`() {
         val g = RetryGuard(maxAttempts = 2)
-        g.recordAttempt("one"); g.recordAttempt("two")
+        g.recordAttempt("one")
+        g.recordAttempt("two")
         val d = g.check("completely new third wording here", refusal, userApproved = true)
         assertEquals("attempt limit reached (2)", assertIs<RetryDecision.Blocked>(d).reason)
         g.reset()

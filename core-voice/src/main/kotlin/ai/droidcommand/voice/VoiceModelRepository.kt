@@ -149,7 +149,10 @@ class VoiceModelRepository(private val root: File, private val downloader: FileD
             if (cancelled()) return "Cancelled"
             val part = File(dir, f.name + ".part")
             try {
-                downloader.download(f.url, part, { n -> done += n; onProgress(done) }, cancelled)
+                downloader.download(f.url, part, { n ->
+                    done += n
+                    onProgress(done)
+                }, cancelled)
                 val actual = part.inputStream().use(::sha256Hex)
                 if (actual != f.sha256) return "${f.name}: SHA-256 mismatch (got $actual); file discarded"
                 Files.move(part.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
@@ -173,7 +176,10 @@ class VoiceModelRepository(private val root: File, private val downloader: FileD
         val extracted = mutableListOf<File>()
         try {
             var done = 0L
-            downloader.download(model.files.first().url, archive, { n -> done += n; onProgress(done) }, cancelled)
+            downloader.download(model.files.first().url, archive, { n ->
+                done += n
+                onProgress(done)
+            }, cancelled)
             val actual = archive.inputStream().use(::sha256Hex)
             if (actual != model.archiveSha256) return "archive: SHA-256 mismatch (got $actual); file discarded"
 

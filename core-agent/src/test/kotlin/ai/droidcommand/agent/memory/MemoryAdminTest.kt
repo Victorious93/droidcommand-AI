@@ -45,7 +45,9 @@ class MemoryAdminTest {
 
     @Test
     fun `forgetScope deletes only that scope and leaves other entities alone`() {
-        store("one", "project:a"); store("two", "project:a"); val keep = store("three", "project:b")
+        store("one", "project:a")
+        store("two", "project:a")
+        val keep = store("three", "project:b")
         graph.addEntity(Entity("plain", EntityType.NOTE, "plain"))
         assertEquals(2, admin.forgetScope("project:a"))
         assertEquals(listOf(keep), admin.list().map { it.id })
@@ -67,7 +69,8 @@ class MemoryAdminTest {
     @Test
     fun `pin toggles and a superseded record cannot be pinned`() {
         val id = store("x note")
-        assertTrue(admin.pin(id, true)); assertTrue(admin.inspect(id)!!.meta.pinned)
+        assertTrue(admin.pin(id, true))
+        assertTrue(admin.inspect(id)!!.meta.pinned)
         val old = writer.write(MemoryCandidate("a", "v1 text", MemoryClass.PROJECT, "project:a", Origin.USER, subject = "s")) as MemoryDecision.Stored
         writer.write(MemoryCandidate("a", "v2 different", MemoryClass.PROJECT, "project:a", Origin.USER, subject = "s"))
         assertFalse(admin.pin(old.entity.id, true))
@@ -76,7 +79,8 @@ class MemoryAdminTest {
 
     @Test
     fun `export is valid JSON with provenance and honours scope`() {
-        store("exported fact", "project:a"); store("other scope", "project:b")
+        store("exported fact", "project:a")
+        store("other scope", "project:b")
         val root = Json.parseToJsonElement(admin.export(setOf("project:a"))).jsonObject
         val items = root.getValue("memories").jsonArray
         assertEquals(1, items.size)

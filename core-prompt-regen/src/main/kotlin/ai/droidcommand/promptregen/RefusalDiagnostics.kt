@@ -126,7 +126,9 @@ class RetryGuard(
 
     val attemptCount: Int get() = attempts.size
 
-    fun recordAttempt(prompt: String) { attempts += tokens(prompt) }
+    fun recordAttempt(prompt: String) {
+        attempts += tokens(prompt)
+    }
 
     fun reset() = attempts.clear()
 

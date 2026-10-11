@@ -109,7 +109,7 @@ class MemoryWriter(
                     audit.record("memory.conflict existing=${clash.id}")
                     return MemoryDecision.Conflict(
                         clash.id,
-                        "existing ${clash.meta.verification} memory on subject '$subject' outranks this ${verification} candidate",
+                        "existing ${clash.meta.verification} memory on subject '$subject' outranks this $verification candidate",
                     )
                 }
                 supersededId = clash.id
