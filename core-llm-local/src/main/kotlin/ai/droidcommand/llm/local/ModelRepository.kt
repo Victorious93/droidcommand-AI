@@ -41,7 +41,12 @@ sealed class ModelCheck {
 sealed class ModelInstallResult {
     data class Installed(val path: String) : ModelInstallResult()
 
-    data class Failed(val reason: String) : ModelInstallResult()
+    /**
+     * [retryable] is true only for a network/disk interruption that kept the `.part` prefix and was not a
+     * cancellation, so calling [ModelRepository.install] again resumes it. Size/digest failures, cancellation and
+     * precondition failures are not retryable.
+     */
+    data class Failed(val reason: String, val retryable: Boolean = false) : ModelInstallResult()
 }
 
 /**
@@ -118,7 +123,7 @@ class ModelRepository(private val modelsDir: File) {
             Files.move(part.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
             return ModelInstallResult.Installed(target.path)
         } catch (e: IOException) {
-            return ModelInstallResult.Failed(e.message ?: e.javaClass.simpleName)
+            return ModelInstallResult.Failed(e.message ?: e.javaClass.simpleName, retryable = keepPart && !cancelled())
         } finally {
             if (!keepPart) part.delete()
         }

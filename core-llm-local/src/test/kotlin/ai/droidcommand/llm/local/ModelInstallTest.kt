@@ -89,7 +89,7 @@ class ModelInstallTest {
         val d = dir()
         File(d, "m.gguf").writeBytes("corrupt".toByteArray())
         val r = repo(d).install("m", FakeDownloader(failWith = IOException("connection reset")))
-        assertEquals(ModelInstallResult.Failed("connection reset"), r)
+        assertEquals(ModelInstallResult.Failed("connection reset", retryable = true), r)
         assertEquals("corrupt", File(d, "m.gguf").readText())
         assertTrue(File(d, "m.gguf.part").exists())
     }
