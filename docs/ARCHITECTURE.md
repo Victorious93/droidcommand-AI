@@ -319,6 +319,14 @@ DroidCommand AI
 │                            `local` provider from config when given
 │                            LocalProviderResources (2026-10-08e); no real
 │                            caller constructs those yet.
+│                            2026-10-11: ModelRepository.install (https download to a
+│                            .part file via the ModelDownloader seam, moved into place
+│                            only after size + SHA-256 match; never throws) with
+│                            HttpsModelDownloader, and EmbeddingModelCatalog (pinned
+│                            nomic-embed-text-v1.5 Q4_K_M, ~84 MB, Apache-2.0). JVM-tested
+│                            with a fake downloader; the real Hub download was run once
+│                            (DCA_NETWORK_TESTS=1). :app's DocumentRuntime/Chat screen use it
+│                            for the Download button; that glue compiles, never run on a device.
 │
 ├── core-llm-openai          OpenAiLlmProvider — a second real LlmProvider,
 │                            speaking the OpenAI Chat Completions API

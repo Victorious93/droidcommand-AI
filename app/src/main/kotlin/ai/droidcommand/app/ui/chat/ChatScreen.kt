@@ -181,6 +181,10 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             documents = state.documents,
             documentsAvailable = state.documentsAvailable,
             attachingDocument = state.attachingDocument,
+            embedderDownloadBytes = state.embedderDownloadBytes,
+            embedderDownloadMegabytes = state.embedderDownloadMegabytes,
+            onDownloadEmbedder = viewModel::downloadEmbedder,
+            onCancelEmbedderDownload = viewModel::cancelEmbedderDownload,
             onAttachDocument = { documentLauncher.launch(arrayOf("application/pdf", "text/*", "application/octet-stream")) },
             onRemoveDocument = viewModel::removeDocument,
             webSearchEnabled = state.webSearchEnabled,
@@ -307,6 +311,10 @@ private fun InputBar(
     documents: List<ai.droidcommand.rag.DocumentInfo>,
     documentsAvailable: Boolean,
     attachingDocument: Boolean,
+    embedderDownloadBytes: Long?,
+    embedderDownloadMegabytes: Long,
+    onDownloadEmbedder: () -> Unit,
+    onCancelEmbedderDownload: () -> Unit,
     onAttachDocument: () -> Unit,
     onRemoveDocument: (String) -> Unit,
     webSearchEnabled: Boolean,
@@ -331,7 +339,11 @@ private fun InputBar(
             Text(if (attachingDocument) "Indexing…" else "Attach document")
         }
         if (!documentsAvailable) {
-            Text("Needs the on-device embedding model (not installed).", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            if (embedderDownloadBytes == null) {
+                OutlinedButton(onClick = onDownloadEmbedder) { Text("Download embedding model ($embedderDownloadMegabytes MB)") }
+            } else {
+                OutlinedButton(onClick = onCancelEmbedderDownload) { Text("Cancel (${embedderDownloadBytes / BYTES_PER_MEGABYTE} / $embedderDownloadMegabytes MB)") }
+            }
         }
     }
     if (documents.isNotEmpty()) {
@@ -405,3 +417,5 @@ private fun InputBar(
         }
     }
 }
+
+private const val BYTES_PER_MEGABYTE = 1024L * 1024L

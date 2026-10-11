@@ -13,6 +13,7 @@ import ai.droidcommand.llm.factory.MemoryResult
 import ai.droidcommand.llm.factory.WebSearchCatalog
 import ai.droidcommand.app.documents.DocumentRuntime
 import ai.droidcommand.app.voice.VoiceRuntime
+import ai.droidcommand.llm.local.ModelInstallResult
 import ai.droidcommand.rag.AttachResult
 import ai.droidcommand.rag.DocumentInfo
 import ai.droidcommand.remote.HttpTransport
@@ -77,6 +78,9 @@ data class ChatUiState(
     /** False while no on-device embedding model is installed: attaching is disabled and says why. */
     val documentsAvailable: Boolean = false,
     val attachingDocument: Boolean = false,
+    /** Bytes of the embedding model downloaded so far, or null when no download is running. */
+    val embedderDownloadBytes: Long? = null,
+    val embedderDownloadMegabytes: Long = 0,
     /** Outcome of the last attach/remove, shown under the toolbar. */
     val documentStatus: String? = null,
 )
@@ -149,7 +153,14 @@ class ChatViewModel @Inject constructor(
         // The document index is a Room database: open and read it off the main thread.
         viewModelScope.launch(Dispatchers.IO) {
             val docs = runCatching { documentRuntime.attacher.list() }.getOrDefault(emptyList())
-            mutableState.update { it.copy(documents = docs, documentsAvailable = documentRuntime.embedderAvailable()) }
+            mutableState.update {
+                it.copy(
+                    documents = docs,
+                    documentsAvailable = documentRuntime.embedderAvailable(),
+                    embedderDownloadMegabytes = documentRuntime.embedderDownloadMegabytes,
+                    documentStatus = documentRuntime.embedderProblem,
+                )
+            }
         }
         // History comes from Room, which refuses main-thread access: load it on the IO dispatcher.
         viewModelScope.launch(Dispatchers.IO) {
@@ -217,6 +228,32 @@ class ChatViewModel @Inject constructor(
             )
             mutableState.update { it.copy(attachingDocument = false, documents = docs, documentStatus = status) }
         }
+    }
+
+    @Volatile private var embedderDownloadCancelled = false
+
+    /** Download-button handler: fetches the pinned embedding model (SHA-256-checked) and then enables attaching. */
+    fun downloadEmbedder() {
+        if (mutableState.value.embedderDownloadBytes != null) return
+        embedderDownloadCancelled = false
+        mutableState.update { it.copy(embedderDownloadBytes = 0, documentStatus = "Downloading the embedding model from huggingface.co…") }
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = runCatching {
+                documentRuntime.installEmbedder({ bytes -> mutableState.update { it.copy(embedderDownloadBytes = bytes) } }, { embedderDownloadCancelled })
+            }
+            val ready = runCatching { documentRuntime.embedderAvailable() }.getOrDefault(false)
+            val status = when {
+                ready -> "Embedding model ready. You can attach documents."
+                result.isFailure -> "Download failed: ${result.exceptionOrNull()?.message ?: "unknown error"}"
+                result.getOrNull() is ModelInstallResult.Failed -> "Download failed: ${(result.getOrNull() as ModelInstallResult.Failed).reason}"
+                else -> documentRuntime.embedderProblem ?: "The embedding model is installed but could not be loaded."
+            }
+            mutableState.update { it.copy(embedderDownloadBytes = null, documentsAvailable = ready, documentStatus = status) }
+        }
+    }
+
+    fun cancelEmbedderDownload() {
+        embedderDownloadCancelled = true
     }
 
     fun removeDocument(docId: String) {
