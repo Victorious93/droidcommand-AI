@@ -6,12 +6,12 @@ import ai.droidcommand.agent.GraphRetriever
 import ai.droidcommand.agent.InMemoryConversationStore
 import ai.droidcommand.agent.InMemoryKnowledgeGraph
 import ai.droidcommand.agent.KnowledgeGraph
+import ai.droidcommand.agent.Role
 import ai.droidcommand.agent.memory.MemoryCandidate
 import ai.droidcommand.agent.memory.MemoryClass
 import ai.droidcommand.agent.memory.MemoryRetriever
 import ai.droidcommand.agent.memory.MemoryWriter
 import ai.droidcommand.agent.memory.Origin
-import ai.droidcommand.agent.Role
 import ai.droidcommand.config.InMemorySecretsVault
 import ai.droidcommand.llm.LlmConfig
 import ai.droidcommand.llm.LlmProvider

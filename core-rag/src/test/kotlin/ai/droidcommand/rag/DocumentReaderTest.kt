@@ -42,7 +42,13 @@ class DocumentReaderTest {
     @Test
     fun `size limits apply before and after extraction`() {
         var called = false
-        val big = DocumentReader(PdfTextExtractor { called = true; "x" }, maxPdfBytes = 8)
+        val big = DocumentReader(
+            PdfTextExtractor {
+                called = true
+                "x"
+            },
+            maxPdfBytes = 8,
+        )
         assertFailsWith<DocumentReadException> { big.read(pdfBytes) }
         assertFalse(called, "an oversize pdf must not reach the parser")
         val long = DocumentReader(PdfTextExtractor { "x".repeat(50) }, maxTextChars = 10)

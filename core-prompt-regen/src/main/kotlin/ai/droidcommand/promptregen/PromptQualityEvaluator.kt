@@ -72,8 +72,13 @@ object PromptQualityEvaluator {
     private class Scorer(val dimension: QualityDimension) {
         var score = BASE
         val reasons = mutableListOf<String>()
-        fun add(points: Int, reason: String) { score += points; reasons += (if (points >= 0) "+$points " else "$points ") + reason }
-        fun note(reason: String) { reasons += reason }
+        fun add(points: Int, reason: String) {
+            score += points
+            reasons += (if (points >= 0) "+$points " else "$points ") + reason
+        }
+        fun note(reason: String) {
+            reasons += reason
+        }
         fun build() = DimensionScore(dimension, score.coerceIn(0, 100), reasons.ifEmpty { listOf("no signals either way") })
     }
 
@@ -81,7 +86,10 @@ object PromptQualityEvaluator {
 
     private fun clarity(t: String) = Scorer(QualityDimension.CLARITY).apply {
         val n = words(t).size
-        if (n == 0) { add(-BASE, "empty prompt"); return@apply }
+        if (n == 0) {
+            add(-BASE, "empty prompt")
+            return@apply
+        }
         when {
             n < 5 -> add(-25, "only $n words; too short to state a task unambiguously")
             n < 12 -> add(-10, "short ($n words)")
@@ -123,7 +131,10 @@ object PromptQualityEvaluator {
     }.build()
 
     private fun compatibility(t: String, target: TargetModel?) = Scorer(QualityDimension.PROVIDER_COMPATIBILITY).apply {
-        if (target == null || target == TargetModel.GENERAL) { add(10, "no provider-specific constraints to check"); return@apply }
+        if (target == null || target == TargetModel.GENERAL) {
+            add(10, "no provider-specific constraints to check")
+            return@apply
+        }
         val tokens = estimateTokens(t)
         if (target == TargetModel.LOCAL_MODEL) {
             if (tokens > LOCAL_MODEL_SOFT_LIMIT_TOKENS) add(-25, "~$tokens tokens is large for a small local model") else add(15, "size suits a small local model (~$tokens tokens)")
@@ -131,15 +142,21 @@ object PromptQualityEvaluator {
             add(15, "no length concern for ${target.name} (~$tokens tokens)")
         }
         if (target == TargetModel.CLAUDE_CODE || target == TargetModel.CODEX) {
-            if (pathLike.containsMatchIn(t) || contextWords.containsMatchIn(t)) add(10, "references repository context, which coding agents can act on")
-            else add(-10, "coding agent target but no repository context referenced")
+            if (pathLike.containsMatchIn(t) || contextWords.containsMatchIn(t)) {
+                add(10, "references repository context, which coding agents can act on")
+            } else {
+                add(-10, "coding agent target but no repository context referenced")
+            }
         }
         note("based on this project's own TargetModel templates, not a provider's published capability matrix")
     }.build()
 
     private fun efficiency(t: String) = Scorer(QualityDimension.CONTEXT_EFFICIENCY).apply {
         val ws = words(t.lowercase())
-        if (ws.size < 8) { add(10, "too short for redundancy to matter"); return@apply }
+        if (ws.size < 8) {
+            add(10, "too short for redundancy to matter")
+            return@apply
+        }
         val ratio = ws.toSet().size.toDouble() / ws.size
         if (ratio >= 0.6) add(20, "low repetition (${(ratio * 100).toInt()}% unique words)") else add(-20, "high repetition (${(ratio * 100).toInt()}% unique words)")
         val dupSentences = t.split(Regex("(?<=[.!?\\n])\\s+")).map { it.trim().lowercase() }.filter { it.length > 15 }.let { it.size - it.toSet().size }
@@ -150,7 +167,13 @@ object PromptQualityEvaluator {
 
     private fun actionability(t: String) = Scorer(QualityDimension.ACTIONABILITY).apply {
         val first = t.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
-        if (actionVerbs.containsMatchIn(first)) add(25, "opens with an action") else if (actionVerbs.containsMatchIn(t)) add(10, "contains an action, but not up front") else add(-20, "no action verb anywhere")
+        if (actionVerbs.containsMatchIn(first)) {
+            add(25, "opens with an action")
+        } else if (actionVerbs.containsMatchIn(t)) {
+            add(10, "contains an action, but not up front")
+        } else {
+            add(-20, "no action verb anywhere")
+        }
         if (Regex("(?m)^\\s*(\\d+[.)]|[-*])\\s+").containsMatchIn(t)) add(10, "has an ordered or bulleted step list")
         if (vagueWords.containsMatchIn(first)) add(-10, "the opening line is vague")
     }.build()

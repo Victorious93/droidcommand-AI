@@ -57,8 +57,11 @@ object PromptChangeSummarizer {
                     RequirementChange(unit, RequirementStatus.PRESERVED, newLines.firstOrNull { normalize(it).contains(norm) })
                 else -> {
                     val (idx, overlap) = newNormalized.mapIndexed { i, l -> i to containment(tokens, l.split(' ').toSet()) }.maxByOrNull { it.second } ?: (-1 to 0.0)
-                    if (idx >= 0 && overlap >= CLARIFIED_OVERLAP) RequirementChange(unit, RequirementStatus.CLARIFIED, newLines[idx])
-                    else RequirementChange(unit, RequirementStatus.FLAGGED, null)
+                    if (idx >= 0 && overlap >= CLARIFIED_OVERLAP) {
+                        RequirementChange(unit, RequirementStatus.CLARIFIED, newLines[idx])
+                    } else {
+                        RequirementChange(unit, RequirementStatus.FLAGGED, null)
+                    }
                 }
             }
         }

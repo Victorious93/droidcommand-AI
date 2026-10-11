@@ -104,20 +104,28 @@ class MemoryRetriever(
         val terms = query.lowercase().split(GraphRetriever.NON_WORD)
             .filter { it.length >= 3 && it !in GraphRetriever.STOPWORDS }.distinct().take(MAX_TERMS)
 
-        val candidates = if (allowedScopes.isEmpty()) emptyList() else MemoryRecords.all(graph).filter { r ->
-            r.meta.scope in allowedScopes &&
-                r.meta.verification != Verification.SUPERSEDED &&
-                r.meta.sensitivity != Sensitivity.SECRET &&
-                !r.isExpired(now) &&
-                (classes == null || r.meta.memoryClass in classes) &&
-                (since == null || !r.entity.updatedAt.isBefore(since))
+        val candidates = if (allowedScopes.isEmpty()) {
+            emptyList()
+        } else {
+            MemoryRecords.all(graph).filter { r ->
+                r.meta.scope in allowedScopes &&
+                    r.meta.verification != Verification.SUPERSEDED &&
+                    r.meta.sensitivity != Sensitivity.SECRET &&
+                    !r.isExpired(now) &&
+                    (classes == null || r.meta.memoryClass in classes) &&
+                    (since == null || !r.entity.updatedAt.isBefore(since))
+            }
         }
         val byId = candidates.associateBy { it.id }
 
         val keyword = candidates.associate { it.id to keywordScore(it, terms) }
-        val semanticScores = if (semantic == null) emptyMap() else candidates.mapNotNull { r ->
-            semantic.similarity(query, r.entity)?.let { r.id to it.coerceIn(0.0, 1.0) }
-        }.toMap()
+        val semanticScores = if (semantic == null) {
+            emptyMap()
+        } else {
+            candidates.mapNotNull { r ->
+                semantic.similarity(query, r.entity)?.let { r.id to it.coerceIn(0.0, 1.0) }
+            }.toMap()
+        }
 
         val graphScores = graphProximity(candidates, keyword, byId.keys)
 
@@ -199,7 +207,15 @@ class MemoryRetriever(
         if (terms.isEmpty()) return 0.0
         val title = r.entity.label.lowercase()
         val body = (r.meta.content + " " + r.meta.summary.orEmpty() + " " + r.meta.tags.joinToString(" ")).lowercase()
-        val sum = terms.sumOf { t -> if (t in title) 1.0 else if (t in body) 0.7 else 0.0 }
+        val sum = terms.sumOf { t ->
+            if (t in title) {
+                1.0
+            } else if (t in body) {
+                0.7
+            } else {
+                0.0
+            }
+        }
         return sum / terms.size
     }
 

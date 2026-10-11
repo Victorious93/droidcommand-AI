@@ -21,9 +21,11 @@ class MemoryRetrieverTest {
     private fun add(
         title: String, content: String, scope: String = "project:dca", origin: Origin = Origin.USER,
         cls: MemoryClass = MemoryClass.PROJECT, pinned: Boolean = false, tags: Set<String> = emptySet(), retention: Int? = null,
-    ): String = (writer.write(
-        MemoryCandidate(title, content, cls, scope, origin, tags = tags, pinned = pinned, retentionDays = retention, explicitUserSave = true),
-    ) as MemoryDecision.Stored).entity.id
+    ): String = (
+        writer.write(
+            MemoryCandidate(title, content, cls, scope, origin, tags = tags, pinned = pinned, retentionDays = retention, explicitUserSave = true),
+        ) as MemoryDecision.Stored
+    ).entity.id
 
     @Test
     fun `returns only relevant memories, best match first`() {
@@ -141,7 +143,10 @@ class MemoryRetrieverTest {
     fun `progressive retrieval stops at the first sufficient budget`() {
         repeat(20) { add("Topic $it", "kotlin module description number $it ".repeat(6)) }
         val seen = mutableListOf<Int>()
-        val pkg = retriever.retrieveProgressive("kotlin module", scopes, listOf(2000, 100, 500)) { seen += it.budgetTokens; it.items.size >= 3 }
+        val pkg = retriever.retrieveProgressive("kotlin module", scopes, listOf(2000, 100, 500)) {
+            seen += it.budgetTokens
+            it.items.size >= 3
+        }
         assertEquals(listOf(100, 500), seen)
         assertTrue(pkg.items.size >= 3)
     }
