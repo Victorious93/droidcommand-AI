@@ -7,6 +7,9 @@ import ai.droidcommand.agent.Role
 import ai.droidcommand.app.documents.DocumentRuntime
 import ai.droidcommand.app.documents.DownloadOutcome
 import ai.droidcommand.app.documents.EmbedderDownloadSupervisor
+import ai.droidcommand.app.localmodels.ImportOutcome
+import ai.droidcommand.app.localmodels.ImportedModel
+import ai.droidcommand.app.localmodels.LocalModelRuntime
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.config.EncryptedSecretsVault
@@ -90,6 +93,15 @@ data class ChatUiState(
     val documentStatus: String? = null,
     /** Chat-toolbar controls left visible by the Advanced settings. */
     val toolbar: Set<ToolbarToggle> = ToolbarLayout.defaults,
+    /** On-device models the owner imported. Empty until one is imported. */
+    val localModels: List<ImportedModel> = emptyList(),
+    /** The on-device model turns run on, or null when the cloud provider above is in use. */
+    val activeLocalModelId: String? = null,
+    val localImporting: Boolean = false,
+    /** Outcome of the last import, selection or deletion, shown in the options panel. */
+    val localStatus: String? = null,
+    /** True while the delete-model confirmation is open. */
+    val confirmDeleteLocalModel: Boolean = false,
 )
 
 /**
@@ -112,6 +124,7 @@ class ChatViewModel @Inject constructor(
     private val runtime: VoiceRuntime,
     private val documentRuntime: DocumentRuntime,
     private val advanced: AdvancedPrefs,
+    private val onDeviceModels: LocalModelRuntime,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
@@ -124,6 +137,7 @@ class ChatViewModel @Inject constructor(
         knowledgeGraph = if (memoryEnabled) graph else null,
         webSearch = WebSearchCatalog.clientFor(vault, transport),
         documents = documentRuntime.retriever,
+        local = onDeviceModels.resources,
     )
 
     private val tts = AndroidTextToSpeech(context)
@@ -153,11 +167,18 @@ class ChatViewModel @Inject constructor(
     private fun initialState(): ChatUiState {
         val provider = CloudProviderCatalog.byId(prefs.getString(KEY_PROVIDER, null).orEmpty()) ?: CloudProviderCatalog.all.first()
         val model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel
-        return ChatUiState(provider = provider, model = model, memoryEnabled = memoryEnabled, webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false), speakMode = speakModeFromPrefs(), micAvailable = voice.sttAvailable, toolbar = advanced.toolbarToggles())
+        return ChatUiState(provider = provider, model = model, memoryEnabled = memoryEnabled, webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false), speakMode = speakModeFromPrefs(), micAvailable = voice.sttAvailable, toolbar = advanced.toolbarToggles(), activeLocalModelId = prefs.getString(KEY_LOCAL_MODEL, null))
     }
 
     init {
         startWakeWordIfEnabled()
+        // Imported models are read from disk: load them off the main thread, and drop a saved choice that no longer exists.
+        viewModelScope.launch(Dispatchers.IO) {
+            val models = onDeviceModels.list()
+            mutableState.update { state ->
+                state.copy(localModels = models, activeLocalModelId = state.activeLocalModelId?.takeIf { id -> models.any { it.id == id } })
+            }
+        }
         // The document index is a Room database: open and read it off the main thread.
         viewModelScope.launch(Dispatchers.IO) {
             val docs = runCatching { documentRuntime.attacher.list() }.getOrDefault(emptyList())
@@ -178,8 +199,74 @@ class ChatViewModel @Inject constructor(
     }
 
     fun selectProvider(provider: CloudProviderSpec) {
-        prefs.edit { putString(KEY_PROVIDER, provider.id) }
-        mutableState.update { it.copy(provider = provider, model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel, error = null) }
+        prefs.edit {
+            putString(KEY_PROVIDER, provider.id)
+            remove(KEY_LOCAL_MODEL)
+        }
+        mutableState.update { it.copy(provider = provider, model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel, activeLocalModelId = null, error = null) }
+    }
+
+    /** Chooses an imported on-device model for the following turns. Switching away from another one frees its memory. */
+    fun selectLocalModel(modelId: String) {
+        val previous = mutableState.value.activeLocalModelId
+        prefs.edit { putString(KEY_LOCAL_MODEL, modelId) }
+        mutableState.update { it.copy(activeLocalModelId = modelId, error = null) }
+        if (previous != null && previous != modelId) viewModelScope.launch(Dispatchers.IO) { session.close() }
+    }
+
+    /**
+     * Import button result. Copies the picked `.gguf` into app storage, records its SHA-256 and makes it the active
+     * on-device model. Runs off the main thread: the copy and the digest read the whole file.
+     */
+    fun importLocalModel(uri: Uri) {
+        if (mutableState.value.localImporting) return
+        mutableState.update { it.copy(localImporting = true, localStatus = "Importing…") }
+        viewModelScope.launch(Dispatchers.IO) {
+            var reportedBytes = 0L
+            val outcome = runCatching {
+                val name = displayName(uri)
+                val size = sizeOf(uri)
+                val stream = context.contentResolver.openInputStream(uri) ?: error("The file could not be opened.")
+                stream.use {
+                    onDeviceModels.importModel(name, it, size) { bytes ->
+                        if (bytes - reportedBytes >= PROGRESS_STEP_BYTES) {
+                            reportedBytes = bytes
+                            mutableState.update { s -> s.copy(localStatus = "Importing… ${bytes / BYTES_PER_MEGABYTE} MB copied") }
+                        }
+                    }
+                }
+            }.getOrElse { ImportOutcome.Failed("Import failed: ${it.message ?: it.javaClass.simpleName}.") }
+            val models = onDeviceModels.list()
+            when (outcome) {
+                is ImportOutcome.Imported -> selectImported(outcome.model.id, models, "Imported ${outcome.model.label}. Chat now runs on this device.")
+                is ImportOutcome.Duplicate -> selectImported(outcome.id, models, "That file is already imported. Selected it.")
+                is ImportOutcome.Rejected -> mutableState.update { it.copy(localImporting = false, localStatus = outcome.reason) }
+                is ImportOutcome.Failed -> mutableState.update { it.copy(localImporting = false, localStatus = outcome.reason) }
+            }
+        }
+    }
+
+    private fun selectImported(id: String, models: List<ImportedModel>, status: String) {
+        prefs.edit { putString(KEY_LOCAL_MODEL, id) }
+        mutableState.update { it.copy(localImporting = false, localModels = models, activeLocalModelId = id, localStatus = status) }
+    }
+
+    fun askDeleteLocalModel() = mutableState.update { it.copy(confirmDeleteLocalModel = true) }
+
+    fun dismissDeleteLocalModel() = mutableState.update { it.copy(confirmDeleteLocalModel = false) }
+
+    /** Deletes the active model's file. The model is unloaded first, so nothing keeps the file open. */
+    fun confirmDeleteLocalModel() {
+        val id = mutableState.value.activeLocalModelId ?: return
+        mutableState.update { it.copy(confirmDeleteLocalModel = false, localStatus = "Deleting…") }
+        viewModelScope.launch(Dispatchers.IO) {
+            session.close()
+            onDeviceModels.remove(id)
+            prefs.edit { remove(KEY_LOCAL_MODEL) }
+            mutableState.update {
+                it.copy(localModels = onDeviceModels.list(), activeLocalModelId = null, localStatus = "Model file deleted. Chat uses the cloud provider again.")
+            }
+        }
     }
 
     fun setModel(model: String) {
@@ -192,8 +279,20 @@ class ChatViewModel @Inject constructor(
         if (current.sending || text.isBlank()) return
         mutableState.update { it.copy(sending = true, streaming = "", error = null, notice = null) }
         viewModelScope.launch(Dispatchers.IO) {
-            val result = session.send(current.provider, current.model, text, useWebSearch = current.webSearchEnabled) { delta ->
-                mutableState.update { it.copy(streaming = it.streaming + delta) }
+            val localId = current.activeLocalModelId
+            // Web search sends the message text to a search provider, so it is not used for on-device replies.
+            val localNotice = if (localId != null && current.webSearchEnabled) "Web search is not used for on-device replies." else null
+            val result = if (localId != null) {
+                onDeviceModels.list() // registers the models before the first on-device turn
+                runCatching {
+                    session.sendLocal(localId, text, useWebSearch = false) { delta ->
+                        mutableState.update { it.copy(streaming = it.streaming + delta) }
+                    }
+                }.getOrElse { ChatResult.Failure(it.message ?: "The on-device model could not run this message.") }
+            } else {
+                session.send(current.provider, current.model, text, useWebSearch = current.webSearchEnabled) { delta ->
+                    mutableState.update { it.copy(streaming = it.streaming + delta) }
+                }
             }
             mutableState.update {
                 when (result) {
@@ -201,7 +300,7 @@ class ChatViewModel @Inject constructor(
                         lines = it.lines + ChatLine(true, text.trim()) + ChatLine(false, result.text),
                         streaming = "",
                         sending = false,
-                        notice = result.notice,
+                        notice = result.notice ?: localNotice,
                     ).also { voice.onReply(result.text, it.speakMode) }
                     is ChatResult.Failure -> it.copy(streaming = "", sending = false, error = result.message)
                 }
@@ -311,6 +410,12 @@ class ChatViewModel @Inject constructor(
         context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
             if (c.moveToFirst()) c.getString(0) else null
         } ?: uri.lastPathSegment ?: "document"
+
+    private fun sizeOf(uri: Uri): Long? = runCatching {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+            if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
+        }
+    }.getOrNull()
 
     fun newChat() {
         if (mutableState.value.sending) return
@@ -452,5 +557,8 @@ class ChatViewModel @Inject constructor(
         const val KEY_MEMORY = "memory_enabled"
         const val KEY_WEB_SEARCH = "web_search_enabled"
         const val KEY_SPEAK_MODE = "speak_mode"
+        const val KEY_LOCAL_MODEL = "local_model_id"
+        const val BYTES_PER_MEGABYTE = 1024L * 1024L
+        const val PROGRESS_STEP_BYTES = 64L * 1024L * 1024L
     }
 }
