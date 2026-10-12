@@ -4,266 +4,177 @@
 
 # DroidCommand AI
 
-An Android AI-agent platform in early development. See
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the target architecture
-and an honest, per-component status (IMPLEMENTED / PARTIAL / PLANNED /
-CONFIGURATION-DEPENDENT), and [`docs/CORE_BUILD.md`](docs/CORE_BUILD.md)
-for the build/workspace pipeline specifically — this README will be
-rewritten to describe the finished product only once there is a finished
-product to describe.
+DroidCommand AI (DCA) is an Android AI-agent platform built as the
+flagship app and command center for a small fleet of independent
+companion apps. It pairs an on-device chat UI with a conversational agent
+that can plan work, call tools under a strict security policy, build and
+deploy software, and orchestrate the capabilities of the other fleet apps
+over well-defined local IPC / network boundaries — without folding those
+apps into this codebase.
 
-DroidCommand AI is also the hub of a small fleet of separate, independently
-licensed Android companion apps — `Victorious93/hackeraiETC`,
-`Victorious93/Pentest-Swarm-AI`, and `Victorious93/VictorSuite` — reached
-over a local IPC/network boundary rather than built into this repo. See
-[`CLAUDE.md`](CLAUDE.md#companion-app-fleet) and
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#8-companion-app-fleet-planned)
-for what's actually wired up today versus still planned.
+The project is organised as a multi-module Gradle build. Most of the
+engine is **pure Kotlin/JVM** so it compiles, runs, and is tested without
+an Android SDK or a device; the Android UI and the native/on-device pieces
+are **opt-in modules** that require the Android toolchain. The sections
+below describe what exists in the repository today, with an honest status
+for anything not yet verified on real hardware.
 
-DCA is evaluating `Victorious93/Kai`'s feature set (chat, memory, provider
-routing, local inference, MCP client, skills, tasks/heartbeat, a Linux
-sandbox, generated UI, personal tools) as a **feature and behavior
-reference** — never a build or runtime dependency — for capabilities DCA
-should offer through its own architecture. See
-[`docs/KAI_INTEGRATION.md`](docs/KAI_INTEGRATION.md) for the evidence-based
-capability map, [`docs/KAI_INTEGRATION_PLAN.md`](docs/KAI_INTEGRATION_PLAN.md)
-for the phased plan, and
-[`docs/CAPABILITY_REPAIR_AUDIT.md`](docs/CAPABILITY_REPAIR_AUDIT.md) for the
-architectural-independence self-audit against those two documents.
+> **Status in one line:** the JVM engine is implemented and tested; the
+> Android debug APK builds (in CI and in configured build environments) but
+> has **not** been launched on a device or emulator; live LLM calls, real
+> device/root control, and the companion-APK bindings are gated on
+> environments this repository's CI does not have.
 
-## Current status
+For the authoritative, per-component status read
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and the dated addenda in
+[`docs/AUDIT_2026-09-05.md`](docs/AUDIT_2026-09-05.md). Session orientation
+and the Consumer Product Roadmap live in [`CLAUDE.md`](CLAUDE.md).
 
-Fourteen pure-Kotlin/JVM modules are implemented and tested:
+## The fleet
 
-- `core-agent` — agent state machine, tool interface/registry/bounded-retry
-  executor, conversation context, the `Planner` contract, a bounded Forge
-  objective loop (`ObjectiveEngine`), and `DroidCommandSession`, which
-  coordinates Pilot Mode and Forge Mode over that shared infrastructure and
-  rejects a mode switch attempted while a task is active.
-- `core-llm` — provider-independent LLM request/response/error types, the
-  `LlmProvider` interface, and `LlmPlanner` (a `Planner` implementation
-  backed by an `LlmProvider`). No local-model-specific provider is
-  implemented yet, but `core-llm-anthropic` and `core-llm-openai` now
-  supply real ones — every `LlmPlanner` test still runs against a scripted
-  fake provider, since that's what proves the planner's own logic in
-  isolation.
-- `core-security` — `SecurityPolicy`/`SecurityPolicyEnforcer` decide whether
-  a tool invocation is allowed, needs explicit approval, or is denied
-  (root/permission requirements), and `SecureToolExecutor` enforces that
-  decision before a tool ever runs: a denied tool is never invoked, no
-  matter what an LLM or planner requested. Root/permission checks are
-  injected functions — now exercised end-to-end against a real `Tool` by
-  `core-root`'s integration test — but real on-device root detection and
-  Android permission grants remain PLANNED (need a real device).
-- `core-config` — `LlmConfigLoader`/`SecurityPolicyLoader` build `core-llm`'s
-  and `core-security`'s config objects from a `ConfigSource` (environment
-  variables by default). No secret is ever held as a plain field: an LLM
-  API key is read from the source fresh on every call, not captured at load
-  time — verified by a test that changes the underlying value between two
-  calls and checks each call sees the current one. Only in-process sources
-  exist; a real Android-backed source (e.g. `EncryptedSharedPreferences`)
-  remains PLANNED.
-- `core-remote` — the first module with a genuinely working implementation,
-  not just an interface plus fakes: `JdkHttpTransport` is a real HTTP
-  client (`java.net.http`), tested against a real local `HttpServer` on
-  loopback (127.0.0.1) — a real network round trip and a real timeout,
-  never leaving the sandbox. That test actually caught a real bug this
-  session (HTTP header names are case-insensitive; the first version
-  wasn't, and the round-trip test failed for real until it was fixed).
-  `RemoteEndpoint` only ever resolves a relative path against its own
-  configured host, so a request can't be aimed elsewhere by construction,
-  and `RemoteClient` reuses `core-agent`'s `RetryPolicy` to retry 5xx/I-O
-  failures while never retrying a 4xx. `RemoteClientIntegrationTest`
-  proves the retry path against a real local server too (503, 503, then
-  200). `JdkHttpTransport` also takes two independent, composable optional
-  configs: a `CertificatePinner`, which pins a specific certificate's
-  public key instead of trusting whatever a CA vouches for (tested against
-  a real TLS handshake with a real self-signed certificate generated by
-  the JDK's own `keytool`: the correct pin lets the handshake complete, a
-  wrong one fails it for real, and with no pinner the same certificate is
-  correctly rejected by ordinary CA trust), and a `MutualTlsConfig` for
-  mutual TLS — presenting a client certificate, trusting the server
-  against a private CA, or both (tested against a real TLS handshake with
-  a real private CA and server/client certificate chain, also generated
-  with `keytool`: the correct client certificate lets a real
-  mutually-authenticated handshake complete, presenting none fails it for
-  real against a server requiring client auth, and with no configured
-  trust store a private-CA-signed server certificate is still correctly
-  rejected by ordinary platform CA trust). When both are supplied,
-  pinning wins for validating the server (a stricter, narrower check),
-  while mTLS's client certificate is still presented. Real consumers of
-  this transport: `core-llm-anthropic` (described next) and
-  `core-build-remote.RemoteBuildExecutor`, a real build-server client.
-- `core-llm-anthropic` — the first real `LlmProvider`: `AnthropicLlmProvider`
-  encodes/decodes Anthropic's actual Messages API JSON shape
-  (`kotlinx.serialization`) over `core-remote`'s real `RemoteClient` and
-  `JdkHttpTransport`, the same "real capability, so build it for real"
-  reasoning that made `core-shell`'s subprocess executor real rather than
-  mocked. The API key is sent as an `x-api-key` header — Anthropic doesn't
-  use `Authorization: Bearer` — read fresh from `LlmConfig.authToken()` on
-  every call and never cached; a missing key fails closed with
-  `LlmError.Authentication` before any request is sent, proven by a test
-  asserting zero bytes reach the server. HTTP status codes map to
-  `LlmError` variants (401/403 → `Authentication`, 429/5xx →
-  `ModelUnavailable`, other non-2xx → `InvalidResponse`), and a malformed
-  response body becomes `LlmError.InvalidResponse` rather than throwing.
-  `AnthropicLlmProviderIntegrationTest` proves all of this against a real
-  local `HttpServer` speaking Anthropic's JSON shape — text responses,
-  tool-use responses (including a nested-object input value flattened to
-  compact JSON text, not dropped), and the `SYSTEM`/`TOOL` role-folding
-  this module does because `Message` carries no `tool_use_id` and
-  `ToolSpec` carries no parameter schema, both documented as explicit,
-  honest simplifications rather than silent gaps. This has never been run
-  against the real `api.anthropic.com` — this environment has no LLM
-  credentials — so the JSON shape is modeled from Anthropic's published
-  API, not verified against a live response.
-- `core-llm-openai` — a second real `LlmProvider`, mirroring
-  `core-llm-anthropic` structurally but speaking the OpenAI Chat
-  Completions API shape (`POST /v1/chat/completions`) instead — the shape
-  OpenAI itself serves and that most self-hosted "OpenAI-compatible"
-  servers (Ollama, vLLM, LM Studio, llama.cpp's server) implement too, so
-  pointing `config.endpoint` at a local server is the expected case here,
-  not an edge case. One deliberate difference from `core-llm-anthropic`:
-  this provider genuinely uses `RemoteClient`'s built-in
-  `Authorization: Bearer` auth, since OpenAI's real API accepts it (unlike
-  Anthropic's `x-api-key` requirement), and a missing API key is *not*
-  rejected up front — many self-hosted OpenAI-compatible servers accept
-  requests with no key at all, so failing closed there would misrepresent
-  what this shape actually requires. Same status-code → `LlmError` mapping
-  and the same two documented simplifications (open tool schema, `TOOL`
-  role mapped to `user`) as `core-llm-anthropic`. Tested the same way,
-  against a real local `HttpServer` — never a live call to `api.openai.com`
-  or a real self-hosted server.
-- `core-build` — the workspace/build-pipeline foundation for Forge Mode
-  (`BuildRequest → WorkspaceManager → BuildPipeline → BuildExecutor →
-  BuildResult → Artifact`). `WorkspaceManager` does real, path-secured
-  filesystem work (creates/imports/cleans real directories under an
-  explicitly authorized root, rejects traversal and absolute-path
-  escapes), `BuildPipeline` orchestrates seven explicit stages each with
-  its own success/failure semantics, and `MockBuildExecutor` is the only
-  `BuildExecutor` — it never performs a real build, and its default
-  outcome says so explicitly. `BuildTool` routes through `core-security`'s
-  real `SecureToolExecutor`, proven by a test where a denied approval
-  means no workspace is ever created on disk. Two real bugs were caught
-  and fixed by this module's own tests before shipping (a workspace
-  lifecycle gap, and an artifact-path containment check that was missing
-  entirely) — see `docs/CORE_BUILD.md`. No Android-on-device
-  `BuildExecutor` exists yet — that needs an Android SDK/AGP this
-  environment doesn't have — but `core-build-local` and `core-build-remote`
-  now supply real ones for JVM/native/generic builds and for delegating to
-  a remote build server, described next.
-- `core-build-local` — the first real `BuildExecutor`:
-  `LocalProcessBuildExecutor` handles `ProjectType.JVM`/`NATIVE`/`GENERIC`
-  for real, the same "a plain JVM/OS capability deserves a real
-  implementation" reasoning that made `core-shell`'s subprocess executor
-  and both LLM providers real rather than mocked. `ProjectType.ANDROID` is
-  refused outright, before any process is spawned — that needs the Android
-  Gradle Plugin/SDK this executor doesn't provide. It never invents a
-  build command from `ProjectType`: the command and any expected artifact
-  paths come entirely from `BuildRequest.metadata`, so it never guesses at
-  "likely" outputs. The actual process spawn is delegated to
-  `core-shell`'s `ShellExecutor` rather than reimplementing
-  `ProcessBuilder` handling, so the same fail-closed executable allow-list
-  applies. Every reported artifact gets a real SHA-256 checksum and size,
-  and is checked for real existence and containment inside the workspace
-  root before being trusted. Tested against a real `javac` invocation —
-  compiling real Java source into a real, checksummed `.class` file — both
-  standalone and running the whole way through `core-build.BuildPipeline`
-  (real workspace creation, real source import, this executor, the
-  pipeline's own artifact validation). What remains PLANNED:
-  `AndroidGradleBuildExecutor` — this executor has never built an actual
-  Android APK, since `ProjectType.ANDROID` is exactly what it refuses to
-  attempt.
-- `core-build-remote` — a second real `BuildExecutor`: `RemoteBuildExecutor`
-  delegates the actual build to a remote build server over `core-remote`'s
-  `RemoteClient`/`HttpTransport` — sending an HTTP request with the
-  workspace's source archived inside it is a plain JVM/OS capability, the
-  same reasoning that made `core-build-local` and both LLM providers real.
-  Unlike `core-build-local`, it never refuses `ProjectType.ANDROID` — the
-  point of a remote build server is that *it*, not this sandbox, is
-  expected to carry the Android SDK/AGP. It speaks a single synchronous
-  request/response protocol this repository defines itself (there is no
-  vendor API to conform to, unlike Anthropic/OpenAI): the source directory
-  is zipped and base64-encoded into the request, and a returned artifact's
-  bytes are decoded, written to disk, and given a locally recomputed
-  SHA-256 checksum rather than trusting anything the server claims about
-  its own output. A `fileName` that tries to escape the workspace (a path
-  separator or `..` segment) is rejected outright, and an oversized
-  artifact is rejected against `BuildSecurityPolicy.maxArtifactBytes`.
-  Tested against a real local `HttpServer` — never a real build service,
-  since none exists in this environment to call.
-- `core-tools-android` — device-control `Tool`s (tap/swipe/type/pressKey/
-  launchApp/findElement/tapElement/getUiTree/listInstalledApps/
-  takeScreenshot), a device-agnostic UI-tree domain model
-  (`UiNode`/`UiTree`/`Selector`) with real query logic behind it, and
-  `DeviceController` — the extension point for real device control,
-  mirroring `core-build`'s `BuildExecutor` role for compilation.
-  `NullDeviceController` is the only implementation, and unlike
-  `MockBuildExecutor` it has no coherent "success" default: every method
-  fails explicitly ("no real device is connected") rather than fabricating
-  a successful tap or UI read. Tap/swipe/type/pressKey/launchApp are
-  `SENSITIVE` and route through `core-security`'s real
-  `SecureToolExecutor`, proven by a test where a denied tap never reaches
-  the device controller. A real Android-backed `DeviceController` remains
-  PLANNED — it needs the Android SDK to even compile against (real
-  Accessibility/`PackageManager` APIs) plus a connected/emulated device.
-- `core-shell` — the one module so far where a real implementation was
-  the *only* honest choice: spawning a subprocess is a plain JVM
-  capability, not an Android-only one, so unlike `core-build`'s
-  `MockBuildExecutor` or `core-tools-android`'s `NullDeviceController`,
-  `ProcessBuilderShellExecutor` genuinely runs real commands. Every
-  command is passed as a plain argument vector — never `sh -c "..."` —
-  so shell-metacharacter injection is impossible by construction, not
-  merely discouraged. Fail-closed by default: an empty executable
-  allow-list means nothing runs until explicitly permitted, and the same
-  applies to working-directory overrides. Tested against real
-  subprocesses (`echo`, `true`, `false`, `sleep`, `pwd`, `env`, `seq`) —
-  a real enforced timeout, real cancellation, real working-directory
-  containment, real output truncation. `ShellTool` routes through
-  `core-security`'s real `SecureToolExecutor` exactly like the other
-  device/build tools, proven with the real executor: a denied command
-  provably never spawns a process.
-- `core-apk-lifecycle` — the same pattern as `core-build`/`core-tools-android`
-  applied to deployment: `ApkLifecyclePipeline` consumes an
-  already-completed `core-build.BuildResult` (building and deploying are
-  separate concerns) and orchestrates select-artifact → install → launch
-  → (best-effort) collect logs → (optional) test → result through an
-  `ApkLifecycleExecutor` extension point. A log-collection failure is
-  just a warning — the app installed and launched, which is what
-  actually matters; a failed *test harness* (as opposed to a test that
-  ran and failed) is a real pipeline failure, since it means the intended
-  work never happened. `NullApkLifecycleExecutor` is the only
-  implementation — every method fails explicitly rather than fabricating
-  a successful install or launch. `ApkLifecycleTool` routes through
-  `core-security`'s real `SecureToolExecutor`, proven the same way as the
-  other tools: a denied deployment never reaches the executor. A real
-  `adb`-backed executor remains PLANNED — needs a connected/emulated
-  device this environment does not have.
-- `core-root` — closes a loop left open since `core-security` was first
-  built: its `rootEnabled`/`rootAvailable` gate existed for several
-  increments but was never exercised end to end against a real `Tool`
-  until `RootTool` existed to test it with. `RootTool` declares
-  `requiresRoot = true` and `SecurityLevel.ROOT`; `core-security`'s
-  `SecurityPolicyEnforcer` denies it outright — no prompt, not even an
-  approval opportunity — unless the session's `rootEnabled` is true *and*
-  `rootAvailable()` reports true, only asking for explicit approval after
-  both hold. `PolicyEnforcingRootExecutor` adds a second, narrower
-  fail-closed executable allow-list beneath that session-level gate — a
-  command outside it never reaches the delegate. `NullRootExecutor` is
-  the only `RootExecutor`: `isRootAvailable()` truthfully returns false,
-  and `execute()` fails explicitly rather than fabricating a successful
-  elevated command. `RootToolSecureExecutorIntegrationTest` runs the full
-  root test matrix (root disabled, root unavailable, user denies,
-  approved-and-executed, command failure) against real `core-security`
-  code. A real rooted-device executor remains PLANNED — needs an actual
-  rooted device this environment does not have.
+DCA is the hub. Each companion is a **separate, independently licensed and
+versioned** application with its own codebase and APK; DCA integrates their
+capabilities rather than reimplementing them.
 
-Everything else described in the architecture doc — the Android app shell,
-a local-model-specific LLM provider, an on-device Android build executor
-(`AndroidGradleBuildExecutor`), a real device controller, a real
-adb-backed APK lifecycle executor, and a real rooted-device executor — is
-not yet built.
+| App | Repo | How DCA reaches it |
+|---|---|---|
+| **HackerAI** | [`Victorious93/hackeraiETC`](https://github.com/Victorious93/hackeraiETC) | Agent orchestration / skill catalog / finding validation via an AIDL bound service (`IHackerAIService`). `core-hackerai` is a Kotlin port of its subagent-orchestration logic. |
+| **Pentest-Swarm-AI** | [`Victorious93/Pentest-Swarm-AI`](https://github.com/Victorious93/Pentest-Swarm-AI) | REST client (`core-pentest-swarm`) to its Go server on loopback, and an AIDL bound service (`IPentestSwarmService`). Fork of the AGPL-3.0 `Armur-Ai/Pentest-Swarm-AI`. |
+| **VictorSuite** | [`Victorious93/VictorSuite`](https://github.com/Victorious93/VictorSuite) | A Termux fork (keeps `applicationId com.termux` and the `RUN_COMMAND` contract); reached through `core-termux`'s public `com.termux.RUN_COMMAND` intent protocol — no DCA-specific module needed. |
+| **RootForge OS** | [`Victorious93/rootforge-os`](https://github.com/Victorious93/rootforge-os) | An independent host OS queried over an SSH-carried JSON protocol (`core-rootforge`). **Passive reads only** today (capabilities, attached adb/fastboot devices); flashing/builds/jobs are deliberately absent. Not a companion APK and exempt from the AIDL model. |
 
+The AIDL contracts are defined once in `core-companion/src/main/aidl/` and
+copied into each companion repo; see
+[`COMPANION_PROTOCOL.md`](COMPANION_PROTOCOL.md). `core-companion` and the
+companion binding glue require the Android SDK and are excluded from the
+default build.
+
+## Repository layout
+
+The default build includes the JVM modules. The Android modules are opt-in
+behind `-PincludeAndroid=true` (they need an Android SDK, and some need the
+NDK/CMake).
+
+### JVM engine (default build)
+
+- **Agent core** — `core-agent` (agent state machine, tool
+  registry/executor, the `Planner` contract, the Forge objective loop, and
+  `DroidCommandSession` coordinating Pilot and Forge modes), `core-llm`
+  (provider-independent request/response/error types and the `LlmProvider`
+  interface), `core-config` (config loading from a `ConfigSource`; secrets
+  read fresh per call, never cached), `core-security`
+  (`SecurityPolicyEnforcer` + `SecureToolExecutor` — allow / require-approval
+  / deny with root and permission gating, fail-closed), `core-remote`
+  (`JdkHttpTransport`: a real HTTP client with optional certificate pinning
+  and mutual TLS), and `core-mcp` (Model Context Protocol tool server).
+- **LLM providers** — `core-llm-anthropic`, `core-llm-openai`,
+  `core-llm-google` (Gemini), `core-llm-groq`, and `core-llm-local` (a
+  local-inference backend seam), composed config-first by
+  `core-llm-factory`. Every provider is tested against a local mock server;
+  **none has been exercised against a live API** in this repository's CI.
+- **Build & deploy (Forge)** — `core-build` (workspace + pipeline),
+  `core-build-local` (`LocalProcessBuildExecutor` for JVM/native/generic
+  builds — refuses `ProjectType.ANDROID`), `core-build-remote` (delegates to
+  a remote build server), `core-apk-lifecycle` (install → launch → logs →
+  test pipeline; real executor is PLANNED, needs a device).
+- **Execution targets** — `core-tools-android` (device-control tools over a
+  `DeviceController` seam; only `NullDeviceController` exists), `core-shell`
+  (real argument-vector subprocess execution, fail-closed allow-list),
+  `core-root` (root-gated tool execution; `NullRootExecutor` only), and
+  `core-termux` (the `com.termux.RUN_COMMAND` intent protocol).
+- **Security tooling** — `core-hackerai`, `core-pentest-swarm`,
+  `core-tools-metasploit`, `core-tools-setoolkit` (JVM clients/ports that
+  route through `SecureToolExecutor`), and `core-rootforge`.
+- **Product features** — `core-templates` (prompt templates / skills),
+  `core-rag` (document retrieval), `core-websearch`, `core-voice`
+  (STT/TTS logic), `core-billing` (subscription entitlement logic), and
+  `core-prompt-regen` (a deterministic prompt optimizer).
+- **Entrypoints & tests** — `cli` (a device-free entrypoint that dispatches
+  Pilot instructions and Forge objectives against a real
+  `DroidCommandSession`) and `core-integration-tests` (cross-module tests).
+
+### Android modules (opt-in, `-PincludeAndroid=true`)
+
+`app` (Jetpack Compose UI + Hilt), `core-conversations` (Room chat storage),
+`core-knowledge-android` (Room knowledge graph), `core-templates-android`,
+`core-rag-android`, `core-llm-local-android` (llama.cpp via JNI/CMake),
+`core-voice-android`, and `core-voice-neural-android` (sherpa-onnx). These
+hold complete source but are **gated on the Android toolchain**; the APK
+has never run on a device.
+
+## Building
+
+### Prerequisites
+
+- **JDK 21** (CI uses Temurin 21).
+- For the Android APK only: an **Android SDK** (`platforms;android-36`,
+  `build-tools;36.0.0`, `platform-tools`), the **NDK** (`ndk;28.2.13676358`,
+  r28c) and **CMake** (`cmake;3.22.1`) — the NDK and CMake are needed
+  because `core-llm-local-android` (llama.cpp) and
+  `core-voice-neural-android` (sherpa-onnx) build native libraries for four
+  ABIs.
+
+A Gradle wrapper is checked in, so no separate Gradle install is required.
+
+### JVM engine (no Android SDK needed)
+
+```sh
+# Build and run every JVM module's tests
+./gradlew test --continue
+
+# Kotlin lint
+./gradlew ktlintCheck --continue
 ```
-./gradlew test
+
+This is what CI runs on every push and pull request (`.github/workflows/ci.yml`).
+
+### Android debug APK
+
+The Android modules are off by default. Enable them with
+`-PincludeAndroid=true` (or set `includeAndroid=true` in your user-level
+`~/.gradle/gradle.properties`) and point Gradle at your SDK via
+`ANDROID_HOME` / `local.properties`:
+
+```sh
+./gradlew :app:assembleDebug -PincludeAndroid=true
 ```
+
+The output is `app/build/outputs/apk/debug/app-debug.apk` — package
+`ai.droidcommand.app`, `versionName 0.1.0-phase0`, `minSdk 28`,
+`compileSdk`/`targetSdk 36`. Because it bundles native llama.cpp and
+sherpa-onnx libraries for four ABIs, the debug APK is large (on the order
+of several hundred MB). The `.github/workflows/android-apk.yml` workflow
+builds and uploads this APK on manual dispatch, but it is **debug-signed and
+has never been launched on a device or emulator** — see the `app` status in
+`docs/AUDIT_2026-09-05.md`.
+
+### Running the CLI
+
+```sh
+./gradlew :cli:run --args="..."
+```
+
+The `cli` module drives Pilot instructions and Forge objectives against a
+real `DroidCommandSession` without any device or Android SDK.
+
+## Status and honesty conventions
+
+This codebase grades every component honestly — IMPLEMENTED / PARTIAL /
+STUB / PLANNED / CONFIGURATION-DEPENDENT — and every intentional non-real
+implementation is self-documented as such in its own code
+(`Mock*Executor`, `Null*Controller`, `Null*Executor`). A component is only
+marked IMPLEMENTED once `./gradlew test` passes for it. Anything requiring a
+real device, root, a live LLM credential, or on-device/emulator execution is
+marked PLANNED or UNVERIFIED rather than faked.
+
+`docs/AUDIT_2026-09-05.md` is the dated, append-only source of truth for
+status; `docs/ARCHITECTURE.md` tracks the per-component design and status
+table. Read those before assuming any capability above is complete.
+
+## License
+
+This repository does not currently ship a `LICENSE` file. The companion
+apps are independently licensed (notably, Pentest-Swarm-AI derives from the
+AGPL-3.0 `Armur-Ai/Pentest-Swarm-AI` and VictorSuite from Termux); DCA
+integrates with them across process boundaries and does not vendor their
+source.
