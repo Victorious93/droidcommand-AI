@@ -31,8 +31,9 @@ fun interface ModelDownloader {
  * cancellation (within [pollMs]) or when fewer than [minBytesPerWindow] bytes arrive in a [stallMs] window (a
  * server dripping bytes often enough to keep resetting the socket timeout). Only the calling thread touches
  * [dest], so an abandoned helper can never write after this call has returned; it ends on its own when the
- * socket read times out or the connection is closed. Waiting for the status line and headers is bounded by the
- * connect/read timeouts only, not by [cancelled].
+ * socket read times out or the connection is closed. Waiting for the status line and headers is also polled
+ * against [cancelled] the same way, on its own helper thread, so a server that accepts the connection but
+ * never responds does not force the caller to wait out the full connect/read timeout.
  */
 class HttpsModelDownloader internal constructor(
     private val httpsOnly: Boolean,
@@ -50,7 +51,7 @@ class HttpsModelDownloader internal constructor(
         conn.readTimeout = READ_TIMEOUT_MS
         if (existing > 0) conn.setRequestProperty("Range", "bytes=$existing-")
         try {
-            val code = conn.responseCode
+            val code = awaitResponseCode(conn, cancelled)
             val resuming = when {
                 code == 206 && existing > 0 && conn.getHeaderField("Content-Range")?.startsWith("bytes $existing-") == true -> true
                 code == 200 -> false
@@ -114,6 +115,31 @@ class HttpsModelDownloader internal constructor(
 
     private fun handOff(chunks: LinkedBlockingQueue<Any>, abandoned: AtomicBoolean, item: Any) {
         while (!abandoned.get() && !chunks.offer(item, pollMs, TimeUnit.MILLISECONDS)) Unit
+    }
+
+    /**
+     * Waits for [conn]'s response code the same polling way the body is read: a daemon helper thread does the
+     * actual blocking call (which can wait up to the connect/read timeout) while this thread polls [cancelled]
+     * every [pollMs]. If cancelled first, this throws immediately and leaves the helper to finish on its own
+     * (its single-slot handoff never blocks, so it cannot leak past that).
+     */
+    private fun awaitResponseCode(conn: HttpURLConnection, cancelled: () -> Boolean): Int {
+        val result = LinkedBlockingQueue<Any>(1)
+        thread(isDaemon = true, name = "model-download-connect") {
+            try {
+                result.put(conn.responseCode)
+            } catch (e: IOException) {
+                result.put(e)
+            }
+        }
+        while (true) {
+            if (cancelled()) throw IOException("Cancelled")
+            when (val item = result.poll(pollMs, TimeUnit.MILLISECONDS)) {
+                null -> Unit
+                is IOException -> throw item
+                else -> return item as Int
+            }
+        }
     }
 
     private companion object {
