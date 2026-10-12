@@ -1,5 +1,6 @@
 package ai.droidcommand.app.prefs
 
+import ai.droidcommand.app.automation.ShellAllowlist
 import ai.droidcommand.app.ui.chat.ToolbarLayout
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import android.content.Context
@@ -29,10 +30,18 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         prefs.edit { putInt(KEY_PUBLIC_LIMIT, limit) }
     }
 
+    /** Executables that automation keys may run. Empty until the owner allows one. */
+    fun shellAllowlist(): Set<String> = ShellAllowlist.parse(prefs.getString(KEY_SHELL_ALLOWLIST, null))
+
+    fun setShellAllowlist(entries: Set<String>) {
+        prefs.edit { putString(KEY_SHELL_ALLOWLIST, ShellAllowlist.serialize(entries)) }
+    }
+
     companion object {
         const val FILE = "advanced_prefs"
         private const val KEY_TOOLBAR = "chat.toolbar"
         private const val KEY_PUBLIC_LIMIT = "clipboard.public.limit"
+        private const val KEY_SHELL_ALLOWLIST = "automation.shell.allowlist"
         val PUBLIC_LIMIT_CHOICES = listOf(10, 25, 50)
         const val DEFAULT_PUBLIC_LIMIT = 25
     }
