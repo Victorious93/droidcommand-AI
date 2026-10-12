@@ -1,6 +1,6 @@
 package ai.droidcommand.app.ui.components
 
-import ai.droidcommand.app.ui.theme.AccentNeonGreen
+import ai.droidcommand.app.ui.theme.AccentBlueBright
 import ai.droidcommand.app.ui.theme.BorderDark
 import ai.droidcommand.app.ui.theme.CardDark
 import androidx.compose.foundation.BorderStroke
@@ -19,13 +19,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Letter-spaced, uppercase neon-green screen header (OpenDroid's "PLAN ENGINE" / "PERSISTENT MEMORY" look). */
+/** Letter-spaced, uppercase bright-blue screen header (OpenDroid's "PLAN ENGINE" / "PERSISTENT MEMORY" look). */
 @Composable
 fun ScreenTitle(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text.uppercase(),
         modifier = modifier,
-        color = AccentNeonGreen,
+        color = AccentBlueBright,
         fontSize = 24.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 3.sp,

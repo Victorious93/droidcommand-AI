@@ -7,11 +7,12 @@ import ai.droidcommand.agent.PlanStepStatus
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ui.theme.AccentBlueBright
+import ai.droidcommand.app.ui.theme.AccentBlueContainer
 import ai.droidcommand.app.ui.theme.AccentCyan
-import ai.droidcommand.app.ui.theme.AccentGreenContainer
-import ai.droidcommand.app.ui.theme.AccentNeonGreen
-import ai.droidcommand.app.ui.theme.AccentPurple
+import ai.droidcommand.app.ui.theme.AccentIndigo
 import ai.droidcommand.app.ui.theme.AccentRed
+import ai.droidcommand.app.ui.theme.AccentSuccess
 import ai.droidcommand.app.ui.theme.BorderDark
 import ai.droidcommand.app.ui.theme.TextPrimary
 import ai.droidcommand.app.ui.theme.TextSecondary
@@ -166,7 +167,7 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
 }
 
 private fun statusColor(status: PlanStatus): Color = when (status) {
-    PlanStatus.COMPLETED -> AccentNeonGreen
+    PlanStatus.COMPLETED -> AccentSuccess
     PlanStatus.RUNNING -> AccentCyan
     PlanStatus.FAILED -> AccentRed
     PlanStatus.CANCELLED -> AMBER
@@ -197,9 +198,9 @@ private fun RunHeaderCard(run: PlanRun, isLatest: Boolean, onShowLatest: () -> U
                 Text(run.status.name, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             if (isLatest) {
-                Badge(if (run.status == PlanStatus.RUNNING) "ACTIVE RUN" else "LATEST RUN", AccentNeonGreen, null)
+                Badge(if (run.status == PlanStatus.RUNNING) "ACTIVE RUN" else "LATEST RUN", AccentBlueBright, null)
             } else {
-                Badge("VIEWING PAST RUN", AccentPurple, onShowLatest)
+                Badge("VIEWING PAST RUN", AccentIndigo, onShowLatest)
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -239,16 +240,16 @@ private fun Badge(text: String, color: Color, onClick: (() -> Unit)?) {
 private fun StepCard(step: PlanStep) {
     val color = when (step.status) {
         PlanStepStatus.RUNNING -> AccentCyan
-        PlanStepStatus.SUCCEEDED -> AccentNeonGreen
+        PlanStepStatus.SUCCEEDED -> AccentSuccess
         PlanStepStatus.PARTIAL -> AMBER
         PlanStepStatus.FAILED -> AccentRed
     }
     DroidCard(borderColor = color.copy(alpha = 0.5f)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
             Box(
-                modifier = Modifier.size(32.dp).clip(CircleShape).background(AccentGreenContainer),
+                modifier = Modifier.size(32.dp).clip(CircleShape).background(AccentBlueContainer),
                 contentAlignment = Alignment.Center,
-            ) { Text("${step.index}", color = AccentNeonGreen, fontWeight = FontWeight.Bold) }
+            ) { Text("${step.index}", color = AccentBlueBright, fontWeight = FontWeight.Bold) }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("Execute ${step.toolName}", fontWeight = FontWeight.Bold, color = TextPrimary)
                 if (step.input.isNotEmpty()) {
@@ -295,7 +296,7 @@ private fun SummaryCard(status: PlanStatus, summary: String) {
 
 @Composable
 private fun HistoryRow(run: PlanRun, selected: Boolean, onSelect: () -> Unit, onDelete: () -> Unit) {
-    DroidCard(modifier = Modifier.clickable(onClick = onSelect), borderColor = if (selected) AccentNeonGreen.copy(alpha = 0.5f) else BorderDark) {
+    DroidCard(modifier = Modifier.clickable(onClick = onSelect), borderColor = if (selected) AccentBlueBright.copy(alpha = 0.5f) else BorderDark) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(run.objective, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
