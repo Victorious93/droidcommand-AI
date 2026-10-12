@@ -1,5 +1,8 @@
 package ai.droidcommand.app.ui.settings
 
+import ai.droidcommand.agent.AgentMode
+import ai.droidcommand.app.mode.EngineModeState
+import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.config.EncryptedSecretsVault
@@ -24,7 +27,9 @@ enum class KeyStatus { NOT_SET, SAVED, NEEDS_REENTRY, STORAGE_ERROR }
 class SettingsViewModel @Inject constructor(
     private val vault: EncryptedSecretsVault,
     private val advanced: AdvancedPrefs,
+    private val modes: EngineModes,
 ) : ViewModel() {
+    val modeState: StateFlow<EngineModeState> = modes.state
     private val mutableStatus = MutableStateFlow(CloudProviderCatalog.all.associateWith { statusOf(it.secretId) })
     val status: StateFlow<Map<CloudProviderSpec, KeyStatus>> = mutableStatus.asStateFlow()
 
@@ -46,6 +51,10 @@ class SettingsViewModel @Inject constructor(
         advanced.setPublicClipLimit(limit)
         mutablePublicLimit.value = advanced.publicClipLimit()
     }
+
+    fun renameMode(mode: AgentMode, raw: String) = modes.rename(mode, raw)
+
+    fun resetModeLabels() = modes.resetLabels()
 
     fun saveSearchKey(slot: SecretSlot, key: String) {
         val trimmed = key.trim()

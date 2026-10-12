@@ -21,9 +21,9 @@ import androidx.compose.ui.unit.sp
 
 /** Letter-spaced, uppercase bright-blue screen header (OpenDroid's "PLAN ENGINE" / "PERSISTENT MEMORY" look). */
 @Composable
-fun ScreenTitle(text: String, modifier: Modifier = Modifier) {
+fun ScreenTitle(text: String, modifier: Modifier = Modifier, uppercase: Boolean = true) {
     Text(
-        text = text.uppercase(),
+        text = if (uppercase) text.uppercase() else text,
         modifier = modifier,
         color = AccentBlueBright,
         fontSize = 24.sp,

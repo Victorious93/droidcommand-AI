@@ -1,5 +1,6 @@
 package ai.droidcommand.app.ui.plan
 
+import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.PlanRun
 import ai.droidcommand.agent.PlanStatus
 import ai.droidcommand.agent.PlanStep
@@ -70,14 +71,14 @@ private val AMBER = Color(0xFFFFB300)
 private val timeFormat = DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault())
 
 /**
- * Plan screen in OpenDroid's "Plan Engine" layout: a current-run card, the steps of that run, and a
- * history list. Here a plan is one agent objective run through the Forge loop; steps are the tool
- * calls the model chose, shown as they happen — there is no up-front step list to show because the
- * model decides one step at a time. Never built into an APK or run on a device.
+ * Forge engine, in the Plan layout: a current-run card, the steps of that run, and a history list.
+ * The title is the user's label for this mode (default "Mode 2"). Steps are the tool calls the model
+ * chose, shown as they happen — there is no up-front step list because the model decides one step at a time.
  */
 @Composable
 fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
+    val mode by viewModel.modeState.collectAsState()
     var objective by remember { mutableStateOf("") }
     var selectedId by remember { mutableStateOf<String?>(null) }
 
@@ -89,7 +90,14 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
     ) {
-        item { ScreenTitle("Plan Engine") }
+        item { ScreenTitle(mode.label(AgentMode.FORGE), uppercase = false) }
+        item {
+            Text(
+                "Forge engine: one objective. The model picks tools one step at a time. The title is the name from Settings.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
+        }
 
         item {
             DroidCard {
