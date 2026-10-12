@@ -1,0 +1,87 @@
+name: Build APK
+
+# Builds the :app debug APK and uploads it as a downloadable workflow artifact.
+# Kept separate from ci.yml because this is a heavy native build (Android SDK +
+# NDK r28c + CMake; llama.cpp and sherpa-onnx native libs for 4 ABIs). It does
+# NOT run on every pull_request — only on manual dispatch and on pushes to the
+# branch(es) listed below — so ordinary JVM PRs stay fast.
+#
+# The produced APK is debug-signed and has NOT been launched on a device or
+# emulator; see docs/AUDIT_2026-09-05.md (app stays ON DISK / UNVERIFIED).
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "ccr-0f7819d2-0rsmt0"
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    name: Build :app debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages (compileSdk 36, NDK r28c, CMake 3.22.1)
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;28.2.13676358" \
+            "cmake;3.22.1"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Assemble debug APK (retry transient Maven Central 429s)
+        run: |
+          set -o pipefail
+          delay=15
+          for attempt in 1 2 3 4 5 6; do
+            echo "::group::assembleDebug attempt #${attempt}"
+            if ./gradlew :app:assembleDebug -PincludeAndroid=true --no-daemon; then
+              echo "::endgroup::"
+              echo "BUILD OK on attempt #${attempt}"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "attempt #${attempt} failed; sleeping ${delay}s before retry"
+            sleep "${delay}"
+            delay=$((delay * 2))
+            if [ "${delay}" -gt 300 ]; then delay=300; fi
+          done
+          echo "assembleDebug failed after all retries"
+          exit 1
+
+      - name: Show APK identity
+        if: success()
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          ls -la "$APK"
+          sha256sum "$APK"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort | tail -1)
+          "${BT}aapt2" dump badging "$APK" | grep -E "^package:|sdkVersion:|targetSdkVersion:|application-label:" || true
+
+      - name: Upload APK artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 90
