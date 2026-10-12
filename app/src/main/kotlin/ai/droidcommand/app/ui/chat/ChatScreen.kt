@@ -110,6 +110,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             micLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
+    // Advanced settings can change while Chat is off screen; pick them up when it is shown again.
+    LaunchedEffect(Unit) { viewModel.reloadToolbar() }
     LaunchedEffect(state.pendingInput) {
         state.pendingInput?.let {
             input = if (input.isBlank()) it else input.trimEnd() + " " + it
@@ -189,6 +191,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         }
 
         InputBar(
+            visibleToggles = state.toolbar,
             documents = state.documents,
             documentsAvailable = state.documentsAvailable,
             attachingDocument = state.attachingDocument,
@@ -319,6 +322,7 @@ private fun MessageBubble(line: ChatLine) {
 
 @Composable
 private fun InputBar(
+    visibleToggles: Set<ToolbarToggle>,
     documents: List<ai.droidcommand.rag.DocumentInfo>,
     documentsAvailable: Boolean,
     attachingDocument: Boolean,
@@ -345,7 +349,7 @@ private fun InputBar(
 ) {
     // Document Q&A: attached files' relevant passages are added to each message while they stay attached.
     // Indexing happens on this device; the passages go to the chat provider only inside later messages.
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    if (ToolbarToggle.ATTACH in visibleToggles) Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         OutlinedButton(onClick = onAttachDocument, enabled = documentsAvailable && !attachingDocument) {
             Text(if (attachingDocument) "Indexing…" else "Attach document")
         }
@@ -372,17 +376,17 @@ private fun InputBar(
     // Toolbar row above the input: the web-search toggle. When on, each message's text is sent to the
     // configured search provider (Brave/SerpAPI) before the model call — hence the explicit label.
     Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilterChip(
+        if (ToolbarToggle.WEB_SEARCH in visibleToggles) FilterChip(
             selected = webSearchEnabled,
             onClick = onToggleWebSearch,
             label = { Text(if (webSearchEnabled) "Web search: on" else "Web search: off") },
         )
-        FilterChip(
+        if (ToolbarToggle.SPEAK in visibleToggles) FilterChip(
             selected = speakMode != SpeakMode.OFF,
             onClick = onCycleSpeakMode,
             label = { Text("Speak: " + speakMode.name.lowercase()) },
         )
-        if (speakMode == SpeakMode.TAP || speaking) {
+        if (ToolbarToggle.SPEAK in visibleToggles && (speakMode == SpeakMode.TAP || speaking)) {
             OutlinedButton(onClick = onSpeakLast, enabled = canSpeak || speaking) { Text(if (speaking) "Stop" else "Speak reply") }
         }
     }
@@ -406,7 +410,7 @@ private fun InputBar(
                 cursorColor = AccentNeonGreen,
             ),
         )
-        IconButton(onClick = onMic, enabled = micEnabled) {
+        if (ToolbarToggle.MICROPHONE in visibleToggles) IconButton(onClick = onMic, enabled = micEnabled) {
             Icon(
                 if (listening) Icons.Filled.Stop else Icons.Filled.Mic,
                 contentDescription = if (listening) "Stop dictation" else "Dictate",

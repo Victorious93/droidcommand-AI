@@ -1,5 +1,7 @@
 package ai.droidcommand.app.ui.settings
 
+import ai.droidcommand.app.prefs.AdvancedPrefs
+import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.config.SecretState
 import ai.droidcommand.config.SecretStorageException
@@ -21,12 +23,29 @@ enum class KeyStatus { NOT_SET, SAVED, NEEDS_REENTRY, STORAGE_ERROR }
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val vault: EncryptedSecretsVault,
+    private val advanced: AdvancedPrefs,
 ) : ViewModel() {
     private val mutableStatus = MutableStateFlow(CloudProviderCatalog.all.associateWith { statusOf(it.secretId) })
     val status: StateFlow<Map<CloudProviderSpec, KeyStatus>> = mutableStatus.asStateFlow()
 
     private val mutableSearchStatus = MutableStateFlow(WebSearchCatalog.all.associateWith { statusOf(it.secretId) })
     val searchStatus: StateFlow<Map<SecretSlot, KeyStatus>> = mutableSearchStatus.asStateFlow()
+
+    private val mutableToolbar = MutableStateFlow(advanced.toolbarToggles())
+    val toolbarToggles: StateFlow<Set<ToolbarToggle>> = mutableToolbar.asStateFlow()
+
+    private val mutablePublicLimit = MutableStateFlow(advanced.publicClipLimit())
+    val publicClipLimit: StateFlow<Int> = mutablePublicLimit.asStateFlow()
+
+    fun setToolbarToggle(toggle: ToolbarToggle, visible: Boolean) {
+        advanced.setToolbarToggle(toggle, visible)
+        mutableToolbar.value = advanced.toolbarToggles()
+    }
+
+    fun setPublicClipLimit(limit: Int) {
+        advanced.setPublicClipLimit(limit)
+        mutablePublicLimit.value = advanced.publicClipLimit()
+    }
 
     fun saveSearchKey(slot: SecretSlot, key: String) {
         val trimmed = key.trim()

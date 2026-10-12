@@ -1,5 +1,7 @@
 package ai.droidcommand.app.ui.settings
 
+import ai.droidcommand.app.prefs.AdvancedPrefs
+import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import ai.droidcommand.app.ui.components.SectionLabel
@@ -18,6 +20,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -25,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -63,6 +68,41 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             )
         }
         VoiceSettingsSection()
+        SectionLabel("Advanced")
+        AdvancedSection(viewModel)
+    }
+}
+
+@Composable
+private fun AdvancedSection(viewModel: SettingsViewModel) {
+    val toolbar by viewModel.toolbarToggles.collectAsState()
+    val publicLimit by viewModel.publicClipLimit.collectAsState()
+    DroidCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Chat toolbar", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Hides a control from the chat toolbar. It does not change what the control does.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ToolbarToggle.entries.forEach { toggle ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(toggle.label)
+                    Switch(checked = toggle in toolbar, onCheckedChange = { viewModel.setToolbarToggle(toggle, it) })
+                }
+            }
+            Text("Public clipboard history size", style = MaterialTheme.typography.titleMedium)
+            AdvancedPrefs.PUBLIC_LIMIT_CHOICES.forEach { choice ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = choice == publicLimit, onClick = { viewModel.setPublicClipLimit(choice) })
+                    Text("$choice clips")
+                }
+            }
+        }
     }
 }
 

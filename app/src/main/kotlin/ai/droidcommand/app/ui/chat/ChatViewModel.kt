@@ -7,6 +7,7 @@ import ai.droidcommand.agent.Role
 import ai.droidcommand.app.documents.DocumentRuntime
 import ai.droidcommand.app.documents.DownloadOutcome
 import ai.droidcommand.app.documents.EmbedderDownloadSupervisor
+import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.llm.factory.ChatResult
@@ -87,6 +88,8 @@ data class ChatUiState(
     val confirmMeteredDownload: Boolean = false,
     /** Outcome of the last attach/remove, shown under the toolbar. */
     val documentStatus: String? = null,
+    /** Chat-toolbar controls left visible by the Advanced settings. */
+    val toolbar: Set<ToolbarToggle> = ToolbarLayout.defaults,
 )
 
 /**
@@ -108,6 +111,7 @@ class ChatViewModel @Inject constructor(
     graph: KnowledgeGraph,
     private val runtime: VoiceRuntime,
     private val documentRuntime: DocumentRuntime,
+    private val advanced: AdvancedPrefs,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
@@ -149,7 +153,7 @@ class ChatViewModel @Inject constructor(
     private fun initialState(): ChatUiState {
         val provider = CloudProviderCatalog.byId(prefs.getString(KEY_PROVIDER, null).orEmpty()) ?: CloudProviderCatalog.all.first()
         val model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel
-        return ChatUiState(provider = provider, model = model, memoryEnabled = memoryEnabled, webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false), speakMode = speakModeFromPrefs(), micAvailable = voice.sttAvailable)
+        return ChatUiState(provider = provider, model = model, memoryEnabled = memoryEnabled, webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false), speakMode = speakModeFromPrefs(), micAvailable = voice.sttAvailable, toolbar = advanced.toolbarToggles())
     }
 
     init {
@@ -314,6 +318,11 @@ class ChatViewModel @Inject constructor(
             session.reset()
             mutableState.update { it.copy(lines = emptyList(), streaming = "", error = null) }
         }
+    }
+
+    /** Re-reads the Advanced toolbar choice; called when Chat is shown, since Settings can change it. */
+    fun reloadToolbar() {
+        mutableState.update { it.copy(toolbar = advanced.toolbarToggles()) }
     }
 
     /** Takes effect on the very next message (unlike Memory, it is a per-request flag, not session wiring). */
