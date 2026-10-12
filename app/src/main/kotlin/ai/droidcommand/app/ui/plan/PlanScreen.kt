@@ -95,7 +95,7 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
             Text(
                 "Forge engine: one objective. The model picks tools one step at a time. The title is the name from Settings.",
                 style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 

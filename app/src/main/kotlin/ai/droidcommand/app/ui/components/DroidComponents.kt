@@ -19,7 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Letter-spaced, uppercase bright-blue screen header (OpenDroid's "PLAN ENGINE" / "PERSISTENT MEMORY" look). */
+/** Letter-spaced bright-blue screen header. Pass uppercase = false for a user-chosen mode label. */
 @Composable
 fun ScreenTitle(text: String, modifier: Modifier = Modifier, uppercase: Boolean = true) {
     Text(

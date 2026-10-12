@@ -3,7 +3,6 @@ package ai.droidcommand.app.ui.mode
 import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
-import ai.droidcommand.app.ui.theme.TextSecondary
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,7 +49,7 @@ fun PilotScreen(viewModel: PilotViewModel = hiltViewModel()) {
         Text(
             "Pilot engine: runs one registered tool, then stops. The title is the name from Settings. Sensitive tools still ask for approval, and a tool with no backend configured is denied.",
             style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (state.tools.isEmpty()) {
             DroidCard {
@@ -76,7 +75,7 @@ fun PilotScreen(viewModel: PilotViewModel = hiltViewModel()) {
                         }
                     }
                     selected?.let {
-                        Text(it.description, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                        Text(it.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     OutlinedTextField(
                         value = args,
