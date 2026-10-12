@@ -50,5 +50,20 @@ fun ToolsScreen(navController: NavHostController) {
                 ) { Text("Social-Engineer Toolkit") }
             }
         }
+
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Clipboards", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "A public list of recent clips and an encrypted private list. You choose what moves between them.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = { navController.navigate(Routes.CLIPBOARDS) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Open clipboards") }
+            }
+        }
     }
 }

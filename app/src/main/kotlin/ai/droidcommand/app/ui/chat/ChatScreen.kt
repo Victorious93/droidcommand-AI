@@ -42,6 +42,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -103,6 +104,10 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val documentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(viewModel::attachDocument)
     }
+    // Model picker: the owner picks one .gguf file, and the app copies it into its own storage.
+    val modelLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(viewModel::importLocalModel)
+    }
     val onMic = {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             viewModel.toggleMic(true)
@@ -110,6 +115,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             micLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
+    // Advanced settings can change while Chat is off screen; pick them up when it is shown again.
+    LaunchedEffect(Unit) { viewModel.reloadToolbar() }
     LaunchedEffect(state.pendingInput) {
         state.pendingInput?.let {
             input = if (input.isBlank()) it else input.trimEnd() + " " + it
@@ -123,7 +130,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Header(
-            subtitle = if (state.sending) "Thinking…" else "${state.provider.label} · ${state.model}",
+            subtitle = if (state.sending) "Thinking…" else subtitleFor(state),
             active = !state.sending,
             optionsOpen = optionsOpen,
             onToggleOptions = { optionsOpen = !optionsOpen },
@@ -132,7 +139,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         )
 
         if (optionsOpen) {
-            OptionsPanel(state, viewModel)
+            OptionsPanel(state, viewModel) { modelLauncher.launch(arrayOf("*/*")) }
         }
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -189,6 +196,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         }
 
         InputBar(
+            visibleToggles = state.toolbar,
             documents = state.documents,
             documentsAvailable = state.documentsAvailable,
             attachingDocument = state.attachingDocument,
@@ -217,6 +225,12 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             },
         )
     }
+}
+
+/** Header line: the on-device model while one is active, otherwise the cloud provider and its model. */
+private fun subtitleFor(state: ChatUiState): String {
+    if (state.activeLocalModelId == null) return "${state.provider.label} · ${state.model}"
+    return "On device · " + (state.localModels.firstOrNull { it.id == state.activeLocalModelId }?.label ?: "model")
 }
 
 @Composable
@@ -251,12 +265,15 @@ private fun Header(
 }
 
 @Composable
-private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel) {
+private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportModel: () -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
+    val activeLocal = state.localModels.firstOrNull { it.id == state.activeLocalModelId }
     DroidCard(modifier = Modifier.padding(bottom = 12.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Box {
-                OutlinedButton(onClick = { menuOpen = true }) { Text(state.provider.label) }
+                OutlinedButton(onClick = { menuOpen = true }) {
+                    Text(if (state.activeLocalModelId != null) "On device: ${activeLocal?.label ?: "model"}" else state.provider.label)
+                }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     CloudProviderCatalog.all.forEach { spec ->
                         DropdownMenuItem(text = { Text(spec.label) }, onClick = {
@@ -264,15 +281,41 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel) {
                             menuOpen = false
                         })
                     }
+                    HorizontalDivider()
+                    DropdownMenuItem(text = { Text("On-device models", color = TextSecondary) }, onClick = {}, enabled = false)
+                    state.localModels.forEach { model ->
+                        DropdownMenuItem(text = { Text("On device: ${model.label}") }, onClick = {
+                            viewModel.selectLocalModel(model.id)
+                            menuOpen = false
+                        })
+                    }
+                    DropdownMenuItem(
+                        text = { Text(if (state.localImporting) "Importing…" else "Import a .gguf file…") },
+                        enabled = !state.localImporting,
+                        onClick = {
+                            menuOpen = false
+                            onImportModel()
+                        },
+                    )
                 }
             }
-            OutlinedTextField(
-                value = state.model,
-                onValueChange = viewModel::setModel,
-                label = { Text("Model (suggested default — edit if it is outdated)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (state.activeLocalModelId == null) {
+                OutlinedTextField(
+                    value = state.model,
+                    onValueChange = viewModel::setModel,
+                    label = { Text("Model (suggested default — edit if it is outdated)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                Text(
+                    "Replies run on this device. A later cloud turn sends the whole conversation, including these replies, to that provider.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                )
+                OutlinedButton(onClick = viewModel::askDeleteLocalModel, enabled = !state.sending) { Text("Delete this model file") }
+            }
+            state.localStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Switch(checked = state.memoryEnabled, onCheckedChange = viewModel::setMemoryEnabled)
                 Text("Memory (applies next time you open Chat)", style = MaterialTheme.typography.bodySmall)
@@ -284,6 +327,15 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel) {
                 }
             }
         }
+    }
+    if (state.confirmDeleteLocalModel) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissDeleteLocalModel,
+            title = { Text("Delete this model file?") },
+            text = { Text("The file is removed from this device. You can import it again from the original file.") },
+            confirmButton = { TextButton(onClick = viewModel::confirmDeleteLocalModel) { Text("Delete") } },
+            dismissButton = { TextButton(onClick = viewModel::dismissDeleteLocalModel) { Text("Keep") } },
+        )
     }
 }
 
@@ -319,6 +371,7 @@ private fun MessageBubble(line: ChatLine) {
 
 @Composable
 private fun InputBar(
+    visibleToggles: Set<ToolbarToggle>,
     documents: List<ai.droidcommand.rag.DocumentInfo>,
     documentsAvailable: Boolean,
     attachingDocument: Boolean,
@@ -345,15 +398,17 @@ private fun InputBar(
 ) {
     // Document Q&A: attached files' relevant passages are added to each message while they stay attached.
     // Indexing happens on this device; the passages go to the chat provider only inside later messages.
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        OutlinedButton(onClick = onAttachDocument, enabled = documentsAvailable && !attachingDocument) {
-            Text(if (attachingDocument) "Indexing…" else "Attach document")
-        }
-        if (!documentsAvailable) {
-            if (embedderDownloadBytes == null) {
-                OutlinedButton(onClick = onDownloadEmbedder) { Text("Download embedding model ($embedderDownloadMegabytes MB)") }
-            } else {
-                OutlinedButton(onClick = onCancelEmbedderDownload) { Text("Cancel (${embedderDownloadBytes / BYTES_PER_MEGABYTE} / $embedderDownloadMegabytes MB)") }
+    if (ToolbarToggle.ATTACH in visibleToggles) {
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = onAttachDocument, enabled = documentsAvailable && !attachingDocument) {
+                Text(if (attachingDocument) "Indexing…" else "Attach document")
+            }
+            if (!documentsAvailable) {
+                if (embedderDownloadBytes == null) {
+                    OutlinedButton(onClick = onDownloadEmbedder) { Text("Download embedding model ($embedderDownloadMegabytes MB)") }
+                } else {
+                    OutlinedButton(onClick = onCancelEmbedderDownload) { Text("Cancel (${embedderDownloadBytes / BYTES_PER_MEGABYTE} / $embedderDownloadMegabytes MB)") }
+                }
             }
         }
     }
@@ -372,17 +427,21 @@ private fun InputBar(
     // Toolbar row above the input: the web-search toggle. When on, each message's text is sent to the
     // configured search provider (Brave/SerpAPI) before the model call — hence the explicit label.
     Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilterChip(
-            selected = webSearchEnabled,
-            onClick = onToggleWebSearch,
-            label = { Text(if (webSearchEnabled) "Web search: on" else "Web search: off") },
-        )
-        FilterChip(
-            selected = speakMode != SpeakMode.OFF,
-            onClick = onCycleSpeakMode,
-            label = { Text("Speak: " + speakMode.name.lowercase()) },
-        )
-        if (speakMode == SpeakMode.TAP || speaking) {
+        if (ToolbarToggle.WEB_SEARCH in visibleToggles) {
+            FilterChip(
+                selected = webSearchEnabled,
+                onClick = onToggleWebSearch,
+                label = { Text(if (webSearchEnabled) "Web search: on" else "Web search: off") },
+            )
+        }
+        if (ToolbarToggle.SPEAK in visibleToggles) {
+            FilterChip(
+                selected = speakMode != SpeakMode.OFF,
+                onClick = onCycleSpeakMode,
+                label = { Text("Speak: " + speakMode.name.lowercase()) },
+            )
+        }
+        if (ToolbarToggle.SPEAK in visibleToggles && (speakMode == SpeakMode.TAP || speaking)) {
             OutlinedButton(onClick = onSpeakLast, enabled = canSpeak || speaking) { Text(if (speaking) "Stop" else "Speak reply") }
         }
     }
@@ -406,12 +465,14 @@ private fun InputBar(
                 cursorColor = AccentNeonGreen,
             ),
         )
-        IconButton(onClick = onMic, enabled = micEnabled) {
-            Icon(
-                if (listening) Icons.Filled.Stop else Icons.Filled.Mic,
-                contentDescription = if (listening) "Stop dictation" else "Dictate",
-                tint = if (listening) AccentNeonGreen else TextSecondary,
-            )
+        if (ToolbarToggle.MICROPHONE in visibleToggles) {
+            IconButton(onClick = onMic, enabled = micEnabled) {
+                Icon(
+                    if (listening) Icons.Filled.Stop else Icons.Filled.Mic,
+                    contentDescription = if (listening) "Stop dictation" else "Dictate",
+                    tint = if (listening) AccentNeonGreen else TextSecondary,
+                )
+            }
         }
         IconButton(
             onClick = onSend,
