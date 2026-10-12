@@ -349,15 +349,17 @@ private fun InputBar(
 ) {
     // Document Q&A: attached files' relevant passages are added to each message while they stay attached.
     // Indexing happens on this device; the passages go to the chat provider only inside later messages.
-    if (ToolbarToggle.ATTACH in visibleToggles) Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        OutlinedButton(onClick = onAttachDocument, enabled = documentsAvailable && !attachingDocument) {
-            Text(if (attachingDocument) "Indexing…" else "Attach document")
-        }
-        if (!documentsAvailable) {
-            if (embedderDownloadBytes == null) {
-                OutlinedButton(onClick = onDownloadEmbedder) { Text("Download embedding model ($embedderDownloadMegabytes MB)") }
-            } else {
-                OutlinedButton(onClick = onCancelEmbedderDownload) { Text("Cancel (${embedderDownloadBytes / BYTES_PER_MEGABYTE} / $embedderDownloadMegabytes MB)") }
+    if (ToolbarToggle.ATTACH in visibleToggles) {
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = onAttachDocument, enabled = documentsAvailable && !attachingDocument) {
+                Text(if (attachingDocument) "Indexing…" else "Attach document")
+            }
+            if (!documentsAvailable) {
+                if (embedderDownloadBytes == null) {
+                    OutlinedButton(onClick = onDownloadEmbedder) { Text("Download embedding model ($embedderDownloadMegabytes MB)") }
+                } else {
+                    OutlinedButton(onClick = onCancelEmbedderDownload) { Text("Cancel (${embedderDownloadBytes / BYTES_PER_MEGABYTE} / $embedderDownloadMegabytes MB)") }
+                }
             }
         }
     }
@@ -376,16 +378,20 @@ private fun InputBar(
     // Toolbar row above the input: the web-search toggle. When on, each message's text is sent to the
     // configured search provider (Brave/SerpAPI) before the model call — hence the explicit label.
     Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (ToolbarToggle.WEB_SEARCH in visibleToggles) FilterChip(
-            selected = webSearchEnabled,
-            onClick = onToggleWebSearch,
-            label = { Text(if (webSearchEnabled) "Web search: on" else "Web search: off") },
-        )
-        if (ToolbarToggle.SPEAK in visibleToggles) FilterChip(
-            selected = speakMode != SpeakMode.OFF,
-            onClick = onCycleSpeakMode,
-            label = { Text("Speak: " + speakMode.name.lowercase()) },
-        )
+        if (ToolbarToggle.WEB_SEARCH in visibleToggles) {
+            FilterChip(
+                selected = webSearchEnabled,
+                onClick = onToggleWebSearch,
+                label = { Text(if (webSearchEnabled) "Web search: on" else "Web search: off") },
+            )
+        }
+        if (ToolbarToggle.SPEAK in visibleToggles) {
+            FilterChip(
+                selected = speakMode != SpeakMode.OFF,
+                onClick = onCycleSpeakMode,
+                label = { Text("Speak: " + speakMode.name.lowercase()) },
+            )
+        }
         if (ToolbarToggle.SPEAK in visibleToggles && (speakMode == SpeakMode.TAP || speaking)) {
             OutlinedButton(onClick = onSpeakLast, enabled = canSpeak || speaking) { Text(if (speaking) "Stop" else "Speak reply") }
         }
@@ -410,12 +416,14 @@ private fun InputBar(
                 cursorColor = AccentNeonGreen,
             ),
         )
-        if (ToolbarToggle.MICROPHONE in visibleToggles) IconButton(onClick = onMic, enabled = micEnabled) {
-            Icon(
-                if (listening) Icons.Filled.Stop else Icons.Filled.Mic,
-                contentDescription = if (listening) "Stop dictation" else "Dictate",
-                tint = if (listening) AccentNeonGreen else TextSecondary,
-            )
+        if (ToolbarToggle.MICROPHONE in visibleToggles) {
+            IconButton(onClick = onMic, enabled = micEnabled) {
+                Icon(
+                    if (listening) Icons.Filled.Stop else Icons.Filled.Mic,
+                    contentDescription = if (listening) "Stop dictation" else "Dictate",
+                    tint = if (listening) AccentNeonGreen else TextSecondary,
+                )
+            }
         }
         IconButton(
             onClick = onSend,
