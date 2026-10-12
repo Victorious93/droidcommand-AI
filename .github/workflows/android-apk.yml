@@ -34,6 +34,11 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Default install of the obsolete legacy "tools" package fails
+          # ("Failed to find package 'tools'"); install nothing here and let
+          # the explicit step below pull the exact packages we need.
+          packages: ""
 
       - name: Install SDK packages (compileSdk 36, NDK r28c, CMake 3.22.1)
         run: |
