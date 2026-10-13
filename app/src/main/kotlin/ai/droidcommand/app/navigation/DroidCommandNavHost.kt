@@ -8,6 +8,7 @@ import ai.droidcommand.app.ui.logs.LogsScreen
 import ai.droidcommand.app.ui.memory.MemoryScreen
 import ai.droidcommand.app.ui.mode.EngineModeViewModel
 import ai.droidcommand.app.ui.mode.PilotScreen
+import ai.droidcommand.app.ui.notes.NotesScreen
 import ai.droidcommand.app.ui.plan.PlanScreen
 import ai.droidcommand.app.ui.settings.SettingsScreen
 import ai.droidcommand.app.ui.theme.AccentBlueBright
@@ -71,6 +72,7 @@ object Routes {
     const val MEMORY = "memory"
     const val CLIPBOARDS = "tools/clipboards"
     const val CODING = "tools/coding"
+    const val NOTES = "tools/notes"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -126,6 +128,7 @@ fun DroidCommandNavHost(
             composable(Routes.MEMORY) { MemoryScreen() }
             composable(Routes.CLIPBOARDS) { ClipboardScreen() }
             composable(Routes.CODING) { CodingScreen() }
+            composable(Routes.NOTES) { NotesScreen() }
         }
     }
 }

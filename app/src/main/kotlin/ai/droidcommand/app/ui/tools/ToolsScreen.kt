@@ -82,5 +82,20 @@ fun ToolsScreen(navController: NavHostController) {
                 ) { Text("Open coding session") }
             }
         }
+
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Notes", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Folders and markdown on this device. No plugins are installed until you add one.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = { navController.navigate(Routes.NOTES) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Open notes") }
+            }
+        }
     }
 }

@@ -19,12 +19,13 @@ import javax.xml.parsers.DocumentBuilderFactory
  * has no opinion on the security policy gating it, matching `core-build-local.LocalProcessBuildExecutor`'s
  * identical relationship to [ShellExecutor].
  *
- * **Deliberately implements only 6 of [DeviceController]'s 29 methods for real** —
- * [getDeviceInfo]/[getBatteryStatus]/[getStorageInfo]/[listInstalledApps]/[getUiTree]/[takeScreenshot] —
- * every one read-only and non-mutating. None of the other 23 (anything that taps, types, launches an
- * app, sends an SMS, makes a call, or writes/deletes a file) are implemented here: this device is a
- * real personal phone, and actually exercising a mutating action against it is not a call this class
- * makes unilaterally. Every unimplemented method fails with an explicit "not yet implemented" reason —
+ * **Deliberately implements only 11 of [DeviceController]'s 29 methods for real** —
+ * [getDeviceInfo]/[getBatteryStatus]/[getStorageInfo]/[listInstalledApps]/[getUiTree]/[takeScreenshot]/
+ * [listNotifications]/[getNetworkState]/[readFile]/[listDirectory]/[listContacts] — every one read-only
+ * and non-mutating. None of the other 18 (anything that taps, types, launches an app, sends an SMS, makes a call, or writes/deletes/
+ * moves/copies a file) are implemented here: this device is a real personal phone, and actually
+ * exercising a mutating action against it is not a call this class makes unilaterally. Every unimplemented
+ * method fails with an explicit "not yet implemented" reason —
  * a **different** honest reason from [NullDeviceController]'s "no real device is connected," since a
  * device genuinely is connected in this topology; conflating "missing capability" with "missing
  * device" would misreport why the call failed. [takeScreenshot] was excluded for a separate, technical
@@ -249,6 +250,42 @@ class AdbDeviceController(
         return NotificationsResult.Success(notifications)
     }
 
+    /**
+     * Determines the active network via `adb shell ip route get 1.1.1.1` — asking the kernel's own
+     * routing table which interface would carry traffic to that address (no packet is actually sent;
+     * `ip route get` is a pure routing-table lookup, the same semantics `ip`'s own man page documents),
+     * rather than parsing `dumpsys connectivity`'s internal state, whose text format has changed
+     * materially across Android versions (legacy `NetworkInfo` lines vs. newer `NetworkAgentInfo`
+     * summaries) — a kernel interface name is comparatively stable. The interface name's prefix
+     * classifies the type: `wlan*` -> WIFI, `eth*` -> ETHERNET, anything else with a route (`rmnet*`,
+     * `ccmni*`, `radio*`, and other vendor-specific cellular names) -> CELLULAR as a reasonable but
+     * **unverified-against-a-real-device default**, not an exhaustive mapping. A non-zero exit whose
+     * stderr names an unreachable route is read as a real "no active network" result
+     * ([NetworkType.NONE], disconnected), not a query failure; any other failure (adb itself could not
+     * run) is [NetworkStateResult.Failure].
+     */
+    override fun getNetworkState(): NetworkStateResult {
+        val result = runAdb("shell", "ip", "route", "get", "1.1.1.1")
+        if (result !is ShellExecutionResult.Success) {
+            return NetworkStateResult.Failure("Cannot read network state: failed to run 'adb shell ip route get'")
+        }
+        if (result.exitCode != 0) {
+            return if ("unreachable" in result.stderr.lowercase()) {
+                NetworkStateResult.Success(NetworkState(type = NetworkType.NONE, isConnected = false))
+            } else {
+                NetworkStateResult.Failure("Cannot read network state: 'adb shell ip route get' exited ${result.exitCode}: ${result.stderr}")
+            }
+        }
+        val iface = IFACE_PATTERN.find(result.stdout)?.groupValues?.get(1)
+            ?: return NetworkStateResult.Success(NetworkState(type = NetworkType.NONE, isConnected = false))
+        val type = when {
+            iface.startsWith("wlan") -> NetworkType.WIFI
+            iface.startsWith("eth") -> NetworkType.ETHERNET
+            else -> NetworkType.CELLULAR
+        }
+        return NetworkStateResult.Success(NetworkState(type = type, isConnected = true))
+    }
+
     override fun sendBroadcast(action: String, packageName: String?, extras: Map<String, String>) =
         failure("send broadcast (mutating — not yet implemented; requires explicit owner sign-off per AdbDeviceController's safety-gate invariant for mutating actions)")
 
@@ -259,18 +296,162 @@ class AdbDeviceController(
     override fun typeText(text: String) = failure("type text")
     override fun pressKey(key: DeviceKey) = failure("press key")
     override fun launchApp(packageName: String) = failure("launch app")
-    override fun readFile(path: String) = FileReadResult.Failure(notImplemented("read file"))
+
+    /**
+     * Reads a file's content via `adb exec-out cat <path>` — `exec-out`, not `shell`, for the same
+     * reason [takeScreenshot] uses it: the bytes stream back over the adb data channel with no
+     * pty/line-ending translation, so content is not corrupted in transit the way
+     * [ShellExecutor.execute]'s line-oriented capture would corrupt it. The captured bytes are then
+     * decoded as UTF-8 (malformed sequences replaced, never thrown) to satisfy [FileReadResult]'s
+     * `String` contract — a genuinely binary file (anything that isn't valid UTF-8 text) will come
+     * back with its content garbled by that decode, a limitation of the result type's shape, not of
+     * the transport underneath it. `cat`'s own non-zero exit (e.g. "No such file or directory",
+     * "Permission denied") is reported verbatim rather than guessed at or reclassified.
+     */
+    override fun readFile(path: String): FileReadResult {
+        val argv = adbArgv("exec-out", "cat", path)
+        val result = shell.executeBinary(
+            ShellCommand(executable = argv.first(), args = argv.drop(1), maxOutputBytes = MAX_FILE_READ_BYTES),
+        )
+        return when (result) {
+            is ShellBinaryExecutionResult.Failure -> FileReadResult.Failure("Cannot read file '$path': ${result.reason}")
+            is ShellBinaryExecutionResult.Success ->
+                if (result.exitCode != 0) {
+                    FileReadResult.Failure("Cannot read file '$path': 'adb exec-out cat' exited ${result.exitCode}: ${result.stderr}")
+                } else {
+                    FileReadResult.Success(result.stdout.toString(Charsets.UTF_8))
+                }
+        }
+    }
+
+    /**
+     * Lists a directory via `adb exec-out ls -1Ap '<path>/'` (`exec-out` so no pty can rewrite line
+     * endings or colorize). `-1Ap` is the deliberately minimal flag set that toybox (Android 6+), busybox
+     * and AOSP's older toolbox agree on: one name per line, `.`/`..` omitted, a trailing `/` on
+     * directories. Long (`-l`) output is avoided because its column layout, date format and symlink
+     * rendering differ across those implementations. The path always gets a trailing `/` so a symlinked
+     * directory such as `/sdcard` lists its target's contents rather than the link itself. Paths are
+     * single-quoted for the device-side shell, since `adb` re-joins its arguments and runs them through
+     * `sh -c`.
+     *
+     * Sizes come from a second, best-effort `stat -L -c '%F|%s|%n'` over the non-directory names (`-L`
+     * so a symlink to a directory is classified as the directory it really is). If `stat` is unavailable
+     * or fails for an entry, that entry is still listed with `sizeBytes = null` rather than the whole
+     * listing failing or a size being invented. Known limit: a file name containing a newline cannot be
+     * represented in line-oriented output and will be split.
+     */
+    override fun listDirectory(path: String): FileListResult {
+        val directory = if (path.endsWith("/")) path else "$path/"
+        val result = runAdb("exec-out", "ls", "-1Ap", shellQuote(directory))
+        if (result !is ShellExecutionResult.Success) {
+            return FileListResult.Failure("Cannot list directory '$path': failed to run 'adb exec-out ls'")
+        }
+        if (result.exitCode != 0) {
+            return FileListResult.Failure("Cannot list directory '$path': 'adb exec-out ls' exited ${result.exitCode}: ${result.stderr.trim()}")
+        }
+        val names = result.stdout.lineSequence()
+            .map { it.removeSuffix("\r") }
+            .filter { it.isNotEmpty() }
+            .toList()
+        val stats = statFiles(directory, names.filterNot { it.endsWith("/") })
+        val parent = directory.trimEnd('/')
+        val entries = names.map { raw ->
+            val isDirectoryByLs = raw.endsWith("/")
+            val name = raw.removeSuffix("/")
+            val stat = if (isDirectoryByLs) null else stats[name]
+            val isDirectory = isDirectoryByLs || stat?.isDirectory == true
+            FileEntry(
+                name = name,
+                path = "$parent/$name",
+                isDirectory = isDirectory,
+                sizeBytes = if (isDirectory) null else stat?.sizeBytes,
+            )
+        }
+        return FileListResult.Success(entries)
+    }
+
+    private data class StatInfo(val isDirectory: Boolean, val sizeBytes: Long?)
+
+    private fun statFiles(directory: String, names: List<String>): Map<String, StatInfo> {
+        val stats = mutableMapOf<String, StatInfo>()
+        var chunk = mutableListOf<String>()
+        var chunkLength = 0
+
+        fun flush() {
+            if (chunk.isEmpty()) return
+            val script = "cd ${shellQuote(directory)} && stat -L -c '%F|%s|%n' -- ${chunk.joinToString(" ") { shellQuote(it) }}"
+            val result = runAdb("exec-out", script)
+            // stat exits non-zero if any single entry (e.g. a dangling symlink) fails but still prints the rest.
+            if (result is ShellExecutionResult.Success) {
+                for (line in result.stdout.lineSequence()) {
+                    val parts = line.removeSuffix("\r").split('|', limit = 3)
+                    if (parts.size != 3) continue
+                    stats[parts[2]] = StatInfo(isDirectory = parts[0] == "directory", sizeBytes = parts[1].toLongOrNull())
+                }
+            }
+            chunk = mutableListOf()
+            chunkLength = 0
+        }
+        for (name in names) {
+            if (chunkLength + name.length > MAX_STAT_ARGS_CHARS) flush()
+            chunk += name
+            chunkLength += name.length + 3
+        }
+        flush()
+        return stats
+    }
+
+    /** Single-quotes [value] for the device-side `sh -c` that `adb exec-out`/`adb shell` hand their arguments to. */
+    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+
+    /**
+     * Lists contacts that have phone numbers via the real contacts provider:
+     * `adb exec-out content query --uri content://com.android.contacts/data/phones --projection
+     * contact_id:display_name:data1`. Rows print as `Row: N contact_id=1, display_name=Alice, data1=+1 555`
+     * — values are not escaped, so each row is matched from its `Row: N contact_id=` header up to the next
+     * header (or end of output), which also tolerates a value containing `, ` or a newline. Rows are
+     * grouped by `contact_id`, not display name, so two different contacts sharing a name stay separate
+     * while one contact's several numbers are collected under it. A provider `NULL` display name becomes
+     * an empty name and a `NULL` number is dropped. `content query` prints `No result found.` for an empty
+     * book, which is reported as an empty list, not a failure. Contacts with no phone number are not
+     * returned (that is what the `data/phones` table contains). Needs no root: the `shell` user holds
+     * `READ_CONTACTS`.
+     */
+    override fun listContacts(): ContactsResult {
+        val result = runAdb(
+            "exec-out", "content", "query",
+            "--uri", "content://com.android.contacts/data/phones",
+            "--projection", "contact_id:display_name:data1",
+        )
+        if (result !is ShellExecutionResult.Success) {
+            return ContactsResult.Failure("Cannot list contacts: failed to run 'adb exec-out content query'")
+        }
+        if (result.exitCode != 0) {
+            return ContactsResult.Failure("Cannot list contacts: 'adb exec-out content query' exited ${result.exitCode}: ${result.stderr.trim()}")
+        }
+        val text = result.stdout.replace("\r\n", "\n")
+        if (!text.contains("Row: ") && ("Error while accessing provider" in text || "Exception" in text)) {
+            return ContactsResult.Failure("Cannot list contacts: the contacts provider reported an error: ${text.trim().lineSequence().first()}")
+        }
+        val byContact = LinkedHashMap<String, Pair<String, MutableList<String>>>()
+        for (match in CONTACT_ROW_PATTERN.findAll(text)) {
+            val (contactId, rawName, rawNumber) = match.destructured
+            val name = rawName.trim().takeIf { it != "NULL" } ?: ""
+            val number = rawNumber.trim().takeIf { it.isNotEmpty() && it != "NULL" } ?: continue
+            val numbers = byContact.getOrPut(contactId) { name to mutableListOf() }.second
+            if (number !in numbers) numbers += number
+        }
+        return ContactsResult.Success(byContact.values.map { (name, numbers) -> ContactEntry(name = name, phoneNumbers = numbers.toList()) })
+    }
+
     override fun writeFile(path: String, content: String, append: Boolean) = failure("write file")
     override fun moveFile(fromPath: String, toPath: String) = failure("move file")
     override fun copyFile(fromPath: String, toPath: String) = failure("copy file")
     override fun deleteFile(path: String) = failure("delete file")
-    override fun listDirectory(path: String) = FileListResult.Failure(notImplemented("list directory"))
-    override fun getNetworkState() = NetworkStateResult.Failure(notImplemented("read network state"))
     override fun getClipboardText() = ClipboardReadResult.Failure(notImplemented("read clipboard"))
     override fun setClipboardText(text: String) = failure("set clipboard text")
     override fun sendSms(phoneNumber: String, message: String) = failure("send SMS")
     override fun makeCall(phoneNumber: String) = failure("make call")
-    override fun listContacts() = ContactsResult.Failure(notImplemented("list contacts"))
     override fun createCalendarEvent(title: String, startEpochMillis: Long, endEpochMillis: Long) = failure("create calendar event")
     override fun setAlarm(hour: Int, minute: Int, label: String?) = failure("set alarm")
     override fun setTimer(durationSeconds: Long, label: String?) = failure("set timer")
@@ -289,8 +470,15 @@ class AdbDeviceController(
         val PKG_PATTERN = Regex("""pkg=(\S+)""")
         val ID_PATTERN = Regex("""\bid=(-?\d+)""")
         val TAG_PATTERN = Regex("""\btag=(\S+)""")
+        val IFACE_PATTERN = Regex("""\bdev\s+(\S+)""")
         val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
         const val SCREENSHOT_TIMEOUT_MILLIS = 15_000L
         const val MAX_SCREENSHOT_BYTES = 20_000_000L
+        const val MAX_FILE_READ_BYTES = 20_000_000L
+        const val MAX_STAT_ARGS_CHARS = 4_000
+        val CONTACT_ROW_PATTERN = Regex(
+            """Row: \d+ contact_id=(\d+), display_name=(.*?), data1=(.*?)(?=\nRow: \d+ contact_id=|\z)""",
+            RegexOption.DOT_MATCHES_ALL,
+        )
     }
 }

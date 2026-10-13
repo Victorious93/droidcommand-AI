@@ -112,9 +112,9 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
                         maxLines = 5,
                     )
                     Text(
-                        "Runs with ${viewModel.targetLabel()}. Tools still ask for approval, and any tool with no backend configured is denied.",
+                        "Runs with ${viewModel.targetLabel()}. Tools still ask for approval, and any tool with no backend configured is denied. Finished runs stay on this device. A run still going when the app closes is not restored.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (state.running) {
                         Button(
