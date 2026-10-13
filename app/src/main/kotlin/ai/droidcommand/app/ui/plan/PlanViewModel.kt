@@ -1,5 +1,7 @@
 package ai.droidcommand.app.ui.plan
 
+import ai.droidcommand.app.mode.EngineModeState
+import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.plan.PlanController
 import ai.droidcommand.app.plan.PlanUiState
 import ai.droidcommand.llm.factory.CloudProviderCatalog
@@ -19,11 +21,13 @@ import javax.inject.Inject
 @HiltViewModel
 class PlanViewModel @Inject constructor(
     private val controller: PlanController,
+    modes: EngineModes,
     @ApplicationContext context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
 
     val state: StateFlow<PlanUiState> = controller.state
+    val modeState: StateFlow<EngineModeState> = modes.state
 
     private fun spec(): CloudProviderSpec =
         CloudProviderCatalog.byId(prefs.getString("provider", null).orEmpty()) ?: CloudProviderCatalog.all.first()

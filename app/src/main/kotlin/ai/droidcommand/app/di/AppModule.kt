@@ -9,6 +9,9 @@ import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.app.approval.ComposeApprovalPrompt
 import ai.droidcommand.app.approval.VoiceApprovalPrompt
+import ai.droidcommand.app.mode.AdvancedModeStore
+import ai.droidcommand.app.mode.EngineModes
+import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.conversations.RoomConversationStore
@@ -144,6 +147,10 @@ object AppModule {
      * fails closed at its default capacity (10,000 events) — once full, further sensitive actions are
      * refused rather than run unaudited, and there is deliberately no way to clear it from the app.
      */
+    @Provides
+    @Singleton
+    fun provideEngineModes(prefs: AdvancedPrefs): EngineModes = EngineModes(AdvancedModeStore(prefs))
+
     @Provides
     @Singleton
     fun provideAuditLog(@ApplicationContext context: Context): JsonFileAuditLog =
