@@ -1,5 +1,6 @@
 package ai.droidcommand.app.prefs
 
+import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.ui.chat.ToolbarLayout
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import android.content.Context
@@ -40,11 +41,29 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         prefs.edit { putString(KEY_CODING_TUNNEL, choice.name) }
     }
 
+    /** The engine the user last selected. Anything other than FORGE is Pilot, including a missing value. */
+    fun agentMode(): AgentMode = if (prefs.getString(KEY_AGENT_MODE, null) == AgentMode.FORGE.name) AgentMode.FORGE else AgentMode.PILOT
+
+    fun setAgentMode(mode: AgentMode) {
+        prefs.edit { putString(KEY_AGENT_MODE, mode.name) }
+    }
+
+    fun modeLabel(mode: AgentMode): String? = prefs.getString(labelKey(mode), null)
+
+    fun setModeLabel(mode: AgentMode, stored: String?) {
+        prefs.edit {
+            if (stored == null) remove(labelKey(mode)) else putString(labelKey(mode), stored)
+        }
+    }
+
     companion object {
         const val FILE = "advanced_prefs"
         private const val KEY_TOOLBAR = "chat.toolbar"
         private const val KEY_PUBLIC_LIMIT = "clipboard.public.limit"
         private const val KEY_CODING_TUNNEL = "coding.tunnel"
+        private const val KEY_AGENT_MODE = "engine.mode"
+
+        private fun labelKey(mode: AgentMode) = "engine.label.${mode.name}"
         val PUBLIC_LIMIT_CHOICES = listOf(10, 25, 50)
         const val DEFAULT_PUBLIC_LIMIT = 25
     }
