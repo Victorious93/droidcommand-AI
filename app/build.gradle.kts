@@ -44,6 +44,10 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0-phase0"
+        // Instrumented (on-device/emulator) tests. The default runner launches the real
+        // @HiltAndroidApp application, so MainActivityLaunchTest exercises the production
+        // DI graph — no HiltTestApplication needed.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
@@ -123,6 +127,14 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
     testImplementation(kotlin("test"))
+
+    // Instrumented launch smoke test (app/src/androidTest). These androidx.test
+    // versions are the current stable line and build against compileSdk 36 / AGP
+    // 8.13.2 — they do NOT pull the compileSdk-37/AGP-9 AAR metadata the main-source
+    // androidx pins above are held back to avoid. Re-check after an AGP 9 upgrade.
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
 }
 
 kotlin {
