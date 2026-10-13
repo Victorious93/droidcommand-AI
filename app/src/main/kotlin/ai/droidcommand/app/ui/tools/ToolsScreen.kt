@@ -65,5 +65,25 @@ fun ToolsScreen(navController: NavHostController) {
                 ) { Text("Open clipboards") }
             }
         }
+
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Workspace", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "A markdown vault on this device, and a shared cloud coding session. " +
+                        "The session tunnel uses a local stub until you set an HTTPS endpoint.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = { navController.navigate(Routes.VAULT) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Markdown vault") }
+                Button(
+                    onClick = { navController.navigate(Routes.CLOUD) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Cloud coding session") }
+            }
+        }
     }
 }

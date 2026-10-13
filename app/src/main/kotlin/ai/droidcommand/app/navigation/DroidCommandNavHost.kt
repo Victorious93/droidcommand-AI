@@ -2,11 +2,13 @@ package ai.droidcommand.app.navigation
 
 import ai.droidcommand.app.clipboard.ClipboardScreen
 import ai.droidcommand.app.ui.chat.ChatScreen
+import ai.droidcommand.app.ui.cloud.CloudSessionScreen
+import ai.droidcommand.app.ui.home.HomeScreen
 import ai.droidcommand.app.ui.logs.LogsScreen
 import ai.droidcommand.app.ui.memory.MemoryScreen
 import ai.droidcommand.app.ui.plan.PlanScreen
 import ai.droidcommand.app.ui.settings.SettingsScreen
-import ai.droidcommand.app.ui.theme.AccentNeonGreen
+import ai.droidcommand.app.ui.theme.AccentBlue
 import ai.droidcommand.app.ui.theme.BackgroundDark
 import ai.droidcommand.app.ui.theme.BorderDark
 import ai.droidcommand.app.ui.theme.NavBarDark
@@ -14,6 +16,7 @@ import ai.droidcommand.app.ui.theme.TextSecondary
 import ai.droidcommand.app.ui.tools.ToolsScreen
 import ai.droidcommand.app.ui.tools.metasploit.MetasploitScreen
 import ai.droidcommand.app.ui.tools.setoolkit.SetToolScreen
+import ai.droidcommand.app.ui.vault.VaultScreen
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
@@ -45,6 +49,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 
 object Routes {
+    const val HOME = "home"
     const val CHAT = "chat"
     const val PLAN = "plan"
     const val LOGS = "logs"
@@ -54,12 +59,15 @@ object Routes {
     const val SETTINGS = "settings"
     const val MEMORY = "memory"
     const val CLIPBOARDS = "tools/clipboards"
+    const val CLOUD = "tools/cloud-session"
+    const val VAULT = "tools/vault"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
 
 // Same order as OpenDroid's bar, with Tools where its Macros tab is (this app has no macro UI).
 private val tabs = listOf(
+    Tab(Routes.HOME, "Home", Icons.Filled.Home),
     Tab(Routes.CHAT, "Chat", Icons.AutoMirrored.Filled.Chat),
     Tab(Routes.PLAN, "Plan", Icons.AutoMirrored.Filled.List),
     Tab(Routes.MEMORY, "Memory", Icons.Filled.Star),
@@ -84,9 +92,18 @@ fun DroidCommandNavHost(navController: NavHostController = rememberNavController
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Routes.CHAT,
+            startDestination = Routes.HOME,
             modifier = Modifier.padding(innerPadding),
         ) {
+            composable(Routes.HOME) {
+                HomeScreen(onNavigate = { route ->
+                    navController.navigate(route) {
+                        popUpTo(Routes.HOME) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                })
+            }
             composable(Routes.CHAT) { ChatScreen() }
             composable(Routes.PLAN) { PlanScreen() }
             composable(Routes.LOGS) { LogsScreen() }
@@ -96,6 +113,8 @@ fun DroidCommandNavHost(navController: NavHostController = rememberNavController
             composable(Routes.SETTINGS) { SettingsScreen() }
             composable(Routes.MEMORY) { MemoryScreen() }
             composable(Routes.CLIPBOARDS) { ClipboardScreen() }
+            composable(Routes.CLOUD) { CloudSessionScreen() }
+            composable(Routes.VAULT) { VaultScreen() }
         }
     }
 }
@@ -113,7 +132,7 @@ private fun DroidBottomBar(currentRoute: String?, navController: NavHostControll
                 selected = selected,
                 onClick = {
                     navController.navigate(tab.route) {
-                        popUpTo(Routes.CHAT) { saveState = true }
+                        popUpTo(Routes.HOME) { saveState = true }
                         launchSingleTop = true
                         restoreState = true
                     }
@@ -128,8 +147,8 @@ private fun DroidBottomBar(currentRoute: String?, navController: NavHostControll
                 },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = BackgroundDark,
-                    selectedTextColor = AccentNeonGreen,
-                    indicatorColor = AccentNeonGreen,
+                    selectedTextColor = AccentBlue,
+                    indicatorColor = AccentBlue,
                     unselectedIconColor = TextSecondary,
                     unselectedTextColor = TextSecondary,
                 ),

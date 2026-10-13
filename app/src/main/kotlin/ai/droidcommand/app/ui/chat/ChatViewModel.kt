@@ -1,5 +1,6 @@
 package ai.droidcommand.app.ui.chat
 
+import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.ConversationStore
 import ai.droidcommand.agent.GraphRetriever
 import ai.droidcommand.agent.KnowledgeGraph
@@ -7,9 +8,12 @@ import ai.droidcommand.agent.Role
 import ai.droidcommand.app.documents.DocumentRuntime
 import ai.droidcommand.app.documents.DownloadOutcome
 import ai.droidcommand.app.documents.EmbedderDownloadSupervisor
+import ai.droidcommand.app.engine.EngineModeRepository
+import ai.droidcommand.app.engine.PilotDispatcher
 import ai.droidcommand.app.localmodels.ImportOutcome
 import ai.droidcommand.app.localmodels.ImportedModel
 import ai.droidcommand.app.localmodels.LocalModelRuntime
+import ai.droidcommand.app.plan.PlanController
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.config.EncryptedSecretsVault
@@ -102,6 +106,10 @@ data class ChatUiState(
     val localStatus: String? = null,
     /** True while the delete-model confirmation is open. */
     val confirmDeleteLocalModel: Boolean = false,
+    val engineMode: AgentMode = AgentMode.PILOT,
+    val mode1Label: String = "Mode 1",
+    val mode2Label: String = "Mode 2",
+    val pilotTools: String = "",
 )
 
 /**
@@ -125,6 +133,9 @@ class ChatViewModel @Inject constructor(
     private val documentRuntime: DocumentRuntime,
     private val advanced: AdvancedPrefs,
     private val onDeviceModels: LocalModelRuntime,
+    private val engine: EngineModeRepository,
+    private val pilot: PilotDispatcher,
+    private val plans: PlanController,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
@@ -167,7 +178,20 @@ class ChatViewModel @Inject constructor(
     private fun initialState(): ChatUiState {
         val provider = CloudProviderCatalog.byId(prefs.getString(KEY_PROVIDER, null).orEmpty()) ?: CloudProviderCatalog.all.first()
         val model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel
-        return ChatUiState(provider = provider, model = model, memoryEnabled = memoryEnabled, webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false), speakMode = speakModeFromPrefs(), micAvailable = voice.sttAvailable, toolbar = advanced.toolbarToggles(), activeLocalModelId = prefs.getString(KEY_LOCAL_MODEL, null))
+        return ChatUiState(
+            provider = provider,
+            model = model,
+            memoryEnabled = memoryEnabled,
+            webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false),
+            speakMode = speakModeFromPrefs(),
+            micAvailable = voice.sttAvailable,
+            toolbar = advanced.toolbarToggles(),
+            activeLocalModelId = prefs.getString(KEY_LOCAL_MODEL, null),
+            engineMode = engine.mode.value,
+            mode1Label = engine.labels.value.mode1,
+            mode2Label = engine.labels.value.mode2,
+            pilotTools = pilot.pilotToolNames(),
+        )
     }
 
     init {
@@ -272,6 +296,62 @@ class ChatViewModel @Inject constructor(
     fun setModel(model: String) {
         prefs.edit { putString(modelKey(mutableState.value.provider), model) }
         mutableState.update { it.copy(model = model) }
+    }
+
+    /** Re-reads mode names. Settings can change them while Chat is off screen. */
+    fun reloadEngine() {
+        val labels = engine.labels.value
+        mutableState.update {
+            it.copy(
+                engineMode = engine.mode.value,
+                mode1Label = labels.mode1,
+                mode2Label = labels.mode2,
+                pilotTools = pilot.pilotToolNames(),
+            )
+        }
+    }
+
+    fun selectEngineMode(mode: AgentMode) {
+        if (mutableState.value.sending) return
+        engine.select(mode)
+        reloadEngine()
+    }
+
+    /**
+     * Mode 1 runs one Pilot tool instruction (`tool key=value`). Mode 2 starts a Forge objective
+     * on the Plan tab. The model chat send is unchanged.
+     */
+    fun runEngine(text: String) {
+        val current = mutableState.value
+        if (current.sending || text.isBlank()) return
+        if (plans.state.value.running) {
+            mutableState.update { it.copy(error = "A Forge objective is already running. Stop it on the Plan tab first.") }
+            return
+        }
+        if (current.engineMode == AgentMode.FORGE) {
+            val label = engine.labels.value.labelFor(AgentMode.FORGE)
+            plans.start(current.provider, current.model, text)
+            mutableState.update {
+                it.copy(
+                    lines = it.lines + ChatLine(true, text.trim()) + ChatLine(
+                        false,
+                        "$label (Forge) started. Open the Plan tab to watch steps. Tools still ask before they run.",
+                    ),
+                    error = null,
+                )
+            }
+            return
+        }
+        mutableState.update { it.copy(sending = true, error = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val output = pilot.run(text)
+            mutableState.update {
+                it.copy(
+                    sending = false,
+                    lines = it.lines + ChatLine(true, text.trim()) + ChatLine(false, output),
+                )
+            }
+        }
     }
 
     fun send(text: String) {

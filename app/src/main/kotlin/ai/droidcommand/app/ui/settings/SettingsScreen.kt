@@ -68,8 +68,34 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             )
         }
         VoiceSettingsSection()
+        SectionLabel("Engine modes")
+        ModeNamesSection(viewModel)
         SectionLabel("Advanced")
         AdvancedSection(viewModel)
+    }
+}
+
+@Composable
+private fun ModeNamesSection(viewModel: SettingsViewModel) {
+    val labels by viewModel.modeLabels.collectAsState()
+    var mode1 by remember(labels.mode1) { mutableStateOf(labels.mode1) }
+    var mode2 by remember(labels.mode2) { mutableStateOf(labels.mode2) }
+    var message by remember { mutableStateOf<String?>(null) }
+    DroidCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Mode names", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Mode 1 always runs Pilot. Mode 2 always runs Forge. Only the labels change, and they are saved on this device.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(value = mode1, onValueChange = { mode1 = it }, label = { Text("Mode 1 (Pilot)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            OutlinedTextField(value = mode2, onValueChange = { mode2 = it }, label = { Text("Mode 2 (Forge)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            Button(onClick = {
+                message = viewModel.replaceModeLabels(mode1, mode2) ?: "Saved."
+            }, modifier = Modifier.fillMaxWidth()) { Text("Save names") }
+            message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        }
     }
 }
 

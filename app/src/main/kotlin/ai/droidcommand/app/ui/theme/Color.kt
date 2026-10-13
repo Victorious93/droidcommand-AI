@@ -2,27 +2,22 @@ package ai.droidcommand.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Visual language follows `Victorious93/opendroid`'s app (near-black surfaces, neon-green
-// accent, cyan labels, purple user bubbles, bordered cards). Hex values are matched to its
-// published dark palette and screenshots; no source was copied.
+// Darker blue Material palette. Surfaces stay near-black; accents are blue rather than neon green.
 
-// Surfaces
-val BackgroundDark = Color(0xFF080C10)
-val SurfaceDark = Color(0xFF0D1117)
-val CardDark = Color(0xFF161B22)
-val BorderDark = Color(0xFF30363D)
-val NavBarDark = Color(0xFF0E2A24)
+val BackgroundDark = Color(0xFF05070C)
+val SurfaceDark = Color(0xFF0A1020)
+val CardDark = Color(0xFF10182A)
+val BorderDark = Color(0xFF243044)
+val NavBarDark = Color(0xFF071018)
 
-// Text
-val TextPrimary = Color(0xFFF0F6FC)
-val TextSecondary = Color(0xFF8B949E)
+val TextPrimary = Color(0xFFE7EEF8)
+val TextSecondary = Color(0xFF93A4BD)
 
-// Accents. Neon is for thin marks, titles and selection; the calmer green fills large buttons.
-val AccentNeonGreen = Color(0xFF00FF88)
-val AccentGreenButton = Color(0xFF00C46A)
-val AccentGreenContainer = Color(0xFF0F3D2A)
-val AccentCyan = Color(0xFF00F0FF)
-val AccentPurple = Color(0xFF8A2BE2)
-val UserBubbleDark = Color(0xFF2A1646)
-val AccentRed = Color(0xFFFF3B30)
-val OnAccentDark = Color(0xFF04120B)
+val AccentBlue = Color(0xFF8EB4FF)
+val AccentBlueButton = Color(0xFF2F6BFF)
+val AccentBlueContainer = Color(0xFF13284A)
+val AccentSky = Color(0xFF7EC8FF)
+val AccentIndigo = Color(0xFF9BB0FF)
+val UserBubbleDark = Color(0xFF163058)
+val AccentRed = Color(0xFFFF5A6A)
+val OnAccentDark = Color(0xFF04101F)

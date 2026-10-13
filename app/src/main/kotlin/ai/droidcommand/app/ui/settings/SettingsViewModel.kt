@@ -1,5 +1,7 @@
 package ai.droidcommand.app.ui.settings
 
+import ai.droidcommand.agent.ModeLabels
+import ai.droidcommand.app.engine.EngineModeRepository
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.config.EncryptedSecretsVault
@@ -24,6 +26,7 @@ enum class KeyStatus { NOT_SET, SAVED, NEEDS_REENTRY, STORAGE_ERROR }
 class SettingsViewModel @Inject constructor(
     private val vault: EncryptedSecretsVault,
     private val advanced: AdvancedPrefs,
+    private val modes: EngineModeRepository,
 ) : ViewModel() {
     private val mutableStatus = MutableStateFlow(CloudProviderCatalog.all.associateWith { statusOf(it.secretId) })
     val status: StateFlow<Map<CloudProviderSpec, KeyStatus>> = mutableStatus.asStateFlow()
@@ -36,6 +39,10 @@ class SettingsViewModel @Inject constructor(
 
     private val mutablePublicLimit = MutableStateFlow(advanced.publicClipLimit())
     val publicClipLimit: StateFlow<Int> = mutablePublicLimit.asStateFlow()
+
+    val modeLabels: StateFlow<ModeLabels> = modes.labels
+
+    fun replaceModeLabels(mode1: String, mode2: String): String? = modes.replaceLabels(mode1, mode2)
 
     fun setToolbarToggle(toggle: ToolbarToggle, visible: Boolean) {
         advanced.setToolbarToggle(toggle, visible)

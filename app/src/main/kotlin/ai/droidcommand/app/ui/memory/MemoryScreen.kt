@@ -3,8 +3,8 @@ package ai.droidcommand.app.ui.memory
 import ai.droidcommand.agent.Entity
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
-import ai.droidcommand.app.ui.theme.AccentCyan
 import ai.droidcommand.app.ui.theme.AccentRed
+import ai.droidcommand.app.ui.theme.AccentSky
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -115,7 +115,7 @@ private fun MemoryRow(entity: Entity, onDelete: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(entity.type.name, style = MaterialTheme.typography.labelSmall, color = AccentCyan)
+                Text(entity.type.name, style = MaterialTheme.typography.labelSmall, color = AccentSky)
                 Text(entity.label, style = MaterialTheme.typography.bodyLarge)
             }
             TextButton(onClick = onDelete) { Text("Delete", color = AccentRed) }

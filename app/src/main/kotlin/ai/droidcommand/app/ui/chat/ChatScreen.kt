@@ -1,11 +1,12 @@
 package ai.droidcommand.app.ui.chat
 
+import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
-import ai.droidcommand.app.ui.theme.AccentCyan
-import ai.droidcommand.app.ui.theme.AccentGreenButton
-import ai.droidcommand.app.ui.theme.AccentNeonGreen
-import ai.droidcommand.app.ui.theme.AccentPurple
+import ai.droidcommand.app.ui.theme.AccentBlue
+import ai.droidcommand.app.ui.theme.AccentBlueButton
+import ai.droidcommand.app.ui.theme.AccentIndigo
+import ai.droidcommand.app.ui.theme.AccentSky
 import ai.droidcommand.app.ui.theme.BorderDark
 import ai.droidcommand.app.ui.theme.CardDark
 import ai.droidcommand.app.ui.theme.OnAccentDark
@@ -72,14 +73,11 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 
 /**
- * Chat in OpenDroid's layout: neon header with a status line, purple right-aligned user bubbles,
- * bordered left-aligned reply cards with a cyan role label, and a pill input with a round send
- * button. Provider/model/memory controls live in a panel that opens from the header subtitle so
- * the default view stays as clean as OpenDroid's.
+ * Chat: model replies stay on Send. Run uses the selected engine mode — Mode 1 is one Pilot
+ * tool instruction, Mode 2 starts a Forge objective. Labels come from Settings.
  *
- * Never built or run on a device — written without an Android SDK. All chat
- * logic is unchanged and lives in the JVM-tested [ai.droidcommand.llm.factory.ChatSession]; the
- * model field is still free text because model ids change and no list here was verified.
+ * Never run on a device. All model-chat logic lives in the JVM-tested
+ * [ai.droidcommand.llm.factory.ChatSession].
  */
 @Composable
 fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
@@ -116,7 +114,10 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         }
     }
     // Advanced settings can change while Chat is off screen; pick them up when it is shown again.
-    LaunchedEffect(Unit) { viewModel.reloadToolbar() }
+    LaunchedEffect(Unit) {
+        viewModel.reloadToolbar()
+        viewModel.reloadEngine()
+    }
     LaunchedEffect(state.pendingInput) {
         state.pendingInput?.let {
             input = if (input.isBlank()) it else input.trimEnd() + " " + it
@@ -141,6 +142,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         if (optionsOpen) {
             OptionsPanel(state, viewModel) { modelLauncher.launch(arrayOf("*/*")) }
         }
+
+        ModeRow(state, onSelect = viewModel::selectEngineMode, enabled = !state.sending)
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (rows.isEmpty()) {
@@ -223,6 +226,16 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 viewModel.send(input)
                 input = ""
             },
+            engineLabel = if (state.engineMode == AgentMode.PILOT) state.mode1Label else state.mode2Label,
+            engineHint = if (state.engineMode == AgentMode.PILOT) {
+                "Pilot tools: ${state.pilotTools}. Example: run_shell_command executable=echo"
+            } else {
+                "Forge runs this text as an objective. Watch steps on the Plan tab."
+            },
+            onRun = {
+                viewModel.runEngine(input)
+                input = ""
+            },
         )
     }
 }
@@ -231,6 +244,26 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
 private fun subtitleFor(state: ChatUiState): String {
     if (state.activeLocalModelId == null) return "${state.provider.label} · ${state.model}"
     return "On device · " + (state.localModels.firstOrNull { it.id == state.activeLocalModelId }?.label ?: "model")
+}
+
+@Composable
+private fun ModeRow(state: ChatUiState, onSelect: (AgentMode) -> Unit, enabled: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = state.engineMode == AgentMode.PILOT,
+                onClick = { onSelect(AgentMode.PILOT) },
+                enabled = enabled,
+                label = { Text("${state.mode1Label} · Pilot") },
+            )
+            FilterChip(
+                selected = state.engineMode == AgentMode.FORGE,
+                onClick = { onSelect(AgentMode.FORGE) },
+                enabled = enabled,
+                label = { Text("${state.mode2Label} · Forge") },
+            )
+        }
+    }
 }
 
 @Composable
@@ -251,7 +284,7 @@ private fun Header(
             ScreenTitle("DroidCommand")
             Text(
                 text = subtitle + if (optionsOpen) "  ▴" else "  ▾",
-                color = if (active) AccentNeonGreen else AccentCyan,
+                color = if (active) AccentBlue else AccentSky,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
@@ -346,7 +379,7 @@ private fun MessageBubble(line: ChatLine) {
             Surface(
                 color = UserBubbleDark,
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 6.dp),
-                border = BorderStroke(1.dp, AccentPurple),
+                border = BorderStroke(1.dp, AccentIndigo),
                 modifier = Modifier.widthIn(max = 300.dp),
             ) {
                 Text(line.text, color = TextPrimary, modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp))
@@ -361,7 +394,7 @@ private fun MessageBubble(line: ChatLine) {
                 modifier = Modifier.widthIn(max = 320.dp),
             ) {
                 Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("ASSISTANT", color = AccentCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text("ASSISTANT", color = AccentSky, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                     Text(line.text, color = TextPrimary)
                 }
             }
@@ -395,6 +428,9 @@ private fun InputBar(
     onValueChange: (String) -> Unit,
     canSend: Boolean,
     onSend: () -> Unit,
+    engineLabel: String,
+    engineHint: String,
+    onRun: () -> Unit,
 ) {
     // Document Q&A: attached files' relevant passages are added to each message while they stay attached.
     // Indexing happens on this device; the passages go to the chat provider only inside later messages.
@@ -446,6 +482,14 @@ private fun InputBar(
         }
     }
     Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(engineHint, color = TextSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        OutlinedButton(onClick = onRun, enabled = canSend) { Text("Run $engineLabel") }
+    }
+    Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -460,9 +504,9 @@ private fun InputBar(
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = CardDark,
                 unfocusedContainerColor = CardDark,
-                focusedBorderColor = AccentGreenButton,
+                focusedBorderColor = AccentBlueButton,
                 unfocusedBorderColor = BorderDark,
-                cursorColor = AccentNeonGreen,
+                cursorColor = AccentBlue,
             ),
         )
         if (ToolbarToggle.MICROPHONE in visibleToggles) {
@@ -470,7 +514,7 @@ private fun InputBar(
                 Icon(
                     if (listening) Icons.Filled.Stop else Icons.Filled.Mic,
                     contentDescription = if (listening) "Stop dictation" else "Dictate",
-                    tint = if (listening) AccentNeonGreen else TextSecondary,
+                    tint = if (listening) AccentBlue else TextSecondary,
                 )
             }
         }
@@ -478,7 +522,7 @@ private fun InputBar(
             onClick = onSend,
             enabled = canSend,
             colors = IconButtonDefaults.iconButtonColors(
-                containerColor = AccentGreenButton,
+                containerColor = AccentBlueButton,
                 contentColor = OnAccentDark,
                 disabledContainerColor = CardDark,
                 disabledContentColor = TextSecondary,
