@@ -5,17 +5,17 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// Dark-only, blue theme, by explicit request — no light scheme, no dynamic-color branch, no theme
-// toggle. Every `MaterialTheme.colorScheme.*` call site in this module reads through this scheme, so
-// wrapping the app in it repaints each screen; the blue extras (bright-blue title, cyan label,
-// indigo user bubble) are the named constants in Color.kt, used by `ui.components`.
+// Dark-only, by explicit request — no light scheme, no dynamic-color branch, no theme toggle.
+// Every `MaterialTheme.colorScheme.*` call site in this module reads through this scheme, so
+// wrapping the app in it repaints each screen; the OpenDroid-style extras (bright-blue title, cyan
+// label, indigo user bubble) are the named constants in Color.kt, used by `ui.components`.
 private val DroidCommandDarkColorScheme = darkColorScheme(
-    primary = AccentGreenButton,
-    onPrimary = OnAccentDark,
-    primaryContainer = AccentGreenContainer,
-    onPrimaryContainer = AccentNeonGreen,
-    secondary = AccentPurple,
-    onSecondary = TextPrimary,
+    primary = AccentBlue,
+    onPrimary = OnAccent,
+    primaryContainer = AccentBlueContainer,
+    onPrimaryContainer = AccentBlueBright,
+    secondary = AccentIndigo,
+    onSecondary = OnAccent,
     secondaryContainer = UserBubbleDark,
     onSecondaryContainer = TextPrimary,
     tertiary = AccentCyan,
@@ -34,7 +34,7 @@ private val DroidCommandDarkColorScheme = darkColorScheme(
     outlineVariant = BorderDark,
     error = AccentRed,
     onError = TextPrimary,
-    errorContainer = Color(0xFF3A1210),
+    errorContainer = Color(0xFF3A1416),
     onErrorContainer = Color(0xFFFFB4AB),
 )
 

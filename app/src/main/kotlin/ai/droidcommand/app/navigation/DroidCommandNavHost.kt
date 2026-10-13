@@ -12,7 +12,7 @@ import ai.droidcommand.app.ui.notes.NotePluginsScreen
 import ai.droidcommand.app.ui.notes.NotesScreen
 import ai.droidcommand.app.ui.plan.PlanScreen
 import ai.droidcommand.app.ui.settings.SettingsScreen
-import ai.droidcommand.app.ui.theme.AccentNeonGreen
+import ai.droidcommand.app.ui.theme.AccentBlueBright
 import ai.droidcommand.app.ui.theme.BackgroundDark
 import ai.droidcommand.app.ui.theme.BorderDark
 import ai.droidcommand.app.ui.theme.NavBarDark
@@ -168,8 +168,8 @@ private fun DroidBottomBar(currentRoute: String?, navController: NavHostControll
                 },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = BackgroundDark,
-                    selectedTextColor = AccentNeonGreen,
-                    indicatorColor = AccentNeonGreen,
+                    selectedTextColor = AccentBlueBright,
+                    indicatorColor = AccentBlueBright,
                     unselectedIconColor = TextSecondary,
                     unselectedTextColor = TextSecondary,
                 ),

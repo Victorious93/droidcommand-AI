@@ -2,29 +2,30 @@ package ai.droidcommand.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Visual language is a blue + darker ("deep ocean") dark theme, by explicit owner request.
-// Near-black navy surfaces, a bright-blue primary accent, cyan labels and an indigo user
-// bubble. The constant NAMES are kept stable across the app so every existing call site keeps
-// compiling; only their hex values changed from the earlier green/OpenDroid palette.
+// Blue-on-deep-navy dark palette. Token names keep the surface/text roles of the earlier
+// OpenDroid-derived palette; only the values and the accent names changed.
 
-// Surfaces — cool, blue-shifted near-blacks (darker than the previous palette).
-val BackgroundDark = Color(0xFF070B14)
-val SurfaceDark = Color(0xFF0B1220)
-val CardDark = Color(0xFF111A2B)
-val BorderDark = Color(0xFF22304A)
-val NavBarDark = Color(0xFF0C1626)
+// Surfaces
+val BackgroundDark = Color(0xFF050912)
+val SurfaceDark = Color(0xFF0A1220)
+val CardDark = Color(0xFF111B2E)
+val BorderDark = Color(0xFF243350)
+val NavBarDark = Color(0xFF0B1A33)
 
 // Text
-val TextPrimary = Color(0xFFEAF1FB)
-val TextSecondary = Color(0xFF8699B4)
+val TextPrimary = Color(0xFFE8F0FC)
+val TextSecondary = Color(0xFF8FA3C2)
 
-// Accents. "Neon" is the bright blue used for thin marks, titles and selection; the calmer
-// blue fills large buttons. (Names retained from the green era; values are now blue.)
-val AccentNeonGreen = Color(0xFF3B9EFF)
-val AccentGreenButton = Color(0xFF2563EB)
-val AccentGreenContainer = Color(0xFF12294A)
-val AccentCyan = Color(0xFF38E1FF)
-val AccentPurple = Color(0xFF6C7BFF)
-val UserBubbleDark = Color(0xFF1B2A52)
-val AccentRed = Color(0xFFFF5A6E)
-val OnAccentDark = Color(0xFF030912)
+// Accents. The bright blue is for thin marks, titles and selection; the deeper blue fills large buttons.
+val AccentBlueBright = Color(0xFF5AA9FF)
+val AccentBlue = Color(0xFF2F6FDB)
+val AccentBlueContainer = Color(0xFF0F2A55)
+val AccentCyan = Color(0xFF4FD1F5)
+val AccentIndigo = Color(0xFF5B6CFF)
+val UserBubbleDark = Color(0xFF1A2354)
+val AccentRed = Color(0xFFFF5A52)
+val OnAccent = Color(0xFFFFFFFF)
+val OnAccentDark = Color(0xFF04101F)
+
+// Status colors stay green so success/failure remain distinguishable from the blue brand accent.
+val AccentSuccess = Color(0xFF3DDC84)
