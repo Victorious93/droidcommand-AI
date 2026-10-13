@@ -19,10 +19,10 @@ import javax.xml.parsers.DocumentBuilderFactory
  * has no opinion on the security policy gating it, matching `core-build-local.LocalProcessBuildExecutor`'s
  * identical relationship to [ShellExecutor].
  *
- * **Deliberately implements only 9 of [DeviceController]'s 29 methods for real** —
+ * **Deliberately implements only 11 of [DeviceController]'s 29 methods for real** —
  * [getDeviceInfo]/[getBatteryStatus]/[getStorageInfo]/[listInstalledApps]/[getUiTree]/[takeScreenshot]/
- * [listNotifications]/[getNetworkState]/[readFile] — every one read-only and non-mutating. None of the
- * other 20 (anything that taps, types, launches an app, sends an SMS, makes a call, or writes/deletes/
+ * [listNotifications]/[getNetworkState]/[readFile]/[listDirectory]/[listContacts] — every one read-only
+ * and non-mutating. None of the other 18 (anything that taps, types, launches an app, sends an SMS, makes a call, or writes/deletes/
  * moves/copies a file) are implemented here: this device is a real personal phone, and actually
  * exercising a mutating action against it is not a call this class makes unilaterally. Every unimplemented
  * method fails with an explicit "not yet implemented" reason —
@@ -323,16 +323,135 @@ class AdbDeviceController(
                 }
         }
     }
+
+    /**
+     * Lists a directory via `adb exec-out ls -1Ap '<path>/'` (`exec-out` so no pty can rewrite line
+     * endings or colorize). `-1Ap` is the deliberately minimal flag set that toybox (Android 6+), busybox
+     * and AOSP's older toolbox agree on: one name per line, `.`/`..` omitted, a trailing `/` on
+     * directories. Long (`-l`) output is avoided because its column layout, date format and symlink
+     * rendering differ across those implementations. The path always gets a trailing `/` so a symlinked
+     * directory such as `/sdcard` lists its target's contents rather than the link itself. Paths are
+     * single-quoted for the device-side shell, since `adb` re-joins its arguments and runs them through
+     * `sh -c`.
+     *
+     * Sizes come from a second, best-effort `stat -L -c '%F|%s|%n'` over the non-directory names (`-L`
+     * so a symlink to a directory is classified as the directory it really is). If `stat` is unavailable
+     * or fails for an entry, that entry is still listed with `sizeBytes = null` rather than the whole
+     * listing failing or a size being invented. Known limit: a file name containing a newline cannot be
+     * represented in line-oriented output and will be split.
+     */
+    override fun listDirectory(path: String): FileListResult {
+        val directory = if (path.endsWith("/")) path else "$path/"
+        val result = runAdb("exec-out", "ls", "-1Ap", shellQuote(directory))
+        if (result !is ShellExecutionResult.Success) {
+            return FileListResult.Failure("Cannot list directory '$path': failed to run 'adb exec-out ls'")
+        }
+        if (result.exitCode != 0) {
+            return FileListResult.Failure("Cannot list directory '$path': 'adb exec-out ls' exited ${result.exitCode}: ${result.stderr.trim()}")
+        }
+        val names = result.stdout.lineSequence()
+            .map { it.removeSuffix("\r") }
+            .filter { it.isNotEmpty() }
+            .toList()
+        val stats = statFiles(directory, names.filterNot { it.endsWith("/") })
+        val parent = directory.trimEnd('/')
+        val entries = names.map { raw ->
+            val isDirectoryByLs = raw.endsWith("/")
+            val name = raw.removeSuffix("/")
+            val stat = if (isDirectoryByLs) null else stats[name]
+            val isDirectory = isDirectoryByLs || stat?.isDirectory == true
+            FileEntry(
+                name = name,
+                path = "$parent/$name",
+                isDirectory = isDirectory,
+                sizeBytes = if (isDirectory) null else stat?.sizeBytes,
+            )
+        }
+        return FileListResult.Success(entries)
+    }
+
+    private data class StatInfo(val isDirectory: Boolean, val sizeBytes: Long?)
+
+    private fun statFiles(directory: String, names: List<String>): Map<String, StatInfo> {
+        val stats = mutableMapOf<String, StatInfo>()
+        var chunk = mutableListOf<String>()
+        var chunkLength = 0
+
+        fun flush() {
+            if (chunk.isEmpty()) return
+            val script = "cd ${shellQuote(directory)} && stat -L -c '%F|%s|%n' -- ${chunk.joinToString(" ") { shellQuote(it) }}"
+            val result = runAdb("exec-out", script)
+            // stat exits non-zero if any single entry (e.g. a dangling symlink) fails but still prints the rest.
+            if (result is ShellExecutionResult.Success) {
+                for (line in result.stdout.lineSequence()) {
+                    val parts = line.removeSuffix("\r").split('|', limit = 3)
+                    if (parts.size != 3) continue
+                    stats[parts[2]] = StatInfo(isDirectory = parts[0] == "directory", sizeBytes = parts[1].toLongOrNull())
+                }
+            }
+            chunk = mutableListOf()
+            chunkLength = 0
+        }
+        for (name in names) {
+            if (chunkLength + name.length > MAX_STAT_ARGS_CHARS) flush()
+            chunk += name
+            chunkLength += name.length + 3
+        }
+        flush()
+        return stats
+    }
+
+    /** Single-quotes [value] for the device-side `sh -c` that `adb exec-out`/`adb shell` hand their arguments to. */
+    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+
+    /**
+     * Lists contacts that have phone numbers via the real contacts provider:
+     * `adb exec-out content query --uri content://com.android.contacts/data/phones --projection
+     * contact_id:display_name:data1`. Rows print as `Row: N contact_id=1, display_name=Alice, data1=+1 555`
+     * — values are not escaped, so each row is matched from its `Row: N contact_id=` header up to the next
+     * header (or end of output), which also tolerates a value containing `, ` or a newline. Rows are
+     * grouped by `contact_id`, not display name, so two different contacts sharing a name stay separate
+     * while one contact's several numbers are collected under it. A provider `NULL` display name becomes
+     * an empty name and a `NULL` number is dropped. `content query` prints `No result found.` for an empty
+     * book, which is reported as an empty list, not a failure. Contacts with no phone number are not
+     * returned (that is what the `data/phones` table contains). Needs no root: the `shell` user holds
+     * `READ_CONTACTS`.
+     */
+    override fun listContacts(): ContactsResult {
+        val result = runAdb(
+            "exec-out", "content", "query",
+            "--uri", "content://com.android.contacts/data/phones",
+            "--projection", "contact_id:display_name:data1",
+        )
+        if (result !is ShellExecutionResult.Success) {
+            return ContactsResult.Failure("Cannot list contacts: failed to run 'adb exec-out content query'")
+        }
+        if (result.exitCode != 0) {
+            return ContactsResult.Failure("Cannot list contacts: 'adb exec-out content query' exited ${result.exitCode}: ${result.stderr.trim()}")
+        }
+        val text = result.stdout.replace("\r\n", "\n")
+        if (!text.contains("Row: ") && ("Error while accessing provider" in text || "Exception" in text)) {
+            return ContactsResult.Failure("Cannot list contacts: the contacts provider reported an error: ${text.trim().lineSequence().first()}")
+        }
+        val byContact = LinkedHashMap<String, Pair<String, MutableList<String>>>()
+        for (match in CONTACT_ROW_PATTERN.findAll(text)) {
+            val (contactId, rawName, rawNumber) = match.destructured
+            val name = rawName.trim().takeIf { it != "NULL" } ?: ""
+            val number = rawNumber.trim().takeIf { it.isNotEmpty() && it != "NULL" } ?: continue
+            val numbers = byContact.getOrPut(contactId) { name to mutableListOf() }.second
+            if (number !in numbers) numbers += number
+        }
+        return ContactsResult.Success(byContact.values.map { (name, numbers) -> ContactEntry(name = name, phoneNumbers = numbers.toList()) })
+    }
+
     override fun writeFile(path: String, content: String, append: Boolean) = failure("write file")
     override fun moveFile(fromPath: String, toPath: String) = failure("move file")
     override fun copyFile(fromPath: String, toPath: String) = failure("copy file")
     override fun deleteFile(path: String) = failure("delete file")
-    override fun listDirectory(path: String) = FileListResult.Failure(notImplemented("list directory"))
     override fun getClipboardText() = ClipboardReadResult.Failure(notImplemented("read clipboard"))
     override fun setClipboardText(text: String) = failure("set clipboard text")
     override fun sendSms(phoneNumber: String, message: String) = failure("send SMS")
     override fun makeCall(phoneNumber: String) = failure("make call")
-    override fun listContacts() = ContactsResult.Failure(notImplemented("list contacts"))
     override fun createCalendarEvent(title: String, startEpochMillis: Long, endEpochMillis: Long) = failure("create calendar event")
     override fun setAlarm(hour: Int, minute: Int, label: String?) = failure("set alarm")
     override fun setTimer(durationSeconds: Long, label: String?) = failure("set timer")
@@ -356,5 +475,10 @@ class AdbDeviceController(
         const val SCREENSHOT_TIMEOUT_MILLIS = 15_000L
         const val MAX_SCREENSHOT_BYTES = 20_000_000L
         const val MAX_FILE_READ_BYTES = 20_000_000L
+        const val MAX_STAT_ARGS_CHARS = 4_000
+        val CONTACT_ROW_PATTERN = Regex(
+            """Row: \d+ contact_id=(\d+), display_name=(.*?), data1=(.*?)(?=\nRow: \d+ contact_id=|\z)""",
+            RegexOption.DOT_MATCHES_ALL,
+        )
     }
 }
