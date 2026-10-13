@@ -1405,3 +1405,15 @@ RootForge OS is an independent product that DCA may optionally control. Full rec
 |---|---|---|
 | core-coding-session | IMPLEMENTED — local + loopback paired; no vendor cloud | `LocalCodingTunnel` walks one session plan → edit → report and says so in the text. It does not edit a repository or call a network. `PairedCodingTunnel` / `CodingTunnelPeer` carry that same session over `core-remote`'s `PairedConnection`. `FileCodingLog` reloads sessions. Unit tests include one real loopback paired socket. Cursor cloud agents, Codex, and any other vendor backend are not implemented. |
 | `:app` coding screen | ON DISK — not assembled here | Tools → Cloud coding, plus a Settings choice of on-device vs paired. Paired is persisted and refuses to start, because the app does not open a socket. No Android SDK in the session that added it. |
+
+## 11. On-device markdown vault (added 2026-10-12)
+
+`core-notes` is a JVM module. The app keeps one vault under its files directory (`notes-vault`). Tools → Notes opens it. Settings states that plugins are user text and that none are bundled.
+
+| Component | Status | Notes |
+|---|---|---|
+| `NoteVault` | IMPLEMENTED (JVM) | Folders and `.md` notes. Paths that leave the vault, absolute paths, and names starting with `.` are refused. `.plugins` is created and hidden from the folder list. |
+| Markdown preview | IMPLEMENTED (JVM) | Headings, bullets, fenced code, and paragraphs. Tables, images, links, and HTML stay as text. |
+| `PluginStore` | IMPLEMENTED (JVM, data only) | A plugin is a text manifest (`id`, `name`, `prefix`, `suffix`, literal `replace` lines). Install always stores it disabled. Enable, disable, and remove are explicit. Enabled plugins run in id order as `String.replace`, then prefix and suffix. No classes, dex, or JavaScript are loaded. A fresh vault has zero plugins. Nothing from Obsidian is bundled. |
+| `:app` Notes screen | ON DISK | Edit, save, preview, install, enable, disable, and remove. Preview applies enabled plugins; save writes the editor text unchanged. Not assembled in the session that added it (no Android SDK). |
+| Executable plugin code | PLANNED | Absent. The current sandbox is that a plugin is data, not code. |
