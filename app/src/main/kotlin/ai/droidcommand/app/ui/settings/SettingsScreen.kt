@@ -68,6 +68,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             )
         }
         VoiceSettingsSection()
+        ModeNamesSection()
         SectionLabel("Advanced")
         AdvancedSection(viewModel)
     }

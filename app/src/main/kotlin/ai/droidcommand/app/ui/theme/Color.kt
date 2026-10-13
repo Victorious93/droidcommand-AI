@@ -2,27 +2,29 @@ package ai.droidcommand.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Visual language follows `Victorious93/opendroid`'s app (near-black surfaces, neon-green
-// accent, cyan labels, purple user bubbles, bordered cards). Hex values are matched to its
-// published dark palette and screenshots; no source was copied.
+// Visual language is a blue + darker ("deep ocean") dark theme, by explicit owner request.
+// Near-black navy surfaces, a bright-blue primary accent, cyan labels and an indigo user
+// bubble. The constant NAMES are kept stable across the app so every existing call site keeps
+// compiling; only their hex values changed from the earlier green/OpenDroid palette.
 
-// Surfaces
-val BackgroundDark = Color(0xFF080C10)
-val SurfaceDark = Color(0xFF0D1117)
-val CardDark = Color(0xFF161B22)
-val BorderDark = Color(0xFF30363D)
-val NavBarDark = Color(0xFF0E2A24)
+// Surfaces — cool, blue-shifted near-blacks (darker than the previous palette).
+val BackgroundDark = Color(0xFF070B14)
+val SurfaceDark = Color(0xFF0B1220)
+val CardDark = Color(0xFF111A2B)
+val BorderDark = Color(0xFF22304A)
+val NavBarDark = Color(0xFF0C1626)
 
 // Text
-val TextPrimary = Color(0xFFF0F6FC)
-val TextSecondary = Color(0xFF8B949E)
+val TextPrimary = Color(0xFFEAF1FB)
+val TextSecondary = Color(0xFF8699B4)
 
-// Accents. Neon is for thin marks, titles and selection; the calmer green fills large buttons.
-val AccentNeonGreen = Color(0xFF00FF88)
-val AccentGreenButton = Color(0xFF00C46A)
-val AccentGreenContainer = Color(0xFF0F3D2A)
-val AccentCyan = Color(0xFF00F0FF)
-val AccentPurple = Color(0xFF8A2BE2)
-val UserBubbleDark = Color(0xFF2A1646)
-val AccentRed = Color(0xFFFF3B30)
-val OnAccentDark = Color(0xFF04120B)
+// Accents. "Neon" is the bright blue used for thin marks, titles and selection; the calmer
+// blue fills large buttons. (Names retained from the green era; values are now blue.)
+val AccentNeonGreen = Color(0xFF3B9EFF)
+val AccentGreenButton = Color(0xFF2563EB)
+val AccentGreenContainer = Color(0xFF12294A)
+val AccentCyan = Color(0xFF38E1FF)
+val AccentPurple = Color(0xFF6C7BFF)
+val UserBubbleDark = Color(0xFF1B2A52)
+val AccentRed = Color(0xFFFF5A6E)
+val OnAccentDark = Color(0xFF030912)

@@ -1,5 +1,6 @@
 package ai.droidcommand.app.ui.chat
 
+import ai.droidcommand.app.modes.ModeLabelViewModel
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import ai.droidcommand.app.ui.theme.AccentCyan
@@ -84,8 +85,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @Composable
 fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
+    val modeLabels by hiltViewModel<ModeLabelViewModel>().labels.collectAsState()
     var input by remember { mutableStateOf("") }
     var optionsOpen by remember { mutableStateOf(false) }
+    var pilotOpen by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val rows = state.lines + if (state.streaming.isNotEmpty()) listOf(ChatLine(false, state.streaming)) else emptyList()
 
@@ -130,6 +133,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Header(
+            title = modeLabels.modeOne,
             subtitle = if (state.sending) "Thinking…" else subtitleFor(state),
             active = !state.sending,
             optionsOpen = optionsOpen,
@@ -141,6 +145,10 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         if (optionsOpen) {
             OptionsPanel(state, viewModel) { modelLauncher.launch(arrayOf("*/*")) }
         }
+        TextButton(onClick = { pilotOpen = !pilotOpen }) {
+            Text(if (pilotOpen) "Hide Pilot tool" else "Pilot: run one tool", color = AccentCyan)
+        }
+        if (pilotOpen) PilotPanel()
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (rows.isEmpty()) {
@@ -235,6 +243,7 @@ private fun subtitleFor(state: ChatUiState): String {
 
 @Composable
 private fun Header(
+    title: String,
     subtitle: String,
     active: Boolean,
     optionsOpen: Boolean,
@@ -248,7 +257,8 @@ private fun Header(
         verticalAlignment = Alignment.Top,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            ScreenTitle("DroidCommand")
+            ScreenTitle(title)
+            Text("Engine: Pilot", color = AccentCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Text(
                 text = subtitle + if (optionsOpen) "  ▴" else "  ▾",
                 color = if (active) AccentNeonGreen else AccentCyan,

@@ -60,6 +60,8 @@ include(":core-billing")
 include(":core-websearch")
 include(":core-voice")
 include(":core-rag")
+include(":core-cloud-session")
+include(":core-notes")
 
 // Android modules are opt-in: they need an Android SDK, which JVM-only environments (CI, cloud
 // sessions) do not have. In Android Studio, add `includeAndroid=true` to your USER-level

@@ -33,6 +33,19 @@ fun ToolsScreen(navController: NavHostController) {
 
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("App", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Memory and the audit log. Shell, root and Termux are registered and denied until a real backend is configured.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = { navController.navigate(Routes.MEMORY) }, modifier = Modifier.fillMaxWidth()) { Text("Memory") }
+                Button(onClick = { navController.navigate(Routes.LOGS) }, modifier = Modifier.fillMaxWidth()) { Text("Logs") }
+            }
+        }
+
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Security Tools", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "Runs against an explicitly named target only, and always asks for " +

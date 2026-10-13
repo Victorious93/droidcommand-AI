@@ -4,6 +4,7 @@ import ai.droidcommand.agent.PlanRun
 import ai.droidcommand.agent.PlanStatus
 import ai.droidcommand.agent.PlanStep
 import ai.droidcommand.agent.PlanStepStatus
+import ai.droidcommand.app.modes.ModeLabelViewModel
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import ai.droidcommand.app.ui.components.SectionLabel
@@ -77,6 +78,7 @@ private val timeFormat = DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(Zon
 @Composable
 fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
+    val modeLabels by hiltViewModel<ModeLabelViewModel>().labels.collectAsState()
     var objective by remember { mutableStateOf("") }
     var selectedId by remember { mutableStateOf<String?>(null) }
 
@@ -88,7 +90,14 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
     ) {
-        item { ScreenTitle("Plan Engine") }
+        item { ScreenTitle(modeLabels.modeTwo) }
+        item {
+            Text(
+                "Engine: Forge — the objective loop. Renaming this mode does not change how the loop runs.",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
 
         item {
             DroidCard {
