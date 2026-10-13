@@ -305,11 +305,12 @@ class AdbDeviceController(
      * decoded as UTF-8 (malformed sequences replaced, never thrown) to satisfy [FileReadResult]'s
      * `String` contract — a genuinely binary file (anything that isn't valid UTF-8 text) will come
      * back with its content garbled by that decode, a limitation of the result type's shape, not of
-     * the transport underneath it. `cat`'s own non-zero exit (e.g. "No such file or directory",
+     * the transport underneath it. The path is single-quoted for the device-side shell (see [shellQuote]),
+     * so spaces, quotes and shell metacharacters in it are taken literally. `cat`'s own non-zero exit (e.g. "No such file or directory",
      * "Permission denied") is reported verbatim rather than guessed at or reclassified.
      */
     override fun readFile(path: String): FileReadResult {
-        val argv = adbArgv("exec-out", "cat", path)
+        val argv = adbArgv("exec-out", "cat", shellQuote(path))
         val result = shell.executeBinary(
             ShellCommand(executable = argv.first(), args = argv.drop(1), maxOutputBytes = MAX_FILE_READ_BYTES),
         )

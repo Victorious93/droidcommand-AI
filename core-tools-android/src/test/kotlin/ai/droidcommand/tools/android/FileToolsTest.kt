@@ -116,6 +116,20 @@ class FileToolsTest {
     }
 
     @Test
+    fun `ListDirectoryTool omits the size when it is unknown instead of printing null`() {
+        val device = ScriptedDeviceController(
+            listDirectoryResult = FileListResult.Success(
+                listOf(
+                    FileEntry("unknown.bin", "/sdcard/unknown.bin", isDirectory = false, sizeBytes = null),
+                    FileEntry("empty.txt", "/sdcard/empty.txt", isDirectory = false, sizeBytes = 0),
+                ),
+            ),
+        )
+        val result = assertIs<ToolResult.Success>(ListDirectoryTool(device).execute(mapOf("path" to "/sdcard")))
+        assertEquals(listOf("unknown.bin", "empty.txt (0 bytes)"), result.output.lines())
+    }
+
+    @Test
     fun `ListDirectoryTool fails without calling the device when path is missing`() {
         val device = ScriptedDeviceController()
         val result = ListDirectoryTool(device).execute(emptyMap())
