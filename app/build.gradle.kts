@@ -72,6 +72,7 @@ dependencies {
     implementation(project(":core-coding-session"))
     implementation(project(":core-llm-factory"))
     implementation(project(":core-websearch"))
+    implementation(project(":core-notes"))
     implementation(project(":core-voice-android"))
     implementation(project(":core-voice-neural-android"))
     implementation(project(":core-shell"))
