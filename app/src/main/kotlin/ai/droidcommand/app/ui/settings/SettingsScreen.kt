@@ -89,6 +89,14 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        SectionLabel("Notes")
+        DroidCard {
+            Text(
+                "Notes are markdown files in a vault on this device. Plugins are text you install yourself. None are bundled, and a plugin cannot run code.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         SectionLabel("Advanced")
         AdvancedSection(viewModel)
     }
