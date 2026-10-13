@@ -1397,3 +1397,11 @@ RootForge OS is an independent product that DCA may optionally control. Full rec
 | `cli` RootForge wiring | IMPLEMENTED | Opt-in via `DROIDCOMMAND_CLI_ROOTFORGE_NODES_FILE`; unset registers nothing. |
 | Build/job/artifact/terminal/flash operations | MISSING | Not exposed; see the doc's gates. |
 | `ExecutionRouter` exact-node selection | MISSING | Not needed by the passive slice. |
+
+
+## 10. Cloud coding session tunnel (2026-10-12)
+
+| Component | Status | Notes |
+|---|---|---|
+| core-coding-session | IMPLEMENTED — local + loopback paired; no vendor cloud | `LocalCodingTunnel` walks one session plan → edit → report and says so in the text. It does not edit a repository or call a network. `PairedCodingTunnel` / `CodingTunnelPeer` carry that same session over `core-remote`'s `PairedConnection`. `FileCodingLog` reloads sessions. Unit tests include one real loopback paired socket. Cursor cloud agents, Codex, and any other vendor backend are not implemented. |
+| `:app` coding screen | ON DISK — not assembled here | Tools → Cloud coding, plus a Settings choice of on-device vs paired. Paired is persisted and refuses to start, because the app does not open a socket. No Android SDK in the session that added it. |

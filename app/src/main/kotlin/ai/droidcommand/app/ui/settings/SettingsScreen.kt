@@ -3,6 +3,7 @@ package ai.droidcommand.app.ui.settings
 import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.mode.ModeLabels
 import ai.droidcommand.app.prefs.AdvancedPrefs
+import ai.droidcommand.app.prefs.CodingTunnelChoice
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
@@ -126,6 +127,7 @@ private fun ModeNamesSection(viewModel: SettingsViewModel) {
 private fun AdvancedSection(viewModel: SettingsViewModel) {
     val toolbar by viewModel.toolbarToggles.collectAsState()
     val publicLimit by viewModel.publicClipLimit.collectAsState()
+    val codingTunnel by viewModel.codingTunnel.collectAsState()
     DroidCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Chat toolbar", style = MaterialTheme.typography.titleMedium)
@@ -149,6 +151,18 @@ private fun AdvancedSection(viewModel: SettingsViewModel) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = choice == publicLimit, onClick = { viewModel.setPublicClipLimit(choice) })
                     Text("$choice clips")
+                }
+            }
+            Text("Coding tunnel", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "On this device runs the plan, edit, and report stand-in. Paired is saved but not connected: no cloud host is built.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            CodingTunnelChoice.entries.forEach { choice ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = choice == codingTunnel, onClick = { viewModel.setCodingTunnel(choice) })
+                    Text(if (choice == CodingTunnelChoice.LOCAL) "On this device" else "Paired (not connected)")
                 }
             }
         }

@@ -2,6 +2,7 @@ package ai.droidcommand.app.navigation
 
 import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.clipboard.ClipboardScreen
+import ai.droidcommand.app.ui.coding.CodingScreen
 import ai.droidcommand.app.ui.chat.ChatScreen
 import ai.droidcommand.app.ui.logs.LogsScreen
 import ai.droidcommand.app.ui.memory.MemoryScreen
@@ -69,6 +70,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val MEMORY = "memory"
     const val CLIPBOARDS = "tools/clipboards"
+    const val CODING = "tools/coding"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -123,6 +125,7 @@ fun DroidCommandNavHost(
             composable(Routes.SETTINGS) { SettingsScreen() }
             composable(Routes.MEMORY) { MemoryScreen() }
             composable(Routes.CLIPBOARDS) { ClipboardScreen() }
+            composable(Routes.CODING) { CodingScreen() }
         }
     }
 }
