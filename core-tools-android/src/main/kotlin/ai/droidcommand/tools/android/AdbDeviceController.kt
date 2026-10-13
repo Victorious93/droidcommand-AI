@@ -22,11 +22,10 @@ import javax.xml.parsers.DocumentBuilderFactory
  * **Deliberately implements only 9 of [DeviceController]'s 29 methods for real** —
  * [getDeviceInfo]/[getBatteryStatus]/[getStorageInfo]/[listInstalledApps]/[getUiTree]/[takeScreenshot]/
  * [listNotifications]/[getNetworkState]/[readFile] — every one read-only and non-mutating. None of the
- * other 20 (anything that taps, types, launches an app, sends an SMS, makes a call, writes/deletes a
- * file, or lists a directory) are implemented here: this device is a real personal phone, and actually
- * exercising a mutating action
- * against it is not a call this class makes unilaterally. Every unimplemented method fails with an
- * explicit "not yet implemented" reason —
+ * other 20 (anything that taps, types, launches an app, sends an SMS, makes a call, or writes/deletes/
+ * moves/copies a file) are implemented here: this device is a real personal phone, and actually
+ * exercising a mutating action against it is not a call this class makes unilaterally. Every unimplemented
+ * method fails with an explicit "not yet implemented" reason —
  * a **different** honest reason from [NullDeviceController]'s "no real device is connected," since a
  * device genuinely is connected in this topology; conflating "missing capability" with "missing
  * device" would misreport why the call failed. [takeScreenshot] was excluded for a separate, technical

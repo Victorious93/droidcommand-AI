@@ -13,7 +13,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * Real hardware verification for [AdbDeviceController]'s 6 read-only methods, mirroring
+ * Real hardware verification for [AdbDeviceController]'s 8 read-only methods, mirroring
  * `core-root.AdbRootExecutorRealDeviceIntegrationTest`'s exact pattern: skips cleanly (reported
  * SKIPPED, never a false PASS) wherever no real authorized adb device is present — every CI run
  * included. Every query here is read-only by construction (see [AdbDeviceController]'s own doc
