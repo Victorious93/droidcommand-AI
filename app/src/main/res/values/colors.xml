@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Matches BackgroundDark in ui/theme/Color.kt (the blue + darker theme). Used only by the
-         window/splash theme so the pre-Compose window is not a white flash. -->
-    <color name="window_background">#FF050912</color>
-</resources>

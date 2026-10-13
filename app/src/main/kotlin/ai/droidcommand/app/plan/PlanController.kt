@@ -1,10 +1,12 @@
 package ai.droidcommand.app.plan
 
+import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.PlanRun
 import ai.droidcommand.agent.PlanRunner
 import ai.droidcommand.agent.PlanStatus
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
+import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.llm.factory.CloudPlannerFactory
 import ai.droidcommand.llm.factory.CloudProviderSpec
@@ -55,6 +57,7 @@ class PlanController @Inject constructor(
     private val auditLog: JsonFileAuditLog,
     private val vault: EncryptedSecretsVault,
     private val transport: HttpTransport,
+    private val modes: EngineModes,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val cancelled = AtomicBoolean(false)
@@ -64,21 +67,19 @@ class PlanController @Inject constructor(
     fun start(spec: CloudProviderSpec, model: String, objective: String) {
         val text = objective.trim()
         if (text.isEmpty()) return
-        // Claim the slot atomically; a second tap while one run is starting must not start another.
-        // update{} may re-run its lambda on contention, so the flag is reassigned on every attempt.
-        val claimed = AtomicBoolean(false)
-        mutableState.update {
-            claimed.set(!it.running)
-            if (it.running) it else it.copy(running = true, error = null)
+        // Forge only. tryBegin also refuses a second run, so a double tap cannot start two objectives.
+        if (!modes.tryBegin(AgentMode.FORGE)) {
+            mutableState.update { it.copy(error = modes.state.value.switchError) }
+            return
         }
-        if (!claimed.get()) return
         cancelled.set(false)
+        mutableState.update { it.copy(running = true, error = null) }
 
         scope.launch {
             try {
                 val planner = when (val result = CloudPlannerFactory.create(vault, spec, model, transport)) {
                     is PlannerResult.MissingKey -> {
-                        mutableState.update { it.copy(running = false, error = result.message) }
+                        mutableState.update { it.copy(error = result.message) }
                         return@launch
                     }
                     is PlannerResult.Ready -> result.planner
@@ -98,11 +99,13 @@ class PlanController @Inject constructor(
                     },
                 )
                 runner.run(text, isCancelled = { cancelled.get() }, onUpdate = ::publish)
-                mutableState.update { it.copy(running = false) }
             } catch (e: Exception) {
                 // Exception, not Throwable: an Error (e.g. OutOfMemoryError) should not be swallowed.
                 // The message is the failure's own; the API key is only ever read lazily by the provider.
-                mutableState.update { it.copy(running = false, error = "Plan run failed: ${e.message ?: e.javaClass.simpleName}") }
+                mutableState.update { it.copy(error = "Plan run failed: ${e.message ?: e.javaClass.simpleName}") }
+            } finally {
+                mutableState.update { it.copy(running = false) }
+                modes.endTask()
             }
         }
     }

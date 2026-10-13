@@ -1,6 +1,10 @@
 package ai.droidcommand.app.ui.settings
 
+import ai.droidcommand.agent.AgentMode
+import ai.droidcommand.app.mode.EngineModeState
+import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.prefs.AdvancedPrefs
+import ai.droidcommand.app.prefs.CodingTunnelChoice
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.config.SecretState
@@ -24,7 +28,9 @@ enum class KeyStatus { NOT_SET, SAVED, NEEDS_REENTRY, STORAGE_ERROR }
 class SettingsViewModel @Inject constructor(
     private val vault: EncryptedSecretsVault,
     private val advanced: AdvancedPrefs,
+    private val modes: EngineModes,
 ) : ViewModel() {
+    val modeState: StateFlow<EngineModeState> = modes.state
     private val mutableStatus = MutableStateFlow(CloudProviderCatalog.all.associateWith { statusOf(it.secretId) })
     val status: StateFlow<Map<CloudProviderSpec, KeyStatus>> = mutableStatus.asStateFlow()
 
@@ -37,6 +43,9 @@ class SettingsViewModel @Inject constructor(
     private val mutablePublicLimit = MutableStateFlow(advanced.publicClipLimit())
     val publicClipLimit: StateFlow<Int> = mutablePublicLimit.asStateFlow()
 
+    private val mutableCodingTunnel = MutableStateFlow(advanced.codingTunnel())
+    val codingTunnel: StateFlow<CodingTunnelChoice> = mutableCodingTunnel.asStateFlow()
+
     fun setToolbarToggle(toggle: ToolbarToggle, visible: Boolean) {
         advanced.setToolbarToggle(toggle, visible)
         mutableToolbar.value = advanced.toolbarToggles()
@@ -46,6 +55,15 @@ class SettingsViewModel @Inject constructor(
         advanced.setPublicClipLimit(limit)
         mutablePublicLimit.value = advanced.publicClipLimit()
     }
+
+    fun setCodingTunnel(choice: CodingTunnelChoice) {
+        advanced.setCodingTunnel(choice)
+        mutableCodingTunnel.value = advanced.codingTunnel()
+    }
+
+    fun renameMode(mode: AgentMode, raw: String) = modes.rename(mode, raw)
+
+    fun resetModeLabels() = modes.resetLabels()
 
     fun saveSearchKey(slot: SecretSlot, key: String) {
         val trimmed = key.trim()
