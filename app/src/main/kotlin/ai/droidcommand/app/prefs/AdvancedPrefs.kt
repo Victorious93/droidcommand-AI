@@ -30,6 +30,17 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         prefs.edit { putInt(KEY_PUBLIC_LIMIT, limit) }
     }
 
+    fun codingTunnel(): CodingTunnelChoice =
+        if (prefs.getString(KEY_CODING_TUNNEL, null) == CodingTunnelChoice.PAIRED.name) {
+            CodingTunnelChoice.PAIRED
+        } else {
+            CodingTunnelChoice.LOCAL
+        }
+
+    fun setCodingTunnel(choice: CodingTunnelChoice) {
+        prefs.edit { putString(KEY_CODING_TUNNEL, choice.name) }
+    }
+
     /** The engine the user last selected. Anything other than FORGE is Pilot, including a missing value. */
     fun agentMode(): AgentMode = if (prefs.getString(KEY_AGENT_MODE, null) == AgentMode.FORGE.name) AgentMode.FORGE else AgentMode.PILOT
 
@@ -49,6 +60,7 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         const val FILE = "advanced_prefs"
         private const val KEY_TOOLBAR = "chat.toolbar"
         private const val KEY_PUBLIC_LIMIT = "clipboard.public.limit"
+        private const val KEY_CODING_TUNNEL = "coding.tunnel"
         private const val KEY_AGENT_MODE = "engine.mode"
 
         private fun labelKey(mode: AgentMode) = "engine.label.${mode.name}"
@@ -56,3 +68,6 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         const val DEFAULT_PUBLIC_LIMIT = 25
     }
 }
+
+/** Where a coding session runs. [PAIRED] is stored only; the app does not open a paired socket. */
+enum class CodingTunnelChoice { LOCAL, PAIRED }
