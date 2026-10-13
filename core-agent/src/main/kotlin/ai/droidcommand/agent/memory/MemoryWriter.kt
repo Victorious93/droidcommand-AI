@@ -165,6 +165,32 @@ class MemoryWriter(
         return MemoryDecision.Stored(entity, supersededId, notes)
     }
 
+    /**
+     * Records a relationship between two already-written memory (or other graph) records, completing the
+     * "relationship update" stage named in this class's own doc comment. Returns `false` and writes nothing
+     * if either [fromId] or [toId] no longer resolves to a stored entity — e.g. the end was [MemoryDecision.Conflict]ed,
+     * [MemoryDecision.Rejected], or has since been superseded away — rather than letting a dangling edge through
+     * or throwing on a caller's behalf. Does not deduplicate: calling this twice for the same pair adds two edges.
+     */
+    fun writeRelationship(fromId: String, toId: String, type: String, sourceRef: String? = null): Boolean {
+        if (graph.getEntity(fromId) == null || graph.getEntity(toId) == null) {
+            audit.record("memory.relationship.skip from=$fromId to=$toId type=$type")
+            return false
+        }
+        graph.addRelationship(
+            Relationship(
+                id = idGenerator(),
+                fromId = fromId,
+                toId = toId,
+                type = type,
+                properties = sourceRef?.let { mapOf("evidence" to it) } ?: emptyMap(),
+                createdAt = clock(),
+            ),
+        )
+        audit.record("memory.relationship from=$fromId to=$toId type=$type")
+        return true
+    }
+
     private fun put(entity: Entity) = graph.addEntity(entity)
 
     private fun reject(reason: String): MemoryDecision.Rejected {

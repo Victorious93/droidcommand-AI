@@ -80,8 +80,8 @@ sealed class MemoryResult {
  * [memoryWriter] (off when `null`, the default) makes [rememberConversation] store what the model extracts
  * through the Second Brain write pipeline (`MemoryWriter`: secret/personal-data screening, duplicate and
  * conflict handling, model-claims-are-never-verified) into [memoryWriteScope], instead of writing straight
- * into [knowledgeGraph]. When both are set, [memoryWriter] wins. Extracted relationships are not stored on
- * this path (see [MemoryExtractionService]).
+ * into [knowledgeGraph]. When both are set, [memoryWriter] wins. Extracted relationships are remapped to the
+ * writer's final entity ids and stored on this path too (see [MemoryExtractionService]).
  *
  * [webSearch] (off when `null`, the default) backs the per-message `useWebSearch` flag on [send]. When the
  * flag is set, the user's message text is sent to that search provider and the top results are added to
@@ -318,7 +318,11 @@ class ChatSession(
         }
         return when (result) {
             is GraphExtractionResult.Success ->
-                if (outcome == null || outcome.stored == 0) MemoryResult.NothingToRemember else MemoryResult.Saved(outcome.stored, 0)
+                if (outcome == null || outcome.stored == 0) {
+                    MemoryResult.NothingToRemember
+                } else {
+                    MemoryResult.Saved(outcome.stored, outcome.relationshipsStored)
+                }
             is GraphExtractionResult.Malformed -> MemoryResult.Failure("The model's reply could not be read as memory.")
             is GraphExtractionResult.ProviderFailed -> MemoryResult.Failure(scrub(result.error.message, key))
         }
