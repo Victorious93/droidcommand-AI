@@ -6,8 +6,9 @@ name: Build APK
 # NOT run on every pull_request — only on manual dispatch and on pushes to the
 # branch(es) listed below — so ordinary JVM PRs stay fast.
 #
-# The produced APK is debug-signed and has NOT been launched on a device or
-# emulator; see docs/AUDIT_2026-09-05.md (app stays ON DISK / UNVERIFIED).
+# The produced APK is debug-signed. A separate workflow
+# (.github/workflows/android-emulator.yml) launches the app and runs the
+# instrumented smoke test; see the 2026-10-13 audit addendum.
 
 on:
   workflow_dispatch:
