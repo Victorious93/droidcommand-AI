@@ -166,4 +166,17 @@ class MemoryWriterTest {
         assertEquals(emptyList(), graph.relationshipsFrom(a.entity.id))
         assertTrue(events.any { it.startsWith("memory.relationship.skip") })
     }
+
+    @Test
+    fun `writeRelationship refuses a credential-like type and never echoes it into the audit log`() {
+        val a = assertIs<MemoryDecision.Stored>(writer.write(cand("a", title = "A")))
+        val b = assertIs<MemoryDecision.Stored>(writer.write(cand("b", title = "B")))
+        val secret = "sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUV"
+
+        assertFalse(writer.writeRelationship(a.entity.id, b.entity.id, secret))
+
+        assertEquals(emptyList(), graph.relationshipsFrom(a.entity.id))
+        assertTrue(events.any { it.startsWith("memory.relationship.reject reason=sensitive-type") })
+        assertTrue(events.none { secret in it }, "audit must not echo the secret")
+    }
 }

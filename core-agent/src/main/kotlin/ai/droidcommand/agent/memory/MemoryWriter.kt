@@ -47,11 +47,14 @@ sealed interface MemoryDecision {
 
 /**
  * The write half of the Second Brain pipeline (Part 1 §4): validate → sensitivity → provenance →
- * duplicate → conflict → store → relationship update.
+ * duplicate → conflict → store → relationship update ([writeRelationship]).
  *
- * Not implemented here, by design of this slice: automatic *extraction* of candidates from a
- * conversation (the existing `core-llm` `GraphExtractionService` does that and can feed this), and
- * embedding/FTS index updates (no embedding index exists in this repo yet; retrieval is keyword + graph).
+ * Automatic *extraction* of candidates from a conversation now feeds this: `core-llm.MemoryExtractionService`
+ * runs an `LlmGraphExtractor` and calls [write] for each extracted entity (see its own doc comment for how
+ * extracted relationships are remapped to final ids and passed to [writeRelationship]).
+ *
+ * Not implemented here, by design of this slice: embedding/FTS index updates (no embedding index exists in
+ * this repo yet; retrieval is keyword + graph).
  *
  * Duplicate detection is O(n) over stored memories ([KnowledgeGraph.searchEntities] with an empty
  * keyword lists everything) — fine for thousands, unmeasured beyond that.
@@ -168,11 +171,19 @@ class MemoryWriter(
     /**
      * Records a relationship between two already-written memory (or other graph) records, completing the
      * "relationship update" stage named in this class's own doc comment. Returns `false` and writes nothing
-     * if either [fromId] or [toId] no longer resolves to a stored entity — e.g. the end was [MemoryDecision.Conflict]ed,
-     * [MemoryDecision.Rejected], or has since been superseded away — rather than letting a dangling edge through
-     * or throwing on a caller's behalf. Does not deduplicate: calling this twice for the same pair adds two edges.
+     * if [type] looks like a credential or personal data ([SensitiveContentClassifier]; checked first, so a
+     * sensitive [type] is never echoed into an audit event even on the endpoint-missing path below) or if
+     * either [fromId] or [toId] no longer resolves to a stored entity — e.g. the end was
+     * [MemoryDecision.Conflict]ed, [MemoryDecision.Rejected], or has since been superseded away — rather than
+     * letting a dangling edge through or throwing on a caller's behalf. Does not deduplicate: calling this
+     * twice for the same pair adds two edges.
      */
     fun writeRelationship(fromId: String, toId: String, type: String, sourceRef: String? = null): Boolean {
+        val classification = SensitiveContentClassifier.classify(type)
+        if (classification.sensitivity != Sensitivity.NORMAL) {
+            audit.record("memory.relationship.reject reason=sensitive-type(${classification.sensitivity})")
+            return false
+        }
         if (graph.getEntity(fromId) == null || graph.getEntity(toId) == null) {
             audit.record("memory.relationship.skip from=$fromId to=$toId type=$type")
             return false
