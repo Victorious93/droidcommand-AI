@@ -1417,3 +1417,14 @@ RootForge OS is an independent product that DCA may optionally control. Full rec
 | `PluginStore` | IMPLEMENTED (JVM, data only) | A plugin is a text manifest (`id`, `name`, `prefix`, `suffix`, literal `replace` lines). Install always stores it disabled. Enable, disable, and remove are explicit. Enabled plugins run in id order as `String.replace`, then prefix and suffix. No classes, dex, or JavaScript are loaded. A fresh vault has zero plugins. Nothing from Obsidian is bundled. |
 | `:app` Notes screen | ON DISK | Edit, save, preview, install, enable, disable, and remove. Preview applies enabled plugins; save writes the editor text unchanged. Not assembled in the session that added it (no Android SDK). |
 | Executable plugin code | PLANNED | Absent. The current sandbox is that a plugin is data, not code. |
+
+## 12. App shell gaps closed on disk (2026-10-13)
+
+These are existing screens and stores, not new product areas. The Compose screens were not assembled in the session that added them (no Android SDK).
+
+| Component | Status | Notes |
+|---|---|---|
+| Saved chats | IMPLEMENTED (JVM) / ON DISK (UI) | `ChatSession.open` switches conversations and leaves the previous one stored. Chat → Library lists them, opens one, and deletes one. New chat no longer deletes the current transcript. |
+| Skills and templates | ON DISK | Chat → Library uses the existing Room template stores (`TemplateStores`). Bundled items are seeded. A template fills the message box. A skill is sent as system text and is not stored in the transcript. User-written templates and skills can be saved and deleted; built-ins cannot be deleted. |
+| Plan history | IMPLEMENTED (JVM) / wired in `:app` | `PlanHistoryFile` keeps finished runs. A run still in progress is not written, so a process death drops it. |
+| Device-tool backends | STUB, stated in the UI | Root, Termux, Metasploit, and SET stay on their `Null*` executors. Settings and the two tool screens say a run is refused because no program is connected. |

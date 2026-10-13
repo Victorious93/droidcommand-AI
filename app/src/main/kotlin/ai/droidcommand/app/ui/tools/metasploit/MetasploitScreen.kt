@@ -66,6 +66,12 @@ fun MetasploitScreen(viewModel: MetasploitViewModel = hiltViewModel()) {
             "Every field below is structured input — no command is ever typed. " +
                 "Running a module always asks for explicit confirmation first.",
             style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "No Metasploit program is connected on this device. A run is refused until one is.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
         )
 
         Text("Module type", style = MaterialTheme.typography.labelLarge)

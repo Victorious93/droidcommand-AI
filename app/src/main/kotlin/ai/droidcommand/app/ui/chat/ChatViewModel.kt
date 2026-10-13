@@ -11,6 +11,7 @@ import ai.droidcommand.app.localmodels.ImportOutcome
 import ai.droidcommand.app.localmodels.ImportedModel
 import ai.droidcommand.app.localmodels.LocalModelRuntime
 import ai.droidcommand.app.prefs.AdvancedPrefs
+import ai.droidcommand.app.prompts.PromptLibrary
 import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.llm.factory.ChatResult
@@ -18,7 +19,12 @@ import ai.droidcommand.llm.factory.ChatSession
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.llm.factory.MemoryResult
+import ai.droidcommand.llm.factory.SavedChat
 import ai.droidcommand.llm.factory.WebSearchCatalog
+import ai.droidcommand.llm.factory.newChatId
+import ai.droidcommand.llm.factory.savedChats
+import ai.droidcommand.templates.PromptTemplate
+import ai.droidcommand.templates.Skill
 import ai.droidcommand.llm.local.ModelInstallResult
 import ai.droidcommand.rag.AttachResult
 import ai.droidcommand.rag.DocumentInfo
@@ -102,6 +108,13 @@ data class ChatUiState(
     val localStatus: String? = null,
     /** True while the delete-model confirmation is open. */
     val confirmDeleteLocalModel: Boolean = false,
+    val conversationId: String = ChatSession.DEFAULT_CONVERSATION_ID,
+    val savedChats: List<SavedChat> = emptyList(),
+    val templates: List<PromptTemplate> = emptyList(),
+    val skills: List<Skill> = emptyList(),
+    /** Skill whose system text is added to each later request. Not written into the saved transcript. */
+    val skillId: String? = null,
+    val promptError: String? = null,
 )
 
 /**
@@ -118,9 +131,10 @@ data class ChatUiState(
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     vault: EncryptedSecretsVault,
-    store: ConversationStore,
+    private val store: ConversationStore,
     transport: HttpTransport,
     graph: KnowledgeGraph,
+    private val prompts: PromptLibrary,
     private val runtime: VoiceRuntime,
     private val documentRuntime: DocumentRuntime,
     private val advanced: AdvancedPrefs,
@@ -191,10 +205,25 @@ class ChatViewModel @Inject constructor(
                 )
             }
         }
-        // History comes from Room, which refuses main-thread access: load it on the IO dispatcher.
+        // History, the chat list, and the template library come from Room, which refuses main-thread access.
         viewModelScope.launch(Dispatchers.IO) {
+            val savedId = prefs.getString(KEY_CONVERSATION, null)?.takeIf { it.isNotBlank() } ?: ChatSession.DEFAULT_CONVERSATION_ID
+            runCatching { session.open(savedId) }
             val lines = runCatching { session.history() }.getOrDefault(emptyList()).map { ChatLine(it.role == Role.USER, it.content) }
-            mutableState.update { if (it.lines.isEmpty()) it.copy(lines = lines) else it }
+            val templates = runCatching { prompts.templates() }.getOrDefault(emptyList())
+            val skills = runCatching { prompts.skills() }.getOrDefault(emptyList())
+            val skillId = prefs.getString(KEY_SKILL, null)?.takeIf { id -> skills.any { it.id == id } }
+            session.setRequestPrompt(skills.firstOrNull { it.id == skillId }?.systemPrompt)
+            mutableState.update {
+                it.copy(
+                    lines = if (it.lines.isEmpty()) lines else it.lines,
+                    savedChats = runCatching { savedChats(store) }.getOrDefault(emptyList()),
+                    templates = templates,
+                    skills = skills,
+                    skillId = skillId,
+                    conversationId = session.currentId(),
+                )
+            }
         }
     }
 
@@ -279,6 +308,7 @@ class ChatViewModel @Inject constructor(
         if (current.sending || text.isBlank()) return
         mutableState.update { it.copy(sending = true, streaming = "", error = null, notice = null) }
         viewModelScope.launch(Dispatchers.IO) {
+            session.setRequestPrompt(current.skills.firstOrNull { it.id == current.skillId }?.systemPrompt)
             val localId = current.activeLocalModelId
             // Web search sends the message text to a search provider, so it is not used for on-device replies.
             val localNotice = if (localId != null && current.webSearchEnabled) "Web search is not used for on-device replies." else null
@@ -301,6 +331,7 @@ class ChatViewModel @Inject constructor(
                         streaming = "",
                         sending = false,
                         notice = result.notice ?: localNotice,
+                        savedChats = runCatching { savedChats(store) }.getOrDefault(it.savedChats),
                     ).also { voice.onReply(result.text, it.speakMode) }
                     is ChatResult.Failure -> it.copy(streaming = "", sending = false, error = result.message)
                 }
@@ -417,11 +448,108 @@ class ChatViewModel @Inject constructor(
         }
     }.getOrNull()
 
+    /** Starts an empty conversation and keeps the previous one in the list. */
     fun newChat() {
         if (mutableState.value.sending) return
         viewModelScope.launch(Dispatchers.IO) {
-            session.reset()
-            mutableState.update { it.copy(lines = emptyList(), streaming = "", error = null) }
+            val id = newChatId()
+            session.open(id)
+            switchTo(id, emptyList())
+        }
+    }
+
+    /** Puts expanded template text into the input field. Does not send it. */
+    fun insertDraft(text: String) {
+        mutableState.update { it.copy(pendingInput = text, promptError = null) }
+    }
+
+    fun openChat(id: String) {
+        if (mutableState.value.sending) return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { session.open(id) }.onFailure { error ->
+                mutableState.update { it.copy(error = error.message) }
+                return@launch
+            }
+            val lines = session.history().map { ChatLine(it.role == Role.USER, it.content) }
+            switchTo(session.currentId(), lines)
+        }
+    }
+
+    /** Deletes one saved chat. Deleting the open chat starts a new empty one. */
+    fun deleteChat(id: String) {
+        if (mutableState.value.sending) return
+        viewModelScope.launch(Dispatchers.IO) {
+            store.delete(id)
+            if (session.currentId() == id) {
+                session.open(newChatId())
+                switchTo(session.currentId(), emptyList())
+            } else {
+                mutableState.update { it.copy(savedChats = savedChats(store)) }
+            }
+        }
+    }
+
+    fun selectSkill(id: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val skill = id?.let { chosen -> mutableState.value.skills.firstOrNull { it.id == chosen } }
+            prefs.edit { if (skill == null) remove(KEY_SKILL) else putString(KEY_SKILL, skill.id) }
+            session.setRequestPrompt(skill?.systemPrompt)
+            mutableState.update { it.copy(skillId = skill?.id, promptError = null) }
+        }
+    }
+
+    fun saveTemplate(name: String, body: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val saved = runCatching { prompts.saveTemplate(name, body) }
+            mutableState.update {
+                it.copy(
+                    templates = runCatching { prompts.templates() }.getOrDefault(it.templates),
+                    promptError = saved.exceptionOrNull()?.message,
+                )
+            }
+        }
+    }
+
+    fun deleteTemplate(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            prompts.deleteTemplate(id)
+            mutableState.update { it.copy(templates = prompts.templates()) }
+        }
+    }
+
+    fun saveSkill(name: String, systemPrompt: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val saved = runCatching { prompts.saveSkill(name, systemPrompt) }
+            mutableState.update {
+                it.copy(
+                    skills = runCatching { prompts.skills() }.getOrDefault(it.skills),
+                    promptError = saved.exceptionOrNull()?.message,
+                )
+            }
+        }
+    }
+
+    fun deleteSkill(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            prompts.deleteSkill(id)
+            val still = prompts.skills()
+            val selected = mutableState.value.skillId?.takeIf { chosen -> still.any { it.id == chosen } }
+            if (selected == null) session.setRequestPrompt(null)
+            prefs.edit { if (selected == null) remove(KEY_SKILL) else putString(KEY_SKILL, selected) }
+            mutableState.update { it.copy(skills = still, skillId = selected) }
+        }
+    }
+
+    private fun switchTo(id: String, lines: List<ChatLine>) {
+        prefs.edit { putString(KEY_CONVERSATION, id) }
+        mutableState.update {
+            it.copy(
+                lines = lines,
+                streaming = "",
+                error = null,
+                conversationId = id,
+                savedChats = runCatching { savedChats(store) }.getOrDefault(it.savedChats),
+            )
         }
     }
 
@@ -558,6 +686,8 @@ class ChatViewModel @Inject constructor(
         const val KEY_WEB_SEARCH = "web_search_enabled"
         const val KEY_SPEAK_MODE = "speak_mode"
         const val KEY_LOCAL_MODEL = "local_model_id"
+        const val KEY_CONVERSATION = "conversation_id"
+        const val KEY_SKILL = "skill_id"
         const val BYTES_PER_MEGABYTE = 1024L * 1024L
         const val PROGRESS_STEP_BYTES = 64L * 1024L * 1024L
     }

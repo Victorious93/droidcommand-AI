@@ -71,6 +71,8 @@ dependencies {
     implementation(project(":core-remote"))
     implementation(project(":core-coding-session"))
     implementation(project(":core-llm-factory"))
+    implementation(project(":core-templates"))
+    implementation(project(":core-templates-android"))
     implementation(project(":core-websearch"))
     implementation(project(":core-notes"))
     implementation(project(":core-voice-android"))
