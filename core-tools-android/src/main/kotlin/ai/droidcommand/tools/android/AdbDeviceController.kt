@@ -19,11 +19,12 @@ import javax.xml.parsers.DocumentBuilderFactory
  * has no opinion on the security policy gating it, matching `core-build-local.LocalProcessBuildExecutor`'s
  * identical relationship to [ShellExecutor].
  *
- * **Deliberately implements only 8 of [DeviceController]'s 29 methods for real** —
+ * **Deliberately implements only 9 of [DeviceController]'s 29 methods for real** —
  * [getDeviceInfo]/[getBatteryStatus]/[getStorageInfo]/[listInstalledApps]/[getUiTree]/[takeScreenshot]/
- * [listNotifications]/[getNetworkState] — every one read-only and non-mutating. None of the other 21
- * (anything that taps, types, launches an app, sends an SMS, makes a call, or writes/deletes a file) are
- * implemented here: this device is a real personal phone, and actually exercising a mutating action
+ * [listNotifications]/[getNetworkState]/[readFile] — every one read-only and non-mutating. None of the
+ * other 20 (anything that taps, types, launches an app, sends an SMS, makes a call, writes/deletes a
+ * file, or lists a directory) are implemented here: this device is a real personal phone, and actually
+ * exercising a mutating action
  * against it is not a call this class makes unilaterally. Every unimplemented method fails with an
  * explicit "not yet implemented" reason —
  * a **different** honest reason from [NullDeviceController]'s "no real device is connected," since a
@@ -296,7 +297,25 @@ class AdbDeviceController(
     override fun typeText(text: String) = failure("type text")
     override fun pressKey(key: DeviceKey) = failure("press key")
     override fun launchApp(packageName: String) = failure("launch app")
-    override fun readFile(path: String) = FileReadResult.Failure(notImplemented("read file"))
+
+    /**
+     * Reads a real device-side text file via `adb shell cat <path>`. The underlying transport
+     * ([ShellExecutor.execute]) is line-oriented text, not byte-safe — the same reason [takeScreenshot]
+     * needed [ShellExecutor.executeBinary] instead — so this is correct only for genuinely text files;
+     * a binary file would come back mangled, an accepted limitation [FileReadResult]'s own `String`
+     * content type already implies, not a new one introduced here. A missing file or permission
+     * failure surfaces `cat`'s own stderr rather than a generic message.
+     */
+    override fun readFile(path: String): FileReadResult {
+        val result = runAdb("shell", "cat", path)
+        if (result !is ShellExecutionResult.Success) {
+            return FileReadResult.Failure("Cannot read file '$path': failed to run 'adb shell cat'")
+        }
+        if (result.exitCode != 0) {
+            return FileReadResult.Failure("Cannot read file '$path': ${result.stderr.ifBlank { "'adb shell cat' exited ${result.exitCode}" }}")
+        }
+        return FileReadResult.Success(result.stdout)
+    }
     override fun writeFile(path: String, content: String, append: Boolean) = failure("write file")
     override fun moveFile(fromPath: String, toPath: String) = failure("move file")
     override fun copyFile(fromPath: String, toPath: String) = failure("copy file")

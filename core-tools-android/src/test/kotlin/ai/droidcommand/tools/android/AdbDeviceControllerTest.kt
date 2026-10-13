@@ -107,6 +107,10 @@ class AdbDeviceControllerTest {
                 echo "1.1.1.1 via 192.168.1.1 dev wlan0 src 192.168.1.42 uid 0"
                 echo "    cache"
                 ;;
+              "cat /sdcard/notes.txt")
+                echo "line one"
+                echo "line two"
+                ;;
               *)
                 exit 1 ;;
             esac
@@ -311,7 +315,6 @@ class AdbDeviceControllerTest {
             assertTrue(failure.reason.contains("not yet implemented"))
         }
 
-        assertIs<FileReadResult.Failure>(device.readFile("/x")).also { assertTrue(it.reason.contains("not yet implemented")) }
         assertIs<FileListResult.Failure>(device.listDirectory("/x")).also { assertTrue(it.reason.contains("not yet implemented")) }
         assertIs<ClipboardReadResult.Failure>(device.getClipboardText()).also { assertTrue(it.reason.contains("not yet implemented")) }
         assertIs<ContactsResult.Failure>(device.listContacts()).also { assertTrue(it.reason.contains("not yet implemented")) }
@@ -425,5 +428,36 @@ class AdbDeviceControllerTest {
             ).getNetworkState(),
         )
         assertTrue(result.reason.contains("ip route get"))
+    }
+
+    @Test
+    fun `readFile returns the real content of a text file via adb shell cat`() {
+        val result = assertIs<FileReadResult.Success>(newController().readFile("/sdcard/notes.txt"))
+        assertEquals("line one\nline two\n", result.content)
+    }
+
+    @Test
+    fun `readFile fails cleanly with the real stderr when the file does not exist`() {
+        val adbPath = writeScript(
+            "adb-no-such-file",
+            """
+            #!/bin/sh
+            echo "cat: /sdcard/missing.txt: No such file or directory" >&2
+            exit 1
+            """.trimIndent(),
+        )
+        val result = assertIs<FileReadResult.Failure>(newController(adbPath).readFile("/sdcard/missing.txt"))
+        assertTrue(result.reason.contains("No such file or directory"))
+    }
+
+    @Test
+    fun `readFile fails cleanly when adb cannot be started`() {
+        val result = assertIs<FileReadResult.Failure>(
+            AdbDeviceController(
+                shell = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf(File(tempDir, "no-such-adb").absolutePath))),
+                adbExecutable = File(tempDir, "no-such-adb").absolutePath,
+            ).readFile("/sdcard/notes.txt"),
+        )
+        assertTrue(result.reason.contains("adb shell cat"))
     }
 }

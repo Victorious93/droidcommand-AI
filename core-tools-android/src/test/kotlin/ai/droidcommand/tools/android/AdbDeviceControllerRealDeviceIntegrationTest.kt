@@ -88,6 +88,12 @@ class AdbDeviceControllerRealDeviceIntegrationTest {
     }
 
     @Test
+    fun `real file content is read via adb shell cat`() {
+        val result = assertIs<FileReadResult.Success>(device.readFile("/proc/version"))
+        assertTrue(result.content.isNotBlank(), "expected real content from /proc/version")
+    }
+
+    @Test
     fun `real network state is plausible`() {
         val result = assertIs<NetworkStateResult.Success>(device.getNetworkState())
         if (result.state.isConnected) {
