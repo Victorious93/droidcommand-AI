@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,7 +28,7 @@ import androidx.navigation.NavHostController
 @Composable
 fun ToolsScreen(navController: NavHostController) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 16.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ScreenTitle("Tools")
@@ -63,6 +65,36 @@ fun ToolsScreen(navController: NavHostController) {
                     onClick = { navController.navigate(Routes.CLIPBOARDS) },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Open clipboards") }
+            }
+        }
+
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Cloud coding", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "One session: plan, then edit, then report. The on-device stand-in does not call a cloud service.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = { navController.navigate(Routes.CODING) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Open coding session") }
+            }
+        }
+
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Notes", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Folders and markdown on this device. No plugins are installed until you add one.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = { navController.navigate(Routes.NOTES) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Open notes") }
             }
         }
     }

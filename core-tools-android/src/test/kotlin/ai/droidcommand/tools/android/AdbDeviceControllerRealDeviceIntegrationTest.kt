@@ -8,11 +8,12 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.io.File
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * Real hardware verification for [AdbDeviceController]'s 6 read-only methods, mirroring
+ * Real hardware verification for [AdbDeviceController]'s 10 read-only methods, mirroring
  * `core-root.AdbRootExecutorRealDeviceIntegrationTest`'s exact pattern: skips cleanly (reported
  * SKIPPED, never a false PASS) wherever no real authorized adb device is present — every CI run
  * included. Every query here is read-only by construction (see [AdbDeviceController]'s own doc
@@ -83,6 +84,46 @@ class AdbDeviceControllerRealDeviceIntegrationTest {
             assertTrue(result.sizeBytes > 0, "expected a non-empty real PNG")
         } finally {
             savedFile.delete() // this is the real device's home/lock screen at capture time — don't leave it on disk
+        }
+    }
+
+    @Test
+    fun `real network state is plausible`() {
+        val result = assertIs<NetworkStateResult.Success>(device.getNetworkState())
+        if (result.state.isConnected) {
+            assertTrue(result.state.type != NetworkType.NONE, "a connected network should report a real type, got ${result.state.type}")
+        } else {
+            assertEquals(NetworkType.NONE, result.state.type, "a disconnected result should report NONE")
+        }
+    }
+
+    @Test
+    fun `real file content is readable from a well-known device path`() {
+        val result = assertIs<FileReadResult.Success>(device.readFile("/proc/version"))
+        assertTrue(result.content.isNotBlank(), "expected /proc/version to have real, non-blank content on any real device")
+    }
+
+    @Test
+    fun `real directory listing returns real entries for a well-known device path`() {
+        val result = assertIs<FileListResult.Success>(device.listDirectory("/system"))
+        assertTrue(result.entries.any { it.name == "bin" && it.isDirectory }, "expected /system to contain a real 'bin' directory")
+        assertTrue(result.entries.none { it.name == "." || it.name == ".." }, "ls -A must not list . or ..")
+        val build = assertIs<FileListResult.Success>(device.listDirectory("/system/")).entries.firstOrNull { !it.isDirectory && it.sizeBytes != null }
+        build?.let { assertTrue(it.sizeBytes!! >= 0, "expected a non-negative real file size") }
+    }
+
+    @Test
+    fun `real directory listing fails for a nonexistent path rather than returning an empty listing`() {
+        assertIs<FileListResult.Failure>(device.listDirectory("/definitely/not/a/real/path"))
+    }
+
+    @Test
+    fun `real contacts query succeeds and returns well-formed entries`() {
+        // A real device may have an empty address book (or deny the shell user the provider) — a
+        // Success with zero entries is acceptable; assert only that any returned entry is well-formed.
+        val result = assertIs<ContactsResult.Success>(device.listContacts())
+        for (contact in result.contacts) {
+            assertTrue(contact.phoneNumbers.isNotEmpty() && contact.phoneNumbers.all { it.isNotBlank() })
         }
     }
 }

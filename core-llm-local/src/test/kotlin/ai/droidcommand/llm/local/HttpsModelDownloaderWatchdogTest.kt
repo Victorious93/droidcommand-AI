@@ -3,7 +3,9 @@ package ai.droidcommand.llm.local
 import com.sun.net.httpserver.HttpServer
 import java.io.File
 import java.io.IOException
+import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.ServerSocket
 import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
@@ -15,11 +17,30 @@ import kotlin.test.assertTrue
 
 class HttpsModelDownloaderWatchdogTest {
     private val servers = mutableListOf<HttpServer>()
+    private val rawSockets = mutableListOf<ServerSocket>()
     private val release = CountDownLatch(1)
 
     @AfterTest fun stop() {
         release.countDown()
         servers.forEach { it.stop(0) }
+        rawSockets.forEach { runCatching { it.close() } }
+    }
+
+    /** Accepts the TCP connection but never writes a response, so the client is stuck waiting on headers. */
+    private fun silentServer(): String {
+        val ss = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
+        rawSockets += ss
+        Thread(
+            {
+                runCatching {
+                    val socket = ss.accept()
+                    release.await()
+                    socket.close()
+                }
+            },
+            "silent-server",
+        ).apply { isDaemon = true }.start()
+        return "http://127.0.0.1:${ss.localPort}/f"
     }
 
     /** Sends [first] bytes then blocks (or drips 1 byte per [dripMs]) until the test ends. */
@@ -82,6 +103,20 @@ class HttpsModelDownloaderWatchdogTest {
         }.start()
         val t0 = System.nanoTime()
         val e = assertFailsWith<IOException> { downloader().download(server(100), dest(), 1L shl 30, {}, { flag.get() }) }
+        assertEquals("Cancelled", e.message)
+        val ms = (System.nanoTime() - t0) / 1_000_000
+        assertTrue(ms < 5_000, "took $ms ms")
+    }
+
+    @Test
+    fun `cancellation during the response-header wait is prompt`() {
+        val flag = AtomicBoolean(false)
+        Thread {
+            Thread.sleep(300)
+            flag.set(true)
+        }.start()
+        val t0 = System.nanoTime()
+        val e = assertFailsWith<IOException> { downloader().download(silentServer(), dest(), 1L shl 30, {}, { flag.get() }) }
         assertEquals("Cancelled", e.message)
         val ms = (System.nanoTime() - t0) / 1_000_000
         assertTrue(ms < 5_000, "took $ms ms")

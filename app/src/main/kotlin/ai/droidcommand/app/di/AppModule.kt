@@ -9,6 +9,9 @@ import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.app.approval.ComposeApprovalPrompt
 import ai.droidcommand.app.approval.VoiceApprovalPrompt
+import ai.droidcommand.app.mode.AdvancedModeStore
+import ai.droidcommand.app.mode.EngineModes
+import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.conversations.RoomConversationStore
@@ -56,19 +59,15 @@ import javax.inject.Singleton
  *
  * **Deliberately still Null-backed here, unlike `cli.buildSession`
  * (updated to an opt-in `DROIDCOMMAND_CLI_METASPLOIT`/`DROIDCOMMAND_CLI_SETOOLKIT`
- * env-var switch).** That switch doesn't transfer to this module for two
- * real reasons, not oversight: (1) there is no persisted Settings/config
- * layer here yet for a user to safely toggle this from — that is Phase 1's
- * own "API key entry... Settings screen" scope, not this Phase 0 shell's;
- * or an env var Android apps aren't normally configured through the way a
- * CLI process is. (2) `msfconsole`/`setoolkit` are Ruby/Python tools a
+ * env-var switch).** Settings states that no program is connected; it does
+ * not offer a toggle that would pretend otherwise. `msfconsole`/`setoolkit`
+ * are Ruby/Python tools a
  * bare Android app process cannot `exec` unless they are themselves
  * reachable inside that process's own filesystem/PATH (e.g. a rooted
  * device or a Termux-hosted install) — a materially different, and
  * currently unverified, precondition from `cli`'s "runs on a PC that may
- * have msfconsole installed" assumption. Wiring a real backend in here is
- * real future work once Phase 1's Settings/secrets layer exists to gate
- * it, not something this entry silently defers without saying so.
+ * have msfconsole installed" assumption. Wiring a real backend remains
+ * future work; this module does not invent a connected one.
  * [ShellTool]'s [ShellSecurityPolicy] is empty (no allowed executables)
  * for the same fail-closed reason `cli`'s own default is empty — a real
  * deployment configures it explicitly, this module never invents a "safe
@@ -144,6 +143,10 @@ object AppModule {
      * fails closed at its default capacity (10,000 events) — once full, further sensitive actions are
      * refused rather than run unaudited, and there is deliberately no way to clear it from the app.
      */
+    @Provides
+    @Singleton
+    fun provideEngineModes(prefs: AdvancedPrefs): EngineModes = EngineModes(AdvancedModeStore(prefs))
+
     @Provides
     @Singleton
     fun provideAuditLog(@ApplicationContext context: Context): JsonFileAuditLog =

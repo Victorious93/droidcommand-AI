@@ -86,6 +86,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
     var input by remember { mutableStateOf("") }
     var optionsOpen by remember { mutableStateOf(false) }
+    var libraryOpen by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val rows = state.lines + if (state.streaming.isNotEmpty()) listOf(ChatLine(false, state.streaming)) else emptyList()
 
@@ -136,16 +137,21 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onToggleOptions = { optionsOpen = !optionsOpen },
             onNewChat = viewModel::newChat,
             newChatEnabled = !state.sending,
+            libraryOpen = libraryOpen,
+            onToggleLibrary = { libraryOpen = !libraryOpen },
         )
 
         if (optionsOpen) {
             OptionsPanel(state, viewModel) { modelLauncher.launch(arrayOf("*/*")) }
         }
+        if (libraryOpen) {
+            ChatLibrary(state, viewModel)
+        }
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (rows.isEmpty()) {
                 Text(
-                    "Ask anything. Turn on Memory in the options above to let it recall past chats.",
+                    "Ask anything. Library holds saved chats, templates, and skills. Turn on Memory in the options above to let it recall past chats.",
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.align(Alignment.Center).padding(32.dp),
@@ -241,6 +247,8 @@ private fun Header(
     onToggleOptions: () -> Unit,
     onNewChat: () -> Unit,
     newChatEnabled: Boolean,
+    libraryOpen: Boolean,
+    onToggleLibrary: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 12.dp),
@@ -258,8 +266,13 @@ private fun Header(
                 modifier = Modifier.clickable(onClick = onToggleOptions).padding(vertical = 4.dp),
             )
         }
-        TextButton(onClick = onNewChat, enabled = newChatEnabled) {
-            Text("New chat", color = TextSecondary)
+        Column(horizontalAlignment = Alignment.End) {
+            TextButton(onClick = onToggleLibrary) {
+                Text(if (libraryOpen) "Hide library" else "Library", color = MaterialTheme.colorScheme.primary)
+            }
+            TextButton(onClick = onNewChat, enabled = newChatEnabled) {
+                Text("New chat", color = TextSecondary)
+            }
         }
     }
 }

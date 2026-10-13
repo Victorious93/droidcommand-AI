@@ -13,7 +13,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Proves [AdbDeviceController]'s 5 real methods against a real, scripted `adb` shell script spawned
+ * Proves [AdbDeviceController]'s real read-only methods against a real, scripted `adb` shell script spawned
  * as a real subprocess (via a real [ProcessBuilderShellExecutor]) — mirroring
  * `core-root.AdbRootExecutorTest`'s "prove the boundary is real" convention. Real on-device
  * verification lives in `AdbDeviceControllerRealDeviceIntegrationTest`, which skips cleanly wherever
@@ -57,6 +57,35 @@ class AdbDeviceControllerTest {
             case "${'$'}*" in
               "screencap -p")
                 cat "$pngFixturePath" ;;
+              "cat /sdcard/testfile.txt")
+                printf 'Hello, DroidCommand!' ;;
+              "cat /sdcard/missing.txt")
+                echo "cat: /sdcard/missing.txt: No such file or directory" 1>&2
+                exit 1 ;;
+              "ls -1Ap '/sdcard/testdir/'")
+                printf 'Documents/\nnotes.txt\nmy file.txt\nlink-to-dir\n.hidden\n' ;;
+              "cd '/sdcard/testdir/' && stat -L -c '%F|%s|%n' --"*)
+                echo "regular file|1234|notes.txt"
+                echo "regular file|7|my file.txt"
+                echo "directory|4096|link-to-dir"
+                echo "stat: can't stat '.hidden': Permission denied" 1>&2
+                exit 1 ;;
+              "content query --uri content://com.android.contacts/data/phones --projection contact_id:display_name:data1")
+                echo "Row: 0 contact_id=1, display_name=Alice Smith, data1=+1 555-0100"
+                echo "Row: 1 contact_id=1, display_name=Alice Smith, data1=+1 555-0101"
+                echo "Row: 2 contact_id=2, display_name=Bob, Jr., data1=0044 20 7946 0000"
+                echo "Row: 3 contact_id=3, display_name=NULL, data1=555-0199"
+                echo "Row: 4 contact_id=4, display_name=Alice Smith, data1=+1 555-0200"
+                echo "Row: 5 contact_id=5, display_name=No Number, data1=NULL" ;;
+              "ls -1Ap '/sdcard/emptydir/'")
+                : ;;
+              "ls -1Ap '/sdcard/nope/'")
+                echo "ls: /sdcard/nope/: No such file or directory" 1>&2
+                exit 1 ;;
+              "ls -1Ap 'it'\''s here/'")
+                printf 'a.txt\n' ;;
+              "cd 'it'\''s here/' && stat -L -c '%F|%s|%n' -- 'a.txt'")
+                echo "regular file|3|a.txt" ;;
               *)
                 exit 1 ;;
             esac
@@ -102,6 +131,10 @@ class AdbDeviceControllerTest {
                 echo "    some nested field"
                 echo "  NotificationRecord{0x5e6f7a8b  pkg=com.google.android.gm  id=12  tag=inbox  userId=0}"
                 echo "    some nested field"
+                ;;
+              "ip route get 1.1.1.1")
+                echo "1.1.1.1 via 192.168.1.1 dev wlan0 src 192.168.1.42 uid 0"
+                echo "    cache"
                 ;;
               *)
                 exit 1 ;;
@@ -266,6 +299,29 @@ class AdbDeviceControllerTest {
     }
 
     @Test
+    fun `readFile reads real content via adb exec-out cat`() {
+        val result = assertIs<FileReadResult.Success>(newController().readFile("/sdcard/testfile.txt"))
+        assertEquals("Hello, DroidCommand!", result.content)
+    }
+
+    @Test
+    fun `readFile fails cleanly when the remote file does not exist`() {
+        val result = assertIs<FileReadResult.Failure>(newController().readFile("/sdcard/missing.txt"))
+        assertTrue(result.reason.contains("No such file or directory"))
+    }
+
+    @Test
+    fun `readFile fails cleanly when adb cannot be started`() {
+        val result = assertIs<FileReadResult.Failure>(
+            AdbDeviceController(
+                shell = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf(File(tempDir, "no-such-adb").absolutePath))),
+                adbExecutable = File(tempDir, "no-such-adb").absolutePath,
+            ).readFile("/sdcard/testfile.txt"),
+        )
+        assertTrue(result.reason.contains("Cannot read file"))
+    }
+
+    @Test
     fun `every unimplemented method fails with a distinct 'not yet implemented' reason, never touching adb`() {
         val markerFile = File(tempDir, "touched")
         val adbPath = writeScript(
@@ -307,11 +363,7 @@ class AdbDeviceControllerTest {
             assertTrue(failure.reason.contains("not yet implemented"))
         }
 
-        assertIs<FileReadResult.Failure>(device.readFile("/x")).also { assertTrue(it.reason.contains("not yet implemented")) }
-        assertIs<FileListResult.Failure>(device.listDirectory("/x")).also { assertTrue(it.reason.contains("not yet implemented")) }
-        assertIs<NetworkStateResult.Failure>(device.getNetworkState()).also { assertTrue(it.reason.contains("not yet implemented")) }
         assertIs<ClipboardReadResult.Failure>(device.getClipboardText()).also { assertTrue(it.reason.contains("not yet implemented")) }
-        assertIs<ContactsResult.Failure>(device.listContacts()).also { assertTrue(it.reason.contains("not yet implemented")) }
 
         assertTrue(!markerFile.exists(), "an unimplemented method must never invoke adb at all")
     }
@@ -349,5 +401,247 @@ class AdbDeviceControllerTest {
             """.trimIndent(),
         )
         assertIs<NotificationsResult.Failure>(newController(adbPath).listNotifications())
+    }
+
+    @Test
+    fun `getNetworkState reports wifi connected from a real ip route get interface`() {
+        val result = assertIs<NetworkStateResult.Success>(newController().getNetworkState())
+        assertEquals(NetworkState(type = NetworkType.WIFI, isConnected = true), result.state)
+    }
+
+    @Test
+    fun `getNetworkState reports cellular connected for a non-wlan, non-eth interface`() {
+        val adbPath = writeScript(
+            "adb-cellular",
+            """
+            #!/bin/sh
+            echo "1.1.1.1 via 10.0.0.1 dev rmnet_data0 src 10.20.30.40 uid 0"
+            exit 0
+            """.trimIndent(),
+        )
+        val result = assertIs<NetworkStateResult.Success>(newController(adbPath).getNetworkState())
+        assertEquals(NetworkState(type = NetworkType.CELLULAR, isConnected = true), result.state)
+    }
+
+    @Test
+    fun `getNetworkState reports ethernet connected for an eth interface`() {
+        val adbPath = writeScript(
+            "adb-ethernet",
+            """
+            #!/bin/sh
+            echo "1.1.1.1 via 192.168.0.1 dev eth0 src 192.168.0.5 uid 0"
+            exit 0
+            """.trimIndent(),
+        )
+        val result = assertIs<NetworkStateResult.Success>(newController(adbPath).getNetworkState())
+        assertEquals(NetworkState(type = NetworkType.ETHERNET, isConnected = true), result.state)
+    }
+
+    @Test
+    fun `getNetworkState reports a real disconnected result when the kernel has no route, not a failure`() {
+        val adbPath = writeScript(
+            "adb-no-route",
+            """
+            #!/bin/sh
+            echo "RTNETLINK answers: Network is unreachable" >&2
+            exit 2
+            """.trimIndent(),
+        )
+        val result = assertIs<NetworkStateResult.Success>(newController(adbPath).getNetworkState())
+        assertEquals(NetworkState(type = NetworkType.NONE, isConnected = false), result.state)
+    }
+
+    @Test
+    fun `getNetworkState fails cleanly on an unrecognized non-zero exit, distinct from a real no-route result`() {
+        val adbPath = writeScript(
+            "adb-route-error",
+            """
+            #!/bin/sh
+            echo "some other routing error" >&2
+            exit 1
+            """.trimIndent(),
+        )
+        val result = assertIs<NetworkStateResult.Failure>(newController(adbPath).getNetworkState())
+        assertTrue(result.reason.contains("some other routing error"))
+    }
+
+    @Test
+    fun `getNetworkState fails cleanly when adb cannot be started`() {
+        val result = assertIs<NetworkStateResult.Failure>(
+            AdbDeviceController(
+                shell = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf(File(tempDir, "no-such-adb").absolutePath))),
+                adbExecutable = File(tempDir, "no-such-adb").absolutePath,
+            ).getNetworkState(),
+        )
+        assertTrue(result.reason.contains("ip route get"))
+    }
+
+    @Test
+    fun `listDirectory parses ls -1Ap names, marks directories, and enriches sizes from stat`() {
+        val result = assertIs<FileListResult.Success>(newController().listDirectory("/sdcard/testdir"))
+        assertEquals(
+            listOf(
+                FileEntry(name = "Documents", path = "/sdcard/testdir/Documents", isDirectory = true, sizeBytes = null),
+                FileEntry(name = "notes.txt", path = "/sdcard/testdir/notes.txt", isDirectory = false, sizeBytes = 1234L),
+                FileEntry(name = "my file.txt", path = "/sdcard/testdir/my file.txt", isDirectory = false, sizeBytes = 7L),
+                // stat -L reveals a symlink-to-directory that ls -p alone does not mark with a slash
+                FileEntry(name = "link-to-dir", path = "/sdcard/testdir/link-to-dir", isDirectory = true, sizeBytes = null),
+                // stat could not read this one: still listed, size honestly unknown
+                FileEntry(name = ".hidden", path = "/sdcard/testdir/.hidden", isDirectory = false, sizeBytes = null),
+            ),
+            result.entries,
+        )
+    }
+
+    @Test
+    fun `listDirectory accepts a path that already ends in a slash`() {
+        val result = assertIs<FileListResult.Success>(newController().listDirectory("/sdcard/testdir/"))
+        assertEquals(5, result.entries.size)
+        assertEquals("/sdcard/testdir/Documents", result.entries[0].path)
+    }
+
+    @Test
+    fun `listDirectory returns an empty listing for an empty directory`() {
+        val result = assertIs<FileListResult.Success>(newController().listDirectory("/sdcard/emptydir"))
+        assertEquals(emptyList(), result.entries)
+    }
+
+    @Test
+    fun `listDirectory single-quotes a path containing a quote for the device shell`() {
+        val result = assertIs<FileListResult.Success>(newController().listDirectory("it's here"))
+        assertEquals(listOf(FileEntry(name = "a.txt", path = "it's here/a.txt", isDirectory = false, sizeBytes = 3L)), result.entries)
+    }
+
+    @Test
+    fun `listDirectory keeps names usable when stat is unavailable, with unknown sizes`() {
+        val adbPath = writeScript(
+            "adb-ls-no-stat",
+            """
+            #!/bin/sh
+            case "${'$'}*" in
+              "exec-out ls -1Ap '/d/'") printf 'sub/\r\nf.bin\r\n' ;;
+              *) echo "stat: not found" 1>&2; exit 127 ;;
+            esac
+            """.trimIndent(),
+        )
+        val result = assertIs<FileListResult.Success>(newController(adbPath).listDirectory("/d"))
+        assertEquals(
+            listOf(
+                FileEntry(name = "sub", path = "/d/sub", isDirectory = true, sizeBytes = null),
+                FileEntry(name = "f.bin", path = "/d/f.bin", isDirectory = false, sizeBytes = null),
+            ),
+            result.entries,
+        )
+    }
+
+    @Test
+    fun `listDirectory lists the filesystem root without a doubled slash`() {
+        val adbPath = writeScript(
+            "adb-ls-root",
+            """
+            #!/bin/sh
+            case "${'$'}*" in
+              "exec-out ls -1Ap '/'") printf 'sdcard/\n' ;;
+              *) exit 1 ;;
+            esac
+            """.trimIndent(),
+        )
+        val result = assertIs<FileListResult.Success>(newController(adbPath).listDirectory("/"))
+        assertEquals("/sdcard", result.entries.single().path)
+    }
+
+    @Test
+    fun `listDirectory reports ls's own error when the directory does not exist`() {
+        val result = assertIs<FileListResult.Failure>(newController().listDirectory("/sdcard/nope"))
+        assertTrue(result.reason.contains("No such file or directory"))
+    }
+
+    @Test
+    fun `listDirectory fails cleanly when adb cannot be started`() {
+        val result = assertIs<FileListResult.Failure>(
+            AdbDeviceController(
+                shell = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf(File(tempDir, "no-such-adb").absolutePath))),
+                adbExecutable = File(tempDir, "no-such-adb").absolutePath,
+            ).listDirectory("/sdcard"),
+        )
+        assertTrue(result.reason.contains("Cannot list directory"))
+    }
+
+    @Test
+    fun `listContacts groups content query rows by contact id and tolerates commas and NULLs`() {
+        val result = assertIs<ContactsResult.Success>(newController().listContacts())
+        assertEquals(
+            listOf(
+                ContactEntry(name = "Alice Smith", phoneNumbers = listOf("+1 555-0100", "+1 555-0101")),
+                ContactEntry(name = "Bob, Jr.", phoneNumbers = listOf("0044 20 7946 0000")),
+                ContactEntry(name = "", phoneNumbers = listOf("555-0199")),
+                // a different contact sharing a display name is not merged into the first Alice
+                ContactEntry(name = "Alice Smith", phoneNumbers = listOf("+1 555-0200")),
+            ),
+            result.contacts,
+        )
+    }
+
+    @Test
+    fun `listContacts handles CRLF line endings and a value spanning lines`() {
+        val adbPath = writeScript(
+            "adb-contacts-crlf",
+            """
+            #!/bin/sh
+            printf 'Row: 0 contact_id=7, display_name=Line\r\nBreak, data1=111\r\nRow: 1 contact_id=8, display_name=Zed, data1=222\r\n'
+            """.trimIndent(),
+        )
+        val result = assertIs<ContactsResult.Success>(newController(adbPath).listContacts())
+        assertEquals(
+            listOf(
+                ContactEntry(name = "Line\nBreak", phoneNumbers = listOf("111")),
+                ContactEntry(name = "Zed", phoneNumbers = listOf("222")),
+            ),
+            result.contacts,
+        )
+    }
+
+    @Test
+    fun `listContacts returns an empty list when the provider has no rows`() {
+        val adbPath = writeScript(
+            "adb-contacts-empty",
+            """
+            #!/bin/sh
+            echo "No result found."
+            """.trimIndent(),
+        )
+        assertEquals(emptyList(), assertIs<ContactsResult.Success>(newController(adbPath).listContacts()).contacts)
+    }
+
+    @Test
+    fun `listContacts fails when the provider reports an error even with exit code zero`() {
+        val adbPath = writeScript(
+            "adb-contacts-denied",
+            """
+            #!/bin/sh
+            echo "Error while accessing provider:com.android.contacts"
+            echo "java.lang.SecurityException: Permission Denial"
+            """.trimIndent(),
+        )
+        val result = assertIs<ContactsResult.Failure>(newController(adbPath).listContacts())
+        assertTrue(result.reason.contains("Error while accessing provider"))
+    }
+
+    @Test
+    fun `listContacts fails cleanly on a non-zero exit and when adb cannot be started`() {
+        val failing = writeScript(
+            "adb-contacts-fails",
+            """
+            #!/bin/sh
+            echo "device offline" 1>&2
+            exit 1
+            """.trimIndent(),
+        )
+        assertTrue(assertIs<ContactsResult.Failure>(newController(failing).listContacts()).reason.contains("device offline"))
+        val missing = AdbDeviceController(
+            shell = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf(File(tempDir, "no-such-adb").absolutePath))),
+            adbExecutable = File(tempDir, "no-such-adb").absolutePath,
+        )
+        assertTrue(assertIs<ContactsResult.Failure>(missing.listContacts()).reason.contains("Cannot list contacts"))
     }
 }

@@ -1,6 +1,9 @@
 package ai.droidcommand.app.ui.settings
 
+import ai.droidcommand.agent.AgentMode
+import ai.droidcommand.app.mode.ModeLabels
 import ai.droidcommand.app.prefs.AdvancedPrefs
+import ai.droidcommand.app.prefs.CodingTunnelChoice
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
@@ -49,6 +52,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ScreenTitle("Settings")
+        SectionLabel("Mode names")
+        ModeNamesSection(viewModel)
         SectionLabel("API keys (stored encrypted on this device)")
         CloudProviderCatalog.all.forEach { provider ->
             ApiKeyRow(
@@ -68,8 +73,77 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             )
         }
         VoiceSettingsSection()
+        SectionLabel("Device tools")
+        DroidCard {
+            Text(
+                "Root, Termux, Metasploit, and the Social-Engineer Toolkit are on the Tools screens. Each run still asks before it executes. No program is connected for any of them in this build, so a run is refused.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        SectionLabel("Chat library")
+        DroidCard {
+            Text(
+                "Saved chats, skills, and prompt templates are under Library on the Chat screen. A skill is added to later requests and is not written into the transcript. A template fills the message box and is not sent until you send it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        SectionLabel("Notes")
+        DroidCard {
+            Text(
+                "Notes are markdown files in a vault on this device. Plugins are text you install yourself. None are bundled, and a plugin cannot run code.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         SectionLabel("Advanced")
         AdvancedSection(viewModel)
+    }
+}
+
+@Composable
+private fun ModeNamesSection(viewModel: SettingsViewModel) {
+    val mode by viewModel.modeState.collectAsState()
+    var pilotDraft by remember { mutableStateOf<String?>(null) }
+    var forgeDraft by remember { mutableStateOf<String?>(null) }
+    val pilotText = pilotDraft ?: mode.pilotLabel
+    val forgeText = forgeDraft ?: mode.forgeLabel
+    DroidCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "Mode 1 is the Pilot engine (one tool). Mode 2 is the Forge engine (an objective). A new name is only a label — it is saved on this device and does not change what either engine does. Leave a field blank to restore its default. At most ${ModeLabels.MAX_LENGTH} characters.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = pilotText,
+                onValueChange = { pilotDraft = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Mode 1 label (Pilot)") },
+            )
+            OutlinedTextField(
+                value = forgeText,
+                onValueChange = { forgeDraft = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Mode 2 label (Forge)") },
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = {
+                    viewModel.renameMode(AgentMode.PILOT, pilotText)
+                    viewModel.renameMode(AgentMode.FORGE, forgeText)
+                    pilotDraft = null
+                    forgeDraft = null
+                }) { Text("Save names") }
+                OutlinedButton(onClick = {
+                    viewModel.resetModeLabels()
+                    pilotDraft = null
+                    forgeDraft = null
+                }) { Text("Reset") }
+            }
+        }
     }
 }
 
@@ -77,6 +151,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 private fun AdvancedSection(viewModel: SettingsViewModel) {
     val toolbar by viewModel.toolbarToggles.collectAsState()
     val publicLimit by viewModel.publicClipLimit.collectAsState()
+    val codingTunnel by viewModel.codingTunnel.collectAsState()
     DroidCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Chat toolbar", style = MaterialTheme.typography.titleMedium)
@@ -100,6 +175,18 @@ private fun AdvancedSection(viewModel: SettingsViewModel) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = choice == publicLimit, onClick = { viewModel.setPublicClipLimit(choice) })
                     Text("$choice clips")
+                }
+            }
+            Text("Coding tunnel", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "On this device runs the plan, edit, and report stand-in. Paired is saved but not connected: no cloud host is built.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            CodingTunnelChoice.entries.forEach { choice ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = choice == codingTunnel, onClick = { viewModel.setCodingTunnel(choice) })
+                    Text(if (choice == CodingTunnelChoice.LOCAL) "On this device" else "Paired (not connected)")
                 }
             }
         }
