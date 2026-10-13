@@ -19,12 +19,13 @@ import javax.xml.parsers.DocumentBuilderFactory
  * has no opinion on the security policy gating it, matching `core-build-local.LocalProcessBuildExecutor`'s
  * identical relationship to [ShellExecutor].
  *
- * **Deliberately implements only 6 of [DeviceController]'s 29 methods for real** —
- * [getDeviceInfo]/[getBatteryStatus]/[getStorageInfo]/[listInstalledApps]/[getUiTree]/[takeScreenshot] —
- * every one read-only and non-mutating. None of the other 23 (anything that taps, types, launches an
- * app, sends an SMS, makes a call, or writes/deletes a file) are implemented here: this device is a
- * real personal phone, and actually exercising a mutating action against it is not a call this class
- * makes unilaterally. Every unimplemented method fails with an explicit "not yet implemented" reason —
+ * **Deliberately implements only 8 of [DeviceController]'s 29 methods for real** —
+ * [getDeviceInfo]/[getBatteryStatus]/[getStorageInfo]/[listInstalledApps]/[getUiTree]/[takeScreenshot]/
+ * [listNotifications]/[getNetworkState] — every one read-only and non-mutating. None of the other 21
+ * (anything that taps, types, launches an app, sends an SMS, makes a call, or writes/deletes a file) are
+ * implemented here: this device is a real personal phone, and actually exercising a mutating action
+ * against it is not a call this class makes unilaterally. Every unimplemented method fails with an
+ * explicit "not yet implemented" reason —
  * a **different** honest reason from [NullDeviceController]'s "no real device is connected," since a
  * device genuinely is connected in this topology; conflating "missing capability" with "missing
  * device" would misreport why the call failed. [takeScreenshot] was excluded for a separate, technical
@@ -249,6 +250,42 @@ class AdbDeviceController(
         return NotificationsResult.Success(notifications)
     }
 
+    /**
+     * Determines the active network via `adb shell ip route get 1.1.1.1` — asking the kernel's own
+     * routing table which interface would carry traffic to that address (no packet is actually sent;
+     * `ip route get` is a pure routing-table lookup, the same semantics `ip`'s own man page documents),
+     * rather than parsing `dumpsys connectivity`'s internal state, whose text format has changed
+     * materially across Android versions (legacy `NetworkInfo` lines vs. newer `NetworkAgentInfo`
+     * summaries) — a kernel interface name is comparatively stable. The interface name's prefix
+     * classifies the type: `wlan*` -> WIFI, `eth*` -> ETHERNET, anything else with a route (`rmnet*`,
+     * `ccmni*`, `radio*`, and other vendor-specific cellular names) -> CELLULAR as a reasonable but
+     * **unverified-against-a-real-device default**, not an exhaustive mapping. A non-zero exit whose
+     * stderr names an unreachable route is read as a real "no active network" result
+     * ([NetworkType.NONE], disconnected), not a query failure; any other failure (adb itself could not
+     * run) is [NetworkStateResult.Failure].
+     */
+    override fun getNetworkState(): NetworkStateResult {
+        val result = runAdb("shell", "ip", "route", "get", "1.1.1.1")
+        if (result !is ShellExecutionResult.Success) {
+            return NetworkStateResult.Failure("Cannot read network state: failed to run 'adb shell ip route get'")
+        }
+        if (result.exitCode != 0) {
+            return if ("unreachable" in result.stderr.lowercase()) {
+                NetworkStateResult.Success(NetworkState(type = NetworkType.NONE, isConnected = false))
+            } else {
+                NetworkStateResult.Failure("Cannot read network state: 'adb shell ip route get' exited ${result.exitCode}: ${result.stderr}")
+            }
+        }
+        val iface = IFACE_PATTERN.find(result.stdout)?.groupValues?.get(1)
+            ?: return NetworkStateResult.Success(NetworkState(type = NetworkType.NONE, isConnected = false))
+        val type = when {
+            iface.startsWith("wlan") -> NetworkType.WIFI
+            iface.startsWith("eth") -> NetworkType.ETHERNET
+            else -> NetworkType.CELLULAR
+        }
+        return NetworkStateResult.Success(NetworkState(type = type, isConnected = true))
+    }
+
     override fun sendBroadcast(action: String, packageName: String?, extras: Map<String, String>) =
         failure("send broadcast (mutating — not yet implemented; requires explicit owner sign-off per AdbDeviceController's safety-gate invariant for mutating actions)")
 
@@ -265,7 +302,6 @@ class AdbDeviceController(
     override fun copyFile(fromPath: String, toPath: String) = failure("copy file")
     override fun deleteFile(path: String) = failure("delete file")
     override fun listDirectory(path: String) = FileListResult.Failure(notImplemented("list directory"))
-    override fun getNetworkState() = NetworkStateResult.Failure(notImplemented("read network state"))
     override fun getClipboardText() = ClipboardReadResult.Failure(notImplemented("read clipboard"))
     override fun setClipboardText(text: String) = failure("set clipboard text")
     override fun sendSms(phoneNumber: String, message: String) = failure("send SMS")
@@ -289,6 +325,7 @@ class AdbDeviceController(
         val PKG_PATTERN = Regex("""pkg=(\S+)""")
         val ID_PATTERN = Regex("""\bid=(-?\d+)""")
         val TAG_PATTERN = Regex("""\btag=(\S+)""")
+        val IFACE_PATTERN = Regex("""\bdev\s+(\S+)""")
         val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
         const val SCREENSHOT_TIMEOUT_MILLIS = 15_000L
         const val MAX_SCREENSHOT_BYTES = 20_000_000L
