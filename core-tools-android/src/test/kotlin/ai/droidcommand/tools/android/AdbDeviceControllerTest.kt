@@ -57,6 +57,11 @@ class AdbDeviceControllerTest {
             case "${'$'}*" in
               "screencap -p")
                 cat "$pngFixturePath" ;;
+              "cat /sdcard/testfile.txt")
+                printf 'Hello, DroidCommand!' ;;
+              "cat /sdcard/missing.txt")
+                echo "cat: /sdcard/missing.txt: No such file or directory" 1>&2
+                exit 1 ;;
               *)
                 exit 1 ;;
             esac
@@ -270,6 +275,29 @@ class AdbDeviceControllerTest {
     }
 
     @Test
+    fun `readFile reads real content via adb exec-out cat`() {
+        val result = assertIs<FileReadResult.Success>(newController().readFile("/sdcard/testfile.txt"))
+        assertEquals("Hello, DroidCommand!", result.content)
+    }
+
+    @Test
+    fun `readFile fails cleanly when the remote file does not exist`() {
+        val result = assertIs<FileReadResult.Failure>(newController().readFile("/sdcard/missing.txt"))
+        assertTrue(result.reason.contains("No such file or directory"))
+    }
+
+    @Test
+    fun `readFile fails cleanly when adb cannot be started`() {
+        val result = assertIs<FileReadResult.Failure>(
+            AdbDeviceController(
+                shell = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf(File(tempDir, "no-such-adb").absolutePath))),
+                adbExecutable = File(tempDir, "no-such-adb").absolutePath,
+            ).readFile("/sdcard/testfile.txt"),
+        )
+        assertTrue(result.reason.contains("Cannot read file"))
+    }
+
+    @Test
     fun `every unimplemented method fails with a distinct 'not yet implemented' reason, never touching adb`() {
         val markerFile = File(tempDir, "touched")
         val adbPath = writeScript(
@@ -311,7 +339,6 @@ class AdbDeviceControllerTest {
             assertTrue(failure.reason.contains("not yet implemented"))
         }
 
-        assertIs<FileReadResult.Failure>(device.readFile("/x")).also { assertTrue(it.reason.contains("not yet implemented")) }
         assertIs<FileListResult.Failure>(device.listDirectory("/x")).also { assertTrue(it.reason.contains("not yet implemented")) }
         assertIs<ClipboardReadResult.Failure>(device.getClipboardText()).also { assertTrue(it.reason.contains("not yet implemented")) }
         assertIs<ContactsResult.Failure>(device.listContacts()).also { assertTrue(it.reason.contains("not yet implemented")) }

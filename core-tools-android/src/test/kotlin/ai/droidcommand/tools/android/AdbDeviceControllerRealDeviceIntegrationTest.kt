@@ -13,7 +13,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * Real hardware verification for [AdbDeviceController]'s 6 read-only methods, mirroring
+ * Real hardware verification for [AdbDeviceController]'s 8 read-only methods, mirroring
  * `core-root.AdbRootExecutorRealDeviceIntegrationTest`'s exact pattern: skips cleanly (reported
  * SKIPPED, never a false PASS) wherever no real authorized adb device is present — every CI run
  * included. Every query here is read-only by construction (see [AdbDeviceController]'s own doc
@@ -95,5 +95,11 @@ class AdbDeviceControllerRealDeviceIntegrationTest {
         } else {
             assertEquals(NetworkType.NONE, result.state.type, "a disconnected result should report NONE")
         }
+    }
+
+    @Test
+    fun `real file content is readable from a well-known device path`() {
+        val result = assertIs<FileReadResult.Success>(device.readFile("/proc/version"))
+        assertTrue(result.content.isNotBlank(), "expected /proc/version to have real, non-blank content on any real device")
     }
 }
