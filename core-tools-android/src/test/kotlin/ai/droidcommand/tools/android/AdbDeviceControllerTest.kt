@@ -103,6 +103,10 @@ class AdbDeviceControllerTest {
                 echo "  NotificationRecord{0x5e6f7a8b  pkg=com.google.android.gm  id=12  tag=inbox  userId=0}"
                 echo "    some nested field"
                 ;;
+              "ip route get 1.1.1.1")
+                echo "1.1.1.1 via 192.168.1.1 dev wlan0 src 192.168.1.42 uid 0"
+                echo "    cache"
+                ;;
               *)
                 exit 1 ;;
             esac
@@ -309,7 +313,6 @@ class AdbDeviceControllerTest {
 
         assertIs<FileReadResult.Failure>(device.readFile("/x")).also { assertTrue(it.reason.contains("not yet implemented")) }
         assertIs<FileListResult.Failure>(device.listDirectory("/x")).also { assertTrue(it.reason.contains("not yet implemented")) }
-        assertIs<NetworkStateResult.Failure>(device.getNetworkState()).also { assertTrue(it.reason.contains("not yet implemented")) }
         assertIs<ClipboardReadResult.Failure>(device.getClipboardText()).also { assertTrue(it.reason.contains("not yet implemented")) }
         assertIs<ContactsResult.Failure>(device.listContacts()).also { assertTrue(it.reason.contains("not yet implemented")) }
 
@@ -349,5 +352,78 @@ class AdbDeviceControllerTest {
             """.trimIndent(),
         )
         assertIs<NotificationsResult.Failure>(newController(adbPath).listNotifications())
+    }
+
+    @Test
+    fun `getNetworkState reports wifi connected from a real ip route get interface`() {
+        val result = assertIs<NetworkStateResult.Success>(newController().getNetworkState())
+        assertEquals(NetworkState(type = NetworkType.WIFI, isConnected = true), result.state)
+    }
+
+    @Test
+    fun `getNetworkState reports cellular connected for a non-wlan, non-eth interface`() {
+        val adbPath = writeScript(
+            "adb-cellular",
+            """
+            #!/bin/sh
+            echo "1.1.1.1 via 10.0.0.1 dev rmnet_data0 src 10.20.30.40 uid 0"
+            exit 0
+            """.trimIndent(),
+        )
+        val result = assertIs<NetworkStateResult.Success>(newController(adbPath).getNetworkState())
+        assertEquals(NetworkState(type = NetworkType.CELLULAR, isConnected = true), result.state)
+    }
+
+    @Test
+    fun `getNetworkState reports ethernet connected for an eth interface`() {
+        val adbPath = writeScript(
+            "adb-ethernet",
+            """
+            #!/bin/sh
+            echo "1.1.1.1 via 192.168.0.1 dev eth0 src 192.168.0.5 uid 0"
+            exit 0
+            """.trimIndent(),
+        )
+        val result = assertIs<NetworkStateResult.Success>(newController(adbPath).getNetworkState())
+        assertEquals(NetworkState(type = NetworkType.ETHERNET, isConnected = true), result.state)
+    }
+
+    @Test
+    fun `getNetworkState reports a real disconnected result when the kernel has no route, not a failure`() {
+        val adbPath = writeScript(
+            "adb-no-route",
+            """
+            #!/bin/sh
+            echo "RTNETLINK answers: Network is unreachable" >&2
+            exit 2
+            """.trimIndent(),
+        )
+        val result = assertIs<NetworkStateResult.Success>(newController(adbPath).getNetworkState())
+        assertEquals(NetworkState(type = NetworkType.NONE, isConnected = false), result.state)
+    }
+
+    @Test
+    fun `getNetworkState fails cleanly on an unrecognized non-zero exit, distinct from a real no-route result`() {
+        val adbPath = writeScript(
+            "adb-route-error",
+            """
+            #!/bin/sh
+            echo "some other routing error" >&2
+            exit 1
+            """.trimIndent(),
+        )
+        val result = assertIs<NetworkStateResult.Failure>(newController(adbPath).getNetworkState())
+        assertTrue(result.reason.contains("some other routing error"))
+    }
+
+    @Test
+    fun `getNetworkState fails cleanly when adb cannot be started`() {
+        val result = assertIs<NetworkStateResult.Failure>(
+            AdbDeviceController(
+                shell = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf(File(tempDir, "no-such-adb").absolutePath))),
+                adbExecutable = File(tempDir, "no-such-adb").absolutePath,
+            ).getNetworkState(),
+        )
+        assertTrue(result.reason.contains("ip route get"))
     }
 }

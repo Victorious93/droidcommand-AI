@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.io.File
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -83,6 +84,16 @@ class AdbDeviceControllerRealDeviceIntegrationTest {
             assertTrue(result.sizeBytes > 0, "expected a non-empty real PNG")
         } finally {
             savedFile.delete() // this is the real device's home/lock screen at capture time — don't leave it on disk
+        }
+    }
+
+    @Test
+    fun `real network state is plausible`() {
+        val result = assertIs<NetworkStateResult.Success>(device.getNetworkState())
+        if (result.state.isConnected) {
+            assertTrue(result.state.type != NetworkType.NONE, "a connected network should report a real type, got ${result.state.type}")
+        } else {
+            assertEquals(NetworkType.NONE, result.state.type, "a disconnected result should report NONE")
         }
     }
 }
