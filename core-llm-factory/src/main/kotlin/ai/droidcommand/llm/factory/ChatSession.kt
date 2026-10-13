@@ -3,6 +3,8 @@ package ai.droidcommand.llm.factory
 import ai.droidcommand.agent.ConversationContext
 import ai.droidcommand.agent.ConversationStore
 import ai.droidcommand.agent.GraphRetriever
+import ai.droidcommand.agent.InvalidConversationId
+import ai.droidcommand.agent.JsonFileConversationStore
 import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.agent.Message
 import ai.droidcommand.agent.Role
@@ -49,8 +51,10 @@ sealed class MemoryResult {
 }
 
 /**
- * One persisted chat conversation against a BYOK cloud provider — the testable core of the Phase 1
- * chat screen, kept free of Android types so it runs (and is tested) on the JVM.
+ * One chat against a BYOK cloud provider — the testable core of the Phase 1 chat screen, kept free of
+ * Android types so it runs (and is tested) on the JVM. [open] switches which stored conversation is
+ * current; the previous one stays on disk. [setRequestPrompt] adds system text to later requests
+ * without writing it into the transcript.
  *
  * Per turn: reads the key fresh from [vault] (never cached), builds the provider, streams the reply
  * through `onDelta`, and only on success appends the user message and the reply to the conversation
@@ -102,7 +106,7 @@ sealed class MemoryResult {
 class ChatSession(
     private val vault: SecretsVault,
     private val store: ConversationStore,
-    private val conversationId: String = DEFAULT_CONVERSATION_ID,
+    conversationId: String = DEFAULT_CONVERSATION_ID,
     private val systemPrompt: String? = null,
     private val transport: HttpTransport,
     private val providerFor: (CloudProviderSpec, LlmConfig) -> LlmProvider = { spec, config ->
@@ -124,7 +128,14 @@ class ChatSession(
 ) {
     // Loaded on first use, not at construction: a Room-backed store throws on the main thread, and a
     // caller (an Android ViewModel) constructs this there. Every public method may touch storage.
+    private var activeConversationId: String = conversationId
     private var loaded: ConversationContext? = null
+
+    /**
+     * Extra system text for the next request (a skill). It is not written into the stored conversation,
+     * so switching it does not rewrite history.
+     */
+    private var requestPrompt: String? = null
 
     // The provider+model of the most recent successful turn. rememberConversation() extracts with the
     // SAME provider, which already received the full conversation in that turn, so remembering adds no
@@ -136,10 +147,34 @@ class ChatSession(
     // One provider per on-device model id, kept so the model stays loaded between turns.
     private val localProviders = HashMap<String, LocalLlmProvider>()
     private val context: ConversationContext
-        get() = loaded ?: (store.load(conversationId) ?: ConversationContext(systemPrompt)).also { loaded = it }
+        get() = loaded ?: (store.load(activeConversationId) ?: ConversationContext(systemPrompt)).also { loaded = it }
 
     @Synchronized
     fun history(): List<Message> = context.messages
+
+    @Synchronized
+    fun currentId(): String = activeConversationId
+
+    /**
+     * Switches to another stored conversation. [id] uses the same character rule as the file and Room
+     * stores. The previous conversation is left on disk.
+     */
+    @Synchronized
+    fun open(id: String) {
+        if (!JsonFileConversationStore.ID_PATTERN.matches(id)) throw InvalidConversationId(id)
+        if (id == activeConversationId) return
+        activeConversationId = id
+        loaded = null
+        lastSpec = null
+        lastModel = null
+        usedLocal = false
+    }
+
+    /** [prompt] is sent as system text on later turns. Null or blank clears it. Not stored in the transcript. */
+    @Synchronized
+    fun setRequestPrompt(prompt: String?) {
+        requestPrompt = prompt?.trim()?.takeIf { it.isNotEmpty() }
+    }
 
     @Synchronized
     fun send(
@@ -241,7 +276,8 @@ class ChatSession(
             null
         }
         val outgoing = listOfNotNull(web, excerpts, memories, notes, text).joinToString("\n\n")
-        val request = LlmRequest(systemPrompt = context.systemPrompt, messages = context.messages + Message(Role.USER, outgoing))
+        val system = listOfNotNull(requestPrompt, context.systemPrompt).filter { it.isNotBlank() }.joinToString("\n\n").ifBlank { null }
+        val request = LlmRequest(systemPrompt = system, messages = context.messages + Message(Role.USER, outgoing))
 
         val response = try {
             provider().completeStreaming(request, onDelta)
@@ -253,7 +289,7 @@ class ChatSession(
             is LlmResponse.Text -> {
                 if (response.content.isBlank()) return ChatResult.Failure("The model returned an empty reply.")
                 context.append(Role.USER, text).append(Role.ASSISTANT, response.content)
-                store.save(conversationId, context)
+                store.save(activeConversationId, context)
                 onSuccess()
                 ChatResult.Reply(response.content, notice)
             }
@@ -293,7 +329,7 @@ class ChatSession(
         if (memoryWriter != null) return rememberViaMemoryWriter(extractor, memoryWriter, key)
         val service = GraphExtractionService(extractor, knowledgeGraph!!)
         val result = try {
-            service.extractAndSave(context, source = conversationId)
+            service.extractAndSave(context, source = activeConversationId)
         } catch (e: Exception) {
             return MemoryResult.Failure(scrub("Could not save memory: ${e.message ?: e.javaClass.simpleName}", key))
         }
@@ -312,7 +348,7 @@ class ChatSession(
     private fun rememberViaMemoryWriter(extractor: LlmGraphExtractor, writer: MemoryWriter, key: String): MemoryResult {
         if (memoryWriteScope.isBlank()) return MemoryResult.Failure("No memory scope is configured.")
         val (result, outcome) = try {
-            MemoryExtractionService(extractor, writer, memoryWriteScope).extractAndStore(context, source = conversationId)
+            MemoryExtractionService(extractor, writer, memoryWriteScope).extractAndStore(context, source = activeConversationId)
         } catch (e: Exception) {
             return MemoryResult.Failure(scrub("Could not save memory: ${e.message ?: e.javaClass.simpleName}", key))
         }
@@ -331,7 +367,7 @@ class ChatSession(
     /** Deletes the stored conversation and starts an empty one. */
     @Synchronized
     fun reset() {
-        store.delete(conversationId)
+        store.delete(activeConversationId)
         loaded = ConversationContext(systemPrompt)
         lastSpec = null
         lastModel = null

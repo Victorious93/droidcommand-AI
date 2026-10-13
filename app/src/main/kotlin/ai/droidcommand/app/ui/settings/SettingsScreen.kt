@@ -73,6 +73,22 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             )
         }
         VoiceSettingsSection()
+        SectionLabel("Device tools")
+        DroidCard {
+            Text(
+                "Root, Termux, Metasploit, and the Social-Engineer Toolkit are on the Tools screens. Each run still asks before it executes. No program is connected for any of them in this build, so a run is refused.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        SectionLabel("Chat library")
+        DroidCard {
+            Text(
+                "Saved chats, skills, and prompt templates are under Library on the Chat screen. A skill is added to later requests and is not written into the transcript. A template fills the message box and is not sent until you send it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         SectionLabel("Advanced")
         AdvancedSection(viewModel)
     }

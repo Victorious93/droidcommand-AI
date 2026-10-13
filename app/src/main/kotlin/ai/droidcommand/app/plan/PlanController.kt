@@ -1,6 +1,7 @@
 package ai.droidcommand.app.plan
 
 import ai.droidcommand.agent.AgentMode
+import ai.droidcommand.agent.PlanHistoryFile
 import ai.droidcommand.agent.PlanRun
 import ai.droidcommand.agent.PlanRunner
 import ai.droidcommand.agent.PlanStatus
@@ -23,14 +24,17 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * [runs] is newest first; the first entry is the in-flight run while [running] is true, otherwise the
- * most recent finished one. In memory only — see [PlanController].
+ * most recent finished one. Finished runs are reloaded from disk — see [PlanController].
  */
 data class PlanUiState(
     val runs: List<PlanRun> = emptyList(),
@@ -46,11 +50,13 @@ data class PlanUiState(
  * a run can never invoke a SENSITIVE/ROOT tool without the user's approval, and tools with no real
  * backend configured (most of them today) are denied, which the model sees as a failed step.
  *
- * History is kept in memory for the life of the process and capped at [MAX_RUNS]; nothing is persisted.
+ * Finished runs are written to [PlanHistoryFile] and reloaded when the process starts again. A run that
+ * is still going when the process ends is not restored. Capped at [PlanHistoryFile.MAX_RUNS].
  * Never run on a device; the LLM planner's real behaviour with these tools is unobserved.
  */
 @Singleton
 class PlanController @Inject constructor(
+    @ApplicationContext context: Context,
     private val registry: ToolRegistry,
     private val policy: SecurityPolicy,
     private val approvalPrompt: ApprovalPrompt,
@@ -59,9 +65,10 @@ class PlanController @Inject constructor(
     private val transport: HttpTransport,
     private val modes: EngineModes,
 ) {
+    private val history = PlanHistoryFile(context.filesDir.toPath().resolve("plans").resolve("history.json"))
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val cancelled = AtomicBoolean(false)
-    private val mutableState = MutableStateFlow(PlanUiState())
+    private val mutableState = MutableStateFlow(PlanUiState(runs = runCatching { history.load() }.getOrDefault(emptyList())))
     val state: StateFlow<PlanUiState> = mutableState
 
     fun start(spec: CloudProviderSpec, model: String, objective: String) {
@@ -117,17 +124,17 @@ class PlanController @Inject constructor(
 
     /** Removes a finished run from history; a running one cannot be removed. */
     fun delete(id: String) {
-        mutableState.update { state -> state.copy(runs = state.runs.filterNot { it.id == id && it.status != PlanStatus.RUNNING }) }
+        val next = mutableState.updateAndGet { state ->
+            state.copy(runs = state.runs.filterNot { it.id == id && it.status != PlanStatus.RUNNING })
+        }
+        runCatching { history.save(next.runs) }
     }
 
     private fun publish(run: PlanRun) {
-        mutableState.update { state ->
+        val next = mutableState.updateAndGet { state ->
             val rest = state.runs.filterNot { it.id == run.id }
-            state.copy(runs = (listOf(run) + rest).take(MAX_RUNS))
+            state.copy(runs = (listOf(run) + rest).take(PlanHistoryFile.MAX_RUNS))
         }
-    }
-
-    private companion object {
-        const val MAX_RUNS = 20
+        if (run.status != PlanStatus.RUNNING) runCatching { history.save(next.runs) }
     }
 }

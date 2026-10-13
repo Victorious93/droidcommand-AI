@@ -52,6 +52,12 @@ fun SetToolScreen(viewModel: SetToolViewModel = hiltViewModel()) {
             "Every field below is structured input — no command is ever typed. " +
                 "Launching an attack vector always asks for explicit confirmation first.",
             style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "No Social-Engineer Toolkit program is connected on this device. A launch is refused until one is.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
         )
 
         Text("Attack vector", style = MaterialTheme.typography.labelLarge)

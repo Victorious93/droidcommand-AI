@@ -507,4 +507,19 @@ class ChatSessionTest {
 
         assertEquals(ChatResult.Reply("ok"), chat.send(groq, "", "hi"))
     }
+
+    @Test
+    fun `a request prompt is sent as system text and is not stored in the transcript`() {
+        val seen = AtomicReference<String>()
+        val base = start(captured = seen) { sse("""{"choices":[{"delta":{"content":"ok"}}]}""") }
+        val (chat, store, _) = session(base)
+        chat.setRequestPrompt("SKILL-MARKER be brief")
+        assertEquals(ChatResult.Reply("ok"), chat.send(groq, "", "hello"))
+        assertTrue(seen.get().contains("SKILL-MARKER"))
+        assertTrue(seen.get().contains("\"role\":\"system\""))
+        assertEquals(null, store.load("default")!!.systemPrompt)
+        chat.setRequestPrompt("   ")
+        chat.send(groq, "", "again")
+        assertFalse(seen.get().contains("\"role\":\"system\""))
+    }
 }
