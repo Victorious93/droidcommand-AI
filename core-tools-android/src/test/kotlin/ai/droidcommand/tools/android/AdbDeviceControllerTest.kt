@@ -57,6 +57,11 @@ class AdbDeviceControllerTest {
             case "${'$'}*" in
               "screencap -p")
                 cat "$pngFixturePath" ;;
+              "cat /sdcard/testfile.txt")
+                printf 'Hello, DroidCommand!' ;;
+              "cat /sdcard/missing.txt")
+                echo "cat: /sdcard/missing.txt: No such file or directory" 1>&2
+                exit 1 ;;
               *)
                 exit 1 ;;
             esac
@@ -106,10 +111,6 @@ class AdbDeviceControllerTest {
               "ip route get 1.1.1.1")
                 echo "1.1.1.1 via 192.168.1.1 dev wlan0 src 192.168.1.42 uid 0"
                 echo "    cache"
-                ;;
-              "cat /sdcard/notes.txt")
-                echo "line one"
-                echo "line two"
                 ;;
               *)
                 exit 1 ;;
@@ -274,6 +275,29 @@ class AdbDeviceControllerTest {
     }
 
     @Test
+    fun `readFile reads real content via adb exec-out cat`() {
+        val result = assertIs<FileReadResult.Success>(newController().readFile("/sdcard/testfile.txt"))
+        assertEquals("Hello, DroidCommand!", result.content)
+    }
+
+    @Test
+    fun `readFile fails cleanly when the remote file does not exist`() {
+        val result = assertIs<FileReadResult.Failure>(newController().readFile("/sdcard/missing.txt"))
+        assertTrue(result.reason.contains("No such file or directory"))
+    }
+
+    @Test
+    fun `readFile fails cleanly when adb cannot be started`() {
+        val result = assertIs<FileReadResult.Failure>(
+            AdbDeviceController(
+                shell = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf(File(tempDir, "no-such-adb").absolutePath))),
+                adbExecutable = File(tempDir, "no-such-adb").absolutePath,
+            ).readFile("/sdcard/testfile.txt"),
+        )
+        assertTrue(result.reason.contains("Cannot read file"))
+    }
+
+    @Test
     fun `every unimplemented method fails with a distinct 'not yet implemented' reason, never touching adb`() {
         val markerFile = File(tempDir, "touched")
         val adbPath = writeScript(
@@ -428,36 +452,5 @@ class AdbDeviceControllerTest {
             ).getNetworkState(),
         )
         assertTrue(result.reason.contains("ip route get"))
-    }
-
-    @Test
-    fun `readFile returns the real content of a text file via adb shell cat`() {
-        val result = assertIs<FileReadResult.Success>(newController().readFile("/sdcard/notes.txt"))
-        assertEquals("line one\nline two\n", result.content)
-    }
-
-    @Test
-    fun `readFile fails cleanly with the real stderr when the file does not exist`() {
-        val adbPath = writeScript(
-            "adb-no-such-file",
-            """
-            #!/bin/sh
-            echo "cat: /sdcard/missing.txt: No such file or directory" >&2
-            exit 1
-            """.trimIndent(),
-        )
-        val result = assertIs<FileReadResult.Failure>(newController(adbPath).readFile("/sdcard/missing.txt"))
-        assertTrue(result.reason.contains("No such file or directory"))
-    }
-
-    @Test
-    fun `readFile fails cleanly when adb cannot be started`() {
-        val result = assertIs<FileReadResult.Failure>(
-            AdbDeviceController(
-                shell = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf(File(tempDir, "no-such-adb").absolutePath))),
-                adbExecutable = File(tempDir, "no-such-adb").absolutePath,
-            ).readFile("/sdcard/notes.txt"),
-        )
-        assertTrue(result.reason.contains("adb shell cat"))
     }
 }

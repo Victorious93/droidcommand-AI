@@ -298,22 +298,30 @@ class AdbDeviceController(
     override fun launchApp(packageName: String) = failure("launch app")
 
     /**
-     * Reads a real device-side text file via `adb shell cat <path>`. The underlying transport
-     * ([ShellExecutor.execute]) is line-oriented text, not byte-safe — the same reason [takeScreenshot]
-     * needed [ShellExecutor.executeBinary] instead — so this is correct only for genuinely text files;
-     * a binary file would come back mangled, an accepted limitation [FileReadResult]'s own `String`
-     * content type already implies, not a new one introduced here. A missing file or permission
-     * failure surfaces `cat`'s own stderr rather than a generic message.
+     * Reads a file's content via `adb exec-out cat <path>` — `exec-out`, not `shell`, for the same
+     * reason [takeScreenshot] uses it: the bytes stream back over the adb data channel with no
+     * pty/line-ending translation, so content is not corrupted in transit the way
+     * [ShellExecutor.execute]'s line-oriented capture would corrupt it. The captured bytes are then
+     * decoded as UTF-8 (malformed sequences replaced, never thrown) to satisfy [FileReadResult]'s
+     * `String` contract — a genuinely binary file (anything that isn't valid UTF-8 text) will come
+     * back with its content garbled by that decode, a limitation of the result type's shape, not of
+     * the transport underneath it. `cat`'s own non-zero exit (e.g. "No such file or directory",
+     * "Permission denied") is reported verbatim rather than guessed at or reclassified.
      */
     override fun readFile(path: String): FileReadResult {
-        val result = runAdb("shell", "cat", path)
-        if (result !is ShellExecutionResult.Success) {
-            return FileReadResult.Failure("Cannot read file '$path': failed to run 'adb shell cat'")
+        val argv = adbArgv("exec-out", "cat", path)
+        val result = shell.executeBinary(
+            ShellCommand(executable = argv.first(), args = argv.drop(1), maxOutputBytes = MAX_FILE_READ_BYTES),
+        )
+        return when (result) {
+            is ShellBinaryExecutionResult.Failure -> FileReadResult.Failure("Cannot read file '$path': ${result.reason}")
+            is ShellBinaryExecutionResult.Success ->
+                if (result.exitCode != 0) {
+                    FileReadResult.Failure("Cannot read file '$path': 'adb exec-out cat' exited ${result.exitCode}: ${result.stderr}")
+                } else {
+                    FileReadResult.Success(result.stdout.toString(Charsets.UTF_8))
+                }
         }
-        if (result.exitCode != 0) {
-            return FileReadResult.Failure("Cannot read file '$path': ${result.stderr.ifBlank { "'adb shell cat' exited ${result.exitCode}" }}")
-        }
-        return FileReadResult.Success(result.stdout)
     }
     override fun writeFile(path: String, content: String, append: Boolean) = failure("write file")
     override fun moveFile(fromPath: String, toPath: String) = failure("move file")
@@ -347,5 +355,6 @@ class AdbDeviceController(
         val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
         const val SCREENSHOT_TIMEOUT_MILLIS = 15_000L
         const val MAX_SCREENSHOT_BYTES = 20_000_000L
+        const val MAX_FILE_READ_BYTES = 20_000_000L
     }
 }
