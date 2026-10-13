@@ -57,9 +57,9 @@ class AdbDeviceControllerTest {
             case "${'$'}*" in
               "screencap -p")
                 cat "$pngFixturePath" ;;
-              "cat /sdcard/testfile.txt")
+              "cat '/sdcard/testfile.txt'")
                 printf 'Hello, DroidCommand!' ;;
-              "cat /sdcard/missing.txt")
+              "cat '/sdcard/missing.txt'")
                 echo "cat: /sdcard/missing.txt: No such file or directory" 1>&2
                 exit 1 ;;
               "ls -1Ap '/sdcard/testdir/'")
@@ -77,6 +77,8 @@ class AdbDeviceControllerTest {
                 echo "Row: 3 contact_id=3, display_name=NULL, data1=555-0199"
                 echo "Row: 4 contact_id=4, display_name=Alice Smith, data1=+1 555-0200"
                 echo "Row: 5 contact_id=5, display_name=No Number, data1=NULL" ;;
+              "cat '/sdcard/it'\''s a file.txt'")
+                printf 'quoted ok' ;;
               "ls -1Ap '/sdcard/emptydir/'")
                 : ;;
               "ls -1Ap '/sdcard/nope/'")
@@ -302,6 +304,12 @@ class AdbDeviceControllerTest {
     fun `readFile reads real content via adb exec-out cat`() {
         val result = assertIs<FileReadResult.Success>(newController().readFile("/sdcard/testfile.txt"))
         assertEquals("Hello, DroidCommand!", result.content)
+    }
+
+    @Test
+    fun `readFile single-quotes a path containing spaces and a single quote for the device shell`() {
+        val result = assertIs<FileReadResult.Success>(newController().readFile("/sdcard/it's a file.txt"))
+        assertEquals("quoted ok", result.content)
     }
 
     @Test

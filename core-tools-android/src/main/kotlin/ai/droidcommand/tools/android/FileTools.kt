@@ -99,7 +99,11 @@ class ListDirectoryTool(private val device: DeviceController) : Tool {
         return when (val result = device.listDirectory(path)) {
             is FileListResult.Success -> ToolResult.Success(
                 result.entries.joinToString("\n") { entry ->
-                    if (entry.isDirectory) "${entry.name}/ (dir)" else "${entry.name} (${entry.sizeBytes} bytes)"
+                    when {
+                        entry.isDirectory -> "${entry.name}/ (dir)"
+                        entry.sizeBytes == null -> entry.name
+                        else -> "${entry.name} (${entry.sizeBytes} bytes)"
+                    }
                 },
             )
             is FileListResult.Failure -> ToolResult.Failure(result.reason)
