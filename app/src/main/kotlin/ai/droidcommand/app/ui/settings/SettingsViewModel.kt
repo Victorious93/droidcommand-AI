@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.settings
 
 import ai.droidcommand.app.prefs.AdvancedPrefs
+import ai.droidcommand.app.prefs.CodingTunnelChoice
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.config.SecretState
@@ -37,6 +38,9 @@ class SettingsViewModel @Inject constructor(
     private val mutablePublicLimit = MutableStateFlow(advanced.publicClipLimit())
     val publicClipLimit: StateFlow<Int> = mutablePublicLimit.asStateFlow()
 
+    private val mutableCodingTunnel = MutableStateFlow(advanced.codingTunnel())
+    val codingTunnel: StateFlow<CodingTunnelChoice> = mutableCodingTunnel.asStateFlow()
+
     fun setToolbarToggle(toggle: ToolbarToggle, visible: Boolean) {
         advanced.setToolbarToggle(toggle, visible)
         mutableToolbar.value = advanced.toolbarToggles()
@@ -45,6 +49,11 @@ class SettingsViewModel @Inject constructor(
     fun setPublicClipLimit(limit: Int) {
         advanced.setPublicClipLimit(limit)
         mutablePublicLimit.value = advanced.publicClipLimit()
+    }
+
+    fun setCodingTunnel(choice: CodingTunnelChoice) {
+        advanced.setCodingTunnel(choice)
+        mutableCodingTunnel.value = advanced.codingTunnel()
     }
 
     fun saveSearchKey(slot: SecretSlot, key: String) {

@@ -29,11 +29,26 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         prefs.edit { putInt(KEY_PUBLIC_LIMIT, limit) }
     }
 
+    fun codingTunnel(): CodingTunnelChoice =
+        if (prefs.getString(KEY_CODING_TUNNEL, null) == CodingTunnelChoice.PAIRED.name) {
+            CodingTunnelChoice.PAIRED
+        } else {
+            CodingTunnelChoice.LOCAL
+        }
+
+    fun setCodingTunnel(choice: CodingTunnelChoice) {
+        prefs.edit { putString(KEY_CODING_TUNNEL, choice.name) }
+    }
+
     companion object {
         const val FILE = "advanced_prefs"
         private const val KEY_TOOLBAR = "chat.toolbar"
         private const val KEY_PUBLIC_LIMIT = "clipboard.public.limit"
+        private const val KEY_CODING_TUNNEL = "coding.tunnel"
         val PUBLIC_LIMIT_CHOICES = listOf(10, 25, 50)
         const val DEFAULT_PUBLIC_LIMIT = 25
     }
 }
+
+/** Where a coding session runs. [PAIRED] is stored only; the app does not open a paired socket. */
+enum class CodingTunnelChoice { LOCAL, PAIRED }
