@@ -19,13 +19,13 @@ import javax.xml.parsers.DocumentBuilderFactory
  * has no opinion on the security policy gating it, matching `core-build-local.LocalProcessBuildExecutor`'s
  * identical relationship to [ShellExecutor].
  *
- * **Deliberately implements only 8 of [DeviceController]'s 29 methods for real** —
+ * **Deliberately implements only 9 of [DeviceController]'s 29 methods for real** —
  * [getDeviceInfo]/[getBatteryStatus]/[getStorageInfo]/[listInstalledApps]/[getUiTree]/[takeScreenshot]/
- * [listNotifications]/[getNetworkState] — every one read-only and non-mutating. None of the other 21
- * (anything that taps, types, launches an app, sends an SMS, makes a call, or writes/deletes a file) are
- * implemented here: this device is a real personal phone, and actually exercising a mutating action
- * against it is not a call this class makes unilaterally. Every unimplemented method fails with an
- * explicit "not yet implemented" reason —
+ * [listNotifications]/[getNetworkState]/[readFile] — every one read-only and non-mutating. None of the
+ * other 20 (anything that taps, types, launches an app, sends an SMS, makes a call, or writes/deletes/
+ * moves/copies a file) are implemented here: this device is a real personal phone, and actually
+ * exercising a mutating action against it is not a call this class makes unilaterally. Every unimplemented
+ * method fails with an explicit "not yet implemented" reason —
  * a **different** honest reason from [NullDeviceController]'s "no real device is connected," since a
  * device genuinely is connected in this topology; conflating "missing capability" with "missing
  * device" would misreport why the call failed. [takeScreenshot] was excluded for a separate, technical
@@ -296,7 +296,33 @@ class AdbDeviceController(
     override fun typeText(text: String) = failure("type text")
     override fun pressKey(key: DeviceKey) = failure("press key")
     override fun launchApp(packageName: String) = failure("launch app")
-    override fun readFile(path: String) = FileReadResult.Failure(notImplemented("read file"))
+
+    /**
+     * Reads a file's content via `adb exec-out cat <path>` — `exec-out`, not `shell`, for the same
+     * reason [takeScreenshot] uses it: the bytes stream back over the adb data channel with no
+     * pty/line-ending translation, so content is not corrupted in transit the way
+     * [ShellExecutor.execute]'s line-oriented capture would corrupt it. The captured bytes are then
+     * decoded as UTF-8 (malformed sequences replaced, never thrown) to satisfy [FileReadResult]'s
+     * `String` contract — a genuinely binary file (anything that isn't valid UTF-8 text) will come
+     * back with its content garbled by that decode, a limitation of the result type's shape, not of
+     * the transport underneath it. `cat`'s own non-zero exit (e.g. "No such file or directory",
+     * "Permission denied") is reported verbatim rather than guessed at or reclassified.
+     */
+    override fun readFile(path: String): FileReadResult {
+        val argv = adbArgv("exec-out", "cat", path)
+        val result = shell.executeBinary(
+            ShellCommand(executable = argv.first(), args = argv.drop(1), maxOutputBytes = MAX_FILE_READ_BYTES),
+        )
+        return when (result) {
+            is ShellBinaryExecutionResult.Failure -> FileReadResult.Failure("Cannot read file '$path': ${result.reason}")
+            is ShellBinaryExecutionResult.Success ->
+                if (result.exitCode != 0) {
+                    FileReadResult.Failure("Cannot read file '$path': 'adb exec-out cat' exited ${result.exitCode}: ${result.stderr}")
+                } else {
+                    FileReadResult.Success(result.stdout.toString(Charsets.UTF_8))
+                }
+        }
+    }
     override fun writeFile(path: String, content: String, append: Boolean) = failure("write file")
     override fun moveFile(fromPath: String, toPath: String) = failure("move file")
     override fun copyFile(fromPath: String, toPath: String) = failure("copy file")
@@ -329,5 +355,6 @@ class AdbDeviceController(
         val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
         const val SCREENSHOT_TIMEOUT_MILLIS = 15_000L
         const val MAX_SCREENSHOT_BYTES = 20_000_000L
+        const val MAX_FILE_READ_BYTES = 20_000_000L
     }
 }
