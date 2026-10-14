@@ -70,6 +70,21 @@ fun ToolsScreen(navController: NavHostController) {
 
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Automation keys", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Saved shell commands and AI prompts. Each run asks for your approval first.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = { navController.navigate(Routes.AUTOMATION) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Open automation keys") }
+            }
+        }
+
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Cloud coding", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "One session: plan, then edit, then report. The on-device stand-in does not call a cloud service.",

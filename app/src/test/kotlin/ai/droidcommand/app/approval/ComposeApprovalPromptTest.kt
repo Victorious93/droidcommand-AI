@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ComposeApprovalPromptTest {
     private fun ask(prompt: ComposeApprovalPrompt, reason: String, handle: ApprovalHandle = ApprovalHandle()): Pair<Thread, AtomicReference<Boolean?>> {
@@ -111,5 +112,27 @@ class ComposeApprovalPromptTest {
         t2.join(5000)
         assertEquals(true, r1.get())
         assertEquals(false, r2.get())
+    }
+
+    @Test
+    fun the_three_argument_request_shows_the_tool_and_its_exact_input() {
+        val p = ComposeApprovalPrompt()
+        val out = AtomicReference<Boolean?>(null)
+        val t = Thread {
+            out.set(p.requestApproval("run_shell_command", mapOf("executable" to "ls", "args" to "-la"), "needs confirmation"))
+        }.apply {
+            isDaemon = true
+            start()
+        }
+        val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (p.pending.value == null && System.nanoTime() < end) Thread.sleep(5)
+        val shown = p.pending.value?.reason.orEmpty()
+        assertTrue(shown.startsWith("needs confirmation"), shown)
+        assertTrue(shown.contains("Tool: run_shell_command"), shown)
+        assertTrue(shown.contains("executable: ls"), shown)
+        assertTrue(shown.contains("args: -la"), shown)
+        p.resolve(true)
+        t.join(5000)
+        assertEquals(true, out.get())
     }
 }

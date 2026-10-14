@@ -9,6 +9,9 @@ import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.app.approval.ComposeApprovalPrompt
 import ai.droidcommand.app.approval.VoiceApprovalPrompt
+import ai.droidcommand.app.automation.AiPromptTool
+import ai.droidcommand.app.automation.AllowlistShellExecutor
+import ai.droidcommand.app.automation.AutomationShellTool
 import ai.droidcommand.app.mode.AdvancedModeStore
 import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.prefs.AdvancedPrefs
@@ -16,6 +19,8 @@ import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.conversations.RoomConversationStore
 import ai.droidcommand.knowledge.android.RoomKnowledgeGraph
+import ai.droidcommand.llm.factory.CloudPromptClient
+import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.metasploit.MetasploitTool
 import ai.droidcommand.metasploit.NullMetasploitExecutor
 import ai.droidcommand.remote.HttpTransport
@@ -29,9 +34,6 @@ import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
 import ai.droidcommand.setoolkit.NullSetExecutor
 import ai.droidcommand.setoolkit.SetTool
-import ai.droidcommand.shell.ProcessBuilderShellExecutor
-import ai.droidcommand.shell.ShellSecurityPolicy
-import ai.droidcommand.shell.ShellTool
 import ai.droidcommand.termux.NullTermuxExecutor
 import ai.droidcommand.termux.TermuxTool
 import ai.droidcommand.voice.android.AndroidSpeechToText
@@ -68,23 +70,40 @@ import javax.inject.Singleton
  * currently unverified, precondition from `cli`'s "runs on a PC that may
  * have msfconsole installed" assumption. Wiring a real backend remains
  * future work; this module does not invent a connected one.
- * [ShellTool]'s [ShellSecurityPolicy] is empty (no allowed executables)
- * for the same fail-closed reason `cli`'s own default is empty — a real
- * deployment configures it explicitly, this module never invents a "safe
- * commands" allowlist on the operator's behalf.
+ * The shell allowlist starts empty (no executable is allowed) for the same
+ * fail-closed reason `cli`'s own default is empty. The owner allows
+ * executables on the Automation keys screen; this module never invents a
+ * "safe commands" allowlist on the owner's behalf.
  */
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
+    private const val CHAT_PREFS = "chat_prefs"
+
+    /**
+     * Automation keys are the only callers of the shell and AI tools. Both have empty `allowedModes`, so the Pilot and Forge
+     * planners never see them. The shell allowlist is read on every run and starts empty, so nothing runs until the owner
+     * allows an executable on the Automation keys screen.
+     */
     @Provides
     @Singleton
-    fun provideToolRegistry(): ToolRegistry = ToolRegistry().apply {
-        register(ShellTool(ProcessBuilderShellExecutor(ShellSecurityPolicy())))
+    fun provideToolRegistry(
+        @ApplicationContext context: Context,
+        vault: EncryptedSecretsVault,
+        transport: HttpTransport,
+        advanced: AdvancedPrefs,
+    ): ToolRegistry = ToolRegistry().apply {
+        register(AutomationShellTool(AllowlistShellExecutor { advanced.shellAllowlist() }))
+        register(AiPromptTool(CloudPromptClient(vault, transport)) { spec -> chatModelFor(context, spec) })
         register(RootTool(NullRootExecutor()))
         register(TermuxTool(NullTermuxExecutor()))
         register(MetasploitTool(NullMetasploitExecutor()))
         register(SetTool(NullSetExecutor()))
     }
+
+    /** The model chat uses for [spec], read from the same preference chat writes. Falls back to the provider's suggestion. */
+    private fun chatModelFor(context: Context, spec: CloudProviderSpec): String =
+        context.getSharedPreferences(CHAT_PREFS, Context.MODE_PRIVATE).getString("model.${spec.id}", null) ?: spec.defaultModel
 
     /** Phase 1: Keystore-backed secrets (API keys). UNBUILT — see security/AndroidSecretsVault.kt. */
     @Provides

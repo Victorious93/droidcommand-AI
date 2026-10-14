@@ -2,8 +2,9 @@ package ai.droidcommand.app.navigation
 
 import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.clipboard.ClipboardScreen
-import ai.droidcommand.app.ui.coding.CodingScreen
+import ai.droidcommand.app.ui.automation.AutomationScreen
 import ai.droidcommand.app.ui.chat.ChatScreen
+import ai.droidcommand.app.ui.coding.CodingScreen
 import ai.droidcommand.app.ui.logs.LogsScreen
 import ai.droidcommand.app.ui.memory.MemoryScreen
 import ai.droidcommand.app.ui.mode.EngineModeViewModel
@@ -71,6 +72,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val MEMORY = "memory"
     const val CLIPBOARDS = "tools/clipboards"
+    const val AUTOMATION = "tools/automation"
     const val CODING = "tools/coding"
     const val NOTES = "tools/notes"
 }
@@ -127,6 +129,7 @@ fun DroidCommandNavHost(
             composable(Routes.SETTINGS) { SettingsScreen() }
             composable(Routes.MEMORY) { MemoryScreen() }
             composable(Routes.CLIPBOARDS) { ClipboardScreen() }
+            composable(Routes.AUTOMATION) { AutomationScreen() }
             composable(Routes.CODING) { CodingScreen() }
             composable(Routes.NOTES) { NotesScreen() }
         }

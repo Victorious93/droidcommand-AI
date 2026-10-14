@@ -14,6 +14,7 @@ import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prompts.PromptLibrary
 import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.config.EncryptedSecretsVault
+import ai.droidcommand.llm.factory.AiSlashCommands
 import ai.droidcommand.llm.factory.ChatResult
 import ai.droidcommand.llm.factory.ChatSession
 import ai.droidcommand.llm.factory.CloudProviderCatalog
@@ -306,21 +307,36 @@ class ChatViewModel @Inject constructor(
     fun send(text: String) {
         val current = mutableState.value
         if (current.sending || text.isBlank()) return
+        // A slash command sends this one message to the named cloud provider and overrides any on-device model.
+        val command = AiSlashCommands.parse(text)
+        if (command is AiSlashCommands.Parsed.MissingPrompt) {
+            mutableState.update { it.copy(error = "Type a question after /${command.command}.") }
+            return
+        }
+        val slash = command as? AiSlashCommands.Parsed.Command
+        val slashProvider = slash?.let { CloudProviderCatalog.byId(it.providerId) }
         mutableState.update { it.copy(sending = true, streaming = "", error = null, notice = null) }
         viewModelScope.launch(Dispatchers.IO) {
             session.setRequestPrompt(current.skills.firstOrNull { it.id == current.skillId }?.systemPrompt)
-            val localId = current.activeLocalModelId
+            val localId = if (slashProvider == null) current.activeLocalModelId else null
+            val outgoing = slash?.prompt ?: text
             // Web search sends the message text to a search provider, so it is not used for on-device replies.
             val localNotice = if (localId != null && current.webSearchEnabled) "Web search is not used for on-device replies." else null
             val result = if (localId != null) {
                 onDeviceModels.list() // registers the models before the first on-device turn
                 runCatching {
-                    session.sendLocal(localId, text, useWebSearch = false) { delta ->
+                    session.sendLocal(localId, outgoing, useWebSearch = false) { delta ->
                         mutableState.update { it.copy(streaming = it.streaming + delta) }
                     }
                 }.getOrElse { ChatResult.Failure(it.message ?: "The on-device model could not run this message.") }
             } else {
-                session.send(current.provider, current.model, text, useWebSearch = current.webSearchEnabled) { delta ->
+                val provider = slashProvider ?: current.provider
+                val model = if (slashProvider == null) {
+                    current.model
+                } else {
+                    prefs.getString(modelKey(slashProvider), null) ?: slashProvider.defaultModel
+                }
+                session.send(provider, model, outgoing, useWebSearch = current.webSearchEnabled) { delta ->
                     mutableState.update { it.copy(streaming = it.streaming + delta) }
                 }
             }

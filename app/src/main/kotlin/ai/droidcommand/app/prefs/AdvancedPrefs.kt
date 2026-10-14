@@ -1,6 +1,7 @@
 package ai.droidcommand.app.prefs
 
 import ai.droidcommand.agent.AgentMode
+import ai.droidcommand.app.automation.ShellAllowlist
 import ai.droidcommand.app.ui.chat.ToolbarLayout
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import android.content.Context
@@ -28,6 +29,13 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
     fun setPublicClipLimit(limit: Int) {
         require(limit in PUBLIC_LIMIT_CHOICES) { "Unsupported public clipboard limit: $limit" }
         prefs.edit { putInt(KEY_PUBLIC_LIMIT, limit) }
+    }
+
+    /** Executables that automation keys may run. Empty until the owner allows one. */
+    fun shellAllowlist(): Set<String> = ShellAllowlist.parse(prefs.getString(KEY_SHELL_ALLOWLIST, null))
+
+    fun setShellAllowlist(entries: Set<String>) {
+        prefs.edit { putString(KEY_SHELL_ALLOWLIST, ShellAllowlist.serialize(entries)) }
     }
 
     fun codingTunnel(): CodingTunnelChoice =
@@ -60,6 +68,7 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         const val FILE = "advanced_prefs"
         private const val KEY_TOOLBAR = "chat.toolbar"
         private const val KEY_PUBLIC_LIMIT = "clipboard.public.limit"
+        private const val KEY_SHELL_ALLOWLIST = "automation.shell.allowlist"
         private const val KEY_CODING_TUNNEL = "coding.tunnel"
         private const val KEY_AGENT_MODE = "engine.mode"
 
