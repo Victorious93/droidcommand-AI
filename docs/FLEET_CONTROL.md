@@ -53,7 +53,9 @@ a growing method list. This slice does not add a second schema.
 - `docs/FLEET_CONTROL.md` (this file) and matching slots in `COMPANION_PROTOCOL.md`.
 - `core-security.KnownFleet` / `StaticFleetHealthChecker` / `PlannedFleetTool`.
 - `cli list-fleet` plus planned stubs: `pentest_swarm_status`, `edl_commander_status`, `kyc_auditlab_status`.
-- Tools screen: read-only fleet card. No run buttons that pretend to execute.
+- Tools → Fleet: #206 PackageManager probe UI (`FleetStatus` / `FleetScreen`),
+  rostered against this catalog plus HackerAI. No run buttons that pretend
+  to execute.
 
 ## What this slice did **not** do
 

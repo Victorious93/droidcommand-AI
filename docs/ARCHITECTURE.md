@@ -1415,7 +1415,7 @@ speaks the SSH fallback. Full record: `docs/ROOTFORGE_INTEGRATION.md` and
 
 | Component | Status | Notes |
 |---|---|---|
-| core-coding-session | IMPLEMENTED — local + loopback paired; no vendor cloud | `LocalCodingTunnel` walks one session plan → edit → report and says so in the text. It does not edit a repository or call a network. `PairedCodingTunnel` / `CodingTunnelPeer` carry that same session over `core-remote`'s `PairedConnection`. `FileCodingLog` reloads sessions. Unit tests include one real loopback paired socket. Cursor cloud agents, Codex, and any other vendor backend are not implemented. |
+| core-coding-session | IMPLEMENTED — local + loopback paired; no vendor cloud | `LocalCodingTunnel` walks one session plan → edit → report and says so in the text. It does not edit a repository or call a network. `PairedCodingTunnel` / `CodingTunnelPeer` carry that same session over `core-remote`'s `PairedConnection`. `FileCodingLog` reloads sessions via `Files.write(byte[])` (API 26), not `Files.writeString`. Unit tests include one real loopback paired socket. Cursor cloud agents, Codex, and any other vendor backend are not implemented. |
 | `:app` coding screen | ON DISK — not assembled here | Tools → Cloud coding, plus a Settings choice of on-device vs paired. Paired is persisted and refuses to start, because the app does not open a socket. No Android SDK in the session that added it. |
 
 ## 11. On-device markdown vault (added 2026-10-12)
@@ -1424,7 +1424,7 @@ speaks the SSH fallback. Full record: `docs/ROOTFORGE_INTEGRATION.md` and
 
 | Component | Status | Notes |
 |---|---|---|
-| `NoteVault` | IMPLEMENTED (JVM) | Folders and `.md` notes. Paths that leave the vault, absolute paths, and names starting with `.` are refused. `.plugins` is created and hidden from the folder list. |
+| `NoteVault` | IMPLEMENTED (JVM) | Folders and `.md` notes. Paths that leave the vault, absolute paths, and names starting with `.` are refused. `.plugins` is created and hidden from the folder list. Read/write uses `Path.readText`/`writeText` (API 26 streams), not `Files.readString`/`writeString` (Java 11 / Android API 33) — those crash Notes on minSdk 28. |
 | Markdown preview | IMPLEMENTED (JVM) | Headings, bullets, fenced code, and paragraphs. Tables, images, links, and HTML stay as text. |
 | `PluginStore` | IMPLEMENTED (JVM, data only) | A plugin is a text manifest (`id`, `name`, `prefix`, `suffix`, literal `replace` lines). Install always stores it disabled. Enable, disable, and remove are explicit. Enabled plugins run in id order as `String.replace`, then prefix and suffix. No classes, dex, or JavaScript are loaded. A fresh vault has zero plugins. Nothing from Obsidian is bundled. |
 | `:app` Notes screen | ON DISK | Edit, save, preview, install, enable, disable, and remove. Preview applies enabled plugins; save writes the editor text unchanged. Not assembled in the session that added it (no Android SDK). |
@@ -1438,15 +1438,17 @@ These are existing screens and stores, not new product areas. The Compose screen
 |---|---|---|
 | Saved chats | IMPLEMENTED (JVM) / ON DISK (UI) | `ChatSession.open` switches conversations and leaves the previous one stored. Chat → Library lists them, opens one, and deletes one. New chat no longer deletes the current transcript. |
 | Skills and templates | ON DISK | Chat → Library uses the existing Room template stores (`TemplateStores`). Bundled items are seeded. A template fills the message box. A skill is sent as system text and is not stored in the transcript. User-written templates and skills can be saved and deleted; built-ins cannot be deleted. |
-| Plan history | IMPLEMENTED (JVM) / wired in `:app` | `PlanHistoryFile` keeps finished runs. A run still in progress is not written, so a process death drops it. |
-| Device-tool backends | STUB, stated in the UI | Root, Termux, Metasploit, and SET stay on their `Null*` executors. Settings and the two tool screens say a run is refused because no program is connected. |
-| Room fleet card (`KnownFleet` on Tools) | ON DISK | Lists the five members with integration class + honesty status. No run buttons. Not assembled in the session that added it. |
+| Plan history | IMPLEMENTED (JVM) / wired in `:app` | `PlanHistoryFile` keeps finished runs. A run still in progress is not written, so a process death drops it. Load/save uses `Files.readAllBytes`/`Files.write(byte[])` so Forge history does not crash on API 28. |
+| Device-tool backends | STUB, stated in the UI | Root, Termux, Metasploit, and SET stay on their `Null*` executors. Settings, the two tool screens, and Pilot's selected-tool note say a run is refused because no program is connected. |
+| Fleet status | ON DISK (UI) / JVM-tested catalog | Tools → Fleet is the #206 PackageManager probe UI. Roster is HackerAI plus the five `KnownFleet` members (EDL BOUND_COMPANION PLANNED; RootForge EXTERNAL Messenger, SSH fallback). Install state only. AIDL/Messenger bind is not started. No member is LIVE. `:core-companion` stays excluded. |
 
 ## 13. Room fleet catalog (added 2026-10-14)
 
 `core-security.KnownFleet` is the JVM catalog for Don's five room-fleet
 members. It reuses `CapabilityRegistry` / `Tool` rather than adding a
-parallel bind system. Full map: `docs/FLEET_CONTROL.md`.
+parallel bind system. Full map: `docs/FLEET_CONTROL.md`. The `:app`
+`FleetStatus` probe (PR #206) is the install-state UI over that catalog
+plus HackerAI.
 
 | Member | Class | Status | Notes |
 |---|---|---|---|

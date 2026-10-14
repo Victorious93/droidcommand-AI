@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.mode
 
 import ai.droidcommand.agent.AgentMode
+import ai.droidcommand.app.mode.ToolBackendNotes
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import androidx.compose.foundation.layout.Arrangement
@@ -76,6 +77,9 @@ fun PilotScreen(viewModel: PilotViewModel = hiltViewModel()) {
                     }
                     selected?.let {
                         Text(it.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        ToolBackendNotes.forName(it.name)?.let { note ->
+                            Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        }
                     }
                     OutlinedTextField(
                         value = args,

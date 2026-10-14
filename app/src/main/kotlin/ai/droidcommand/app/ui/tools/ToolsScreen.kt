@@ -3,7 +3,6 @@ package ai.droidcommand.app.ui.tools
 import ai.droidcommand.app.navigation.Routes
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
-import ai.droidcommand.security.KnownFleet
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,25 +35,19 @@ fun ToolsScreen(navController: NavHostController) {
 
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Room fleet", style = MaterialTheme.typography.titleMedium)
+                Text("Fleet", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "DCA is the hub. Status is honest: nothing here is LIVE control. " +
+                    "DCA is the hub. This list reports install state only — nothing here is LIVE. " +
                         "Pentest-Swarm and EDL-Commander are bound companions (EDL is PLANNED). " +
-                        "RootForge, VictorSuite, and KYC-AuditLab are not.",
+                        "RootForge is an external node (Messenger on their main; SSH fallback). " +
+                        "No companion is bound and no node is paired.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                for (member in KnownFleet.ALL) {
-                    Text(
-                        "${member.displayName} — ${member.integrationClass} — ${member.status}",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        member.notes,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Button(
+                    onClick = { navController.navigate(Routes.FLEET) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Open fleet status") }
             }
         }
 

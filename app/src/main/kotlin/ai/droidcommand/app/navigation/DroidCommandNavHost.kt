@@ -17,6 +17,7 @@ import ai.droidcommand.app.ui.theme.BackgroundDark
 import ai.droidcommand.app.ui.theme.BorderDark
 import ai.droidcommand.app.ui.theme.NavBarDark
 import ai.droidcommand.app.ui.theme.TextSecondary
+import ai.droidcommand.app.ui.fleet.FleetScreen
 import ai.droidcommand.app.ui.tools.ToolsScreen
 import ai.droidcommand.app.ui.tools.metasploit.MetasploitScreen
 import ai.droidcommand.app.ui.tools.setoolkit.SetToolScreen
@@ -76,6 +77,7 @@ object Routes {
     const val AUTOMATION = "tools/automation"
     const val CODING = "tools/coding"
     const val NOTES = "tools/notes"
+    const val FLEET = "tools/fleet"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -133,6 +135,7 @@ fun DroidCommandNavHost(
             composable(Routes.AUTOMATION) { AutomationScreen() }
             composable(Routes.CODING) { CodingScreen() }
             composable(Routes.NOTES) { NotesScreen() }
+            composable(Routes.FLEET) { FleetScreen() }
         }
     }
 }

@@ -151,7 +151,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (rows.isEmpty()) {
                 Text(
-                    "Ask anything. Library holds saved chats, templates, and skills. Turn on Memory in the options above to let it recall past chats.",
+                    emptyChatCopy(state),
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.align(Alignment.Center).padding(32.dp),
@@ -166,6 +166,14 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             }
         }
 
+        if (state.activeLocalModelId == null && !state.cloudKeyReady) {
+            Text(
+                "No API key for ${state.provider.label}. Add one in Settings, or import an on-device model. Send is refused until then.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
+        }
         state.error?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
@@ -237,6 +245,15 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
 private fun subtitleFor(state: ChatUiState): String {
     if (state.activeLocalModelId == null) return "${state.provider.label} · ${state.model}"
     return "On device · " + (state.localModels.firstOrNull { it.id == state.activeLocalModelId }?.label ?: "model")
+}
+
+private fun emptyChatCopy(state: ChatUiState): String {
+    val base = "Ask anything. Library holds saved chats, templates, and skills. Turn on Memory in the options above to let it recall past chats."
+    return if (state.activeLocalModelId == null && !state.cloudKeyReady) {
+        "$base This provider has no API key yet — Chat will refuse a send until you add one in Settings or pick an on-device model."
+    } else {
+        base
+    }
 }
 
 @Composable

@@ -3,6 +3,8 @@ package ai.droidcommand.notes
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.isDirectory
+import kotlin.io.path.readText
+import kotlin.io.path.writeText
 
 data class VaultEntry(val name: String, val relativePath: String, val folder: Boolean)
 
@@ -34,12 +36,15 @@ class NoteVault(val root: Path) {
         }
     }
 
-    fun read(relative: String): String = Files.readString(resolveNote(relative))
+    fun read(relative: String): String = resolveNote(relative).readText()
 
     fun write(relative: String, markdown: String) {
         val path = resolveNote(relative)
         Files.createDirectories(path.parent)
-        Files.writeString(path, markdown)
+        // Path.writeText uses Files.newOutputStream (API 26). Files.writeString is Java 11 /
+        // Android API 33 and crashes Notes on this app's minSdk 28, same class of bug as
+        // Stream.toList() above.
+        path.writeText(markdown)
     }
 
     fun createFolder(relative: String) {

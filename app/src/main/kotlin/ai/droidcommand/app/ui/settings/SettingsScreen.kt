@@ -55,6 +55,14 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         SectionLabel("Mode names")
         ModeNamesSection(viewModel)
         SectionLabel("API keys (stored encrypted on this device)")
+        DroidCard {
+            Text(
+                "Chat and Forge use the provider last chosen on the Chat screen. " +
+                    "Without a key for that provider — and without an on-device model — those screens refuse the request. A key is never shown again after you save it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         CloudProviderCatalog.all.forEach { provider ->
             ApiKeyRow(
                 label = provider.label,
