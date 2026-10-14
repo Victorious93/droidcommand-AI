@@ -14,6 +14,7 @@ import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prompts.PromptLibrary
 import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.config.EncryptedSecretsVault
+import ai.droidcommand.config.SecretState
 import ai.droidcommand.llm.factory.AiSlashCommands
 import ai.droidcommand.llm.factory.ChatResult
 import ai.droidcommand.llm.factory.ChatSession
@@ -116,6 +117,11 @@ data class ChatUiState(
     /** Skill whose system text is added to each later request. Not written into the saved transcript. */
     val skillId: String? = null,
     val promptError: String? = null,
+    /**
+     * True when the selected cloud provider has a vault entry. Local-model turns do not
+     * need this. Refreshed when Chat is shown again so a key saved in Settings is picked up.
+     */
+    val cloudKeyReady: Boolean = false,
 )
 
 /**
@@ -131,7 +137,7 @@ data class ChatUiState(
  */
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    vault: EncryptedSecretsVault,
+    private val vault: EncryptedSecretsVault,
     private val store: ConversationStore,
     transport: HttpTransport,
     graph: KnowledgeGraph,
@@ -182,7 +188,17 @@ class ChatViewModel @Inject constructor(
     private fun initialState(): ChatUiState {
         val provider = CloudProviderCatalog.byId(prefs.getString(KEY_PROVIDER, null).orEmpty()) ?: CloudProviderCatalog.all.first()
         val model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel
-        return ChatUiState(provider = provider, model = model, memoryEnabled = memoryEnabled, webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false), speakMode = speakModeFromPrefs(), micAvailable = voice.sttAvailable, toolbar = advanced.toolbarToggles(), activeLocalModelId = prefs.getString(KEY_LOCAL_MODEL, null))
+        return ChatUiState(
+            provider = provider,
+            model = model,
+            memoryEnabled = memoryEnabled,
+            webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false),
+            speakMode = speakModeFromPrefs(),
+            micAvailable = voice.sttAvailable,
+            toolbar = advanced.toolbarToggles(),
+            activeLocalModelId = prefs.getString(KEY_LOCAL_MODEL, null),
+            cloudKeyReady = keyReady(provider),
+        )
     }
 
     init {
@@ -233,7 +249,15 @@ class ChatViewModel @Inject constructor(
             putString(KEY_PROVIDER, provider.id)
             remove(KEY_LOCAL_MODEL)
         }
-        mutableState.update { it.copy(provider = provider, model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel, activeLocalModelId = null, error = null) }
+        mutableState.update {
+            it.copy(
+                provider = provider,
+                model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel,
+                activeLocalModelId = null,
+                error = null,
+                cloudKeyReady = keyReady(provider),
+            )
+        }
     }
 
     /** Chooses an imported on-device model for the following turns. Switching away from another one frees its memory. */
@@ -571,7 +595,9 @@ class ChatViewModel @Inject constructor(
 
     /** Re-reads the Advanced toolbar choice; called when Chat is shown, since Settings can change it. */
     fun reloadToolbar() {
-        mutableState.update { it.copy(toolbar = advanced.toolbarToggles()) }
+        mutableState.update {
+            it.copy(toolbar = advanced.toolbarToggles(), cloudKeyReady = keyReady(it.provider))
+        }
     }
 
     /** Takes effect on the very next message (unlike Memory, it is a per-request flag, not session wiring). */
@@ -695,6 +721,9 @@ class ChatViewModel @Inject constructor(
         runCatching { SpeakMode.valueOf(prefs.getString(KEY_SPEAK_MODE, null).orEmpty()) }.getOrDefault(SpeakMode.OFF)
 
     private fun modelKey(provider: CloudProviderSpec) = "model.${provider.id}"
+
+    private fun keyReady(provider: CloudProviderSpec): Boolean =
+        vault.inspect(provider.secretId) == SecretState.Present
 
     private companion object {
         const val KEY_PROVIDER = "provider"

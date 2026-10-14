@@ -116,6 +116,13 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (!viewModel.keyReady()) {
+                        Text(
+                            "No API key for that provider. Add one in Settings — a run is refused until then, and no live model is called.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                     if (state.running) {
                         Button(
                             onClick = viewModel::stop,
@@ -187,7 +194,8 @@ private fun EmptyPlanPlaceholder() {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("No plan yet", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Describe an objective above. The agent chooses tools one step at a time and each step is recorded here.",
+                "Describe an objective above. The agent chooses tools one step at a time and each step is recorded here. " +
+                    "This needs an API key for the Chat-screen provider. Root, Termux, Metasploit, and SET have no backend in this build, so the model will see those steps denied.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextSecondary,
             )

@@ -4,6 +4,8 @@ import ai.droidcommand.app.mode.EngineModeState
 import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.plan.PlanController
 import ai.droidcommand.app.plan.PlanUiState
+import ai.droidcommand.config.EncryptedSecretsVault
+import ai.droidcommand.config.SecretState
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.CloudProviderSpec
 import android.content.Context
@@ -22,6 +24,7 @@ import javax.inject.Inject
 class PlanViewModel @Inject constructor(
     private val controller: PlanController,
     modes: EngineModes,
+    private val vault: EncryptedSecretsVault,
     @ApplicationContext context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
@@ -36,6 +39,9 @@ class PlanViewModel @Inject constructor(
 
     /** "Provider · model" as it will be used if a run starts now. */
     fun targetLabel(): String = spec().let { "${it.label} · ${model(it)}" }
+
+    /** Same vault inspect Settings uses. A missing key makes [CloudPlannerFactory] refuse the run. */
+    fun keyReady(): Boolean = vault.inspect(spec().secretId) == SecretState.Present
 
     fun run(objective: String) {
         val spec = spec()

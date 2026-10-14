@@ -35,6 +35,22 @@ fun ToolsScreen(navController: NavHostController) {
 
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Fleet", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "HackerAI, Pentest-Swarm, Termux/VictorSuite, and RootForge. " +
+                        "This list reports install state only — no companion is bound and no node is paired.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = { navController.navigate(Routes.FLEET) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Open fleet status") }
+            }
+        }
+
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Security Tools", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "Runs against an explicitly named target only, and always asks for " +
