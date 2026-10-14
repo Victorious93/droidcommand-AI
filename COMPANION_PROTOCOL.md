@@ -43,6 +43,72 @@ signature-permission bind, or an "install DCA first" check to RootForge. A RootF
 node that DCA cannot reach, or that DCA has never paired with, loses nothing; removing
 DCA must not disable any RootForge feature.
 
+The same exemption applies to every non-companion fleet slot below. The room-fleet
+map (five members, honest status, next code step) lives in `docs/FLEET_CONTROL.md`
+and `core-security.KnownFleet`. Do not add those members to `KnownCompanions` unless
+they are genuinely dependent companion APKs.
+
+## Fleet slots that are not companions
+
+These use the **same security rules as their class**, not a copy of the AIDL
+block above. Forcing AIDL + `DependencyGuard` onto them would invert the
+architecture.
+
+### VictorSuite — Termux IPC (`com.termux`)
+
+VictorSuite is a Termux/ZeroTermux-derived Android Linux suite. It ships under
+Termux's own `applicationId` (`com.termux`) with the public `com.termux.RUN_COMMAND`
+contract. DCA already reaches that contract through `core-termux` /
+`AdbTermuxExecutor` (`run_termux_command`).
+
+- **Not** a bound companion. Do not add `IVictorSuiteService`, a signature
+  permission, or a `DependencyGuard`.
+- DCA cannot tell a VictorSuite install from genuine Termux by package name;
+  only one can be installed. `TerminalSelector` uses a `versionName` heuristic.
+- VictorSuite-only features (multi-distro, backup/restore) are UI-only today
+  and need new surface area in VictorSuite's own repo — out of scope here.
+- Status: **PARTIAL**. App/CLI default to `NullTermuxExecutor` unless adb is
+  opted in. Never runtime-verified on a device in this environment.
+
+### KYC-AuditLab — host process tool (Python IdentityShield)
+
+A host-side identity lab, not an APK. Catalog id `kyc-auditlab`; tool
+`kyc_auditlab_status` (`PlannedHostProcessTool`).
+
+- **Not** a companion. Never AIDL, never `DependencyGuard`, never
+  `KnownCompanions`.
+- Reach it later as a local process behind `SecureToolExecutor`, the same
+  way Metasploit/SET use a process executor (Null until configured).
+- Do not log identity-document contents.
+- Status: **PLANNED**. No public repo under `Victorious93/KYC-AuditLab` as of
+  2026-10-14. The stub always returns `ToolResult.Failure` /
+  `CapabilityState.REQUIRES_EXTERNAL_SERVICE`.
+
+### EDL-Commander — host CLI tool (Rust Sahara/EDL)
+
+A host-side Qualcomm Sahara/EDL framework, not an APK. Catalog id
+`edl-commander`; tool `edl_commander_status`.
+
+- **Not** a companion. Never AIDL, never `DependencyGuard`.
+- Safety-first: **dry-run / status only**. This repo must not register a
+  flash, write, or restore tool until the owner explicitly asks. Those
+  operations would be `RiskTier.IRREVERSIBLE`.
+- Status: **PLANNED**. No public repo under `Victorious93/EDL-Commander` as of
+  2026-10-14. The stub always fails closed and says it does not flash.
+
+### Adding a non-companion fleet slot
+
+1. Add a `FleetMemberDescriptor` to `KnownFleet` with the correct
+   `FleetIntegrationClass`. The descriptor constructor rejects AIDL /
+   `DependencyGuard` unless the class is `BOUND_COMPANION`.
+2. If it is a new dependent APK, follow "Adding a new companion capability"
+   instead (AIDL sync + `KnownCompanions`).
+3. If it is a host process and not yet executable, register a
+   `PlannedHostProcessTool` that fails honestly. Do not spawn a guessed
+   binary.
+4. Update `docs/FLEET_CONTROL.md` and append an audit addendum. Do not mark
+   the member LIVE.
+
 ## Security Model
 
 ### OS-level enforcement (signature permission)

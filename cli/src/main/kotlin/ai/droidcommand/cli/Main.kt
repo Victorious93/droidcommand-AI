@@ -31,6 +31,7 @@ import ai.droidcommand.remote.JdkHttpTransport
 import ai.droidcommand.root.NullRootExecutor
 import ai.droidcommand.root.RootTool
 import ai.droidcommand.security.ApprovalPrompt
+import ai.droidcommand.security.KnownFleet
 import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
@@ -79,6 +80,10 @@ fun main(args: Array<String>) {
     val exitCode = when (val command = args[0]) {
         "list-tools" -> {
             printTools(session.registry)
+            0
+        }
+        "list-fleet" -> {
+            print(KnownFleet.formatListing())
             0
         }
         "pilot" -> runPilot(session, args.drop(1))
@@ -151,6 +156,11 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * `SENSITIVE`/`PermissionCategory.NETWORK`, so it goes through the same approval
  * gate as every other tool here regardless of which client backs it.
  *
+ * `kyc_auditlab_status` / `edl_commander_status` (`KnownFleet.plannedHostTools`)
+ * are catalog stubs for the two host-process fleet members that have no
+ * executor yet. They always fail without spawning a process. See
+ * `docs/FLEET_CONTROL.md`.
+ *
  * No [ai.droidcommand.security.GrantStore]/[ai.droidcommand.security.AuditLog] is
  * wired: none of these seven tools declares a `grantCapability`, and this CLI is one command per process
  * invocation with no persistence across runs, so an in-memory audit log nobody ever reads back
@@ -171,6 +181,7 @@ internal fun buildSession(
         register(MetasploitTool(metasploitExecutorFor()))
         register(SetTool(setExecutorFor()))
         register(WebSearchTool(webSearchClientFor(transport)))
+        KnownFleet.plannedHostTools().forEach { register(it) }
         rootForge.forEach { register(it) }
     }
     val stateMachine = AgentStateMachine()
@@ -252,6 +263,7 @@ internal fun printUsage() {
 
         Usage:
           list-tools                     List every registered tool and its spec
+          list-fleet                     List the five room-fleet members and their honest status
           pilot <tool> [key=value ...]   Run a single Pilot Mode tool invocation
           forge <objective text...>      Run a Forge Mode objective via an LLM planner
                                           [--finalization-steps <n>]
@@ -318,6 +330,11 @@ internal fun printUsage() {
         DROIDCOMMAND_CLI_BRAVE_API_KEY and/or DROIDCOMMAND_CLI_SERPAPI_API_KEY is set
         (both set tries Brave first, falling back to SerpAPI on failure); with neither
         set it fails without making any network call. Still requires approval either way.
+
+        list-fleet prints the five room-fleet members (RootForge, VictorSuite,
+        KYC-AuditLab, EDL-Commander, Pentest-Swarm) from core-security.KnownFleet.
+        None is LIVE. kyc_auditlab_status / edl_commander_status are planned stubs
+        and always fail without spawning a process. See docs/FLEET_CONTROL.md.
 
         Examples:
           pilot echo text=hello

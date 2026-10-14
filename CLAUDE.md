@@ -311,6 +311,15 @@ inflate any entry's status past what those addenda actually say:
   surface area in VictorSuite's own repo, out of scope here. See
   `docs/AUDIT_2026-09-05.md`'s addendum for the full record.
 
+The five-member **room fleet** Don asked DCA to control (RootForge OS,
+VictorSuite, KYC-AuditLab, EDL-Commander, Pentest-Swarm-AI) is catalogued
+in `docs/FLEET_CONTROL.md` and `core-security.KnownFleet`. KYC-AuditLab
+(Python IdentityShield lab) and EDL-Commander (Rust Sahara/EDL CLI,
+dry-run defaults) are **host process tools**, not APK companions — never
+AIDL / DependencyGuard. Both are PLANNED stubs (`kyc_auditlab_status` /
+`edl_commander_status`) as of 2026-10-14; no public repos were found.
+None of the five is LIVE. Do not invent a parallel control plane.
+
 ---
 
 ## Consumer Product Roadmap (DroidCommand AI — App Layer)

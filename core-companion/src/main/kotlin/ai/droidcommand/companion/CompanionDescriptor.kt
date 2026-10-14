@@ -19,7 +19,14 @@ data class CompanionDescriptor(
     val capabilities: List<String>,
 )
 
-/** Well-known companion descriptors built into DCA. */
+/**
+ * Well-known **bound companion APK** descriptors.
+ *
+ * Only HackerAI and Pentest-Swarm belong here. RootForge, VictorSuite,
+ * KYC-AuditLab, and EDL-Commander are different integration classes — see
+ * `ai.droidcommand.security.KnownFleet` and `docs/FLEET_CONTROL.md`. Do not
+ * add those members to this object; that would imply AIDL + DependencyGuard.
+ */
 object KnownCompanions {
     const val HACKERAI_PACKAGE = "ai.hackerai.companion"
     const val PENTESTSWARM_PACKAGE = "ai.pentestswarm.companion"

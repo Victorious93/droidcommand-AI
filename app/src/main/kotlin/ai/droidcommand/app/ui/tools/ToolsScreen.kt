@@ -3,6 +3,7 @@ package ai.droidcommand.app.ui.tools
 import ai.droidcommand.app.navigation.Routes
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.security.KnownFleet
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +33,30 @@ fun ToolsScreen(navController: NavHostController) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ScreenTitle("Tools")
+
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Room fleet", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "DCA is the hub. Status is honest: nothing here is LIVE control. " +
+                        "Bound companions use AIDL; RootForge, VictorSuite, KYC-AuditLab, and " +
+                        "EDL-Commander do not.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                for (member in KnownFleet.ALL) {
+                    Text(
+                        "${member.displayName} — ${member.integrationClass} — ${member.status}",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        member.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
 
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
