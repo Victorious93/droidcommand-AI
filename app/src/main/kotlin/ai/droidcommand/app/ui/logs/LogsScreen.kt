@@ -2,9 +2,10 @@ package ai.droidcommand.app.ui.logs
 
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.theme.AccentBlueBright
 import ai.droidcommand.app.ui.theme.AccentCyan
-import ai.droidcommand.app.ui.theme.AccentNeonGreen
 import ai.droidcommand.app.ui.theme.AccentRed
+import ai.droidcommand.app.ui.theme.AccentSuccess
 import ai.droidcommand.app.ui.theme.BackgroundDark
 import ai.droidcommand.app.ui.theme.BorderDark
 import ai.droidcommand.app.ui.theme.TextPrimary
@@ -69,7 +70,7 @@ private val okTypes = setOf(
 
 private fun typeColor(type: AuditEventType): Color = when (type) {
     in problemTypes -> AccentRed
-    in okTypes -> AccentNeonGreen
+    in okTypes -> AccentSuccess
     else -> AccentCyan
 }
 
@@ -103,7 +104,7 @@ fun LogsScreen(viewModel: LogsViewModel = hiltViewModel()) {
         SecondaryTabRow(
             selectedTabIndex = tab,
             containerColor = BackgroundDark,
-            contentColor = AccentNeonGreen,
+            contentColor = AccentBlueBright,
             divider = { HorizontalDivider(color = BorderDark) },
         ) {
             listOf("All events", "Denied & errors").forEachIndexed { index, title ->
@@ -115,7 +116,7 @@ fun LogsScreen(viewModel: LogsViewModel = hiltViewModel()) {
                             title,
                             fontSize = 13.sp,
                             fontWeight = if (tab == index) FontWeight.Bold else FontWeight.Normal,
-                            color = if (tab == index) AccentNeonGreen else TextSecondary,
+                            color = if (tab == index) AccentBlueBright else TextSecondary,
                         )
                     },
                 )

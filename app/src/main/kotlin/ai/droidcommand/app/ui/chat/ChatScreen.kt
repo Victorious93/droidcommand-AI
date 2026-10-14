@@ -2,13 +2,13 @@ package ai.droidcommand.app.ui.chat
 
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.theme.AccentBlue
+import ai.droidcommand.app.ui.theme.AccentBlueBright
 import ai.droidcommand.app.ui.theme.AccentCyan
-import ai.droidcommand.app.ui.theme.AccentGreenButton
-import ai.droidcommand.app.ui.theme.AccentNeonGreen
-import ai.droidcommand.app.ui.theme.AccentPurple
+import ai.droidcommand.app.ui.theme.AccentIndigo
 import ai.droidcommand.app.ui.theme.BorderDark
 import ai.droidcommand.app.ui.theme.CardDark
-import ai.droidcommand.app.ui.theme.OnAccentDark
+import ai.droidcommand.app.ui.theme.OnAccent
 import ai.droidcommand.app.ui.theme.TextPrimary
 import ai.droidcommand.app.ui.theme.TextSecondary
 import ai.droidcommand.app.ui.theme.UserBubbleDark
@@ -72,7 +72,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 
 /**
- * Chat in OpenDroid's layout: neon header with a status line, purple right-aligned user bubbles,
+ * Chat in OpenDroid's layout: blue header with a status line, indigo right-aligned user bubbles,
  * bordered left-aligned reply cards with a cyan role label, and a pill input with a round send
  * button. Provider/model/memory controls live in a panel that opens from the header subtitle so
  * the default view stays as clean as OpenDroid's.
@@ -86,6 +86,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
     var input by remember { mutableStateOf("") }
     var optionsOpen by remember { mutableStateOf(false) }
+    var libraryOpen by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val rows = state.lines + if (state.streaming.isNotEmpty()) listOf(ChatLine(false, state.streaming)) else emptyList()
 
@@ -136,16 +137,21 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onToggleOptions = { optionsOpen = !optionsOpen },
             onNewChat = viewModel::newChat,
             newChatEnabled = !state.sending,
+            libraryOpen = libraryOpen,
+            onToggleLibrary = { libraryOpen = !libraryOpen },
         )
 
         if (optionsOpen) {
             OptionsPanel(state, viewModel) { modelLauncher.launch(arrayOf("*/*")) }
         }
+        if (libraryOpen) {
+            ChatLibrary(state, viewModel)
+        }
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (rows.isEmpty()) {
                 Text(
-                    "Ask anything. Turn on Memory in the options above to let it recall past chats.",
+                    "Ask anything. Library holds saved chats, templates, and skills. Turn on Memory in the options above to let it recall past chats.",
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.align(Alignment.Center).padding(32.dp),
@@ -241,6 +247,8 @@ private fun Header(
     onToggleOptions: () -> Unit,
     onNewChat: () -> Unit,
     newChatEnabled: Boolean,
+    libraryOpen: Boolean,
+    onToggleLibrary: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 12.dp),
@@ -251,15 +259,20 @@ private fun Header(
             ScreenTitle("DroidCommand")
             Text(
                 text = subtitle + if (optionsOpen) "  ▴" else "  ▾",
-                color = if (active) AccentNeonGreen else AccentCyan,
+                color = if (active) AccentBlueBright else AccentCyan,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 modifier = Modifier.clickable(onClick = onToggleOptions).padding(vertical = 4.dp),
             )
         }
-        TextButton(onClick = onNewChat, enabled = newChatEnabled) {
-            Text("New chat", color = TextSecondary)
+        Column(horizontalAlignment = Alignment.End) {
+            TextButton(onClick = onToggleLibrary) {
+                Text(if (libraryOpen) "Hide library" else "Library", color = MaterialTheme.colorScheme.primary)
+            }
+            TextButton(onClick = onNewChat, enabled = newChatEnabled) {
+                Text("New chat", color = TextSecondary)
+            }
         }
     }
 }
@@ -346,7 +359,7 @@ private fun MessageBubble(line: ChatLine) {
             Surface(
                 color = UserBubbleDark,
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 6.dp),
-                border = BorderStroke(1.dp, AccentPurple),
+                border = BorderStroke(1.dp, AccentIndigo),
                 modifier = Modifier.widthIn(max = 300.dp),
             ) {
                 Text(line.text, color = TextPrimary, modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp))
@@ -460,9 +473,9 @@ private fun InputBar(
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = CardDark,
                 unfocusedContainerColor = CardDark,
-                focusedBorderColor = AccentGreenButton,
+                focusedBorderColor = AccentBlue,
                 unfocusedBorderColor = BorderDark,
-                cursorColor = AccentNeonGreen,
+                cursorColor = AccentBlueBright,
             ),
         )
         if (ToolbarToggle.MICROPHONE in visibleToggles) {
@@ -470,7 +483,7 @@ private fun InputBar(
                 Icon(
                     if (listening) Icons.Filled.Stop else Icons.Filled.Mic,
                     contentDescription = if (listening) "Stop dictation" else "Dictate",
-                    tint = if (listening) AccentNeonGreen else TextSecondary,
+                    tint = if (listening) AccentBlueBright else TextSecondary,
                 )
             }
         }
@@ -478,8 +491,8 @@ private fun InputBar(
             onClick = onSend,
             enabled = canSend,
             colors = IconButtonDefaults.iconButtonColors(
-                containerColor = AccentGreenButton,
-                contentColor = OnAccentDark,
+                containerColor = AccentBlue,
+                contentColor = OnAccent,
                 disabledContainerColor = CardDark,
                 disabledContentColor = TextSecondary,
             ),

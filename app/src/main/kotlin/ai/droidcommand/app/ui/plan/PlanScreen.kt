@@ -1,5 +1,6 @@
 package ai.droidcommand.app.ui.plan
 
+import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.PlanRun
 import ai.droidcommand.agent.PlanStatus
 import ai.droidcommand.agent.PlanStep
@@ -7,11 +8,12 @@ import ai.droidcommand.agent.PlanStepStatus
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ui.theme.AccentBlueBright
+import ai.droidcommand.app.ui.theme.AccentBlueContainer
 import ai.droidcommand.app.ui.theme.AccentCyan
-import ai.droidcommand.app.ui.theme.AccentGreenContainer
-import ai.droidcommand.app.ui.theme.AccentNeonGreen
-import ai.droidcommand.app.ui.theme.AccentPurple
+import ai.droidcommand.app.ui.theme.AccentIndigo
 import ai.droidcommand.app.ui.theme.AccentRed
+import ai.droidcommand.app.ui.theme.AccentSuccess
 import ai.droidcommand.app.ui.theme.BorderDark
 import ai.droidcommand.app.ui.theme.TextPrimary
 import ai.droidcommand.app.ui.theme.TextSecondary
@@ -69,14 +71,14 @@ private val AMBER = Color(0xFFFFB300)
 private val timeFormat = DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault())
 
 /**
- * Plan screen in OpenDroid's "Plan Engine" layout: a current-run card, the steps of that run, and a
- * history list. Here a plan is one agent objective run through the Forge loop; steps are the tool
- * calls the model chose, shown as they happen — there is no up-front step list to show because the
- * model decides one step at a time. Never built into an APK or run on a device.
+ * Forge engine, in the Plan layout: a current-run card, the steps of that run, and a history list.
+ * The title is the user's label for this mode (default "Mode 2"). Steps are the tool calls the model
+ * chose, shown as they happen — there is no up-front step list because the model decides one step at a time.
  */
 @Composable
 fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
+    val mode by viewModel.modeState.collectAsState()
     var objective by remember { mutableStateOf("") }
     var selectedId by remember { mutableStateOf<String?>(null) }
 
@@ -88,7 +90,14 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
     ) {
-        item { ScreenTitle("Plan Engine") }
+        item { ScreenTitle(mode.label(AgentMode.FORGE), uppercase = false) }
+        item {
+            Text(
+                "Forge engine: one objective. The model picks tools one step at a time. The title is the name from Settings.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         item {
             DroidCard {
@@ -103,9 +112,9 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
                         maxLines = 5,
                     )
                     Text(
-                        "Runs with ${viewModel.targetLabel()}. Tools still ask for approval, and any tool with no backend configured is denied.",
+                        "Runs with ${viewModel.targetLabel()}. Tools still ask for approval, and any tool with no backend configured is denied. Finished runs stay on this device. A run still going when the app closes is not restored.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (state.running) {
                         Button(
@@ -166,7 +175,7 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
 }
 
 private fun statusColor(status: PlanStatus): Color = when (status) {
-    PlanStatus.COMPLETED -> AccentNeonGreen
+    PlanStatus.COMPLETED -> AccentSuccess
     PlanStatus.RUNNING -> AccentCyan
     PlanStatus.FAILED -> AccentRed
     PlanStatus.CANCELLED -> AMBER
@@ -197,9 +206,9 @@ private fun RunHeaderCard(run: PlanRun, isLatest: Boolean, onShowLatest: () -> U
                 Text(run.status.name, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             if (isLatest) {
-                Badge(if (run.status == PlanStatus.RUNNING) "ACTIVE RUN" else "LATEST RUN", AccentNeonGreen, null)
+                Badge(if (run.status == PlanStatus.RUNNING) "ACTIVE RUN" else "LATEST RUN", AccentBlueBright, null)
             } else {
-                Badge("VIEWING PAST RUN", AccentPurple, onShowLatest)
+                Badge("VIEWING PAST RUN", AccentIndigo, onShowLatest)
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -239,16 +248,16 @@ private fun Badge(text: String, color: Color, onClick: (() -> Unit)?) {
 private fun StepCard(step: PlanStep) {
     val color = when (step.status) {
         PlanStepStatus.RUNNING -> AccentCyan
-        PlanStepStatus.SUCCEEDED -> AccentNeonGreen
+        PlanStepStatus.SUCCEEDED -> AccentSuccess
         PlanStepStatus.PARTIAL -> AMBER
         PlanStepStatus.FAILED -> AccentRed
     }
     DroidCard(borderColor = color.copy(alpha = 0.5f)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
             Box(
-                modifier = Modifier.size(32.dp).clip(CircleShape).background(AccentGreenContainer),
+                modifier = Modifier.size(32.dp).clip(CircleShape).background(AccentBlueContainer),
                 contentAlignment = Alignment.Center,
-            ) { Text("${step.index}", color = AccentNeonGreen, fontWeight = FontWeight.Bold) }
+            ) { Text("${step.index}", color = AccentBlueBright, fontWeight = FontWeight.Bold) }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("Execute ${step.toolName}", fontWeight = FontWeight.Bold, color = TextPrimary)
                 if (step.input.isNotEmpty()) {
@@ -295,7 +304,7 @@ private fun SummaryCard(status: PlanStatus, summary: String) {
 
 @Composable
 private fun HistoryRow(run: PlanRun, selected: Boolean, onSelect: () -> Unit, onDelete: () -> Unit) {
-    DroidCard(modifier = Modifier.clickable(onClick = onSelect), borderColor = if (selected) AccentNeonGreen.copy(alpha = 0.5f) else BorderDark) {
+    DroidCard(modifier = Modifier.clickable(onClick = onSelect), borderColor = if (selected) AccentBlueBright.copy(alpha = 0.5f) else BorderDark) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(run.objective, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)

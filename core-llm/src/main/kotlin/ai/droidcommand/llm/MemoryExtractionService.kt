@@ -15,7 +15,9 @@ data class MemoryExtractionOutcome(
     val duplicates: Int,
     val conflicts: Int,
     val rejected: Int,
-    /** Extracted relationships are not stored on this path; see [MemoryExtractionService]. */
+    /** Relationships remapped to the writer's final entity ids and written via [MemoryWriter.writeRelationship]. */
+    val relationshipsStored: Int,
+    /** Relationships whose `from`/`to` entity was [MemoryDecision.Conflict]ed or [MemoryDecision.Rejected], so no final id existed to remap to. */
     val relationshipsDropped: Int,
 )
 
@@ -28,10 +30,14 @@ data class MemoryExtractionOutcome(
  * as `VERIFIED`, and confidence is a fixed low [CONFIDENCE]. Nothing here sets `explicitUserSave`, so extracted
  * personal data is rejected rather than stored.
  *
- * **Not done:** extracted relationships are counted in [MemoryExtractionOutcome.relationshipsDropped] and not
- * written — the writer assigns its own ids and deduplicates, so an edge between extracted ids would dangle or
- * point at the wrong record; remapping them is future work. Extraction quality against a real provider is
- * unmeasured, as for every other `core-llm` extraction prompt.
+ * Extracted relationships reference the extractor's own per-response entity ids (see [LlmGraphExtractor]), not
+ * the ids [MemoryWriter] assigns on write — so each entity's extractor id is remapped to whatever id it actually
+ * ended up stored under ([MemoryDecision.Stored]'s new id, or [MemoryDecision.Duplicate]'s existing id) before a
+ * relationship referencing it is written; a relationship whose end was [MemoryDecision.Conflict]ed or
+ * [MemoryDecision.Rejected] has no final id to remap to and is counted in
+ * [MemoryExtractionOutcome.relationshipsDropped] instead of written.
+ *
+ * Extraction quality against a real provider is unmeasured, as for every other `core-llm` extraction prompt.
  */
 class MemoryExtractionService(
     private val extractor: LlmGraphExtractor,
@@ -49,15 +55,33 @@ class MemoryExtractionService(
         var duplicates = 0
         var conflicts = 0
         var rejected = 0
+        val finalIdByExtractedId = mutableMapOf<String, String>()
         for (e in result.entities) {
-            when (writer.write(candidate(e, source))) {
-                is MemoryDecision.Stored -> stored++
-                is MemoryDecision.Duplicate -> duplicates++
+            when (val decision = writer.write(candidate(e, source))) {
+                is MemoryDecision.Stored -> {
+                    stored++
+                    finalIdByExtractedId[e.id] = decision.entity.id
+                }
+                is MemoryDecision.Duplicate -> {
+                    duplicates++
+                    finalIdByExtractedId[e.id] = decision.existingId
+                }
                 is MemoryDecision.Conflict -> conflicts++
                 is MemoryDecision.Rejected -> rejected++
             }
         }
-        return result to MemoryExtractionOutcome(stored, duplicates, conflicts, rejected, result.relationships.size)
+        var relationshipsStored = 0
+        var relationshipsDropped = 0
+        for (r in result.relationships) {
+            val fromId = finalIdByExtractedId[r.fromId]
+            val toId = finalIdByExtractedId[r.toId]
+            if (fromId != null && toId != null && writer.writeRelationship(fromId, toId, r.type, source)) {
+                relationshipsStored++
+            } else {
+                relationshipsDropped++
+            }
+        }
+        return result to MemoryExtractionOutcome(stored, duplicates, conflicts, rejected, relationshipsStored, relationshipsDropped)
     }
 
     private fun candidate(e: Entity, source: String): MemoryCandidate {

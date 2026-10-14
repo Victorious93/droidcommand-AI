@@ -1,10 +1,13 @@
 package ai.droidcommand.app.plan
 
+import ai.droidcommand.agent.AgentMode
+import ai.droidcommand.agent.PlanHistoryFile
 import ai.droidcommand.agent.PlanRun
 import ai.droidcommand.agent.PlanRunner
 import ai.droidcommand.agent.PlanStatus
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
+import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.llm.factory.CloudPlannerFactory
 import ai.droidcommand.llm.factory.CloudProviderSpec
@@ -21,14 +24,17 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * [runs] is newest first; the first entry is the in-flight run while [running] is true, otherwise the
- * most recent finished one. In memory only — see [PlanController].
+ * most recent finished one. Finished runs are reloaded from disk — see [PlanController].
  */
 data class PlanUiState(
     val runs: List<PlanRun> = emptyList(),
@@ -44,41 +50,43 @@ data class PlanUiState(
  * a run can never invoke a SENSITIVE/ROOT tool without the user's approval, and tools with no real
  * backend configured (most of them today) are denied, which the model sees as a failed step.
  *
- * History is kept in memory for the life of the process and capped at [MAX_RUNS]; nothing is persisted.
+ * Finished runs are written to [PlanHistoryFile] and reloaded when the process starts again. A run that
+ * is still going when the process ends is not restored. Capped at [PlanHistoryFile.MAX_RUNS].
  * Never run on a device; the LLM planner's real behaviour with these tools is unobserved.
  */
 @Singleton
 class PlanController @Inject constructor(
+    @ApplicationContext context: Context,
     private val registry: ToolRegistry,
     private val policy: SecurityPolicy,
     private val approvalPrompt: ApprovalPrompt,
     private val auditLog: JsonFileAuditLog,
     private val vault: EncryptedSecretsVault,
     private val transport: HttpTransport,
+    private val modes: EngineModes,
 ) {
+    private val history = PlanHistoryFile(context.filesDir.toPath().resolve("plans").resolve("history.json"))
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val cancelled = AtomicBoolean(false)
-    private val mutableState = MutableStateFlow(PlanUiState())
+    private val mutableState = MutableStateFlow(PlanUiState(runs = runCatching { history.load() }.getOrDefault(emptyList())))
     val state: StateFlow<PlanUiState> = mutableState
 
     fun start(spec: CloudProviderSpec, model: String, objective: String) {
         val text = objective.trim()
         if (text.isEmpty()) return
-        // Claim the slot atomically; a second tap while one run is starting must not start another.
-        // update{} may re-run its lambda on contention, so the flag is reassigned on every attempt.
-        val claimed = AtomicBoolean(false)
-        mutableState.update {
-            claimed.set(!it.running)
-            if (it.running) it else it.copy(running = true, error = null)
+        // Forge only. tryBegin also refuses a second run, so a double tap cannot start two objectives.
+        if (!modes.tryBegin(AgentMode.FORGE)) {
+            mutableState.update { it.copy(error = modes.state.value.switchError) }
+            return
         }
-        if (!claimed.get()) return
         cancelled.set(false)
+        mutableState.update { it.copy(running = true, error = null) }
 
         scope.launch {
             try {
                 val planner = when (val result = CloudPlannerFactory.create(vault, spec, model, transport)) {
                     is PlannerResult.MissingKey -> {
-                        mutableState.update { it.copy(running = false, error = result.message) }
+                        mutableState.update { it.copy(error = result.message) }
                         return@launch
                     }
                     is PlannerResult.Ready -> result.planner
@@ -98,11 +106,13 @@ class PlanController @Inject constructor(
                     },
                 )
                 runner.run(text, isCancelled = { cancelled.get() }, onUpdate = ::publish)
-                mutableState.update { it.copy(running = false) }
             } catch (e: Exception) {
                 // Exception, not Throwable: an Error (e.g. OutOfMemoryError) should not be swallowed.
                 // The message is the failure's own; the API key is only ever read lazily by the provider.
-                mutableState.update { it.copy(running = false, error = "Plan run failed: ${e.message ?: e.javaClass.simpleName}") }
+                mutableState.update { it.copy(error = "Plan run failed: ${e.message ?: e.javaClass.simpleName}") }
+            } finally {
+                mutableState.update { it.copy(running = false) }
+                modes.endTask()
             }
         }
     }
@@ -114,17 +124,17 @@ class PlanController @Inject constructor(
 
     /** Removes a finished run from history; a running one cannot be removed. */
     fun delete(id: String) {
-        mutableState.update { state -> state.copy(runs = state.runs.filterNot { it.id == id && it.status != PlanStatus.RUNNING }) }
+        val next = mutableState.updateAndGet { state ->
+            state.copy(runs = state.runs.filterNot { it.id == id && it.status != PlanStatus.RUNNING })
+        }
+        runCatching { history.save(next.runs) }
     }
 
     private fun publish(run: PlanRun) {
-        mutableState.update { state ->
+        val next = mutableState.updateAndGet { state ->
             val rest = state.runs.filterNot { it.id == run.id }
-            state.copy(runs = (listOf(run) + rest).take(MAX_RUNS))
+            state.copy(runs = (listOf(run) + rest).take(PlanHistoryFile.MAX_RUNS))
         }
-    }
-
-    private companion object {
-        const val MAX_RUNS = 20
+        if (run.status != PlanStatus.RUNNING) runCatching { history.save(next.runs) }
     }
 }

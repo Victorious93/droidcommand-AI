@@ -1,0 +1,118 @@
+name: Emulator Smoke Test
+
+# Launches the :app debug APK on a real Android emulator and runs the instrumented
+# launch smoke test (app/src/androidTest/MainActivityLaunchTest). This is the first
+# thing in this repo that actually RUNS the app on an Android runtime — every :app
+# addendum in docs/AUDIT_2026-09-05.md through slice 3 ends with "no device or
+# emulator". A green run here moves the app launch path past ON DISK / UNVERIFIED.
+#
+# Heavy native build (llama.cpp + sherpa-onnx), same as android-apk.yml, plus a
+# hardware-accelerated (KVM) x86_64 emulator — so, like that workflow, it is NOT wired
+# to every pull_request. Manual dispatch and pushes to the feature branch(es) only.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "cursor/app-launch-smoke-test-68c2"
+
+permissions:
+  contents: read
+
+jobs:
+  emulator:
+    name: Launch :app on emulator (API 28, x86_64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # KVM is present on GitHub's Linux runners but not writable by default;
+      # the emulator needs hardware acceleration to boot in reasonable time.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # The legacy "tools" package install fails; pull exact packages below.
+          packages: ""
+
+      - name: Install SDK packages (compileSdk 36, NDK r28c, CMake 3.22.1)
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;28.2.13676358" \
+            "cmake;3.22.1"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # ggml-vulkan's host tool (vulkan-shaders-gen) is configured with -GNinja and looks
+      # ninja up on PATH. The SDK CMake package ships it; the runner image may not.
+      - name: Put SDK CMake ninja on PATH
+        run: echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
+
+      # Build the app and test APKs before the emulator step, wrapped in the same
+      # exponential-backoff retry android-apk.yml uses, so a transient Maven Central
+      # 429 doesn't burn an already-booted emulator's time.
+      - name: Assemble app + androidTest APKs (retry transient Maven Central 429s)
+        run: |
+          set -o pipefail
+          delay=15
+          for attempt in 1 2 3 4 5 6; do
+            echo "::group::assemble attempt #${attempt}"
+            if ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest \
+                 -PincludeAndroid=true --no-daemon; then
+              echo "::endgroup::"
+              echo "BUILD OK on attempt #${attempt}"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "attempt #${attempt} failed; sleeping ${delay}s before retry"
+            sleep "${delay}"
+            delay=$((delay * 2))
+            if [ "${delay}" -gt 300 ]; then delay=300; fi
+          done
+          echo "assemble failed after all retries"
+          exit 1
+
+      - name: Run launch smoke test on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 28
+          arch: x86_64
+          target: default
+          # NDK r28c is already installed above; the action does not need to resolve it.
+          ndk: "28.2.13676358"
+          cmake: "3.22.1"
+          force-avd-creation: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          # The APKs are already assembled above; this only installs and runs the test,
+          # so no 429-retry wrapper is needed here.
+          script: ./gradlew :app:connectedDebugAndroidTest -PincludeAndroid=true --no-daemon
+
+      - name: Upload instrumentation test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: connected-test-report
+          path: |
+            app/build/reports/androidTests/connected/**
+            app/build/outputs/androidTest-results/connected/**
+          if-no-files-found: warn
+          retention-days: 30

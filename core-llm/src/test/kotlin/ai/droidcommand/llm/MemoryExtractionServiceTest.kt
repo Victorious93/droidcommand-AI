@@ -30,6 +30,9 @@ class MemoryExtractionServiceTest {
 
     private fun records() = graph.searchEntities("").mapNotNull { MemoryMetadata.from(it) }
 
+    private fun entityOf(memoryClass: MemoryClass) =
+        graph.searchEntities("").single { MemoryMetadata.from(it)?.memoryClass == memoryClass }
+
     @Test
     fun `extracted entities are stored as unverified model memories in the given scope`() {
         val (result, outcome) = service(
@@ -37,7 +40,7 @@ class MemoryExtractionServiceTest {
         ).extractAndStore(ConversationContext(), "conversation:c1")
 
         assertIs<GraphExtractionResult.Success>(result)
-        assertEquals(MemoryExtractionOutcome(1, 0, 0, 0, 0), outcome)
+        assertEquals(MemoryExtractionOutcome(1, 0, 0, 0, 0, 0), outcome)
         val meta = records().single()
         assertEquals(MemoryClass.DEVICE, meta.memoryClass)
         assertEquals("project:dca", meta.scope)
@@ -53,7 +56,7 @@ class MemoryExtractionServiceTest {
             """{"entities":[{"key":"a","type":"NOTE","label":"api key","properties":{"value":"sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUV"}}],"relationships":[]}""",
         ).extractAndStore(ConversationContext(), "s")
 
-        assertEquals(MemoryExtractionOutcome(0, 0, 0, 1, 0), outcome)
+        assertEquals(MemoryExtractionOutcome(0, 0, 0, 1, 0, 0), outcome)
         assertEquals(emptyList(), records())
     }
 
@@ -68,15 +71,49 @@ class MemoryExtractionServiceTest {
     }
 
     @Test
-    fun `relationships are counted as dropped and not written`() {
+    fun `relationships between stored entities are remapped to final ids and written`() {
         val (_, outcome) = service(
             """{"entities":[{"key":"a","type":"DEVICE","label":"Pixel 9"},{"key":"b","type":"COMMAND","label":"reboot"}],""" +
                 """"relationships":[{"fromKey":"b","toKey":"a","type":"targets"}]}""",
         ).extractAndStore(ConversationContext(), "s")
 
         assertEquals(2, outcome?.stored)
+        assertEquals(1, outcome?.relationshipsStored)
+        assertEquals(0, outcome?.relationshipsDropped)
+        val command = entityOf(MemoryClass.AGENT)
+        val device = entityOf(MemoryClass.DEVICE)
+        val edge = graph.relationshipsFrom(command.id).single()
+        assertEquals(device.id, edge.toId)
+        assertEquals("targets", edge.type)
+    }
+
+    @Test
+    fun `a relationship whose endpoint was rejected is dropped, not the whole extraction`() {
+        val (_, outcome) = service(
+            """{"entities":[{"key":"a","type":"DEVICE","label":"Pixel 9"},""" +
+                """{"key":"b","type":"NOTE","label":"api key","properties":{"value":"sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUV"}}],""" +
+                """"relationships":[{"fromKey":"b","toKey":"a","type":"targets"}]}""",
+        ).extractAndStore(ConversationContext(), "s")
+
+        assertEquals(1, outcome?.stored)
+        assertEquals(1, outcome?.rejected)
+        assertEquals(0, outcome?.relationshipsStored)
         assertEquals(1, outcome?.relationshipsDropped)
+        assertEquals(1, records().size)
         assertEquals(0, graph.searchEntities("").sumOf { graph.relationshipsFrom(it.id).size })
+    }
+
+    @Test
+    fun `re-extracting the same relationship a second time adds a second edge`() {
+        val json = """{"entities":[{"key":"a","type":"DEVICE","label":"Pixel 9"},{"key":"b","type":"COMMAND","label":"reboot"}],""" +
+            """"relationships":[{"fromKey":"b","toKey":"a","type":"targets"}]}"""
+        service(json).extractAndStore(ConversationContext(), "s")
+        val (_, second) = service(json).extractAndStore(ConversationContext(), "s")
+
+        assertEquals(2, second?.duplicates)
+        assertEquals(1, second?.relationshipsStored)
+        val command = entityOf(MemoryClass.AGENT)
+        assertEquals(2, graph.relationshipsFrom(command.id).size)
     }
 
     @Test

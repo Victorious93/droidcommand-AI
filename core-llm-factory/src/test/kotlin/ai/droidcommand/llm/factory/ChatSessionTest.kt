@@ -405,6 +405,19 @@ class ChatSessionTest {
     }
 
     @Test
+    fun `rememberConversation with a memory writer also stores a remapped relationship`() {
+        val g = InMemoryKnowledgeGraph()
+        var call = 0
+        val relJson =
+            """{"choices":[{"message":{"content":"{\"entities\":[{\"key\":\"d\",\"type\":\"DEVICE\",\"label\":\"Home Router\"},{\"key\":\"c\",\"type\":\"COMMAND\",\"label\":\"reboot\"}],\"relationships\":[{\"fromKey\":\"c\",\"toKey\":\"d\",\"type\":\"targets\"}]}"}}]}"""
+        val base = startRouting { if (call++ == 0) sse("""{"choices":[{"delta":{"content":"hi"}}]}""") else relJson }
+        val (chat, _, _) = session(base, memoryWriter = MemoryWriter(g), memoryWriteScope = "project:dca")
+
+        chat.send(groq, "", "my router is slow")
+        assertEquals(MemoryResult.Saved(2, 1), chat.rememberConversation())
+    }
+
+    @Test
     fun `a memory writer without a write scope fails closed and writes nothing`() {
         val g = InMemoryKnowledgeGraph()
         var call = 0
@@ -493,5 +506,20 @@ class ChatSessionTest {
         val (chat, _, _) = session(base, documents = docs)
 
         assertEquals(ChatResult.Reply("ok"), chat.send(groq, "", "hi"))
+    }
+
+    @Test
+    fun `a request prompt is sent as system text and is not stored in the transcript`() {
+        val seen = AtomicReference<String>()
+        val base = start(captured = seen) { sse("""{"choices":[{"delta":{"content":"ok"}}]}""") }
+        val (chat, store, _) = session(base)
+        chat.setRequestPrompt("SKILL-MARKER be brief")
+        assertEquals(ChatResult.Reply("ok"), chat.send(groq, "", "hello"))
+        assertTrue(seen.get().contains("SKILL-MARKER"))
+        assertTrue(seen.get().contains("\"role\":\"system\""))
+        assertEquals(null, store.load("default")!!.systemPrompt)
+        chat.setRequestPrompt("   ")
+        chat.send(groq, "", "again")
+        assertFalse(seen.get().contains("\"role\":\"system\""))
     }
 }

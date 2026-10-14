@@ -143,4 +143,40 @@ class MemoryWriterTest {
         assertEquals(null, MemoryMetadata.from(e.copy(properties = e.properties + (MemoryMetadata.K_CLASS to "BOGUS"))))
         assertEquals(null, MemoryMetadata.from(ai.droidcommand.agent.Entity("y", ai.droidcommand.agent.EntityType.NOTE, "plain")))
     }
+
+    @Test
+    fun `writeRelationship links two stored records`() {
+        val a = assertIs<MemoryDecision.Stored>(writer.write(cand("a", title = "A")))
+        val b = assertIs<MemoryDecision.Stored>(writer.write(cand("b", title = "B")))
+
+        assertTrue(writer.writeRelationship(a.entity.id, b.entity.id, "relates-to", sourceRef = "conversation:c1"))
+
+        val edge = graph.relationshipsFrom(a.entity.id).single()
+        assertEquals(b.entity.id, edge.toId)
+        assertEquals("relates-to", edge.type)
+        assertEquals("conversation:c1", edge.properties["evidence"])
+    }
+
+    @Test
+    fun `writeRelationship refuses an unknown endpoint and writes nothing`() {
+        val a = assertIs<MemoryDecision.Stored>(writer.write(cand("a", title = "A")))
+
+        assertFalse(writer.writeRelationship(a.entity.id, "no-such-id", "relates-to"))
+        assertFalse(writer.writeRelationship("no-such-id", a.entity.id, "relates-to"))
+        assertEquals(emptyList(), graph.relationshipsFrom(a.entity.id))
+        assertTrue(events.any { it.startsWith("memory.relationship.skip") })
+    }
+
+    @Test
+    fun `writeRelationship refuses a credential-like type and never echoes it into the audit log`() {
+        val a = assertIs<MemoryDecision.Stored>(writer.write(cand("a", title = "A")))
+        val b = assertIs<MemoryDecision.Stored>(writer.write(cand("b", title = "B")))
+        val secret = "sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUV"
+
+        assertFalse(writer.writeRelationship(a.entity.id, b.entity.id, secret))
+
+        assertEquals(emptyList(), graph.relationshipsFrom(a.entity.id))
+        assertTrue(events.any { it.startsWith("memory.relationship.reject reason=sensitive-type") })
+        assertTrue(events.none { secret in it }, "audit must not echo the secret")
+    }
 }
