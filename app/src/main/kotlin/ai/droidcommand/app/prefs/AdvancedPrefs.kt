@@ -1,7 +1,7 @@
 package ai.droidcommand.app.prefs
 
-import ai.droidcommand.app.automation.ShellAllowlist
 import ai.droidcommand.agent.AgentMode
+import ai.droidcommand.app.automation.ShellAllowlist
 import ai.droidcommand.app.ui.chat.ToolbarLayout
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import android.content.Context

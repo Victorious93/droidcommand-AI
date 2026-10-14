@@ -3,8 +3,8 @@ package ai.droidcommand.app.navigation
 import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.clipboard.ClipboardScreen
 import ai.droidcommand.app.ui.automation.AutomationScreen
-import ai.droidcommand.app.ui.coding.CodingScreen
 import ai.droidcommand.app.ui.chat.ChatScreen
+import ai.droidcommand.app.ui.coding.CodingScreen
 import ai.droidcommand.app.ui.logs.LogsScreen
 import ai.droidcommand.app.ui.memory.MemoryScreen
 import ai.droidcommand.app.ui.mode.EngineModeViewModel
