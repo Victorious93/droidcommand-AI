@@ -20,7 +20,9 @@ class NoteVault(val root: Path) {
         val dir = resolve(folder, directory = true)
         if (!Files.exists(dir)) return emptyList()
         return Files.list(dir).use { stream ->
-            stream.toList()
+            // iterator().asSequence() — not Stream.toList() — so this runs on API 28
+            // (Android 9 / Java 8). Stream.toList() is Java 16 and crashes Notes there.
+            stream.iterator().asSequence()
                 .filter { it.fileName.toString() != PluginStore.DIRECTORY }
                 .map { path ->
                     val name = path.fileName.toString()
@@ -28,6 +30,7 @@ class NoteVault(val root: Path) {
                     VaultEntry(name, relative, path.isDirectory())
                 }
                 .sortedWith(compareBy({ !it.folder }, { it.name }))
+                .toList()
         }
     }
 

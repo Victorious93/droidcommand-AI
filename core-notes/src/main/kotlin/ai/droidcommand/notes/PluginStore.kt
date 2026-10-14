@@ -81,10 +81,12 @@ class PluginStore(private val root: Path) {
     fun list(): List<NotePlugin> {
         if (!Files.isDirectory(dir)) return emptyList()
         return Files.list(dir).use { stream ->
-            stream.toList()
+            // iterator().asSequence() — not Stream.toList() — so this runs on API 28
+            stream.iterator().asSequence()
                 .filter { it.fileName.toString().endsWith(".plugin") }
                 .map { PluginManifest.parse(Files.readString(it)) }
                 .sortedBy { it.id }
+                .toList()
         }
     }
 
