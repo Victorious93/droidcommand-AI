@@ -1,10 +1,12 @@
 name: Emulator Smoke Test
 
-# Launches the :app debug APK on a real Android emulator and runs the instrumented
-# launch smoke test (app/src/androidTest/MainActivityLaunchTest). This is the first
-# thing in this repo that actually RUNS the app on an Android runtime — every :app
-# addendum in docs/AUDIT_2026-09-05.md through slice 3 ends with "no device or
-# emulator". A green run here moves the app launch path past ON DISK / UNVERIFIED.
+# Launches the :app debug APK on a real Android emulator and runs instrumented
+# tests: MainActivityLaunchTest (RESUMED) and PrimaryScreensScreenshotTest
+# (walks Chat/Tools/Notes/Memory/Settings/Pilot/Forge/Logs and dumps PNGs).
+# This is the first thing in this repo that actually RUNS the app on an Android
+# runtime — every :app addendum in docs/AUDIT_2026-09-05.md through slice 3 ends
+# with "no device or emulator". A green run here moves the app launch path past
+# ON DISK / UNVERIFIED. Screens past first composition are now exercised too.
 #
 # Heavy native build (llama.cpp + sherpa-onnx), same as android-apk.yml, plus a
 # hardware-accelerated (KVM) x86_64 emulator — so this is NOT wired to every
@@ -141,8 +143,13 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           # The APKs are already assembled above; this only installs and runs the test,
-          # so no 429-retry wrapper is needed here.
-          script: ./gradlew :app:connectedDebugAndroidTest -PincludeAndroid=true -Pandroid.injected.build.abi=x86_64 --no-daemon
+          # so no 429-retry wrapper is needed here. Screenshots are pulled while the
+          # emulator is still up (PrimaryScreensScreenshotTest writes /data/local/tmp/dca-screenshots).
+          script: |
+            set -euo pipefail
+            ./gradlew :app:connectedDebugAndroidTest -PincludeAndroid=true -Pandroid.injected.build.abi=x86_64 --no-daemon
+            mkdir -p "$GITHUB_WORKSPACE/emulator-screenshots"
+            adb pull /data/local/tmp/dca-screenshots "$GITHUB_WORKSPACE/emulator-screenshots" || true
 
       - name: Upload instrumentation test report
         if: always()
@@ -152,5 +159,14 @@ jobs:
           path: |
             app/build/reports/androidTests/connected/**
             app/build/outputs/androidTest-results/connected/**
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload emulator screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-screenshots
+          path: emulator-screenshots/**
           if-no-files-found: warn
           retention-days: 30

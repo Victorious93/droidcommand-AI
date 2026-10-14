@@ -135,6 +135,12 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:core-ktx:1.6.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
+    // Compose UI test + UiAutomator: PrimaryScreensScreenshotTest clicks the real
+    // bottom bar / mode switcher and dumps PNGs via UiDevice.takeScreenshot.
+    // ui-test-junit4 version is managed by the same Compose BOM as the app.
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.01.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
 }
 
 kotlin {
