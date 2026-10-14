@@ -246,9 +246,10 @@ object KnownFleet {
         checker: CapabilityHealthChecker = StaticFleetHealthChecker(),
     ) {
         for (member in ALL) {
-            registry.register(checker.verify(member.capabilityId, member.providerId).let { meta ->
-                if (meta.lastVerifiedAt == now) meta else meta.copy(lastVerifiedAt = now)
-            })
+            val meta = checker.verify(member.capabilityId, member.providerId)
+            registry.register(
+                if (meta.lastVerifiedAt == now) meta else meta.copy(lastVerifiedAt = now),
+            )
         }
     }
 
