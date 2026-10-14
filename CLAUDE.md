@@ -311,6 +311,21 @@ inflate any entry's status past what those addenda actually say:
   surface area in VictorSuite's own repo, out of scope here. See
   `docs/AUDIT_2026-09-05.md`'s addendum for the full record.
 
+The five-member **room fleet** Don asked DCA to control (RootForge OS,
+VictorSuite, KYC-AuditLab, EDL-Commander, Pentest-Swarm-AI) is catalogued
+in `docs/FLEET_CONTROL.md` and `core-security.KnownFleet`. Wiring order:
+Pentest (when the base repo exists) → RootForge Messenger deepen →
+VictorSuite `RUN_COMMAND` → EDL companion APK → KYC last. RootForge is an
+**EXTERNAL_NODE** — live APK path on their `main` is already Messenger +
+shared JSON (`docs/DROIDCOMMAND_INTEGRATION.md` in `rootforge-os`, action
+`ai.rootforge.os.action.BRIDGE`, `protocol_major` 1); SSH is CLI/ISO
+fallback only. Never DependencyGuard, never a shared signing key.
+EDL-Commander is a **bound companion** (AIDL + same-signing +
+DependencyGuard), PLANNED until the APK lands — do not mark it
+host-tool-only. KYC-AuditLab is a host-process simulator (localhost only;
+the hub must not call `/scope` admin). None of the five is LIVE. Do not
+invent a parallel control plane.
+
 ---
 
 ## Consumer Product Roadmap (DroidCommand AI — App Layer)
@@ -754,23 +769,29 @@ into the future, per this file's own standing rule.
 ## RootForge OS (external node — NOT a companion)
 
 `core-rootforge` (2026-10-07) lets DCA optionally ask an independently installed RootForge
-OS machine questions (capabilities, attached adb/fastboot devices) over an SSH-carried JSON
-protocol. RootForge is an independent product: it is **exempt from the companion
-`DependencyGuard`** and from the AIDL/signature-permission model below — never add either to
-it. Read `docs/ROOTFORGE_INTEGRATION.md` before touching the module; the canonical protocol
-lives in the `rootforge-os` repo (`docs/DROIDCOMMAND_INTEGRATION.md`). Only passive reads
-exist; flashing, restore, builds, jobs and terminals are deliberately absent until RootForge
-repairs the gates listed there.
+OS machine questions (capabilities, attached adb/fastboot devices). RootForge is an
+independent product: it is **exempt from the companion `DependencyGuard`** and from
+the AIDL/signature-permission / shared-signing-key model — never add any of those
+to it. Live APK path on *their* `main` is already Messenger + shared JSON
+(`docs/DROIDCOMMAND_INTEGRATION.md` in `rootforge-os`, action
+`ai.rootforge.os.action.BRIDGE`, `protocol_major` 1). This repo still only
+speaks the SSH fallback. Read `docs/ROOTFORGE_INTEGRATION.md` and
+`docs/FLEET_CONTROL.md` before touching the module. Only passive reads exist
+here; flashing, restore, builds, jobs and terminals are deliberately absent
+until RootForge repairs the gates listed there.
 
 ## Companion APK Integration
 
-DCA integrates with two companion APKs via Android Bound Services:
+DCA integrates with companion APKs via Android Bound Services:
 
 - **HackerAI companion** (`hackeraiETC/android/`) — exposes HackerAI's agent
   orchestration, skill catalog, and finding validation via `IHackerAIService`
 - **Pentest-Swarm companion** (`Pentest-Swarm-AI/android/`) — exposes the Go
   pentestswarm binary's campaign/chain/playbook capabilities via
   `IPentestSwarmService`
+- **EDL-Commander companion** (`Victorious93/EDL-Commander`, PLANNED) —
+  Sahara/Firehose over AIDL + same-signing + DependencyGuard when the APK
+  lands. Do not add `IEDLCommanderService` here until then. Not a host tool.
 
 **For session orientation on the full integration protocol**, read
 `COMPANION_PROTOCOL.md` at the repo root before modifying AIDL contracts,
@@ -785,6 +806,7 @@ adding companion capabilities, or working on the modules below.
 | `core-companion` | `droidcommand-AI/core-companion/` | Android (excluded from build) | IMPLEMENTED (source only) |
 | HackerAI companion APK | `hackeraiETC/android/` | Android standalone | IMPLEMENTED (source only) |
 | Pentest-Swarm companion APK | `Pentest-Swarm-AI/android/` | Android standalone | IMPLEMENTED (source only) |
+| EDL-Commander companion APK | `Victorious93/EDL-Commander` | Android standalone | PLANNED (APK has not landed; no AIDL in this repo) |
 
 **Critical rule — AIDL sync**: The AIDL files in each companion repo are
 copies of the canonical files in `core-companion/src/main/aidl/`. A diverged

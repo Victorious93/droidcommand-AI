@@ -37,8 +37,10 @@ fun ToolsScreen(navController: NavHostController) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Fleet", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "HackerAI, Pentest-Swarm, Termux/VictorSuite, and RootForge. " +
-                        "This list reports install state only — no companion is bound and no node is paired.",
+                    "DCA is the hub. This list reports install state only — nothing here is LIVE. " +
+                        "Pentest-Swarm and EDL-Commander are bound companions (EDL is PLANNED). " +
+                        "RootForge is an external node (Messenger on their main; SSH fallback). " +
+                        "No companion is bound and no node is paired.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

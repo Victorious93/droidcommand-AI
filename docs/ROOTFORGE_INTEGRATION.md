@@ -7,7 +7,14 @@ the canonical protocol; this module mirrors it by hand (see "Protocol sync").
 
 RootForge is an independent product. DCA is an optional controller of it, not a host,
 dependency guard or replacement. See `COMPANION_PROTOCOL.md` ("External nodes are not
-companions") — RootForge is deliberately exempt from the companion `DependencyGuard`.
+companions") — RootForge is deliberately exempt from the companion `DependencyGuard`
+and from any shared signing key. Live APK path on *their* `main` is already a bound
+Messenger + shared JSON envelope (`action ai.rootforge.os.action.BRIDGE`,
+`protocol_major` 1; canonical `docs/DROIDCOMMAND_INTEGRATION.md` in
+`Victorious93/rootforge-os`). Desktop/Docker localhost API + bearer is planned.
+SSH is the CLI/ISO **fallback only** — that is what this module implements today.
+They are auditing gaps so `core-rootforge` can call the Messenger bridge; do not
+treat SSH as the live APK path. Room-fleet map: `docs/FLEET_CONTROL.md`.
 
 ## What this module does
 

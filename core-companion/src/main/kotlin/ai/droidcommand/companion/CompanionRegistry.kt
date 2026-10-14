@@ -46,6 +46,8 @@ class AndroidCompanionRegistry(private val context: Context) : CompanionRegistry
     @Synchronized
     override fun bind(descriptor: CompanionDescriptor) {
         if (connections.containsKey(descriptor.packageName)) return
+        // Planned slot — APK/AIDL have not landed. Do not invent a bind action.
+        if (descriptor.packageName == KnownCompanions.EDLCOMMANDER_PACKAGE) return
 
         val intent = Intent().apply {
             setPackage(descriptor.packageName)

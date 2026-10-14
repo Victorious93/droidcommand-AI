@@ -19,10 +19,21 @@ data class CompanionDescriptor(
     val capabilities: List<String>,
 )
 
-/** Well-known companion descriptors built into DCA. */
+/**
+ * Well-known **bound companion APK** descriptors.
+ *
+ * HackerAI and Pentest-Swarm have AIDL + APK source. EDL-Commander is the
+ * same class (AIDL + same-signing + DependencyGuard) but the APK/AIDL are
+ * still PLANNED — do not bind it from [CompanionRegistry] until
+ * `IEDLCommanderService` exists. RootForge, VictorSuite, and KYC-AuditLab
+ * are different classes — see `ai.droidcommand.security.KnownFleet` and
+ * `docs/FLEET_CONTROL.md`. Do not add those three here.
+ */
 object KnownCompanions {
     const val HACKERAI_PACKAGE = "ai.hackerai.companion"
     const val PENTESTSWARM_PACKAGE = "ai.pentestswarm.companion"
+    /** Planned package id. The APK does not exist; do not bind this. */
+    const val EDLCOMMANDER_PACKAGE = "ai.edlcommander.companion"
 
     val HACKERAI = CompanionDescriptor(
         id = "hackerai",
@@ -44,5 +55,16 @@ object KnownCompanions {
             "ai.companion.pentestswarm.run_chain",
             "ai.companion.pentestswarm.run_playbook",
         ),
+    )
+
+    /**
+     * Planned slot only. Version `0.0.0-planned` means there is no APK and
+     * no AIDL yet. [CompanionRegistry] must not bind this package.
+     */
+    val EDLCOMMANDER = CompanionDescriptor(
+        id = "edlcommander",
+        packageName = EDLCOMMANDER_PACKAGE,
+        version = "0.0.0-planned",
+        capabilities = listOf("ai.companion.edlcommander.status"),
     )
 }
