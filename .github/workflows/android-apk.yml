@@ -2,19 +2,42 @@ name: Build APK
 
 # Builds the :app debug APK and uploads it as a downloadable workflow artifact.
 # Kept separate from ci.yml because this is a heavy native build (Android SDK +
-# NDK r28c + CMake; llama.cpp and sherpa-onnx native libs for 4 ABIs). It does
-# NOT run on every pull_request — only on manual dispatch and on pushes to the
-# branch(es) listed below — so ordinary JVM PRs stay fast.
+# NDK r28c + CMake; llama.cpp for arm64-v8a/x86_64 plus sherpa-onnx's 4-ABI AAR).
+# It does NOT run on every pull_request — ordinary JVM and :app Kotlin PRs stay
+# on ci.yml / android-emulator.yml. Triggers:
+#   - workflow_dispatch (always)
+#   - push to main, except docs-only commits
+#   - PRs that touch this workflow, the native modules packaged into the APK,
+#     or the Gradle files that decide whether :app still assembles
 #
 # The produced APK is debug-signed. A separate workflow
-# (.github/workflows/android-emulator.yml) launches the app and runs the
-# instrumented smoke test; see the 2026-10-13 audit addendum.
+# (.github/workflows/android-emulator.yml) launches an x86_64-only build and
+# runs the instrumented smoke test; see the 2026-10-13 / 2026-10-14 audit
+# addenda. This job is the 4-ABI artifact, not a launch proof.
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - "ccr-0f7819d2-0rsmt0"
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/android-apk.yml"
+      - "core-llm-local-android/**"
+      - "core-voice-neural-android/**"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - "gradle.properties"
+      - "gradle/**"
+
+concurrency:
+  group: apk-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -54,19 +77,43 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # ggml-vulkan's host tool (vulkan-shaders-gen) is configured with -GNinja and looks
+      # ninja up on PATH. The SDK CMake package ships it; the runner image may not.
+      - name: Put SDK CMake ninja on PATH
+        run: echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
+
+      # Retry only transient Maven Central / network errors — a compile error is
+      # not a 429. The previous wrapper retried PilotController.kt:65 six times
+      # on Actions 38503712187 / 38504189408 (~23 min each) after Mode 1/2
+      # landed on the stale feature branch.
       - name: Assemble debug APK (retry transient Maven Central 429s)
         run: |
           set -o pipefail
           delay=15
           for attempt in 1 2 3 4 5 6; do
             echo "::group::assembleDebug attempt #${attempt}"
-            if ./gradlew :app:assembleDebug -PincludeAndroid=true --no-daemon; then
+            log="$(mktemp)"
+            if ./gradlew :app:assembleDebug -PincludeAndroid=true --no-daemon \
+                 2>&1 | tee "$log"; then
               echo "::endgroup::"
               echo "BUILD OK on attempt #${attempt}"
+              rm -f "$log"
               exit 0
             fi
             echo "::endgroup::"
-            echo "attempt #${attempt} failed; sleeping ${delay}s before retry"
+            if ! grep -qE \
+              'Could not (GET|HEAD|resolve)|Received status code 429|Connection reset|SocketTimeout|UnknownHostException|Connection timed out|503 Service Unavailable|502 Bad Gateway' \
+              "$log"; then
+              echo "Non-transient assemble failure; not retrying"
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            if [ "${attempt}" -eq 6 ]; then
+              echo "assembleDebug failed after all retries"
+              exit 1
+            fi
+            echo "attempt #${attempt} failed with a transient dependency error; sleeping ${delay}s before retry"
             sleep "${delay}"
             delay=$((delay * 2))
             if [ "${delay}" -gt 300 ]; then delay=300; fi
