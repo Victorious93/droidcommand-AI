@@ -32,6 +32,15 @@ class PilotInstructionTest {
     }
 
     @Test
+    fun `Ok input is read through an exhaustive when`() {
+        val input = when (val parsed = PilotArguments.parse("text=hi")) {
+            is PilotArguments.Ok -> parsed.input
+            is PilotArguments.Invalid -> error(parsed.message)
+        }
+        assertEquals(mapOf("text" to "hi"), input)
+    }
+
+    @Test
     fun `run goes through a Pilot session`() {
         val registry = ToolRegistry().apply { register(EchoTool()) }
         val instruction = PilotInstruction(registry) { machine -> ToolExecutor(registry, machine) }

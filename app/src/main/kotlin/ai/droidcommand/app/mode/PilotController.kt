@@ -57,12 +57,13 @@ class PilotController @Inject constructor(
             mutableState.update { it.copy(error = "Choose a tool first.") }
             return
         }
-        val parsed = PilotArguments.parse(argumentText)
-        if (parsed is PilotArguments.Invalid) {
-            mutableState.update { it.copy(error = parsed.message, result = null) }
-            return
+        val input = when (val parsed = PilotArguments.parse(argumentText)) {
+            is PilotArguments.Invalid -> {
+                mutableState.update { it.copy(error = parsed.message, result = null) }
+                return
+            }
+            is PilotArguments.Ok -> parsed.input
         }
-        val input = parsed.input
         if (!modes.tryBegin(AgentMode.PILOT)) {
             mutableState.update { it.copy(error = modes.state.value.switchError) }
             return
