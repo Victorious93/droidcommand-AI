@@ -22,13 +22,13 @@ AIDL bind. Honest status: **none of these is LIVE control**. Full map:
 | Member | Repo | Class | How DCA reaches it | Status |
 |---|---|---|---|---|
 | **HackerAI** | [Victorious93/hackeraiETC](https://github.com/Victorious93/hackeraiETC) | Bound companion | AIDL `IHackerAIService`; `core-hackerai` | PARTIAL (not one of the five room-fleet items) |
-| **Pentest-Swarm-AI** | [Victorious93/Pentest-Swarm-AI](https://github.com/Victorious93/Pentest-Swarm-AI) | Bound companion | Loopback REST + AIDL `IPentestSwarmService` (AGPL-3.0 upstream lineage) | PARTIAL |
-| **VictorSuite** | `Victorious93/VictorSuite` (documented; not publicly resolvable 2026-10-14) | Termux IPC | `com.termux` + `RUN_COMMAND` via `core-termux` | PARTIAL |
-| **RootForge OS** | [Victorious93/rootforge-os](https://github.com/Victorious93/rootforge-os) | External node | SSH-carried JSON (`core-rootforge`); **passive reads only** | PARTIAL |
-| **KYC-AuditLab** | unpublished as of 2026-10-14 | Host process | `kyc_auditlab_status` stub — Python IdentityShield lab, no APK | PLANNED |
-| **EDL-Commander** | unpublished as of 2026-10-14 | Host process | `edl_commander_status` stub — Rust Sahara/EDL CLI, dry-run only, no flash | PLANNED |
+| **Pentest-Swarm-AI** | [Victorious93/Pentest-Swarm-AI](https://github.com/Victorious93/Pentest-Swarm-AI) | Bound companion | One command-envelope AIDL (planned). Older REST/AIDL copies in this repo are not LIVE | PLANNED |
+| **VictorSuite** | `Victorious93/VictorSuite` (documented; not publicly resolvable 2026-10-14) | Termux IPC | `com.termux` + `RUN_COMMAND` / plugin IPC; gated on their PR #15 | PARTIAL |
+| **RootForge OS** | [Victorious93/rootforge-os](https://github.com/Victorious93/rootforge-os) | External node | Their main already has Messenger + JSON (`ai.rootforge.os.action.BRIDGE`). This repo speaks SSH fallback only. No DependencyGuard, no shared signing key | PARTIAL |
+| **KYC-AuditLab** | unpublished as of 2026-10-14 | Host process | `kyc_auditlab_status` stub — localhost simulator; hub must not call `/scope` admin | PLANNED |
+| **EDL-Commander** | `Victorious93/EDL-Commander` (APK in progress) | Bound companion | `edl_commander_status` stub. AIDL + same-signing when the APK lands. Owns Sahara/Firehose | PLANNED |
 
-AIDL + `DependencyGuard` apply **only** to bound companions. RootForge / VictorSuite / KYC / EDL must not get them. See [`COMPANION_PROTOCOL.md`](COMPANION_PROTOCOL.md). Companion binding glue requires the Android SDK and is excluded from the default build.
+AIDL + `DependencyGuard` apply **only** to bound companions (HackerAI, Pentest, EDL). RootForge / VictorSuite / KYC must not get them. See [`COMPANION_PROTOCOL.md`](COMPANION_PROTOCOL.md). Companion binding glue requires the Android SDK and is excluded from the default build.
 
 ## Features (what exists in-repo)
 

@@ -39,8 +39,8 @@ fun ToolsScreen(navController: NavHostController) {
                 Text("Room fleet", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "DCA is the hub. Status is honest: nothing here is LIVE control. " +
-                        "Bound companions use AIDL; RootForge, VictorSuite, KYC-AuditLab, and " +
-                        "EDL-Commander do not.",
+                        "Pentest-Swarm and EDL-Commander are bound companions (EDL is PLANNED). " +
+                        "RootForge, VictorSuite, and KYC-AuditLab are not.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

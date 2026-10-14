@@ -1,49 +1,62 @@
 # DroidCommand AI — room fleet control map
 
-DCA is the hub. This document maps Don's five room-fleet members onto
-**existing** integration classes from `COMPANION_PROTOCOL.md` and
-`docs/ROOTFORGE_INTEGRATION.md`. It does not invent a third protocol.
+DCA is the hub. This is the **latest room consensus** (2026-10-14), including
+Don's explicit override: **EDL-Commander is a bound companion APK**, not a
+host tool. It does not invent a third protocol.
 
-Honesty grades match the rest of this repo: **LIVE** is reserved for
-runtime-verified control. Nothing in this table is LIVE.
+Honesty: **LIVE** is reserved for runtime-verified control. Nothing here is LIVE.
 
-Source of the catalog in code: `core-security.KnownFleet` /
-`FleetMemberDescriptor`. Companion APKs that *do* use AIDL stay in
-`core-companion.KnownCompanions`. Host/node/Termux members are **not**
-added there.
+Code: `core-security.KnownFleet`. Bound companions also appear in
+`core-companion.KnownCompanions`. RootForge, VictorSuite, and KYC must not
+be added there.
 
-HackerAI (`Victorious93/hackeraiETC`, package `ai.hackerai.companion`) is
-already a bound companion and is **not** one of these five. It stays in
-`COMPANION_PROTOCOL.md` / `KnownCompanions`.
+HackerAI (`ai.hackerai.companion`) is already a bound companion and is
+**not** one of these five.
+
+## Wiring order
+
+1. **Pentest-Swarm-AI** — when the base companion repo exists
+2. **RootForge** — `core-rootforge` calling their existing Messenger bridge
+3. **VictorSuite** — `RUN_COMMAND` / plugin IPC (gated on their PR #15)
+4. **EDL-Commander** — bound companion APK (when it lands)
+5. **KYC-AuditLab** — last
 
 ## Integration classes (do not mix)
 
 | Class | Security rules | Who |
 |---|---|---|
-| **BOUND_COMPANION** | AIDL bind + `protectionLevel="signature"` + companion `DependencyGuard` (companion stops without DCA). `Initiator.REMOTE`. | Pentest-Swarm-AI (HackerAI, already mapped) |
-| **EXTERNAL_NODE** | Authenticated SSH-carried JSON (`core-rootforge`). **Never** DependencyGuard, AIDL, or "install DCA first". Removing DCA must not disable the node. | RootForge OS |
-| **TERMUX_IPC** | Public `com.termux.RUN_COMMAND` via `core-termux`. Same Android package as Termux (`com.termux`). **Never** AIDL or DependencyGuard. | VictorSuite |
-| **HOST_PROCESS_TOOL** | Local process / CLI behind a `Tool` + `SecureToolExecutor`. **Never** AIDL or DependencyGuard. Fail closed / dry-run until a real executor is pinned. | KYC-AuditLab, EDL-Commander |
+| **BOUND_COMPANION** | AIDL + `protectionLevel="signature"` (same signing key) + companion `DependencyGuard`. Prefer one command-envelope service for new companions. `Initiator.REMOTE`. | Pentest-Swarm-AI, EDL-Commander (HackerAI, already mapped) |
+| **EXTERNAL_NODE** | Independent product. **Never** `DependencyGuard`, **never** a shared signing key, never "install DCA first". Live APK path on *their* main is already bound **Messenger** + shared JSON (`action ai.rootforge.os.action.BRIDGE`, `protocol_major` 1; `docs/DROIDCOMMAND_INTEGRATION.md` in `rootforge-os`). Desktop/Docker = localhost headless API + bearer (planned). SSH = CLI/ISO **fallback only**. Removing DCA must not disable the node. | RootForge OS |
+| **TERMUX_IPC** | `com.termux.RUN_COMMAND` + plugin IPC + shared command schema. **Not** a new bound service. | VictorSuite |
+| **HOST_PROCESS_TOOL** | Localhost process behind a `Tool` + `SecureToolExecutor`. **Never** AIDL or DependencyGuard. | KYC-AuditLab only |
 
 ## The five
 
-| Member | Class | Repo / id | Package or binary | Status | What is actually wired | Next concrete code step |
-|---|---|---|---|---|---|---|
-| **RootForge OS** | EXTERNAL_NODE | `Victorious93/rootforge-os` (public) | SSH JSON bridge; no APK | **PARTIAL** | `core-rootforge`: passive `rootforge_capabilities` / `rootforge_list_devices`. CLI registers them only when `DROIDCOMMAND_CLI_ROOTFORGE_NODES_FILE` is set. | Keep the SSH path. Android `RootForgeTransport` is unbuilt. Do not add AIDL. Write/flash/build stay gated on RootForge's own document. |
-| **VictorSuite** | TERMUX_IPC | `Victorious93/VictorSuite` (documented 2026-09-29b; **not publicly resolvable** on GitHub as of 2026-10-14) | `com.termux` | **PARTIAL** | `core-termux.AdbTermuxExecutor` + `run_termux_command` + `TerminalSelector`. CLI default is `NullTermuxExecutor` unless `DROIDCOMMAND_CLI_ADB=1`. App stays on the Null executor. | Do not add `core-victorsuite` or an AIDL companion. Next device-side work is exercising `RUN_COMMAND` on a real phone. VictorSuite-only UI (multi-distro, backup) needs new surface in that repo. |
-| **KYC-AuditLab** | HOST_PROCESS_TOOL | unpublished — no public `Victorious93/KYC-AuditLab` as of 2026-10-14 | Python IdentityShield lab; no APK | **PLANNED** | Catalog + `kyc_auditlab_status` stub. Always `ToolResult.Failure`. Capability state `REQUIRES_EXTERNAL_SERVICE`. | Pin the repo/binary, then a process executor behind this status tool. Never AIDL. Do not log identity-document contents. |
-| **EDL-Commander** | HOST_PROCESS_TOOL | unpublished — no public `Victorious93/EDL-Commander` as of 2026-10-14 | Rust Sahara/EDL CLI; no APK | **PLANNED** | Catalog + `edl_commander_status` stub. Status/dry-run only. Always `ToolResult.Failure`. No flash/write/restore tool is registered. | Pin the CLI, then a **dry-run-only** probe. Flash/write stay unexposed (would be `RiskTier.IRREVERSIBLE`) until an explicit owner decision. Never AIDL. |
-| **Pentest-Swarm-AI** | BOUND_COMPANION | `Victorious93/Pentest-Swarm-AI` (public; AGPL-3.0 upstream lineage) | `ai.pentestswarm.companion` | **PARTIAL** | `core-pentest-swarm` REST client + `SwarmTool.*`. `core-companion` AIDL + `KnownCompanions.PENTESTSWARM`. Bind never runtime-verified. Not registered in `cli` today. | Same-certificate signed bind on a device. Do not move this to SSH or a host-process stub. |
+| # | Member | Class | Repo / id | Package or binary | Status | Owns | What is actually wired | Next concrete code step |
+|---|---|---|---|---|---|---|---|---|
+| 1 | **Pentest-Swarm-AI** | BOUND_COMPANION | `Victorious93/Pentest-Swarm-AI` (older fork exists; room says **awaiting base repo** for the envelope companion) | `ai.pentestswarm.companion` | **PLANNED** | Swarm campaigns via one command-envelope service (when ready) | This checkout still has `core-pentest-swarm` + `IPentestSwarmService` from an earlier slice. Catalog stub: `pentest_swarm_status`. Not LIVE. | Wait for the base repo, then one envelope AIDL + same-signing + DependencyGuard. |
+| 2 | **RootForge OS** | EXTERNAL_NODE | `Victorious93/rootforge-os` | Messenger action `ai.rootforge.os.action.BRIDGE` / localhost API / SSH fallback | **PARTIAL** | Target-phone control (USB OTG, later LAN/Tailscale). Does **not** own Termux/proot or Sahara. | SSH fallback only in `core-rootforge` (passive `rootforge_capabilities` / `rootforge_list_devices`). Their main already has Messenger + JSON; this repo cannot call it yet. | Fill gaps so `core-rootforge` can call the Messenger bridge. No DependencyGuard, no shared signing key. SSH stays fallback. UI may call the EDL companion later for Sahara/Firehose. |
+| 3 | **VictorSuite** | TERMUX_IPC | `Victorious93/VictorSuite` (documented; **not publicly resolvable** 2026-10-14) | `com.termux` | **PARTIAL** | On-device Termux / proot / X11 / plugins | `core-termux` `run_termux_command`. CLI default `NullTermuxExecutor` unless `DROIDCOMMAND_CLI_ADB=1`. | Keep RUN_COMMAND / plugin IPC. **Not** a new bound service. Gated on VictorSuite **PR #15** (package/signing cleanup). |
+| 4 | **EDL-Commander** | BOUND_COMPANION | `Victorious93/EDL-Commander` (scaffold + AIDL + USB 9008/Sahara + OnePlus 7T **in progress**) | `ai.edlcommander.companion` (planned) | **PLANNED** | Sahara / Firehose | Catalog stub `edl_commander_status`. Always fails. No AIDL file in this repo yet. No flash tool. | When the APK lands: `IEDLCommanderService` + `BIND_EDLCOMMANDER` same-signing + DependencyGuard, like Pentest. RootForge UI may call this later. Do **not** mark host-tool-only. |
+| 5 | **KYC-AuditLab** | HOST_PROCESS_TOOL | unpublished as of 2026-10-14 | IdentityShield simulator, localhost only | **PLANNED** | Simulator lab | Catalog stub `kyc_auditlab_status`. Always fails. | Last. Simulator only, localhost only. **Hub must not call `/scope` admin** until KYC adds auth. Do not log identity documents. |
+
+## Shared command envelope
+
+RootForge Messenger / localhost API / SSH and VictorSuite plugin IPC are
+intended to speak the **same JSON command envelope** `core-rootforge`
+already mirrors (`BRIDGE_PROTOCOL_MAJOR` 1). Pentest and EDL companions,
+when their APKs exist, should each be **one** envelope service rather than
+a growing method list. This slice does not add a second schema.
 
 ## What this slice added in-repo
 
-- `docs/FLEET_CONTROL.md` (this file) and a matching section in `COMPANION_PROTOCOL.md`.
-- `core-security.KnownFleet` / `StaticFleetHealthChecker` / `PlannedHostProcessTool`.
-- `cli list-fleet` plus the two planned status tools on `list-tools`.
-- Tools screen: a read-only fleet card. No run buttons that pretend to execute.
+- `docs/FLEET_CONTROL.md` (this file) and matching slots in `COMPANION_PROTOCOL.md`.
+- `core-security.KnownFleet` / `StaticFleetHealthChecker` / `PlannedFleetTool`.
+- `cli list-fleet` plus planned stubs: `pentest_swarm_status`, `edl_commander_status`, `kyc_auditlab_status`.
+- Tools screen: read-only fleet card. No run buttons that pretend to execute.
 
 ## What this slice did **not** do
 
-- No live SSH, AIDL bind, Termux intent, Python lab, or EDL binary was invoked.
-- No new Gradle module, no new AIDL, no DependencyGuard on RootForge / VictorSuite / KYC / EDL.
-- No claim that the `:app` fleet card has been shown on a device in this session.
+- No live Messenger bind from this repo, no EDL AIDL file, no Termux intent, no flash, no KYC `/scope` call.
+- No DependencyGuard or shared signing key on RootForge.
+- No claim of LIVE control.

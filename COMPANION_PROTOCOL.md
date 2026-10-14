@@ -36,17 +36,23 @@ Everything in this document — AIDL binding, signature permissions, and the
 extend DCA and are meant to stop working without it.
 
 **RootForge OS is the opposite kind of integration and is exempt from all of it.**
-It is an independent product (own CLI, runtime, workspaces) that DCA may *optionally*
-control over an authenticated SSH-carried JSON protocol (`core-rootforge`; see
-`docs/ROOTFORGE_INTEGRATION.md`). Never add a `DependencyGuard`, an AIDL contract, a
-signature-permission bind, or an "install DCA first" check to RootForge. A RootForge
-node that DCA cannot reach, or that DCA has never paired with, loses nothing; removing
-DCA must not disable any RootForge feature.
+It is an independent product. Live APK path on *their* `main` is already a bound
+**Messenger** + shared JSON envelope (`action ai.rootforge.os.action.BRIDGE`,
+`protocol_major` 1; canonical doc `docs/DROIDCOMMAND_INTEGRATION.md` in
+`Victorious93/rootforge-os`). Desktop/Docker is a localhost headless API + bearer
+(planned). SSH is the CLI/ISO **fallback only** — that is what `core-rootforge`
+implements today. They are auditing gaps so this repo can call the Messenger
+bridge; do not treat SSH as the live APK path.
 
-The same exemption applies to every non-companion fleet slot below. The room-fleet
-map (five members, honest status, next code step) lives in `docs/FLEET_CONTROL.md`
-and `core-security.KnownFleet`. Do not add those members to `KnownCompanions` unless
-they are genuinely dependent companion APKs.
+Never add a `DependencyGuard`, a shared signing key, or an "install DCA first"
+check to RootForge. A node that DCA cannot reach loses nothing; removing DCA
+must not disable any RootForge feature. RootForge owns target-phone control
+(USB OTG, later LAN/Tailscale). It does **not** own Termux/proot (VictorSuite)
+or Sahara/Firehose (EDL companion).
+
+The room-fleet map lives in `docs/FLEET_CONTROL.md` and `core-security.KnownFleet`.
+Add a member to `KnownCompanions` only when it is a genuine dependent companion
+APK (HackerAI, Pentest-Swarm, EDL-Commander).
 
 ## Fleet slots that are not companions
 
@@ -65,47 +71,48 @@ contract. DCA already reaches that contract through `core-termux` /
   permission, or a `DependencyGuard`.
 - DCA cannot tell a VictorSuite install from genuine Termux by package name;
   only one can be installed. `TerminalSelector` uses a `versionName` heuristic.
-- VictorSuite-only features (multi-distro, backup/restore) are UI-only today
-  and need new surface area in VictorSuite's own repo — out of scope here.
+- VictorSuite owns on-device Termux / proot / X11 / plugins. Not a new
+  bound service. Gated on their package/signing cleanup (PR #15).
 - Status: **PARTIAL**. App/CLI default to `NullTermuxExecutor` unless adb is
   opted in. Never runtime-verified on a device in this environment.
 
 ### KYC-AuditLab — host process tool (Python IdentityShield)
 
-A host-side identity lab, not an APK. Catalog id `kyc-auditlab`; tool
-`kyc_auditlab_status` (`PlannedHostProcessTool`).
+A host-side identity **simulator**, not an APK. Catalog id `kyc-auditlab`;
+tool `kyc_auditlab_status` (`PlannedFleetTool`).
 
 - **Not** a companion. Never AIDL, never `DependencyGuard`, never
   `KnownCompanions`.
-- Reach it later as a local process behind `SecureToolExecutor`, the same
-  way Metasploit/SET use a process executor (Null until configured).
+- Simulator only, localhost only. **No auth yet** — the hub must not call
+  `/scope` admin until they add auth.
 - Do not log identity-document contents.
-- Status: **PLANNED**. No public repo under `Victorious93/KYC-AuditLab` as of
-  2026-10-14. The stub always returns `ToolResult.Failure` /
-  `CapabilityState.REQUIRES_EXTERNAL_SERVICE`.
+- Status: **PLANNED**. Wiring order: last.
 
-### EDL-Commander — host CLI tool (Rust Sahara/EDL)
+### EDL-Commander — bound companion (not a host tool)
 
-A host-side Qualcomm Sahara/EDL framework, not an APK. Catalog id
-`edl-commander`; tool `edl_commander_status`.
+Don explicitly chose EDL-Commander as a **bound companion APK**, same model
+as Pentest-Swarm: AIDL + same-signing + `DependencyGuard`. Do not mark it
+host-tool-only.
 
-- **Not** a companion. Never AIDL, never `DependencyGuard`.
-- Safety-first: **dry-run / status only**. This repo must not register a
-  flash, write, or restore tool until the owner explicitly asks. Those
-  operations would be `RiskTier.IRREVERSIBLE`.
-- Status: **PLANNED**. No public repo under `Victorious93/EDL-Commander` as of
-  2026-10-14. The stub always fails closed and says it does not flash.
+- Planned package: `ai.edlcommander.companion` (`KnownCompanions.EDLCOMMANDER`).
+- Repo: `Victorious93/EDL-Commander`. Scaffold + AIDL + USB 9008/Sahara +
+  OnePlus 7T path is **in progress there**. This repo has no
+  `IEDLCommanderService` yet — do not invent the AIDL file until the APK lands.
+- Catalog stub: `edl_commander_status` (always `ToolResult.Failure` /
+  `REQUIRES_EXTERNAL_SERVICE`). No flash/write/restore tool.
+- EDL owns Sahara/Firehose. RootForge is the target-phone UI front end and
+  may call this companion later.
+- Status: **PLANNED** until the APK lands.
 
-### Adding a non-companion fleet slot
+### Adding a fleet slot
 
 1. Add a `FleetMemberDescriptor` to `KnownFleet` with the correct
-   `FleetIntegrationClass`. The descriptor constructor rejects AIDL /
-   `DependencyGuard` unless the class is `BOUND_COMPANION`.
-2. If it is a new dependent APK, follow "Adding a new companion capability"
-   instead (AIDL sync + `KnownCompanions`).
-3. If it is a host process and not yet executable, register a
-   `PlannedHostProcessTool` that fails honestly. Do not spawn a guessed
-   binary.
+   `FleetIntegrationClass`. The constructor requires AIDL + `DependencyGuard`
+   for `BOUND_COMPANION` and forbids them otherwise.
+2. New dependent APK: follow "Adding a new companion capability" (AIDL sync +
+   `KnownCompanions`).
+3. Planned members get a `PlannedFleetTool` that fails honestly. Do not spawn
+   a guessed binary or bind a missing APK.
 4. Update `docs/FLEET_CONTROL.md` and append an audit addendum. Do not mark
    the member LIVE.
 

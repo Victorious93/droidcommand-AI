@@ -156,10 +156,10 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * `SENSITIVE`/`PermissionCategory.NETWORK`, so it goes through the same approval
  * gate as every other tool here regardless of which client backs it.
  *
- * `kyc_auditlab_status` / `edl_commander_status` (`KnownFleet.plannedHostTools`)
- * are catalog stubs for the two host-process fleet members that have no
- * executor yet. They always fail without spawning a process. See
- * `docs/FLEET_CONTROL.md`.
+ * `pentest_swarm_status` / `edl_commander_status` / `kyc_auditlab_status`
+ * (`KnownFleet.plannedStubs`) are catalog stubs. Pentest and EDL are planned
+ * bound companions; KYC is a host-process simulator. All always fail without
+ * binding or spawning. See `docs/FLEET_CONTROL.md`.
  *
  * No [ai.droidcommand.security.GrantStore]/[ai.droidcommand.security.AuditLog] is
  * wired: none of these seven tools declares a `grantCapability`, and this CLI is one command per process
@@ -181,7 +181,7 @@ internal fun buildSession(
         register(MetasploitTool(metasploitExecutorFor()))
         register(SetTool(setExecutorFor()))
         register(WebSearchTool(webSearchClientFor(transport)))
-        KnownFleet.plannedHostTools().forEach { register(it) }
+        KnownFleet.plannedStubs().forEach { register(it) }
         rootForge.forEach { register(it) }
     }
     val stateMachine = AgentStateMachine()
@@ -331,10 +331,11 @@ internal fun printUsage() {
         (both set tries Brave first, falling back to SerpAPI on failure); with neither
         set it fails without making any network call. Still requires approval either way.
 
-        list-fleet prints the five room-fleet members (RootForge, VictorSuite,
-        KYC-AuditLab, EDL-Commander, Pentest-Swarm) from core-security.KnownFleet.
-        None is LIVE. kyc_auditlab_status / edl_commander_status are planned stubs
-        and always fail without spawning a process. See docs/FLEET_CONTROL.md.
+        list-fleet prints the five room-fleet members from core-security.KnownFleet.
+        None is LIVE. Wiring order: Pentest (when repo exists) → RootForge Messenger
+        → VictorSuite RUN_COMMAND → EDL companion → KYC last.
+        pentest_swarm_status / edl_commander_status / kyc_auditlab_status are planned
+        stubs and always fail. See docs/FLEET_CONTROL.md.
 
         Examples:
           pilot echo text=hello

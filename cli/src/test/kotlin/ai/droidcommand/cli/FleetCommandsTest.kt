@@ -7,10 +7,18 @@ import kotlin.test.assertTrue
 
 class FleetCommandsTest {
     @Test
-    fun `default session registers the two planned host stubs and no extra companion bind`() {
+    fun `default session registers the three planned stubs and no extra companion bind`() {
         val names = buildSession().registry.list().map { it.name }
-        assertTrue(names.containsAll(listOf("kyc_auditlab_status", "edl_commander_status", "run_termux_command")))
-        assertTrue(names.none { it.startsWith("pentest_swarm_") })
+        assertTrue(
+            names.containsAll(
+                listOf(
+                    "pentest_swarm_status",
+                    "kyc_auditlab_status",
+                    "edl_commander_status",
+                    "run_termux_command",
+                ),
+            ),
+        )
         assertTrue(names.none { it.startsWith("rootforge_") })
     }
 
@@ -22,5 +30,7 @@ class FleetCommandsTest {
         assertTrue(text.contains("edl-commander"))
         assertTrue(text.contains("aidl=false  dependencyGuard=false"))
         assertTrue(text.contains("ai.pentestswarm.companion"))
+        assertTrue(text.contains("ai.rootforge.os.action.BRIDGE"))
+        assertTrue(text.contains("RootForge Messenger is not that"))
     }
 }

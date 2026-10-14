@@ -44,8 +44,9 @@ class MainTest {
                 "run_metasploit_module",
                 "run_setoolkit_attack",
                 "web_search",
-                "kyc_auditlab_status",
+                "pentest_swarm_status",
                 "edl_commander_status",
+                "kyc_auditlab_status",
             ),
             specs.map { it.name },
         )
@@ -144,6 +145,12 @@ class MainTest {
     @Test
     fun `pilot edl_commander_status fails honestly and never flashes`() {
         val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("edl_commander_status"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot pentest_swarm_status fails honestly and never binds`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("pentest_swarm_status"))
         assertEquals(1, exitCode)
     }
 
