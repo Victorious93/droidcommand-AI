@@ -3,6 +3,7 @@ package ai.droidcommand.agent
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import java.nio.charset.StandardCharsets
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -19,7 +20,9 @@ class PlanHistoryFile(private val file: Path) {
 
     fun load(): List<PlanRun> {
         if (!Files.isRegularFile(file)) return emptyList()
-        val text = runCatching { Files.readString(file) }.getOrNull() ?: return emptyList()
+        // readAllBytes + UTF-8: Files.readString is Java 11 / Android API 33 and crashes
+        // Forge history on this app's minSdk 28.
+        val text = runCatching { String(Files.readAllBytes(file), StandardCharsets.UTF_8) }.getOrNull() ?: return emptyList()
         val rows = runCatching { json.decodeFromString<List<RunDto>>(text) }.getOrNull() ?: return emptyList()
         return rows.mapNotNull { it.toRun() }.filter { it.status != PlanStatus.RUNNING }.take(MAX_RUNS)
     }
@@ -32,7 +35,7 @@ class PlanHistoryFile(private val file: Path) {
         val parent = file.parent
         if (parent != null) Files.createDirectories(parent)
         val tmp = file.resolveSibling(file.fileName.toString() + ".tmp")
-        Files.writeString(tmp, payload)
+        Files.write(tmp, payload.toByteArray(StandardCharsets.UTF_8))
         try {
             Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
         } catch (_: AtomicMoveNotSupportedException) {

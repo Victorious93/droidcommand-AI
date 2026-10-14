@@ -2,6 +2,8 @@ package ai.droidcommand.notes
 
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.readText
+import kotlin.io.path.writeText
 
 /**
  * User-installed note plugins.
@@ -84,7 +86,7 @@ class PluginStore(private val root: Path) {
             // iterator().asSequence() — not Stream.toList() — so this runs on API 28
             stream.iterator().asSequence()
                 .filter { it.fileName.toString().endsWith(".plugin") }
-                .map { PluginManifest.parse(Files.readString(it)) }
+                .map { PluginManifest.parse(it.readText()) }
                 .sortedBy { it.id }
                 .toList()
         }
@@ -97,14 +99,14 @@ class PluginStore(private val root: Path) {
         require(!Files.exists(path)) { "A plugin named ${parsed.id} is already installed" }
         Files.createDirectories(dir)
         val stored = parsed.copy(enabled = false)
-        Files.writeString(path, PluginManifest.encode(stored))
+        path.writeText(PluginManifest.encode(stored))
         return stored
     }
 
     fun setEnabled(id: String, enabled: Boolean): NotePlugin {
         val current = read(id)
         val next = current.copy(enabled = enabled)
-        Files.writeString(file(id), PluginManifest.encode(next))
+        file(id).writeText(PluginManifest.encode(next))
         return next
     }
 
@@ -129,7 +131,7 @@ class PluginStore(private val root: Path) {
     private fun read(id: String): NotePlugin {
         val path = file(id)
         require(Files.exists(path)) { "No plugin $id" }
-        return PluginManifest.parse(Files.readString(path))
+        return PluginManifest.parse(path.readText())
     }
 
     private fun file(id: String): Path {

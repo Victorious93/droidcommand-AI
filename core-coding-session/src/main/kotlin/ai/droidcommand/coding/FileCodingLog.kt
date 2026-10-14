@@ -1,5 +1,6 @@
 package ai.droidcommand.coding
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -19,6 +20,7 @@ class FileCodingLog(private val path: Path) {
     fun save(sessions: List<CodingSession>) {
         path.parent?.let { Files.createDirectories(it) }
         val text = sessions.joinToString("\n") { CodingWire.encode(it) }
-        Files.writeString(path, if (text.isEmpty()) "" else text + "\n")
+        // Files.write(byte[]): API 26. Files.writeString is Java 11 / Android API 33.
+        Files.write(path, (if (text.isEmpty()) "" else text + "\n").toByteArray(StandardCharsets.UTF_8))
     }
 }

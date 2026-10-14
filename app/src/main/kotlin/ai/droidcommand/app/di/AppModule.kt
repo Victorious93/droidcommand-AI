@@ -17,6 +17,7 @@ import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.config.EncryptedSecretsVault
+import ai.droidcommand.hackerai.HackerAiTool
 import ai.droidcommand.conversations.RoomConversationStore
 import ai.droidcommand.knowledge.android.RoomKnowledgeGraph
 import ai.droidcommand.llm.factory.CloudPromptClient
@@ -99,6 +100,10 @@ object AppModule {
         register(TermuxTool(NullTermuxExecutor()))
         register(MetasploitTool(NullMetasploitExecutor()))
         register(SetTool(NullSetExecutor()))
+        // Always-fail stub: AIDL bind is not started in this module. Registering it keeps the
+        // name visible to anything that asks the registry; Pilot as DEVICE_OWNER still hides
+        // it because the tool is scoped to Initiator.REMOTE.
+        register(HackerAiTool())
     }
 
     /** The model chat uses for [spec], read from the same preference chat writes. Falls back to the provider's suggestion. */
