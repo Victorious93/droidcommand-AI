@@ -7,14 +7,35 @@ name: Emulator Smoke Test
 # emulator". A green run here moves the app launch path past ON DISK / UNVERIFIED.
 #
 # Heavy native build (llama.cpp + sherpa-onnx), same as android-apk.yml, plus a
-# hardware-accelerated (KVM) x86_64 emulator — so, like that workflow, it is NOT wired
-# to every pull_request. Manual dispatch and pushes to the feature branch(es) only.
+# hardware-accelerated (KVM) x86_64 emulator — so this is NOT wired to every
+# pull_request. Triggers:
+#   - workflow_dispatch (always)
+#   - push to main, except docs-only commits
+#   - PRs that touch the app, this workflow, or the Gradle files that decide
+#     whether :app still assembles
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - "cursor/app-launch-smoke-test-68c2"
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - ".github/workflows/android-emulator.yml"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - "gradle.properties"
+      - "gradle/**"
+
+concurrency:
+  group: emulator-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -66,23 +87,40 @@ jobs:
       - name: Put SDK CMake ninja on PATH
         run: echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
 
-      # Build the app and test APKs before the emulator step, wrapped in the same
-      # exponential-backoff retry android-apk.yml uses, so a transient Maven Central
-      # 429 doesn't burn an already-booted emulator's time.
+      # Build the app and test APKs before the emulator step. Retry only transient
+      # Maven Central / network errors — a compile error is not a 429, and retrying
+      # it six times burned ~25 minutes on run #2 (Actions 38357634068).
+      # ABI is pinned to the emulator's x86_64; the 4-ABI APK is android-apk.yml's job.
       - name: Assemble app + androidTest APKs (retry transient Maven Central 429s)
         run: |
           set -o pipefail
           delay=15
           for attempt in 1 2 3 4 5 6; do
             echo "::group::assemble attempt #${attempt}"
+            log="$(mktemp)"
             if ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest \
-                 -PincludeAndroid=true --no-daemon; then
+                 -PincludeAndroid=true \
+                 -Pandroid.injected.build.abi=x86_64 \
+                 --no-daemon 2>&1 | tee "$log"; then
               echo "::endgroup::"
               echo "BUILD OK on attempt #${attempt}"
+              rm -f "$log"
               exit 0
             fi
             echo "::endgroup::"
-            echo "attempt #${attempt} failed; sleeping ${delay}s before retry"
+            if ! grep -qE \
+              'Could not (GET|HEAD|resolve)|Received status code 429|Connection reset|SocketTimeout|UnknownHostException|Connection timed out|503 Service Unavailable|502 Bad Gateway' \
+              "$log"; then
+              echo "Non-transient assemble failure; not retrying"
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            if [ "${attempt}" -eq 6 ]; then
+              echo "assemble failed after all retries"
+              exit 1
+            fi
+            echo "attempt #${attempt} failed with a transient dependency error; sleeping ${delay}s before retry"
             sleep "${delay}"
             delay=$((delay * 2))
             if [ "${delay}" -gt 300 ]; then delay=300; fi
@@ -104,7 +142,7 @@ jobs:
           disable-animations: true
           # The APKs are already assembled above; this only installs and runs the test,
           # so no 429-retry wrapper is needed here.
-          script: ./gradlew :app:connectedDebugAndroidTest -PincludeAndroid=true --no-daemon
+          script: ./gradlew :app:connectedDebugAndroidTest -PincludeAndroid=true -Pandroid.injected.build.abi=x86_64 --no-daemon
 
       - name: Upload instrumentation test report
         if: always()
