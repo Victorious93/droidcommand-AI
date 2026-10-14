@@ -35,7 +35,16 @@ CMDLINE_ZIP_URL="https://dl.google.com/android/repository/commandlinetools-linux
 CMDLINE_ZIP_SHA="2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258"
 AVD_NAME="${AVD_NAME:-dca_ui}"
 OUT_DIR="$ROOT/docs/images"
-DEVICE_DIR="/data/local/tmp/dca-screenshots"
+DEVICE_DIR="/sdcard/Android/data/ai.droidcommand.app/files/screenshots"
+APP_APK="$ROOT/app/build/outputs/apk/debug/app-debug.apk"
+TEST_APK="$ROOT/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+# assembleDebug writes outputs/; intermediates can be an older copy (seen 2026-10-14).
+if [[ ! -f "$APP_APK" ]]; then
+  APP_APK="$ROOT/app/build/intermediates/apk/debug/app-debug.apk"
+fi
+if [[ ! -f "$TEST_APK" ]]; then
+  TEST_APK="$ROOT/app/build/intermediates/apk/androidTest/debug/app-debug-androidTest.apk"
+fi
 
 log() { printf '%s\n' "$*"; }
 
@@ -127,6 +136,10 @@ start_emulator() {
       adb shell settings put global window_animation_scale 0
       adb shell settings put global transition_animation_scale 0
       adb shell settings put global animator_duration_scale 0
+      # TCG is slow enough that System UI ANRs during first compose. Give it
+      # time, then tap Wait if the dialog is already up.
+      sleep 15
+      adb shell input tap 540 1100 || true
       return
     fi
     sleep 10
@@ -158,16 +171,23 @@ assemble() {
 }
 
 run_test_and_pull() {
-  adb shell rm -rf "$DEVICE_DIR"
-  adb shell mkdir -p "$DEVICE_DIR"
-  ./gradlew :app:connectedDebugAndroidTest \
-    -PincludeAndroid=true \
-    -Pandroid.injected.build.abi=x86_64 \
-    --no-daemon
+  # Gradle's connected installer uses split/incremental install, which failed
+  # on this 208 MB x86_64 APK ("Failed to install-write all apks"). Streamed
+  # `adb install --no-incremental` is the path the 2026-10-13g launch smoke used.
+  adb install -r -t -d --no-incremental "$APP_APK"
+  adb install -r -t -d --no-incremental "$TEST_APK"
+  local instr="/tmp/dca-instrument.log"
+  adb shell am instrument -w -r \
+    ai.droidcommand.app.test/androidx.test.runner.AndroidJUnitRunner \
+    | tee "$instr"
   mkdir -p "$OUT_DIR"
-  adb pull "$DEVICE_DIR/." "$OUT_DIR/"
+  adb pull "$DEVICE_DIR/." "$OUT_DIR/" || true
   log "Screenshots in $OUT_DIR:"
-  ls -la "$OUT_DIR"/*.png
+  ls -la "$OUT_DIR"/*.png || true
+  if grep -q 'FAILURES!!!' "$instr"; then
+    echo "instrumented walk reported FAILURES!!! — keep whatever PNGs were pulled" >&2
+    exit 1
+  fi
 }
 
 if [[ "${SKIP_SDK_INSTALL:-0}" != "1" ]]; then

@@ -8,7 +8,7 @@ DroidCommand AI (DCA) is an Android AI-agent platform: a flagship chat UI and co
 
 The project is a multi-module Gradle build. Most of the engine is **pure Kotlin/JVM** (buildable and tested without an Android SDK). Android UI and native/on-device pieces are **opt-in** (`-PincludeAndroid=true`).
 
-> **Status in one line:** the JVM engine is implemented and tested; the Android debug APK builds (CI / configured environments) but has **not** been launched on a device or emulator; live LLM calls, real device/root control, and companion-APK bindings depend on environments this repository’s CI does not have.
+> **Status in one line:** the JVM engine is implemented and tested; the Android debug APK builds and has been launched on an API 28 x86_64 emulator (launch smoke + primary-screen captures); it has **not** been run on a physical device. Live LLM calls, real device/root/Termux/Metasploit/SET backends, and companion-APK bindings stay UNVERIFIED.
 
 Authoritative status: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/AUDIT_2026-09-05.md`](docs/AUDIT_2026-09-05.md). Session orientation / roadmap: [`CLAUDE.md`](CLAUDE.md).
 
@@ -40,11 +40,19 @@ Honesty grades: IMPLEMENTED / PARTIAL / STUB / PLANNED — see audit docs. Highl
 
 ## Screenshots
 
-> Placeholders — the debug APK has not been run on a device or emulator.
+Captured 2026-10-14 on an API 28 x86_64 emulator (AVD `dca_ui`, TCG — this host’s KVM hits `kvm_arch_vcpu_create`). Sources: instrumented `PrimaryScreensScreenshotTest` (production `MainActivity`) and `adb exec-out screencap` after tapping the real bottom bar. Reproduce with `./scripts/capture-app-screenshots.sh`. Tool backends are the existing `Null*` stubs — nothing here executed real root, Termux, Metasploit, or SET.
 
 | Chat (Pilot) | Tool approval | Forge build run | Memory / knowledge | Settings / providers | Notes vault |
 |---|---|---|---|---|---|
-| *TODO* | *TODO* | *TODO* | *TODO* | *TODO* | *TODO* |
+| <img src="docs/images/chat.png" alt="Chat screen with Mode 1 selected" width="160"> | *UNVERIFIED* — Confirm action dialog not captured. Pilot `run_root_command` was denied (`root is disabled for this session`) before a prompt. The Metasploit form did not reach Run Module via coordinate taps on TCG. | <img src="docs/images/forge.png" alt="Forge engine empty objective" width="160"><br>*Empty Forge UI.* A finished build run needs a live LLM — UNVERIFIED. | <img src="docs/images/memory.png" alt="Persistent Memory empty state" width="160"> | <img src="docs/images/settings.png" alt="Settings mode names and API keys" width="160"> | <img src="docs/images/notes.png" alt="Notes vault" width="160"> |
+
+Additional screens from the same emulator session (not in the table above):
+
+| Tools | Metasploit (Null backend) | Pilot engine | System Logs |
+|---|---|---|---|
+| <img src="docs/images/tools.png" alt="Tools launcher" width="160"> | <img src="docs/images/tools-metasploit.png" alt="Metasploit form, no program connected" width="160"> | <img src="docs/images/pilot.png" alt="Pilot engine" width="160"> | <img src="docs/images/logs.png" alt="System Logs empty state" width="160"> |
+
+Still UNVERIFIED on emulator and device: live chat against a real provider, a finished Forge run, the Confirm-action dialog, Social-Engineer Toolkit, clipboards / automation / coding, voice, GGUF load, and any `Null*` backend executing for real.
 
 ## Requirements
 
@@ -73,7 +81,7 @@ Honesty grades: IMPLEMENTED / PARTIAL / STUB / PLANNED — see audit docs. Highl
 ./gradlew :cli:run --args="..."
 ```
 
-The debug APK bundles native llama.cpp and sherpa-onnx libraries and is large (hundreds of MB). Workflow `.github/workflows/android-apk.yml` can build/upload it on manual dispatch; it is **debug-signed and has never been launched on a device**.
+The debug APK bundles native llama.cpp and sherpa-onnx libraries and is large (hundreds of MB). Workflow `.github/workflows/android-apk.yml` can build/upload it on manual dispatch; it is **debug-signed**. An x86_64 build has been launched on an API 28 emulator (see Screenshots); it has not been installed on a physical device.
 
 ## Project structure
 
