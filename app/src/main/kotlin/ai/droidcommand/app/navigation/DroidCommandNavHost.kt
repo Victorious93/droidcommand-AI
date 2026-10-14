@@ -50,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -151,8 +152,8 @@ private fun ModeSwitcher(
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ModeButton(pilotLabel, selected == AgentMode.PILOT, Modifier.weight(1f)) { onSelect(AgentMode.PILOT) }
-            ModeButton(forgeLabel, selected == AgentMode.FORGE, Modifier.weight(1f)) { onSelect(AgentMode.FORGE) }
+            ModeButton(pilotLabel, selected == AgentMode.PILOT, Modifier.weight(1f).testTag("mode_pilot")) { onSelect(AgentMode.PILOT) }
+            ModeButton(forgeLabel, selected == AgentMode.FORGE, Modifier.weight(1f).testTag("mode_forge")) { onSelect(AgentMode.FORGE) }
         }
         switchError?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -210,7 +211,13 @@ private fun DroidBottomBar(
                         restoreState = true
                     }
                 },
-                icon = { Icon(tab.icon, contentDescription = tab.label) },
+                icon = {
+                    Icon(
+                        tab.icon,
+                        contentDescription = tab.label,
+                        modifier = Modifier.testTag("nav_${tab.route.substringBefore('/')}"),
+                    )
+                },
                 label = {
                     Text(
                         tab.label,
