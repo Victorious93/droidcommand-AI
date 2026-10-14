@@ -57,6 +57,7 @@ jobs:
           name: test-reports
           path: "**/build/reports/tests/test"
           if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload ktlint reports
         if: always()
@@ -65,3 +66,4 @@ jobs:
           name: ktlint-reports
           path: "**/build/reports/ktlint"
           if-no-files-found: ignore
+          retention-days: 7
