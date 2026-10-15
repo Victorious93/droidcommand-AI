@@ -5,6 +5,7 @@ import ai.droidcommand.agent.AgentState
 import ai.droidcommand.agent.AgentStateMachine
 import ai.droidcommand.agent.DroidCommandSession
 import ai.droidcommand.agent.PermissionCategory
+import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
@@ -170,6 +171,7 @@ internal fun buildSession(
     approvalPrompt: ApprovalPrompt = ConsoleApprovalPrompt,
     device: AdbDeviceConfig? = AdbDeviceConfig.fromEnvironment(),
     transport: HttpTransport = JdkHttpTransport(),
+    flashTools: List<Tool> = flashNodeTools(),
 ): CliSession {
     val rootForge = rootForgeTools()
     val registry = ToolRegistry().apply {
@@ -183,13 +185,14 @@ internal fun buildSession(
         register(WebSearchTool(webSearchClientFor(transport)))
         KnownFleet.plannedStubs().forEach { register(it) }
         rootForge.forEach { register(it) }
+        flashTools.forEach { register(it) }
     }
     val stateMachine = AgentStateMachine()
     val delegate = ToolExecutor(registry, stateMachine)
     // REMOTE_CONTROL is granted only when the operator explicitly configured RootForge nodes; the
     // tools are still SENSITIVE, so each call also goes through the approval prompt.
     val granted = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK) +
-        (if (rootForge.isEmpty()) emptySet() else setOf(PermissionCategory.REMOTE_CONTROL))
+        (if (rootForge.isEmpty() && flashTools.isEmpty()) emptySet() else setOf(PermissionCategory.REMOTE_CONTROL))
     val policy = SecurityPolicy(grantedCategories = granted)
     val secure = SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(policy), approvalPrompt)
     return CliSession(DroidCommandSession(registry, secure, stateMachine), registry)
