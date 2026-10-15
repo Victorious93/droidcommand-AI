@@ -25,6 +25,10 @@ plugins {
     id("com.google.dagger.hilt.android")
 }
 
+// Optional; only "arm64-v8a" changes packaging. Any other value (including unset)
+// is the existing 4-ABI debug APK.
+val abiFilter: String? = providers.gradleProperty("abiFilter").orNull
+
 repositories {
     google()
     mavenCentral()
@@ -48,6 +52,27 @@ android {
         // @HiltAndroidApp application, so MainActivityLaunchTest exercises the production
         // DI graph — no HiltTestApplication needed.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Optional phone-sized debug APK: -PabiFilter=arm64-v8a. Unset keeps the
+        // current 4-ABI package (llama.cpp arm64+x86_64 plus sherpa-onnx's 4 ABIs).
+        if (abiFilter == "arm64-v8a") {
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
+        }
+    }
+
+    if (abiFilter == "arm64-v8a") {
+        packaging {
+            jniLibs {
+                // ndk.abiFilters does not always strip prebuilt AAR .so files
+                // (sherpa-onnx ships all 4 ABIs). Drop the unused ones at pack time.
+                excludes += listOf(
+                    "lib/x86/**",
+                    "lib/x86_64/**",
+                    "lib/armeabi-v7a/**",
+                )
+            }
+        }
     }
 
     buildFeatures {
