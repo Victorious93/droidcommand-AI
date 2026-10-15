@@ -145,4 +145,4 @@ jobs:
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/debug/SHA256SUMS
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7

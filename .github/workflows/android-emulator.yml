@@ -157,7 +157,7 @@ jobs:
             app/build/reports/androidTests/connected/**
             app/build/outputs/androidTest-results/connected/**
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 7
 
       - name: Upload emulator screenshots
         if: always()
@@ -167,4 +167,4 @@ jobs:
           name: emulator-screenshots
           path: emulator-screenshots/**
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 7
