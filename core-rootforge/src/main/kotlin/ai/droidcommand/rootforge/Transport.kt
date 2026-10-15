@@ -127,16 +127,26 @@ class SshRootForgeTransport(
 
 object SshCommand {
     /** `[host]:port key-type base64` — the form OpenSSH uses for non-default ports; also valid for 22. */
-    fun knownHostsLine(node: RootForgeNodeConfig): String = "[${node.host}]:${node.port} ${node.hostKey}"
+    fun knownHostsLine(node: RootForgeNodeConfig): String = knownHostsLine(node.host, node.port, node.hostKey)
 
-    fun build(node: RootForgeNodeConfig, knownHosts: Path, sshExecutable: String = "ssh", connectTimeoutSeconds: Int = 10): List<String> = listOf(
+    /** Same, for any external node type (e.g. `core-flash`) that already validated these fields. */
+    fun knownHostsLine(host: String, port: Int, hostKey: String): String = "[$host]:$port $hostKey"
+
+    fun build(node: RootForgeNodeConfig, knownHosts: Path, sshExecutable: String = "ssh", connectTimeoutSeconds: Int = 10): List<String> =
+        build(SshTarget(node.host, node.port, node.user, node.identityFile, node.hostKey), knownHosts, sshExecutable, connectTimeoutSeconds)
+
+    /**
+     * Pinned-host-key argv for any external node. Callers MUST pass fields that were validated the
+     * way [RootForgeNodeConfig] validates them (host/user charset, no leading '-', single key line).
+     */
+    fun build(target: SshTarget, knownHosts: Path, sshExecutable: String = "ssh", connectTimeoutSeconds: Int = 10): List<String> = listOf(
         sshExecutable,
         "-T",
         "-o", "BatchMode=yes",
         "-o", "StrictHostKeyChecking=yes",
         "-o", "UserKnownHostsFile=$knownHosts",
         "-o", "GlobalKnownHostsFile=/dev/null",
-        "-o", "HostKeyAlgorithms=${node.hostKeyType}",
+        "-o", "HostKeyAlgorithms=${target.hostKeyType}",
         "-o", "IdentitiesOnly=yes",
         "-o", "IdentityAgent=none",
         "-o", "PasswordAuthentication=no",
@@ -146,10 +156,15 @@ object SshCommand {
         "-o", "ForwardX11=no",
         "-o", "ControlMaster=no",
         "-o", "ConnectTimeout=$connectTimeoutSeconds",
-        "-i", node.identityFile,
-        "-p", node.port.toString(),
-        "-l", node.user,
+        "-i", target.identityFile,
+        "-p", target.port.toString(),
+        "-l", target.user,
         "--",
-        node.host,
+        target.host,
     )
+}
+
+/** The SSH-reachability part of a node config, shared by external node types. */
+data class SshTarget(val host: String, val port: Int, val user: String, val identityFile: String, val hostKey: String) {
+    val hostKeyType: String get() = hostKey.substringBefore(' ')
 }
