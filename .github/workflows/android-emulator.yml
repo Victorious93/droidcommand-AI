@@ -150,6 +150,7 @@ jobs:
       - name: Upload instrumentation test report
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: connected-test-report
           path: |
@@ -161,6 +162,7 @@ jobs:
       - name: Upload emulator screenshots
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: emulator-screenshots
           path: emulator-screenshots/**
