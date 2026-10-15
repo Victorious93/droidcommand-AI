@@ -11,16 +11,16 @@ import kotlin.test.assertTrue
 
 class FleetCatalogTest {
     @Test
-    fun `the room fleet is the five members in wiring order`() {
+    fun `the room fleet is the six members in wiring order`() {
         assertEquals(
-            listOf("pentestswarm", "rootforge", "victorsuite", "edl-commander", "kyc-auditlab"),
+            listOf("pentestswarm", "rootforge", "victorsuite", "edl-commander", "kyc-auditlab", "file-manager"),
             KnownFleet.ALL.map { it.id },
         )
-        assertEquals(listOf(1, 2, 3, 4, 5), KnownFleet.ALL.map { it.wiringOrder })
+        assertEquals(listOf(1, 2, 3, 4, 5, 6), KnownFleet.ALL.map { it.wiringOrder })
     }
 
     @Test
-    fun `none of the five is LIVE and the static checker never reports AVAILABLE`() {
+    fun `none of the six is LIVE and the static checker never reports AVAILABLE`() {
         val checker = StaticFleetHealthChecker()
         for (member in KnownFleet.ALL) {
             assertNotEquals(FleetHonestyStatus.LIVE, member.status, member.id)
@@ -40,12 +40,14 @@ class FleetCatalogTest {
         assertEquals(FleetIntegrationClass.BOUND_COMPANION, KnownFleet.EDL_COMMANDER.integrationClass)
         assertEquals(FleetHonestyStatus.PLANNED, KnownFleet.EDL_COMMANDER.status)
         assertEquals(FleetIntegrationClass.HOST_PROCESS_TOOL, KnownFleet.KYC_AUDITLAB.integrationClass)
+        assertEquals(FleetIntegrationClass.EXTERNAL_NODE, KnownFleet.FILE_MANAGER.integrationClass)
+        assertEquals(FleetHonestyStatus.PLANNED, KnownFleet.FILE_MANAGER.status)
 
         assertTrue(KnownFleet.PENTEST_SWARM.usesAidl)
         assertTrue(KnownFleet.PENTEST_SWARM.usesDependencyGuard)
         assertTrue(KnownFleet.EDL_COMMANDER.usesAidl)
         assertTrue(KnownFleet.EDL_COMMANDER.usesDependencyGuard)
-        for (member in listOf(KnownFleet.ROOTFORGE, KnownFleet.VICTORSUITE, KnownFleet.KYC_AUDITLAB)) {
+        for (member in listOf(KnownFleet.ROOTFORGE, KnownFleet.VICTORSUITE, KnownFleet.KYC_AUDITLAB, KnownFleet.FILE_MANAGER)) {
             assertFalse(member.usesAidl, member.id)
             assertFalse(member.usesDependencyGuard, member.id)
         }
@@ -58,6 +60,9 @@ class FleetCatalogTest {
         }
         assertFailsWith<IllegalArgumentException> {
             KnownFleet.ROOTFORGE.copy(usesDependencyGuard = true)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            KnownFleet.FILE_MANAGER.copy(usesAidl = true)
         }
         assertFailsWith<IllegalArgumentException> {
             KnownFleet.EDL_COMMANDER.copy(usesAidl = false, usesDependencyGuard = false)
@@ -75,13 +80,14 @@ class FleetCatalogTest {
         assertEquals(CapabilityState.REQUIRES_TERMUX, checker.verify(KnownFleet.VICTORSUITE.capabilityId, "termux").state)
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.EDL_COMMANDER.capabilityId, "edl-commander").state)
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.KYC_AUDITLAB.capabilityId, "kyc-auditlab").state)
+        assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.FILE_MANAGER.capabilityId, "file-manager").state)
     }
 
     @Test
     fun `registerCapabilities fills the existing CapabilityRegistry`() {
         val registry = InMemoryCapabilityRegistry(StaticFleetHealthChecker())
         KnownFleet.registerCapabilities(registry, now = 1_000L)
-        assertEquals(5, registry.listCapabilities().size)
+        assertEquals(6, registry.listCapabilities().size)
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, registry.getCapability(KnownFleet.PENTEST_SWARM.capabilityId)?.state)
         val reverified = registry.reverify(KnownFleet.KYC_AUDITLAB.capabilityId)
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, reverified.state)
@@ -91,10 +97,10 @@ class FleetCatalogTest {
     }
 
     @Test
-    fun `planned stubs are Pentest EDL and KYC and never succeed`() {
+    fun `planned stubs are Pentest EDL KYC and File Manager and never succeed`() {
         val tools = KnownFleet.plannedStubs()
         assertEquals(
-            listOf("pentest_swarm_status", "edl_commander_status", "kyc_auditlab_status"),
+            listOf("pentest_swarm_status", "edl_commander_status", "kyc_auditlab_status", "filemanager_status"),
             tools.map { it.spec.name },
         )
         for (tool in tools) {
@@ -108,6 +114,9 @@ class FleetCatalogTest {
         assertTrue(kyc.reason.contains("/scope admin"))
         val pentest = tools.first { it.spec.name == "pentest_swarm_status" }.execute(emptyMap()) as ToolResult.Failure
         assertTrue(pentest.reason.contains("awaiting the base companion repo"))
+        val fileManager = tools.first { it.spec.name == "filemanager_status" }.execute(emptyMap()) as ToolResult.Failure
+        assertTrue(fileManager.reason.contains("does not bind Messenger"))
+        assertTrue(fileManager.reason.contains("ai.victorious.filemanager.action.BRIDGE"))
     }
 
     @Test
@@ -134,17 +143,24 @@ class FleetCatalogTest {
         assertTrue(KnownFleet.VICTORSUITE.notes.contains("PR #15"))
         assertNull(KnownFleet.KYC_AUDITLAB.repo)
         assertEquals("Victorious93/EDL-Commander", KnownFleet.EDL_COMMANDER.repo)
+        assertEquals("Victorious93/File-Manager", KnownFleet.FILE_MANAGER.repo)
+        assertTrue(KnownFleet.FILE_MANAGER.packageOrBinary.contains("ai.victorious.filemanager"))
+        assertTrue(KnownFleet.FILE_MANAGER.transports.any { it.contains("ai.victorious.filemanager.action.BRIDGE") })
+        assertTrue(KnownFleet.FILE_MANAGER.notes.contains("Never DependencyGuard"))
+        assertTrue(KnownFleet.FILE_MANAGER.notes.contains("never KnownCompanions"))
+        assertTrue(KnownFleet.FILE_MANAGER.notes.contains("dca_required:false"))
     }
 
     @Test
     fun `listing names every member wiring order and the companion rule`() {
         val text = KnownFleet.formatListing()
-        for (id in listOf("rootforge", "victorsuite", "kyc-auditlab", "edl-commander", "pentestswarm")) {
+        for (id in listOf("rootforge", "victorsuite", "kyc-auditlab", "edl-commander", "pentestswarm", "file-manager")) {
             assertTrue(text.contains(id), id)
         }
         assertTrue(text.contains("None is LIVE"))
         assertTrue(text.contains("Pentest (when repo exists)"))
-        assertTrue(text.contains("RootForge Messenger is not that"))
+        assertTrue(text.contains("RootForge/File Manager Messenger is not that"))
+        assertTrue(text.contains("ai.victorious.filemanager.action.BRIDGE"))
         assertTrue(text.contains("HackerAI"))
     }
 }

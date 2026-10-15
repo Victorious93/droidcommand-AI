@@ -3,7 +3,7 @@ package ai.droidcommand.app.fleet
 /**
  * Package-probe roster for Tools → Fleet. This is the UI half of
  * `core-security.KnownFleet` plus HackerAI (already a bound companion,
- * not one of the five room-fleet items).
+ * not one of the six room-fleet items).
  *
  * Lives in `:app` so the default JVM build does not have to compile the
  * AIDL module. Install state is a PackageManager probe only. It never
@@ -13,6 +13,7 @@ enum class FleetKind {
     COMPANION_APK,
     TERMUX,
     ROOTFORGE,
+    EXTERNAL_NODE,
     HOST_PROCESS,
 }
 
@@ -30,6 +31,8 @@ object FleetCatalog {
     const val TERMUX_PACKAGE = "com.termux"
     /** Planned. The APK has not landed; do not bind this. */
     const val EDLCOMMANDER_PACKAGE = "ai.edlcommander.companion"
+    /** EXTERNAL_NODE. Probe only — do not bind Messenger. */
+    const val FILEMANAGER_PACKAGE = "ai.victorious.filemanager"
 
     val HACKERAI = FleetMember(
         id = "hackerai",
@@ -79,6 +82,16 @@ object FleetCatalog {
         summary = "HOST_PROCESS_TOOL, PLANNED. Simulator only, localhost only. Hub must not call /scope admin.",
     )
 
+    val FILE_MANAGER = FleetMember(
+        id = "file-manager",
+        name = "Victorious File Manager",
+        packageName = FILEMANAGER_PACKAGE,
+        kind = FleetKind.EXTERNAL_NODE,
+        summary = "EXTERNAL_NODE, PLANNED. Messenger action ai.victorious.filemanager.action.BRIDGE " +
+            "(protocol_major 1) already on their main; this app does not bind it. " +
+            "Never DependencyGuard, never a shared signing key. Identity/default-off PR still landing.",
+    )
+
     val all: List<FleetMember> = listOf(
         HACKERAI,
         PENTEST_SWARM,
@@ -86,6 +99,7 @@ object FleetCatalog {
         TERMUX,
         EDL_COMMANDER,
         KYC_AUDITLAB,
+        FILE_MANAGER,
     )
 }
 
@@ -128,6 +142,14 @@ object FleetStatus {
         }
         FleetKind.ROOTFORGE ->
             "Not paired. Messenger + shared JSON is the live APK path on their main; this app does not bind it. SSH is fallback only, JVM/CLI."
+        FleetKind.EXTERNAL_NODE -> when (state) {
+            FleetInstallState.INSTALLED ->
+                "Installed. Package probe only — Messenger bind is not started. PLANNED, not LIVE."
+            FleetInstallState.NOT_INSTALLED ->
+                "Not installed. Probe only — this build does not bind Messenger. PLANNED, not LIVE."
+            FleetInstallState.NOT_APPLICABLE ->
+                "No APK on this row. This build does not bind Messenger. Not LIVE."
+        }
         FleetKind.HOST_PROCESS ->
             "Not started. Simulator only, localhost only. The hub must not call /scope admin. Not LIVE."
     }
