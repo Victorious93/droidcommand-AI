@@ -53,6 +53,7 @@ jobs:
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: test-reports
           path: "**/build/reports/tests/test"
@@ -62,6 +63,7 @@ jobs:
       - name: Upload ktlint reports
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: ktlint-reports
           path: "**/build/reports/ktlint"
