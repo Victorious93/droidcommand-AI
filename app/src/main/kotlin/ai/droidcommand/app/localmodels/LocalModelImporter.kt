@@ -50,7 +50,7 @@ class LocalModelImporter(
             return ImportOutcome.Failed("Not enough free storage: about ${expectedBytes / MEGABYTE} MB needed.")
         }
         val temp = try {
-            File.createTempFile("import-", ".part", dir)
+            File.createTempFile(TEMP_PREFIX, TEMP_SUFFIX, dir)
         } catch (e: IOException) {
             return ImportOutcome.Failed("Could not create a file for the import: ${e.message ?: "unknown error"}.")
         }
@@ -97,6 +97,17 @@ class LocalModelImporter(
         }
     }
 
+    /**
+     * Deletes the `import-*.part` files an interrupted import left behind. An import that is cut off by the process being killed
+     * or crashing never reaches its cleanup, and each such file can be as large as a model while no list or screen shows it.
+     * Returns how many were removed. Call it before any import starts in this process: it cannot tell a leftover from a copy
+     * that is still running.
+     */
+    fun discardAbandonedImports(): Int =
+        dir.listFiles { file -> file.isFile && file.name.startsWith(TEMP_PREFIX) && file.name.endsWith(TEMP_SUFFIX) }
+            .orEmpty()
+            .count { it.delete() }
+
     private fun readFully(input: InputStream, buffer: ByteArray): Int {
         var total = 0
         while (total < buffer.size) {
@@ -118,6 +129,8 @@ class LocalModelImporter(
 
     companion object {
         const val DEFAULT_CONTEXT_TOKENS = 2048
+        private const val TEMP_PREFIX = "import-"
+        private const val TEMP_SUFFIX = ".part"
         private const val GGUF_EXTENSION = ".gguf"
         private val GGUF_MAGIC = "GGUF".toByteArray(Charsets.US_ASCII)
         private const val ID_PREFIX = "user-"

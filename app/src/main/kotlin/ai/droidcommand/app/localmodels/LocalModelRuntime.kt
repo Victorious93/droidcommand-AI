@@ -66,6 +66,9 @@ class LocalModelRuntime @Inject constructor(@ApplicationContext context: Context
 
     private fun current(): List<ImportedModel> {
         models?.let { return it }
+        // The first look at the directory in this process, and every import calls list() first, so nothing can be mid-copy
+        // yet: whatever `.part` file exists is from an earlier run that was killed.
+        importer.discardAbandonedImports()
         val loaded = registry.load()
         loaded.forEach { if (repository.get(it.id) == null) repository.register(it.metadata) }
         models = loaded
