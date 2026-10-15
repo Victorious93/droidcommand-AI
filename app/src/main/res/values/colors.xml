@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Same value as BackgroundDark in ui/theme/Color.kt. The window is painted with it before the first Compose
+         frame, so a cold start does not flash white. -->
+    <color name="window_background">#FF050912</color>
+</resources>
