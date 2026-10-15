@@ -25,12 +25,12 @@ import ai.droidcommand.llm.factory.SavedChat
 import ai.droidcommand.llm.factory.WebSearchCatalog
 import ai.droidcommand.llm.factory.newChatId
 import ai.droidcommand.llm.factory.savedChats
-import ai.droidcommand.templates.PromptTemplate
-import ai.droidcommand.templates.Skill
 import ai.droidcommand.llm.local.ModelInstallResult
 import ai.droidcommand.rag.AttachResult
 import ai.droidcommand.rag.DocumentInfo
 import ai.droidcommand.remote.HttpTransport
+import ai.droidcommand.templates.PromptTemplate
+import ai.droidcommand.templates.Skill
 import ai.droidcommand.voice.SpeakMode
 import ai.droidcommand.voice.VoiceController
 import ai.droidcommand.voice.VoiceState
@@ -334,7 +334,8 @@ class ChatViewModel @Inject constructor(
         // A slash command sends this one message to the named cloud provider and overrides any on-device model.
         val command = AiSlashCommands.parse(text)
         if (command is AiSlashCommands.Parsed.MissingPrompt) {
-            mutableState.update { it.copy(error = "Type a question after /${command.command}.") }
+            // The input box was already cleared; give the command back so only the question has to be added.
+            mutableState.update { it.copy(error = "Type a question after /${command.command}.", pendingInput = text) }
             return
         }
         val slash = command as? AiSlashCommands.Parsed.Command
@@ -364,18 +365,11 @@ class ChatViewModel @Inject constructor(
                     mutableState.update { it.copy(streaming = it.streaming + delta) }
                 }
             }
-            mutableState.update {
-                when (result) {
-                    is ChatResult.Reply -> it.copy(
-                        lines = it.lines + ChatLine(true, text.trim()) + ChatLine(false, result.text),
-                        streaming = "",
-                        sending = false,
-                        notice = result.notice ?: localNotice,
-                        savedChats = runCatching { savedChats(store) }.getOrDefault(it.savedChats),
-                    ).also { voice.onReply(result.text, it.speakMode) }
-                    is ChatResult.Failure -> it.copy(streaming = "", sending = false, error = result.message)
-                }
-            }
+            // Read the saved-chat list and speak the reply outside the update: the flow may run the lambda more than once
+            // (speaking re-enters this flow through the voice callback, which can force exactly such a retry and a second speak).
+            val refreshedChats = if (result is ChatResult.Reply) runCatching { savedChats(store) }.getOrNull() else null
+            mutableState.update { it.afterTurn(result, text, localNotice, refreshedChats) }
+            if (result is ChatResult.Reply) voice.onReply(result.text, mutableState.value.speakMode)
         }
     }
 
