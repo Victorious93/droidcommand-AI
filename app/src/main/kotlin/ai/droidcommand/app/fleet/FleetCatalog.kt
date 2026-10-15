@@ -28,6 +28,7 @@ object FleetCatalog {
     const val HACKERAI_PACKAGE = "ai.hackerai.companion"
     const val PENTESTSWARM_PACKAGE = "ai.pentestswarm.companion"
     const val TERMUX_PACKAGE = "com.termux"
+
     /** Planned. The APK has not landed; do not bind this. */
     const val EDLCOMMANDER_PACKAGE = "ai.edlcommander.companion"
 
