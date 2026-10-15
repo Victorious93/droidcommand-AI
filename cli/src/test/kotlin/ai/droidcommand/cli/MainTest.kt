@@ -47,6 +47,7 @@ class MainTest {
                 "pentest_swarm_status",
                 "edl_commander_status",
                 "kyc_auditlab_status",
+                "filemanager_status",
             ),
             specs.map { it.name },
         )
@@ -151,6 +152,12 @@ class MainTest {
     @Test
     fun `pilot pentest_swarm_status fails honestly and never binds`() {
         val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("pentest_swarm_status"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot filemanager_status fails honestly and never binds Messenger`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("filemanager_status"))
         assertEquals(1, exitCode)
     }
 
