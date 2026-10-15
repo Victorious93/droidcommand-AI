@@ -13,7 +13,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * Real hardware verification for [AdbDeviceController]'s 10 read-only methods, mirroring
+ * Real hardware verification for [AdbDeviceController]'s 11 read-only methods, mirroring
  * `core-root.AdbRootExecutorRealDeviceIntegrationTest`'s exact pattern: skips cleanly (reported
  * SKIPPED, never a false PASS) wherever no real authorized adb device is present — every CI run
  * included. Every query here is read-only by construction (see [AdbDeviceController]'s own doc
@@ -125,5 +125,12 @@ class AdbDeviceControllerRealDeviceIntegrationTest {
         for (contact in result.contacts) {
             assertTrue(contact.phoneNumbers.isNotEmpty() && contact.phoneNumbers.all { it.isNotBlank() })
         }
+    }
+
+    @Test
+    fun `real clipboard read succeeds, whatever the clipboard currently holds`() {
+        // A real device's clipboard may genuinely be empty — Success with "" is a real result, not a
+        // failure; assert only that the query itself succeeded, never what text it happens to hold.
+        assertIs<ClipboardReadResult.Success>(device.getClipboardText())
     }
 }
