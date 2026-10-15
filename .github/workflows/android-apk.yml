@@ -13,10 +13,20 @@ name: Build APK
 # The produced APK is debug-signed. A separate workflow
 # (.github/workflows/android-emulator.yml) launches an x86_64-only build and
 # runs the instrumented smoke test; see the 2026-10-13 / 2026-10-14 audit
-# addenda. This job is the 4-ABI artifact, not a launch proof.
+# addenda. Push/PR builds are the 4-ABI artifact, not a launch proof.
+# workflow_dispatch can pass abi=arm64-v8a for a smaller phone APK
+# (artifact app-arm64-debug-apk) that drops x86 / x86_64 / armeabi-v7a.
 
 on:
   workflow_dispatch:
+    inputs:
+      abi:
+        description: "ABIs to package. all = current 4-ABI APK; arm64-v8a = phone-sized debug APK."
+        type: choice
+        options:
+          - all
+          - arm64-v8a
+        default: all
   push:
     branches:
       - main
@@ -87,13 +97,19 @@ jobs:
       # on Actions 38503712187 / 38504189408 (~23 min each) after Mode 1/2
       # landed on the stale feature branch.
       - name: Assemble debug APK (retry transient Maven Central 429s)
+        env:
+          ABI_FILTER: ${{ github.event.inputs.abi }}
         run: |
           set -o pipefail
+          extra=()
+          if [ "${ABI_FILTER}" = "arm64-v8a" ]; then
+            extra+=(-PabiFilter=arm64-v8a)
+          fi
           delay=15
           for attempt in 1 2 3 4 5 6; do
             echo "::group::assembleDebug attempt #${attempt}"
             log="$(mktemp)"
-            if ./gradlew :app:assembleDebug -PincludeAndroid=true --no-daemon \
+            if ./gradlew :app:assembleDebug -PincludeAndroid=true "${extra[@]}" --no-daemon \
                  2>&1 | tee "$log"; then
               echo "::endgroup::"
               echo "BUILD OK on attempt #${attempt}"
@@ -121,28 +137,44 @@ jobs:
           echo "assembleDebug failed after all retries"
           exit 1
 
+      - name: Select APK artifact name
+        if: success()
+        env:
+          ABI_FILTER: ${{ github.event.inputs.abi }}
+        run: |
+          if [ "${ABI_FILTER}" = "arm64-v8a" ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk \
+               app/build/outputs/apk/debug/app-arm64-debug.apk
+            echo "APK_FILE=app-arm64-debug.apk" >> "$GITHUB_ENV"
+            echo "APK_ARTIFACT=app-arm64-debug-apk" >> "$GITHUB_ENV"
+          else
+            echo "APK_FILE=app-debug.apk" >> "$GITHUB_ENV"
+            echo "APK_ARTIFACT=app-debug-apk" >> "$GITHUB_ENV"
+          fi
+
       - name: Show APK identity
         if: success()
         run: |
-          APK=app/build/outputs/apk/debug/app-debug.apk
+          APK=app/build/outputs/apk/debug/${APK_FILE}
           ls -la "$APK"
           BT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort | tail -1)
           "${BT}aapt2" dump badging "$APK" | grep -E "^package:|sdkVersion:|targetSdkVersion:|application-label:" || true
+          unzip -l "$APK" | grep -E 'lib/.*/.*\.so$' | awk '{print $4}' | sort || true
 
       - name: Record APK checksum
         if: success()
         working-directory: app/build/outputs/apk/debug
         run: |
-          sha256sum app-debug.apk | tee SHA256SUMS
+          sha256sum "$APK_FILE" | tee SHA256SUMS
 
       - name: Upload APK artifact
         if: success()
         uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
-          name: app-debug-apk
+          name: ${{ env.APK_ARTIFACT }}
           path: |
-            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/${{ env.APK_FILE }}
             app/build/outputs/apk/debug/SHA256SUMS
           if-no-files-found: error
           retention-days: 7
