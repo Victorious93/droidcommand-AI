@@ -150,19 +150,21 @@ jobs:
       - name: Upload instrumentation test report
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: connected-test-report
           path: |
             app/build/reports/androidTests/connected/**
             app/build/outputs/androidTest-results/connected/**
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 7
 
       - name: Upload emulator screenshots
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: emulator-screenshots
           path: emulator-screenshots/**
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 7

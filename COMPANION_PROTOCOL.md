@@ -52,7 +52,8 @@ or Sahara/Firehose (EDL companion).
 
 The room-fleet map lives in `docs/FLEET_CONTROL.md` and `core-security.KnownFleet`.
 Add a member to `KnownCompanions` only when it is a genuine dependent companion
-APK (HackerAI, Pentest-Swarm, EDL-Commander).
+APK (HackerAI, Pentest-Swarm, EDL-Commander). File Manager is an EXTERNAL_NODE
+like RootForge — never `KnownCompanions`.
 
 ## Fleet slots that are not companions
 
@@ -87,6 +88,35 @@ tool `kyc_auditlab_status` (`PlannedFleetTool`).
   `/scope` admin until they add auth.
 - Do not log identity-document contents.
 - Status: **PLANNED**. Wiring order: last.
+
+### Victorious File Manager — EXTERNAL_NODE (Messenger)
+
+Victorious File Manager (`Victorious93/File-Manager`) is an independent
+product, the same class as RootForge. It is **not** a companion.
+
+- Package: `ai.victorious.filemanager` (debug: `ai.victorious.filemanager.debug`).
+- Service: `ai.victorious.filemanager.fleet.FileManagerBridgeService` (Messenger).
+- Action: `ai.victorious.filemanager.action.BRIDGE`, `protocol_major` 1.
+- Transport: Message what=1 Bundle key `request` (JSON); reply what=2 Bundle
+  key `response`. Envelope fields match RootForge (`protocol_major`,
+  `request_id`, `target_node_id` / `node_id`, `operation`, `timeout_ms`,
+  `parameters` / `ok`, `result`, `error {category, message}`).
+- Stub ops already on their `main`: `filemanager.capabilities.get` (read),
+  `filemanager.status` (read), `filemanager.list` (read, empty entries).
+  Every reply currently carries `live:false`, `mode:stub`, `dca_required:false`.
+- Their identity/default-off PR is still landing: external control default
+  OFF; caller identity = UID package + SHA-256 cert; allow only
+  `ai.droidcommand.app` and its `.debug` build; error categories
+  `external_control_disabled` and `unauthorized_caller`; `fleet_class` →
+  `external_node`.
+- **Never** `DependencyGuard`, **never** a shared signing key, **never**
+  `KnownCompanions`, **never** a `BIND_*` signature permission, **never**
+  AIDL. Removing DCA must not disable File Manager.
+- Catalog stub: `filemanager_status` (`PlannedFleetTool`). Always
+  `ToolResult.Failure` / `REQUIRES_EXTERNAL_SERVICE`. This repo does **not**
+  implement a live Messenger client bind.
+- Status: **PLANNED** (not LIVE, not PARTIAL). Wiring: when their
+  identity/default-off PR lands; after the RootForge Messenger client exists.
 
 ### EDL-Commander — bound companion (not a host tool)
 

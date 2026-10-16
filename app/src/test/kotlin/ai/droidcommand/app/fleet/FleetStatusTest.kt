@@ -13,10 +13,12 @@ class FleetStatusTest {
         assertEquals("ai.pentestswarm.companion", FleetCatalog.PENTESTSWARM_PACKAGE)
         assertEquals("com.termux", FleetCatalog.TERMUX_PACKAGE)
         assertEquals("ai.edlcommander.companion", FleetCatalog.EDLCOMMANDER_PACKAGE)
+        assertEquals("ai.victorious.filemanager", FleetCatalog.FILEMANAGER_PACKAGE)
         assertNull(FleetCatalog.ROOTFORGE.packageName)
         assertNull(FleetCatalog.KYC_AUDITLAB.packageName)
+        assertEquals(FleetCatalog.FILEMANAGER_PACKAGE, FleetCatalog.FILE_MANAGER.packageName)
         assertEquals(
-            listOf("hackerai", "pentestswarm", "rootforge", "termux", "edl-commander", "kyc-auditlab"),
+            listOf("hackerai", "pentestswarm", "rootforge", "termux", "edl-commander", "kyc-auditlab", "file-manager"),
             FleetCatalog.all.map { it.id },
         )
     }
@@ -32,6 +34,7 @@ class FleetStatusTest {
         val rootforge = rows.single { it.member.id == "rootforge" }
         val edl = rows.single { it.member.id == "edl-commander" }
         val kyc = rows.single { it.member.id == "kyc-auditlab" }
+        val fileManager = rows.single { it.member.id == "file-manager" }
 
         assertEquals(FleetInstallState.INSTALLED, hacker.installed)
         assertTrue(hacker.status.contains("disconnected"))
@@ -55,8 +58,22 @@ class FleetStatusTest {
         assertEquals(FleetInstallState.NOT_APPLICABLE, kyc.installed)
         assertTrue(kyc.status.contains("/scope admin"))
 
+        assertEquals(FleetInstallState.NOT_INSTALLED, fileManager.installed)
+        assertTrue(fileManager.status.contains("does not bind Messenger"))
+        assertTrue(fileManager.status.contains("PLANNED"))
+        assertTrue(fileManager.member.summary.contains("Never DependencyGuard"))
+        assertTrue(fileManager.member.summary.contains("ai.victorious.filemanager.action.BRIDGE"))
+        assertFalse(fileManager.status.contains("ready", ignoreCase = true), fileManager.status)
+
         rows.forEach { row ->
             assertFalse(row.status.contains("ready", ignoreCase = true), row.status)
         }
+
+        val installedFm = FleetStatus.resolve(FleetCatalog.all) { it == FleetCatalog.FILEMANAGER_PACKAGE }
+            .single { it.member.id == "file-manager" }
+        assertEquals(FleetInstallState.INSTALLED, installedFm.installed)
+        assertTrue(installedFm.status.contains("Package probe only"))
+        assertTrue(installedFm.status.contains("PLANNED"))
+        assertFalse(installedFm.status.contains("ready", ignoreCase = true), installedFm.status)
     }
 }

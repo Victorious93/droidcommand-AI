@@ -5,6 +5,7 @@ import ai.droidcommand.app.coding.CodingUiState
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prefs.CodingTunnelChoice
 import ai.droidcommand.app.ui.components.DroidCard
+import ai.droidcommand.app.ui.components.rememberDraft
 import ai.droidcommand.coding.CodingPhase
 import ai.droidcommand.coding.CodingSession
 import androidx.compose.foundation.layout.Arrangement
@@ -23,8 +24,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -67,7 +66,7 @@ class CodingViewModel @Inject constructor(
 fun CodingScreen(viewModel: CodingViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
     val paired = viewModel.usingPairedTunnel()
-    var goal by remember { mutableStateOf("") }
+    var goal by rememberDraft()
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),

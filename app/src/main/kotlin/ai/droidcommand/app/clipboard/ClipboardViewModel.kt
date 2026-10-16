@@ -3,6 +3,7 @@ package ai.droidcommand.app.clipboard
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.PersistableBundle
 import androidx.core.content.getSystemService
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -11,6 +12,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
+
+// ClipDescription.EXTRA_IS_SENSITIVE (API 33). Its value, so the flag can be set on older versions without an API-level check.
+private const val EXTRA_IS_SENSITIVE = "android.content.extra.IS_SENSITIVE"
 
 data class ClipboardUiState(
     val publicClips: List<Clip> = emptyList(),
@@ -54,9 +58,15 @@ class ClipboardViewModel @Inject constructor(
         publish(if (history.addPublic(text)) "Added to public clips." else "Same as the newest public clip, so not added.")
     }
 
-    /** Puts text on the system clipboard, where any app in the foreground can read it. */
-    fun copyToSystem(text: String) {
-        context.getSystemService<ClipboardManager>()?.setPrimaryClip(ClipData.newPlainText("DroidCommand AI clip", text))
+    /**
+     * Puts text on the system clipboard, where any app in the foreground can read it. A [sensitive] clip (one that came from the
+     * private list) is flagged so Android 13+ keeps its text out of the on-screen "copied" preview and keyboard suggestion
+     * strips; older versions ignore the flag. It does not stop another app from reading the clipboard.
+     */
+    fun copyToSystem(text: String, sensitive: Boolean = false) {
+        val clip = ClipData.newPlainText("DroidCommand AI clip", text)
+        if (sensitive) clip.description.extras = PersistableBundle().apply { putBoolean(EXTRA_IS_SENSITIVE, true) }
+        context.getSystemService<ClipboardManager>()?.setPrimaryClip(clip)
         publish("Copied to the system clipboard. Other apps can now read it.")
     }
 

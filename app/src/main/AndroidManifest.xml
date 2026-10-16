@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Every LLM provider call and (future) web-search lookup goes over HTTPS
-         via core-remote's JdkHttpTransport; nothing else in this Phase 0 shell
-         needs a permission. -->
+    <!-- Every LLM provider call and web-search lookup goes over HTTPS via core-remote's
+         HttpUrlConnectionTransport (JdkHttpTransport needs java.net.http, which Android does not ship). -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Normal-protection permission: lets the embedding-model download ask whether the active network is
@@ -14,11 +14,26 @@
          message, never a crash. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Android 11+ package visibility: SpeechRecognizer.isRecognitionAvailable() and TextToSpeech need to
-         see the device's recognition/TTS services. -->
+    <!-- RECORD_AUDIO makes the build tools add a *required* microphone feature, and Google Play then hides the app from
+         devices without one. Voice is optional here (typing always works), so say so. -->
+    <uses-feature
+        android:name="android.hardware.microphone"
+        android:required="false" />
+
+    <!-- Android 11+ package visibility. Without an entry here, a lookup of another app (PackageManager.getPackageInfo)
+         throws as if the app were not installed, and a speech or TTS service is invisible to the platform checks. -->
     <queries>
         <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+
+        <!-- Tools > Fleet reports whether each of these is installed (PackageFleetProbe). Keep this list in step with
+             FleetCatalog; ManifestPolicyTest fails when a catalog package is missing. Named packages only: the broad
+             QUERY_ALL_PACKAGES permission is deliberately not requested. -->
+        <package android:name="ai.hackerai.companion" />
+        <package android:name="ai.pentestswarm.companion" />
+        <package android:name="com.termux" />
+        <package android:name="ai.edlcommander.companion" />
+        <package android:name="ai.victorious.filemanager" />
     </queries>
 
     <!-- Phase 4 — Companion APK signature permissions.
@@ -34,18 +49,29 @@
         android:name="ai.droidcommand.permission.BIND_PENTESTSWARM"
         android:protectionLevel="signature" />
 
+    <!-- allowBackup is off and the extraction rules exclude everything: chats, the memory graph, notes, clipboards, the
+         audit log and imported models stay on this device (docs/SECURITY.md). dataExtractionRules is read on Android 12+,
+         fullBackupContent="false" on Android 9 to 11 (the minSdk is 28). The network security config refuses cleartext
+         HTTP and trusts only the system CA store. enableOnBackInvokedCallback opts in to predictive back. -->
     <application
         android:name=".DroidCommandApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:enableOnBackInvokedCallback="true"
+        android:fullBackupContent="false"
         android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:label="DroidCommand AI"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/Theme.DroidCommand"
+        tools:targetApi="33">
 
+        <!-- adjustResize: on Android 10 and older the keyboard height only reaches Compose's imePadding() when the
+             window resizes. MainActivity draws edge to edge, so each screen handles the system bar insets itself. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
