@@ -77,6 +77,9 @@ Still UNVERIFIED on emulator and device: live chat against a real provider, a fi
 ./gradlew test --continue
 ./gradlew ktlintCheck --continue
 
+# Android modules' unit tests + ktlint (opt-in; CI runs the same in .github/workflows/android-checks.yml)
+./gradlew -PincludeAndroid=true testDebugUnitTest ktlintCheck --continue
+
 # Android debug APK (opt-in)
 ./gradlew :app:assembleDebug -PincludeAndroid=true
 # → app/build/outputs/apk/debug/app-debug.apk
