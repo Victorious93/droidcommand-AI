@@ -33,6 +33,7 @@
         <package android:name="ai.pentestswarm.companion" />
         <package android:name="com.termux" />
         <package android:name="ai.edlcommander.companion" />
+        <package android:name="ai.victorious.filemanager" />
     </queries>
 
     <!-- Phase 4 — Companion APK signature permissions.

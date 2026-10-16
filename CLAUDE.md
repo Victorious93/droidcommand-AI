@@ -1,5 +1,27 @@
 # DroidCommand AI — orientation for Claude sessions
 
+> **Docs refresh 2026-10-15 (`docs/update-claude-md`):** several claims below are stale.
+> Verified against `settings.gradle.kts` and `.github/workflows/` on this date:
+> - Always-on JVM modules in `settings.gradle.kts` now include (among others)
+>   `core-coding-session`, `core-billing`, `core-websearch`, `core-voice`, `core-rag`,
+>   `core-notes`, and (as of PR #207) `core-flash`. Counts that say "25 modules" are wrong.
+> - Opt-in Android modules (`-PincludeAndroid=true` or user `gradle.properties`):
+>   `:app`, `:core-conversations`, `:core-rag-android`, `:core-templates-android`,
+>   `:core-knowledge-android`, `:core-llm-local-android`, `:core-voice-android`,
+>   `:core-voice-neural-android`. `:core-companion` is still on disk but not in the
+>   `includeAndroid` block.
+> - `:app:assembleDebug` **has** been built in GitHub Actions (`android-apk.yml`) and
+>   launched on an API 28 x86_64 emulator (`android-emulator.yml`); README screenshots
+>   were filled from that emulator (PR #202). Claims that `:app` has "never been
+>   build-verified" or "never launched" are obsolete — check the audit addenda from
+>   2026-10-13 onward and the workflow run history instead.
+> - CI: `ci.yml` (JVM `./gradlew test --continue` + `ktlintCheck` on every push/PR to
+>   `main`); `android-apk.yml` (4-ABI debug APK, selective triggers); `android-emulator.yml`
+>   (API 28 smoke + screenshots, selective triggers). JDK 21.
+> Re-verify against `settings.gradle.kts` and the bottom of `docs/AUDIT_2026-09-05.md`
+> before trusting older module counts or "never run" statements further down this file.
+
+
 Read this first. It exists so a new session doesn't have to re-derive
 context that already lives elsewhere in this repo — don't re-audit the
 project or re-clone the reference repos unless the task genuinely requires
@@ -311,19 +333,26 @@ inflate any entry's status past what those addenda actually say:
   surface area in VictorSuite's own repo, out of scope here. See
   `docs/AUDIT_2026-09-05.md`'s addendum for the full record.
 
-The five-member **room fleet** Don asked DCA to control (RootForge OS,
-VictorSuite, KYC-AuditLab, EDL-Commander, Pentest-Swarm-AI) is catalogued
-in `docs/FLEET_CONTROL.md` and `core-security.KnownFleet`. Wiring order:
-Pentest (when the base repo exists) → RootForge Messenger deepen →
-VictorSuite `RUN_COMMAND` → EDL companion APK → KYC last. RootForge is an
+The six-member **room fleet** Don asked DCA to control (RootForge OS,
+VictorSuite, KYC-AuditLab, EDL-Commander, Pentest-Swarm-AI, Victorious
+File Manager) is catalogued in `docs/FLEET_CONTROL.md` and
+`core-security.KnownFleet`. Wiring order: Pentest (when the base repo
+exists) → RootForge Messenger deepen → VictorSuite `RUN_COMMAND` → EDL
+companion APK → KYC last → File Manager (when their identity/default-off
+PR lands; after the RootForge Messenger client exists). RootForge is an
 **EXTERNAL_NODE** — live APK path on their `main` is already Messenger +
 shared JSON (`docs/DROIDCOMMAND_INTEGRATION.md` in `rootforge-os`, action
 `ai.rootforge.os.action.BRIDGE`, `protocol_major` 1); SSH is CLI/ISO
 fallback only. Never DependencyGuard, never a shared signing key.
-EDL-Commander is a **bound companion** (AIDL + same-signing +
+Victorious File Manager is a second **EXTERNAL_NODE**, **PLANNED** —
+package `ai.victorious.filemanager`, action
+`ai.victorious.filemanager.action.BRIDGE` already on their `main`
+(`dca_required:false` stub ops); this repo does not bind it, and must
+never get DependencyGuard / a shared signing key / `KnownCompanions` /
+AIDL. EDL-Commander is a **bound companion** (AIDL + same-signing +
 DependencyGuard), PLANNED until the APK lands — do not mark it
 host-tool-only. KYC-AuditLab is a host-process simulator (localhost only;
-the hub must not call `/scope` admin). None of the five is LIVE. Do not
+the hub must not call `/scope` admin). None of the six is LIVE. Do not
 invent a parallel control plane.
 
 ---
@@ -710,13 +739,12 @@ this project had specifically evaluated them.
 
 ---
 
-### Current module inventory (verified against `settings.gradle.kts`, 2026-09-29)
+### Current module inventory (originally verified 2026-09-29; **stale — see 2026-10-15 banner at top**)
 
-25 modules are wired into the build via `include(...)` in
-`settings.gradle.kts`. `app/` also exists on disk with real source but is
-deliberately **not** in `settings.gradle.kts` (gated on an Android SDK this
-environment does not have — see the excluded-module comment at the bottom of
-`settings.gradle.kts`).
+The table below is kept for historical orientation. Do not treat its module
+count or `:app` status as current. Re-read `settings.gradle.kts` and the
+2026-10-15 banner. Android modules are opt-in via `includeAndroid=true`
+(CI APK/emulator workflows pass `-PincludeAndroid=true`).
 
 | Module | Type | Status |
 |---|---|---|
@@ -813,3 +841,9 @@ copies of the canonical files in `core-companion/src/main/aidl/`. A diverged
 copy causes a `RemoteException: Binder interface mismatch` at runtime with no
 compile-time warning. Always update all three locations together. Details in
 `COMPANION_PROTOCOL.md` § "AIDL Contract Sync Rule".
+
+## Don's standing rules (apply to every change)
+- Work on a branch and open a PR. Never push to `main`.
+- Never merge a PR, and never ask to merge one, until every test/check on the PR passes.
+- Never commit secrets (API keys, tokens, keystore passwords, `.env` files, credentials).
+- Don't claim something works unless it was actually tested; say what was and wasn't run.

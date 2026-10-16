@@ -133,7 +133,7 @@ JVM-only core modules now:
   and mutual TLS (only `JdkHttpTransport` has them, and it cannot run on Android), response-size limits
   (`HttpUrlConnectionTransport` reads a whole body into memory), and cancellation of an in-flight request
   when a screen is left (it ends at the read timeout).
-- **Package visibility — IMPLEMENTED 2026-10-15.** The app asks Android about four other apps by name
+- **Package visibility — IMPLEMENTED 2026-10-15.** The app asks Android about five other apps by name
   (`<queries><package …>`), never `QUERY_ALL_PACKAGES`. `ManifestPolicyTest` keeps the list in step with
   `FleetCatalog` and fails if the broad permission appears.
 

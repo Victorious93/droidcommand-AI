@@ -25,7 +25,14 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             // armeabi-v7a is deliberately not listed until a build of it is proven.
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            // -PabiFilter=arm64-v8a skips the x86_64 llama.cpp compile (phone APK).
+            // Unset is the existing arm64-v8a + x86_64 pair.
+            val abiFilter = providers.gradleProperty("abiFilter").orNull
+            if (abiFilter == "arm64-v8a") {
+                abiFilters += "arm64-v8a"
+            } else {
+                abiFilters += listOf("arm64-v8a", "x86_64")
+            }
         }
         externalNativeBuild {
             cmake {
