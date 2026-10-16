@@ -108,6 +108,12 @@ JVM-only core modules now:
   authority/MIME/flags before every operation — never convert an
   arbitrary URI into a raw filesystem path.
 - Temporary exports live in app-private cache, deleted after use.
+- **`:app` backup — IMPLEMENTED 2026-10-15.** `android:allowBackup="false"`, `android:fullBackupContent="false"`
+  (Android 9–11) and `res/xml/data_extraction_rules.xml` (Android 12+) exclude every domain from cloud backup
+  and device-to-device transfer, so chats, the memory graph, notes, clipboards, the audit log and imported
+  models are never copied off the device by the platform. The cost: moving to a new phone starts empty until
+  an export feature exists (Keystore-bound secrets could not be restored anyway). `ManifestPolicyTest` pins
+  all three. Before this, the merged manifest of the debug APK carried `allowBackup=true` with no rules.
 
 ### Networking
 - HTTPS by default; Network Security Configuration disabling cleartext
@@ -121,6 +127,15 @@ JVM-only core modules now:
   endpoint access.
 - Retry only safe/idempotent failures, bounded, with backoff; never retry
   auth or confirmation failures.
+- **`:app` network security config — IMPLEMENTED 2026-10-15.** `res/xml/network_security_config.xml` sets
+  `cleartextTrafficPermitted="false"` and trusts only the system certificate store; `ManifestPolicyTest` fails
+  if either changes or a `domain-config` exception is added without review. Not covered: certificate pinning
+  and mutual TLS (only `JdkHttpTransport` has them, and it cannot run on Android), response-size limits
+  (`HttpUrlConnectionTransport` reads a whole body into memory), and cancellation of an in-flight request
+  when a screen is left (it ends at the read timeout).
+- **Package visibility — IMPLEMENTED 2026-10-15.** The app asks Android about five other apps by name
+  (`<queries><package …>`), never `QUERY_ALL_PACKAGES`. `ManifestPolicyTest` keeps the list in step with
+  `FleetCatalog` and fails if the broad permission appears.
 
 ### Secrets
 - Provider credentials in Android Keystore-backed encrypted storage
@@ -130,6 +145,13 @@ JVM-only core modules now:
   the JVM-side interface (CAP-013); the Keystore-backed implementation is
   the Android-specific piece still to build.
 - Never in prompts, tool arguments, logs, or error messages.
+- **Update 2026-10-15 (the paragraph above is older):** the Keystore-backed vault exists
+  (`app/security/AndroidSecretsVault.kt`, AES-256-GCM key in the AndroidKeyStore, wired in `AppModule`) and
+  its read path (`inspect`) ran on an API 28 emulator. Saving and decrypting a real key has still never run on
+  a device. Typed API keys are deliberately kept out of saved instance state (`SettingsScreen.ApiKeyRow`);
+  the new `rememberDraft` helper is for non-secret text only. Private clips copied to the system clipboard are
+  now flagged `EXTRA_IS_SENSITIVE` (Android 13+ hides them from the on-screen preview); that does not stop another
+  app in the foreground from reading the clipboard.
 
 ### Logging
 - Structured events (request id, tool name, outcome, duration, coarse
@@ -191,3 +213,8 @@ document.
       covered** by `ExecutionTarget`'s typed contract; no sandboxed
       subprocess implementation exists yet beyond `core-shell`'s
       fixed-executable model.
+- [x] `:app` backup exclusion, cleartext refusal and package-visibility policy
+      pinned by a JVM test — **covered 2026-10-15** (`ManifestPolicyTest`).
+- [x] `:app` unit tests and ktlint run in CI — **covered 2026-10-15**
+      (`.github/workflows/android-checks.yml`; before that no workflow ran them).
+      Android Lint is not gated: it needs the native build for every module.

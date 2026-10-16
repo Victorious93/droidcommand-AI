@@ -17,8 +17,8 @@ import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.config.EncryptedSecretsVault
-import ai.droidcommand.hackerai.HackerAiTool
 import ai.droidcommand.conversations.RoomConversationStore
+import ai.droidcommand.hackerai.HackerAiTool
 import ai.droidcommand.knowledge.android.RoomKnowledgeGraph
 import ai.droidcommand.llm.factory.CloudPromptClient
 import ai.droidcommand.llm.factory.CloudProviderSpec

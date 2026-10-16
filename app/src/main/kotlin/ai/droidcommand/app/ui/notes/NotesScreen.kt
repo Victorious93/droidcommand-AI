@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.notes
 
 import ai.droidcommand.app.ui.components.DroidCard
+import ai.droidcommand.app.ui.components.rememberDraft
 import ai.droidcommand.notes.MarkdownBlock
 import ai.droidcommand.notes.NotePlugin
 import ai.droidcommand.notes.NoteVault
@@ -27,7 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,11 +39,19 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.IOException
+import java.nio.file.Path
 import javax.inject.Inject
 
+/**
+ * State for the Notes screen. The notes live in a [NoteVault] under [root]; the internal constructor takes the path so the
+ * save and navigation rules below run in a JVM test, and Hilt uses the [Context] constructor.
+ */
 @HiltViewModel
-class NotesViewModel @Inject constructor(@ApplicationContext context: Context) : ViewModel() {
-    private val root = context.filesDir.toPath().resolve("notes-vault")
+class NotesViewModel internal constructor(root: Path) : ViewModel() {
+    @Inject
+    constructor(@ApplicationContext context: Context) : this(context.filesDir.toPath().resolve("notes-vault"))
+
     private val vault = NoteVault(root)
     private val plugins = PluginStore(root)
 
@@ -62,23 +71,45 @@ class NotesViewModel @Inject constructor(@ApplicationContext context: Context) :
     var error by mutableStateOf<String?>(null)
         private set
 
+    /** The open note's text as last read from or written to disk. [body] differing from it means the edits are not saved yet. */
+    private var savedBody by mutableStateOf("")
+
+    /** True while the open note has edits that are not on disk. */
+    val unsavedChanges: Boolean get() = openPath != null && body != savedBody
+
     fun open(entry: VaultEntry) {
         error = null
         if (entry.folder) {
             folder = entry.relativePath
             openPath = null
             entries = vault.list(folder)
-        } else {
-            openPath = entry.relativePath
-            body = vault.read(entry.relativePath)
-            preview = false
+            return
         }
+        val text = try {
+            vault.read(entry.relativePath)
+        } catch (e: IOException) {
+            // An unreadable file (not valid UTF-8, removed behind our back) must not crash the screen.
+            error = "Could not open ${entry.name}: ${e.message ?: e.javaClass.simpleName}"
+            return
+        }
+        openPath = entry.relativePath
+        body = text
+        savedBody = text
+        preview = false
     }
 
+    /**
+     * Closes the open note and shows the folder it is in, or, with no note open, goes up one folder. Edits to an open note are
+     * saved first; if that fails the note stays open with the reason in [error], so leaving never throws edits away.
+     */
     fun up() {
+        if (openPath != null) {
+            if (unsavedChanges && !save()) return
+            openPath = null
+        } else {
+            folder = folder.substringBeforeLast('/', "")
+        }
         error = null
-        openPath = null
-        folder = folder.substringBeforeLast('/', "")
         entries = vault.list(folder)
     }
 
@@ -90,6 +121,8 @@ class NotesViewModel @Inject constructor(@ApplicationContext context: Context) :
             error = null
         } catch (e: IllegalArgumentException) {
             error = e.message
+        } catch (e: IOException) {
+            error = "Could not create the folder: ${e.message ?: e.javaClass.simpleName}"
         }
     }
 
@@ -97,11 +130,19 @@ class NotesViewModel @Inject constructor(@ApplicationContext context: Context) :
         val file = if (name.endsWith(".md")) name else "$name.md"
         val relative = child(file)
         try {
+            // write() replaces whatever is there, so a taken name is refused here. Typing the name of an existing note and
+            // tapping Note used to empty that note.
+            if (vault.exists(relative)) {
+                error = "A note called $file already exists here."
+                return
+            }
             vault.write(relative, "")
             entries = vault.list(folder)
             open(VaultEntry(file, relative, folder = false))
         } catch (e: IllegalArgumentException) {
             error = e.message
+        } catch (e: IOException) {
+            error = "Could not create the note: ${e.message ?: e.javaClass.simpleName}"
         }
     }
 
@@ -109,10 +150,18 @@ class NotesViewModel @Inject constructor(@ApplicationContext context: Context) :
         body = text
     }
 
-    fun save() {
-        val path = openPath ?: return
-        vault.write(path, body)
-        error = null
+    /** Writes the open note. Returns false, with the reason in [error], when it could not be saved. */
+    fun save(): Boolean {
+        val path = openPath ?: return true
+        return try {
+            vault.write(path, body)
+            savedBody = body
+            error = null
+            true
+        } catch (e: IOException) {
+            error = "Could not save: ${e.message ?: e.javaClass.simpleName}"
+            false
+        }
     }
 
     fun togglePreview() {
@@ -151,8 +200,8 @@ class NotesViewModel @Inject constructor(@ApplicationContext context: Context) :
  */
 @Composable
 fun NotesScreen(viewModel: NotesViewModel = hiltViewModel()) {
-    var showPlugins by remember { mutableStateOf(false) }
-    var draftName by remember { mutableStateOf("") }
+    var showPlugins by rememberSaveable { mutableStateOf(false) }
+    var draftName by rememberDraft()
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -193,8 +242,21 @@ fun NotesScreen(viewModel: NotesViewModel = hiltViewModel()) {
                             singleLine = true,
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { viewModel.newNote(draftName); draftName = "" }, enabled = draftName.isNotBlank()) { Text("Note") }
-                            OutlinedButton(onClick = { viewModel.newFolder(draftName); draftName = "" }, enabled = draftName.isNotBlank()) { Text("Folder") }
+                            // The name stays in the box when it was refused (for example, the note already exists), so it can be edited.
+                            Button(
+                                onClick = {
+                                    viewModel.newNote(draftName)
+                                    if (viewModel.error == null) draftName = ""
+                                },
+                                enabled = draftName.isNotBlank(),
+                            ) { Text("Note") }
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.newFolder(draftName)
+                                    if (viewModel.error == null) draftName = ""
+                                },
+                                enabled = draftName.isNotBlank(),
+                            ) { Text("Folder") }
                         }
                     }
                 }
@@ -218,8 +280,11 @@ private fun Editor(viewModel: NotesViewModel) {
     DroidCard {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(viewModel.openPath.orEmpty(), fontWeight = FontWeight.Bold)
+            if (viewModel.unsavedChanges) {
+                Text("Unsaved changes. Save, or go Up: leaving saves them.", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = viewModel::save) { Text("Save") }
+                Button(onClick = { viewModel.save() }) { Text("Save") }
                 OutlinedButton(onClick = viewModel::togglePreview) { Text(if (viewModel.preview) "Edit" else "Preview") }
             }
             if (viewModel.preview) {

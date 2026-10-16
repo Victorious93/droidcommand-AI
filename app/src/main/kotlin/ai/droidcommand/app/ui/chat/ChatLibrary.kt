@@ -1,5 +1,6 @@
 package ai.droidcommand.app.ui.chat
 
+import ai.droidcommand.app.ui.components.rememberDraft
 import ai.droidcommand.templates.PromptTemplate
 import ai.droidcommand.templates.TemplateEngine
 import ai.droidcommand.templates.TemplateResult
@@ -35,10 +36,11 @@ fun ChatLibrary(state: ChatUiState, viewModel: ChatViewModel) {
     var filling by remember { mutableStateOf<PromptTemplate?>(null) }
     var slotValues by remember { mutableStateOf(mapOf<String, String>()) }
     var slotError by remember { mutableStateOf<String?>(null) }
-    var newTemplateName by remember { mutableStateOf("") }
-    var newTemplateBody by remember { mutableStateOf("") }
-    var newSkillName by remember { mutableStateOf("") }
-    var newSkillPrompt by remember { mutableStateOf("") }
+    // Drafts of a template or skill being written survive rotation; the fill-in form above is tied to a template object, so it does not.
+    var newTemplateName by rememberDraft()
+    var newTemplateBody by rememberDraft()
+    var newSkillName by rememberDraft()
+    var newSkillPrompt by rememberDraft()
 
     Column(
         modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState()),

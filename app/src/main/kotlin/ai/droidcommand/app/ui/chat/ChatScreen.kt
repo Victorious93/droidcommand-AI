@@ -2,6 +2,7 @@ package ai.droidcommand.app.ui.chat
 
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.components.rememberDraft
 import ai.droidcommand.app.ui.theme.AccentBlue
 import ai.droidcommand.app.ui.theme.AccentBlueBright
 import ai.droidcommand.app.ui.theme.AccentCyan
@@ -61,6 +62,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,9 +86,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @Composable
 fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
-    var input by remember { mutableStateOf("") }
-    var optionsOpen by remember { mutableStateOf(false) }
-    var libraryOpen by remember { mutableStateOf(false) }
+    // Saved across rotation, folding and theme changes: with plain remember a half-typed message vanished while the
+    // ViewModel (and the conversation) survived.
+    var input by rememberDraft()
+    var optionsOpen by rememberSaveable { mutableStateOf(false) }
+    var libraryOpen by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val rows = state.lines + if (state.streaming.isNotEmpty()) listOf(ChatLine(false, state.streaming)) else emptyList()
 
