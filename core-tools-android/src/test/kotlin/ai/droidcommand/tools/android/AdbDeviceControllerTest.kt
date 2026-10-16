@@ -136,6 +136,12 @@ class AdbDeviceControllerTest {
                 echo "1.1.1.1 via 192.168.1.1 dev wlan0 src 192.168.1.42 uid 0"
                 echo "    cache"
                 ;;
+              "dumpsys clipboard")
+                echo "CLIPBOARD SERVICE (clipboard)"
+                echo "Clipboard for user 0:"
+                echo "  Clipboard: com.android.shell, uid 2000"
+                echo "    mPrimaryClip: ClipData { text/plain<Hello, DroidCommand!> }"
+                ;;
               *)
                 exit 1 ;;
             esac
@@ -362,8 +368,6 @@ class AdbDeviceControllerTest {
             val failure = assertIs<DeviceActionResult.Failure>(result)
             assertTrue(failure.reason.contains("not yet implemented"))
         }
-
-        assertIs<ClipboardReadResult.Failure>(device.getClipboardText()).also { assertTrue(it.reason.contains("not yet implemented")) }
 
         assertTrue(!markerFile.exists(), "an unimplemented method must never invoke adb at all")
     }
@@ -643,5 +647,52 @@ class AdbDeviceControllerTest {
             adbExecutable = File(tempDir, "no-such-adb").absolutePath,
         )
         assertTrue(assertIs<ContactsResult.Failure>(missing.listContacts()).reason.contains("Cannot list contacts"))
+    }
+
+    @Test
+    fun `getClipboardText parses real text out of a ClipData dump`() {
+        val result = assertIs<ClipboardReadResult.Success>(newController().getClipboardText())
+        assertEquals("Hello, DroidCommand!", result.text)
+    }
+
+    @Test
+    fun `getClipboardText reports a real empty clipboard, not a failure, when mPrimaryClip is null`() {
+        val adbPath = writeScript(
+            "adb-clipboard-empty",
+            """
+            #!/bin/sh
+            echo "CLIPBOARD SERVICE (clipboard)"
+            echo "  mPrimaryClip: null"
+            exit 0
+            """.trimIndent(),
+        )
+        val result = assertIs<ClipboardReadResult.Success>(newController(adbPath).getClipboardText())
+        assertEquals("", result.text)
+    }
+
+    @Test
+    fun `getClipboardText fails cleanly when the dump has no mPrimaryClip line`() {
+        val adbPath = writeScript(
+            "adb-clipboard-no-line",
+            """
+            #!/bin/sh
+            echo "CLIPBOARD SERVICE (clipboard)"
+            echo "Clipboard for user 0:"
+            exit 0
+            """.trimIndent(),
+        )
+        val result = assertIs<ClipboardReadResult.Failure>(newController(adbPath).getClipboardText())
+        assertTrue(result.reason.contains("no 'mPrimaryClip:' line"))
+    }
+
+    @Test
+    fun `getClipboardText fails cleanly when adb cannot be started`() {
+        val result = assertIs<ClipboardReadResult.Failure>(
+            AdbDeviceController(
+                shell = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf(File(tempDir, "no-such-adb").absolutePath))),
+                adbExecutable = File(tempDir, "no-such-adb").absolutePath,
+            ).getClipboardText(),
+        )
+        assertTrue(result.reason.contains("Cannot read the clipboard"))
     }
 }
