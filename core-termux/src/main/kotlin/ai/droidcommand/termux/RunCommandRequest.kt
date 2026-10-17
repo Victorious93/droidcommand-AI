@@ -66,6 +66,6 @@ fun interface RunCommandClient {
     fun execute(
         request: RunCommandRequest,
         timeoutMillis: Long,
-        isCancelled: () -> Boolean = { false },
+        isCancelled: () -> Boolean,
     ): RunCommandResultBundle
 }
