@@ -5,11 +5,11 @@ package ai.droidcommand.metasploit
  * `core-root.RootExecutor`/`core-termux.TermuxExecutor`'s role in those
  * modules. [isAvailable] is meant to be called cheaply/passively, feeding
  * `core-security.SecurityPolicy` the same way those two interfaces' own
- * methods do. [NullMetasploitExecutor] is the only always-present
- * implementation; [ShellBackedMetasploitExecutor] is real but requires an
- * actual `msfconsole` installation reachable from wherever the injected
- * `core-shell.ShellExecutor` runs, which no environment this was built in
- * has.
+ * methods do. [NullMetasploitExecutor] is the always-present stub;
+ * [ShellBackedMetasploitExecutor] is the desktop/CLI `ProcessBuilder` path;
+ * [TermuxMetasploitExecutor] is the on-device path (VictorSuite Kali via
+ * RUN_COMMAND). None of those have been runtime-verified against a live
+ * `msfconsole` in the environments that built them.
  */
 interface MetasploitExecutor {
     fun isAvailable(): Boolean

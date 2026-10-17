@@ -3,6 +3,11 @@ package ai.droidcommand.app.ui.tools.metasploit
 import ai.droidcommand.app.ui.tools.ToolRunStatusCard
 import ai.droidcommand.app.ui.tools.ToolRunUiState
 import ai.droidcommand.metasploit.MetasploitModuleType
+import ai.droidcommand.pentestswarm.LocalKaliPlaybookRunner
+import ai.droidcommand.termux.RunCommandContract
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -27,7 +33,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 
 private val COMMON_MODULES = listOf(
@@ -45,17 +53,43 @@ private val COMMON_PAYLOADS = listOf(
 /**
  * Every field here is structured input filled in by tapping a button or
  * typing into a single-purpose field — never a place to type an
- * `msfconsole` command. "Run Module" only enables once a target host and
- * module path are set, and the tap itself still has to clear the real
- * confirmation dialog ([ai.droidcommand.app.approval.ApprovalHost]) before
- * [ai.droidcommand.metasploit.MetasploitTool] is actually invoked.
+ * `msfconsole` command. "Run Module" and the Kali playbook still have to
+ * clear the real confirmation dialog
+ * ([ai.droidcommand.app.approval.ApprovalHost]) before
+ * [ai.droidcommand.metasploit.MetasploitTool] /
+ * [ai.droidcommand.pentestswarm.KaliAuthorizedScanTool] is invoked.
+ *
+ * Kali tools run inside VictorSuite (Termux + proot Kali) through
+ * `com.termux.RUN_COMMAND` + `RUN_COMMAND_PENDING_INTENT`. That path is
+ * **NOT RUNTIME VERIFIED** on a device in the sessions that wired it.
  */
 @Composable
 fun MetasploitScreen(viewModel: MetasploitViewModel = hiltViewModel()) {
     val form by viewModel.form.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     var pendingOptionKey by remember { mutableStateOf("") }
     var pendingOptionValue by remember { mutableStateOf("") }
+    var pendingAfterPermission by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) pendingAfterPermission?.invoke()
+        pendingAfterPermission = null
+    }
+
+    fun withRunCommandPermission(action: () -> Unit) {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            RunCommandContract.PERMISSION,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            action()
+        } else {
+            pendingAfterPermission = action
+            permissionLauncher.launch(RunCommandContract.PERMISSION)
+        }
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
@@ -69,10 +103,52 @@ fun MetasploitScreen(viewModel: MetasploitViewModel = hiltViewModel()) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            "No Metasploit program is connected on this device. A run is refused until one is.",
+            "VictorSuite (Termux + proot Kali) is the on-device backend. " +
+                "Commands go through com.termux.RUN_COMMAND with RUN_COMMAND_BACKGROUND " +
+                "and RUN_COMMAND_PENDING_INTENT — not ADB, root, or terminal scraping. " +
+                "On-device msfconsole round-trip is UNVERIFIED. " +
+                "Requires allow-external-apps=true, the RUN_COMMAND permission, and the app-shell runner. " +
+                "See docs/VICTORSUITE_KALI_RUN_COMMAND.md.",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        Text("Authorized Kali playbook", style = MaterialTheme.typography.labelLarge)
+        Text(
+            "nmap then an auxiliary msfconsole resource script against one named host. " +
+                "Blank, subnet, and mass targets are refused. Active/exploit steps ask again.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = form.scopeFilePath,
+            onValueChange = { value -> viewModel.updateForm { it.copy(scopeFilePath = value) } },
+            label = { Text("Scope file path (required)") },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedButton(
+            onClick = { viewModel.writeScopeFileForHost(context.filesDir) },
+            enabled = form.targetHost.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Write scope file for this host") }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = form.targetsAuthorized,
+                onCheckedChange = { checked -> viewModel.updateForm { it.copy(targetsAuthorized = checked) } },
+            )
+            Text(
+                LocalKaliPlaybookRunner.AUTHORIZED_CONFIRMATION_PHRASE,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Button(
+            onClick = { withRunCommandPermission(viewModel::runAuthorizedKaliPlaybook) },
+            enabled = form.targetHost.isNotBlank() &&
+                form.scopeFilePath.isNotBlank() &&
+                form.targetsAuthorized &&
+                uiState !is ToolRunUiState.Running,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Run authorized Kali playbook") }
 
         Text("Module type", style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -161,7 +237,7 @@ fun MetasploitScreen(viewModel: MetasploitViewModel = hiltViewModel()) {
         }
 
         Button(
-            onClick = viewModel::runModule,
+            onClick = { withRunCommandPermission(viewModel::runModule) },
             enabled = form.targetHost.isNotBlank() && form.modulePath.isNotBlank() && uiState !is ToolRunUiState.Running,
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Run Module") }

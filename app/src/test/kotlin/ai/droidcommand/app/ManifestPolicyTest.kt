@@ -46,6 +46,12 @@ class ManifestPolicyTest {
     }
 
     @Test
+    fun `VictorSuite RUN_COMMAND permission is declared`() {
+        val permissions = manifest.children("uses-permission").map { it.androidAttr("name") }
+        assertTrue("com.termux.permission.RUN_COMMAND" in permissions)
+    }
+
+    @Test
     fun `a missing microphone does not hide the app`() {
         val microphone = manifest.children("uses-feature").single { it.androidAttr("name") == "android.hardware.microphone" }
         assertEquals("false", microphone.androidAttr("required"))

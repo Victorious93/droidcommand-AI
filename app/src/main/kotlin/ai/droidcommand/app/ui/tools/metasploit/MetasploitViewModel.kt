@@ -5,6 +5,8 @@ import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.agent.describe
 import ai.droidcommand.app.ui.tools.ToolRunUiState
 import ai.droidcommand.metasploit.MetasploitModuleType
+import ai.droidcommand.pentestswarm.KaliAuthorizedScanTool
+import ai.droidcommand.pentestswarm.LocalKaliPlaybookRunner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -12,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 
 data class MetasploitFormState(
@@ -21,18 +24,16 @@ data class MetasploitFormState(
     val targetPort: String = "",
     val payload: String = "",
     val options: List<Pair<String, String>> = emptyList(),
+    val scopeFilePath: String = "",
+    val targetsAuthorized: Boolean = false,
 )
 
 /**
- * Drives [ai.droidcommand.metasploit.MetasploitTool] through the exact same
- * [ToolRunner] the CLI uses ([ai.droidcommand.app.di.AppModule] wires it as a
- * real `SecureToolExecutor`). Every field on [MetasploitFormState] becomes a
- * structured `input` map entry — never a raw command string an operator
- * types — and [runModule] always goes through the real security/approval
- * gate before anything executes. Dispatches on `Dispatchers.IO` because
- * [ToolRunner.run] can block this coroutine's thread on
- * [ai.droidcommand.app.approval.ComposeApprovalPrompt]'s confirmation queue
- * until the user taps Approve/Deny in [ai.droidcommand.app.approval.ApprovalHost].
+ * Drives [ai.droidcommand.metasploit.MetasploitTool] and
+ * [KaliAuthorizedScanTool] through the same [ToolRunner]
+ * (`SecureToolExecutor`). Playbook confirmation is the exact phrase in
+ * [LocalKaliPlaybookRunner.AUTHORIZED_CONFIRMATION_PHRASE]; an unchecked
+ * box sends an empty string so the runner refuses before any Termux call.
  */
 @HiltViewModel
 class MetasploitViewModel @Inject constructor(
@@ -48,6 +49,13 @@ class MetasploitViewModel @Inject constructor(
         _form.value = update(_form.value)
     }
 
+    fun writeScopeFileForHost(directory: File) {
+        val host = _form.value.targetHost.trim()
+        val file = File(directory, "kali-authorized-scope.yaml")
+        file.writeText("authorized_targets:\n  - $host\n")
+        _form.value = _form.value.copy(scopeFilePath = file.absolutePath)
+    }
+
     fun runModule() {
         val current = _form.value
         _uiState.value = ToolRunUiState.Running
@@ -61,6 +69,30 @@ class MetasploitViewModel @Inject constructor(
                 current.options.forEach { (key, value) -> if (key.isNotBlank()) put("option.$key", value) }
             }
             val result = toolRunner.run("run_metasploit_module", input)
+            _uiState.value = when (result) {
+                is ToolResult.Success -> ToolRunUiState.Success(result.output)
+                else -> ToolRunUiState.Failed(result.describe())
+            }
+        }
+    }
+
+    fun runAuthorizedKaliPlaybook() {
+        val current = _form.value
+        _uiState.value = ToolRunUiState.Running
+        viewModelScope.launch(Dispatchers.IO) {
+            val confirmation = if (current.targetsAuthorized) {
+                LocalKaliPlaybookRunner.AUTHORIZED_CONFIRMATION_PHRASE
+            } else {
+                ""
+            }
+            val result = toolRunner.run(
+                KaliAuthorizedScanTool.NAME,
+                mapOf(
+                    "targetHost" to current.targetHost,
+                    "scopeFile" to current.scopeFilePath,
+                    "authorizedConfirmation" to confirmation,
+                ),
+            )
             _uiState.value = when (result) {
                 is ToolResult.Success -> ToolRunUiState.Success(result.output)
                 else -> ToolRunUiState.Failed(result.describe())
