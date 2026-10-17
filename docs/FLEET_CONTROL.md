@@ -7,11 +7,11 @@ host tool. It does not invent a third protocol.
 Honesty: **LIVE** is reserved for runtime-verified control. Nothing here is LIVE.
 
 Code: `core-security.KnownFleet`. Bound companions also appear in
-`core-companion.KnownCompanions`. RootForge, VictorSuite, and KYC must not
-be added there.
+`core-companion.KnownCompanions`. RootForge, File Manager, Keyboard,
+VictorSuite, and KYC must not be added there.
 
 HackerAI (`ai.hackerai.companion`) is already a bound companion and is
-**not** one of these six.
+**not** one of these seven.
 
 ## Wiring order
 
@@ -21,17 +21,18 @@ HackerAI (`ai.hackerai.companion`) is already a bound companion and is
 4. **EDL-Commander** — bound companion APK (when it lands)
 5. **KYC-AuditLab** — last
 6. **Victorious File Manager** — when their identity/default-off PR lands; after the RootForge Messenger client exists
+7. **Victorious Keyboard** — catalog only; direction (hub queries keyboard vs keyboard slash-commands) is open
 
 ## Integration classes (do not mix)
 
 | Class | Security rules | Who |
 |---|---|---|
 | **BOUND_COMPANION** | AIDL + `protectionLevel="signature"` (same signing key) + companion `DependencyGuard`. Prefer one command-envelope service for new companions. `Initiator.REMOTE`. | Pentest-Swarm-AI, EDL-Commander (HackerAI, already mapped) |
-| **EXTERNAL_NODE** | Independent product. **Never** `DependencyGuard`, **never** a shared signing key, never "install DCA first". Live APK path on *their* main is bound **Messenger** + shared JSON (`protocol_major` 1). RootForge: `action ai.rootforge.os.action.BRIDGE`. File Manager: `action ai.victorious.filemanager.action.BRIDGE` (**PLANNED** here; their identity/default-off PR still landing). Desktop/Docker = localhost headless API + bearer (planned, RootForge). SSH = CLI/ISO **fallback only** (RootForge). Removing DCA must not disable the node. | RootForge OS, Victorious File Manager |
+| **EXTERNAL_NODE** | Independent product. **Never** `DependencyGuard`, **never** a shared signing key, never "install DCA first". Live APK path on *their* main is bound **Messenger** + shared JSON (`protocol_major` 1). RootForge: `action ai.rootforge.os.action.BRIDGE`. File Manager: `action ai.victorious.filemanager.action.BRIDGE` (**PLANNED** here; their identity/default-off PR still landing). Keyboard: planned `action com.victorious.keyboard.action.BRIDGE` (**PLANNED**; never forwards typed text/keystrokes). Desktop/Docker = localhost headless API + bearer (planned, RootForge). SSH = CLI/ISO **fallback only** (RootForge). Removing DCA must not disable the node. | RootForge OS, Victorious File Manager, Victorious Keyboard |
 | **TERMUX_IPC** | `com.termux.RUN_COMMAND` + plugin IPC + shared command schema. **Not** a new bound service. | VictorSuite |
 | **HOST_PROCESS_TOOL** | Localhost process behind a `Tool` + `SecureToolExecutor`. **Never** AIDL or DependencyGuard. | KYC-AuditLab only |
 
-## The six
+## The seven
 
 | # | Member | Class | Repo / id | Package or binary | Status | Owns | What is actually wired | Next concrete code step |
 |---|---|---|---|---|---|---|---|---|
@@ -41,15 +42,17 @@ HackerAI (`ai.hackerai.companion`) is already a bound companion and is
 | 4 | **EDL-Commander** | BOUND_COMPANION | `Victorious93/EDL-Commander` (scaffold + AIDL + USB 9008/Sahara + OnePlus 7T **in progress**) | `ai.edlcommander.companion` (planned) | **PLANNED** | Sahara / Firehose | Catalog stub `edl_commander_status`. Always fails. No AIDL file in this repo yet. No flash tool. | When the APK lands: `IEDLCommanderService` + `BIND_EDLCOMMANDER` same-signing + DependencyGuard, like Pentest. RootForge UI may call this later. Do **not** mark host-tool-only. |
 | 5 | **KYC-AuditLab** | HOST_PROCESS_TOOL | unpublished as of 2026-10-14 | IdentityShield simulator, localhost only | **PLANNED** | Simulator lab | Catalog stub `kyc_auditlab_status`. Always fails. | Last among the original five. Simulator only, localhost only. **Hub must not call `/scope` admin** until KYC adds auth. Do not log identity documents. |
 | 6 | **Victorious File Manager** | EXTERNAL_NODE | `Victorious93/File-Manager` (already on their `main`) | `ai.victorious.filemanager` (debug: `ai.victorious.filemanager.debug`); Messenger action `ai.victorious.filemanager.action.BRIDGE` | **PLANNED** | File listing / status over the shared JSON envelope (stub ops only on their side today) | Catalog stub `filemanager_status`. Always fails. **No live Messenger bind in this repo.** Their main already has `FileManagerBridgeService` (Message what=1 Bundle key `request`; reply what=2 Bundle key `response`; `protocol_major` 1). Stub ops: `filemanager.capabilities.get`, `filemanager.status`, `filemanager.list` (empty entries). Every reply currently `live:false`, `mode:stub`, `dca_required:false`. | When their identity/default-off PR lands (external control default OFF; caller identity = UID package + SHA-256 cert; allow only `ai.droidcommand.app` and `.debug`; error categories `external_control_disabled` / `unauthorized_caller`; `fleet_class` → `external_node`). After the RootForge Messenger client exists, a File Manager client can follow that pattern. Never DependencyGuard, never shared signing key, never `KnownCompanions`, never AIDL. |
+| 7 | **Victorious Keyboard** | EXTERNAL_NODE | `Victorious93/Victorious-Keyboard` | `com.victorious.keyboard` (debug: `com.victorious.keyboard.debug`; benchmark: `com.victorious.keyboard.bench`); planned Messenger action `com.victorious.keyboard.action.BRIDGE` | **PLANNED** | Keyboard capabilities / status over the shared JSON envelope. **Never forwards typed text or keystrokes.** | Catalog stub `keyboard_status`. Always fails. **No live Messenger bind in this repo.** Planned service `com.victorious.keyboard.fleet.KeyboardBridgeService` (Message what=1 Bundle key `request`; reply what=2 Bundle key `response`; `protocol_major` 1, `dca_required:false`, `fleet_class` `external_node`). Planned ops: `keyboard.capabilities.get`, `keyboard.status`. Keyboard-side: external control default OFF; caller allowlist `ai.droidcommand.app` and `ai.droidcommand.app.debug`; errors `external_control_disabled` / `unauthorized_caller`. | Catalog only until Don decides direction (hub queries the keyboard vs the keyboard surfaces fleet slash-commands). If hub-query is chosen, a Keyboard Messenger client can follow the RootForge Messenger client. Never DependencyGuard, never shared signing key, never `KnownCompanions`, never AIDL, never a `BIND_*` permission. Never forward typed text or keystrokes. |
 
 ## Shared command envelope
 
-RootForge Messenger / localhost API / SSH, File Manager Messenger, and
-VictorSuite plugin IPC are intended to speak the **same JSON command
-envelope** `core-rootforge` already mirrors (`BRIDGE_PROTOCOL_MAJOR` 1).
-Pentest and EDL companions, when their APKs exist, should each be **one**
-envelope service rather than a growing method list. This slice does not
-add a second schema, and it does not add a File Manager Messenger client.
+RootForge Messenger / localhost API / SSH, File Manager Messenger,
+Keyboard Messenger, and VictorSuite plugin IPC are intended to speak the
+**same JSON command envelope** `core-rootforge` already mirrors
+(`BRIDGE_PROTOCOL_MAJOR` 1). Pentest and EDL companions, when their APKs
+exist, should each be **one** envelope service rather than a growing
+method list. This slice does not add a second schema, and it does not add
+a File Manager or Keyboard Messenger client.
 
 ## What this slice added in-repo
 
@@ -77,3 +80,30 @@ Sixth member. Same class rules as RootForge: **never** DependencyGuard,
 - Tools → Fleet probes package `ai.victorious.filemanager` only. No run button.
 - Their `main` already has the Messenger stub (`action ai.victorious.filemanager.action.BRIDGE`).
   Identity/default-off PR is still landing.
+
+## 2026-10-17 — Victorious Keyboard (EXTERNAL_NODE, PLANNED)
+
+Seventh member. Same class rules as RootForge and File Manager: **never**
+DependencyGuard, **never** a shared signing key, **never** `KnownCompanions`,
+**never** a `BIND_*` signature permission, **never** AIDL. Status stays
+**PLANNED** (not LIVE, not PARTIAL). No live Messenger client bind in this
+repo. The bridge **never forwards typed text or keystrokes**.
+
+- Catalog stub `keyboard_status` always fails (`REQUIRES_EXTERNAL_SERVICE`).
+- Tools → Fleet probes package `com.victorious.keyboard` only. No run button.
+- Planned action `com.victorious.keyboard.action.BRIDGE`; planned service
+  `com.victorious.keyboard.fleet.KeyboardBridgeService`; planned ops
+  `keyboard.capabilities.get`, `keyboard.status`.
+- Keyboard-side: external control default OFF; caller allowlist
+  `ai.droidcommand.app` and `ai.droidcommand.app.debug`; errors
+  `external_control_disabled` / `unauthorized_caller`.
+
+### Open design question — Keyboard direction (undecided by Don)
+
+Don has not decided whether:
+
+1. the hub queries the keyboard (`keyboard.capabilities.get` /
+   `keyboard.status` over Messenger), or
+2. the keyboard surfaces fleet slash-commands to the user.
+
+This catalog does not pick one. Wiring stays PLANNED until that call.

@@ -16,6 +16,7 @@ class FleetCommandsTest {
                     "kyc_auditlab_status",
                     "edl_commander_status",
                     "filemanager_status",
+                    "keyboard_status",
                     "run_termux_command",
                 ),
             ),
@@ -25,15 +26,17 @@ class FleetCommandsTest {
 
     @Test
     fun `list-fleet text is the KnownFleet catalog`() {
-        assertEquals(6, KnownFleet.ALL.size)
+        assertEquals(7, KnownFleet.ALL.size)
         val text = KnownFleet.formatListing()
         assertTrue(text.contains("kyc-auditlab"))
         assertTrue(text.contains("edl-commander"))
         assertTrue(text.contains("file-manager"))
+        assertTrue(text.contains("keyboard"))
         assertTrue(text.contains("aidl=false  dependencyGuard=false"))
         assertTrue(text.contains("ai.pentestswarm.companion"))
         assertTrue(text.contains("ai.rootforge.os.action.BRIDGE"))
         assertTrue(text.contains("ai.victorious.filemanager.action.BRIDGE"))
-        assertTrue(text.contains("RootForge/File Manager Messenger is not that"))
+        assertTrue(text.contains("com.victorious.keyboard.action.BRIDGE"))
+        assertTrue(text.contains("RootForge/File Manager/Keyboard Messenger is not that"))
     }
 }

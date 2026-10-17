@@ -14,11 +14,22 @@ class FleetStatusTest {
         assertEquals("com.termux", FleetCatalog.TERMUX_PACKAGE)
         assertEquals("ai.edlcommander.companion", FleetCatalog.EDLCOMMANDER_PACKAGE)
         assertEquals("ai.victorious.filemanager", FleetCatalog.FILEMANAGER_PACKAGE)
+        assertEquals("com.victorious.keyboard", FleetCatalog.KEYBOARD_PACKAGE)
         assertNull(FleetCatalog.ROOTFORGE.packageName)
         assertNull(FleetCatalog.KYC_AUDITLAB.packageName)
         assertEquals(FleetCatalog.FILEMANAGER_PACKAGE, FleetCatalog.FILE_MANAGER.packageName)
+        assertEquals(FleetCatalog.KEYBOARD_PACKAGE, FleetCatalog.KEYBOARD.packageName)
         assertEquals(
-            listOf("hackerai", "pentestswarm", "rootforge", "termux", "edl-commander", "kyc-auditlab", "file-manager"),
+            listOf(
+                "hackerai",
+                "pentestswarm",
+                "rootforge",
+                "termux",
+                "edl-commander",
+                "kyc-auditlab",
+                "file-manager",
+                "keyboard",
+            ),
             FleetCatalog.all.map { it.id },
         )
     }
@@ -35,6 +46,7 @@ class FleetStatusTest {
         val edl = rows.single { it.member.id == "edl-commander" }
         val kyc = rows.single { it.member.id == "kyc-auditlab" }
         val fileManager = rows.single { it.member.id == "file-manager" }
+        val keyboard = rows.single { it.member.id == "keyboard" }
 
         assertEquals(FleetInstallState.INSTALLED, hacker.installed)
         assertTrue(hacker.status.contains("disconnected"))
@@ -65,6 +77,14 @@ class FleetStatusTest {
         assertTrue(fileManager.member.summary.contains("ai.victorious.filemanager.action.BRIDGE"))
         assertFalse(fileManager.status.contains("ready", ignoreCase = true), fileManager.status)
 
+        assertEquals(FleetInstallState.NOT_INSTALLED, keyboard.installed)
+        assertTrue(keyboard.status.contains("does not bind Messenger"))
+        assertTrue(keyboard.status.contains("PLANNED"))
+        assertTrue(keyboard.member.summary.contains("Never DependencyGuard"))
+        assertTrue(keyboard.member.summary.contains("com.victorious.keyboard.action.BRIDGE"))
+        assertTrue(keyboard.member.summary.contains("Never forwards typed text"))
+        assertFalse(keyboard.status.contains("ready", ignoreCase = true), keyboard.status)
+
         rows.forEach { row ->
             assertFalse(row.status.contains("ready", ignoreCase = true), row.status)
         }
@@ -75,5 +95,12 @@ class FleetStatusTest {
         assertTrue(installedFm.status.contains("Package probe only"))
         assertTrue(installedFm.status.contains("PLANNED"))
         assertFalse(installedFm.status.contains("ready", ignoreCase = true), installedFm.status)
+
+        val installedKb = FleetStatus.resolve(FleetCatalog.all) { it == FleetCatalog.KEYBOARD_PACKAGE }
+            .single { it.member.id == "keyboard" }
+        assertEquals(FleetInstallState.INSTALLED, installedKb.installed)
+        assertTrue(installedKb.status.contains("Package probe only"))
+        assertTrue(installedKb.status.contains("PLANNED"))
+        assertFalse(installedKb.status.contains("ready", ignoreCase = true), installedKb.status)
     }
 }

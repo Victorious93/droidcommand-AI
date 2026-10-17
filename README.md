@@ -21,15 +21,16 @@ AIDL bind. Honest status: **none of these is LIVE control**. Full map:
 
 | Member | Repo | Class | How DCA reaches it | Status |
 |---|---|---|---|---|
-| **HackerAI** | [Victorious93/hackeraiETC](https://github.com/Victorious93/hackeraiETC) | Bound companion | AIDL `IHackerAIService`; `core-hackerai` | PARTIAL (not one of the six room-fleet items) |
+| **HackerAI** | [Victorious93/hackeraiETC](https://github.com/Victorious93/hackeraiETC) | Bound companion | AIDL `IHackerAIService`; `core-hackerai` | PARTIAL (not one of the seven room-fleet items) |
 | **Pentest-Swarm-AI** | [Victorious93/Pentest-Swarm-AI](https://github.com/Victorious93/Pentest-Swarm-AI) | Bound companion | One command-envelope AIDL (planned). Older REST/AIDL copies in this repo are not LIVE | PLANNED |
 | **VictorSuite** | `Victorious93/VictorSuite` (documented; not publicly resolvable 2026-10-14) | Termux IPC | `com.termux` + `RUN_COMMAND` / plugin IPC; gated on their PR #15 | PARTIAL |
 | **RootForge OS** | [Victorious93/rootforge-os](https://github.com/Victorious93/rootforge-os) | External node | Their main already has Messenger + JSON (`ai.rootforge.os.action.BRIDGE`). This repo speaks SSH fallback only. No DependencyGuard, no shared signing key | PARTIAL |
 | **KYC-AuditLab** | unpublished as of 2026-10-14 | Host process | `kyc_auditlab_status` stub — localhost simulator; hub must not call `/scope` admin | PLANNED |
 | **EDL-Commander** | `Victorious93/EDL-Commander` (APK in progress) | Bound companion | `edl_commander_status` stub. AIDL + same-signing when the APK lands. Owns Sahara/Firehose | PLANNED |
 | **Victorious File Manager** | [Victorious93/File-Manager](https://github.com/Victorious93/File-Manager) | External node | `filemanager_status` stub. Their main already has Messenger `ai.victorious.filemanager.action.BRIDGE`. This repo does not bind it. No DependencyGuard, no shared signing key | PLANNED |
+| **Victorious Keyboard** | [Victorious93/Victorious-Keyboard](https://github.com/Victorious93/Victorious-Keyboard) | External node | `keyboard_status` stub. Planned Messenger `com.victorious.keyboard.action.BRIDGE`. This repo does not bind it. Never forwards typed text/keystrokes. No DependencyGuard, no shared signing key | PLANNED |
 
-AIDL + `DependencyGuard` apply **only** to bound companions (HackerAI, Pentest, EDL). RootForge / File Manager / VictorSuite / KYC must not get them. See [`COMPANION_PROTOCOL.md`](COMPANION_PROTOCOL.md). Companion binding glue requires the Android SDK and is excluded from the default build.
+AIDL + `DependencyGuard` apply **only** to bound companions (HackerAI, Pentest, EDL). RootForge / File Manager / Keyboard / VictorSuite / KYC must not get them. See [`COMPANION_PROTOCOL.md`](COMPANION_PROTOCOL.md). Companion binding glue requires the Android SDK and is excluded from the default build.
 
 ## Features (what exists in-repo)
 

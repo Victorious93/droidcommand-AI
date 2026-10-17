@@ -3,7 +3,7 @@ package ai.droidcommand.app.fleet
 /**
  * Package-probe roster for Tools → Fleet. This is the UI half of
  * `core-security.KnownFleet` plus HackerAI (already a bound companion,
- * not one of the six room-fleet items).
+ * not one of the seven room-fleet items).
  *
  * Lives in `:app` so the default JVM build does not have to compile the
  * AIDL module. Install state is a PackageManager probe only. It never
@@ -35,6 +35,9 @@ object FleetCatalog {
 
     /** EXTERNAL_NODE. Probe only — do not bind Messenger. */
     const val FILEMANAGER_PACKAGE = "ai.victorious.filemanager"
+
+    /** EXTERNAL_NODE. Probe only — do not bind Messenger. */
+    const val KEYBOARD_PACKAGE = "com.victorious.keyboard"
 
     val HACKERAI = FleetMember(
         id = "hackerai",
@@ -94,6 +97,17 @@ object FleetCatalog {
             "Never DependencyGuard, never a shared signing key. Identity/default-off PR still landing.",
     )
 
+    val KEYBOARD = FleetMember(
+        id = "keyboard",
+        name = "Victorious Keyboard",
+        packageName = KEYBOARD_PACKAGE,
+        kind = FleetKind.EXTERNAL_NODE,
+        summary = "EXTERNAL_NODE, PLANNED. Planned Messenger action com.victorious.keyboard.action.BRIDGE " +
+            "(protocol_major 1); this app does not bind it. " +
+            "Never DependencyGuard, never a shared signing key. Never forwards typed text or keystrokes. " +
+            "Direction (hub query vs keyboard slash-commands) is open.",
+    )
+
     val all: List<FleetMember> = listOf(
         HACKERAI,
         PENTEST_SWARM,
@@ -102,6 +116,7 @@ object FleetCatalog {
         EDL_COMMANDER,
         KYC_AUDITLAB,
         FILE_MANAGER,
+        KEYBOARD,
     )
 }
 
