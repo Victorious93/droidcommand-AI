@@ -57,4 +57,13 @@ object RunCommandContract {
      * Any other non-null `err` is a launch/validation failure; read `errmsg`.
      */
     fun isLaunchOk(err: Int?): Boolean = err == null || err == 0 || err == -1
+
+    /**
+     * Runtime prompt for [PERMISSION] is only useful when VictorSuite/Termux
+     * is installed to define that permission. Requesting it on an emulator
+     * without `com.termux` never grants, and would skip the in-app approval
+     * dialog that still has to run.
+     */
+    fun shouldRequestRuntimePermission(packageInstalled: Boolean, permissionGranted: Boolean): Boolean =
+        packageInstalled && !permissionGranted
 }

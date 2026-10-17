@@ -4,6 +4,7 @@ import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.agent.describe
 import ai.droidcommand.app.ui.tools.ToolRunUiState
+import ai.droidcommand.metasploit.AuthorizedTarget
 import ai.droidcommand.metasploit.MetasploitModuleType
 import ai.droidcommand.pentestswarm.KaliAuthorizedScanTool
 import ai.droidcommand.pentestswarm.LocalKaliPlaybookRunner
@@ -50,7 +51,12 @@ class MetasploitViewModel @Inject constructor(
     }
 
     fun writeScopeFileForHost(directory: File) {
-        val host = _form.value.targetHost.trim()
+        val host = try {
+            AuthorizedTarget.requireSingleHost(_form.value.targetHost)
+        } catch (e: IllegalArgumentException) {
+            _uiState.value = ToolRunUiState.Failed("Refused: ${e.message}")
+            return
+        }
         val file = File(directory, "kali-authorized-scope.yaml")
         file.writeText("authorized_targets:\n  - $host\n")
         _form.value = _form.value.copy(scopeFilePath = file.absolutePath)

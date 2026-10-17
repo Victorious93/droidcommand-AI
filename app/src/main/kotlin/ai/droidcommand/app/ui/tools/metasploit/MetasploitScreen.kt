@@ -1,11 +1,11 @@
 package ai.droidcommand.app.ui.tools.metasploit
 
+import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
 import ai.droidcommand.app.ui.tools.ToolRunStatusCard
 import ai.droidcommand.app.ui.tools.ToolRunUiState
 import ai.droidcommand.metasploit.MetasploitModuleType
 import ai.droidcommand.pentestswarm.LocalKaliPlaybookRunner
 import ai.droidcommand.termux.RunCommandContract
-import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -35,7 +35,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 
 private val COMMON_MODULES = listOf(
@@ -79,16 +78,14 @@ fun MetasploitScreen(viewModel: MetasploitViewModel = hiltViewModel()) {
     }
 
     fun withRunCommandPermission(action: () -> Unit) {
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            RunCommandContract.PERMISSION,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            action()
-        } else {
+        val installed = AndroidPendingIntentRunCommandClient.isVictorSuiteInstalled(context)
+        val granted = AndroidPendingIntentRunCommandClient.hasRunCommandPermission(context)
+        if (RunCommandContract.shouldRequestRuntimePermission(installed, granted)) {
             pendingAfterPermission = action
             permissionLauncher.launch(RunCommandContract.PERMISSION)
+            return
         }
+        action()
     }
 
     Column(

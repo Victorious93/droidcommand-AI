@@ -3,6 +3,7 @@ package ai.droidcommand.termux
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class RunCommandRequestTest {
@@ -40,5 +41,12 @@ class RunCommandRequestTest {
         assertFailsWith<IllegalArgumentException> {
             RunCommandRequest(path = RunCommandContract.PROOT_DISTRO_PATH, arguments = listOf("login"), background = false)
         }
+    }
+
+    @Test
+    fun `runtime permission prompt is skipped when VictorSuite is not installed`() {
+        assertFalse(RunCommandContract.shouldRequestRuntimePermission(packageInstalled = false, permissionGranted = false))
+        assertTrue(RunCommandContract.shouldRequestRuntimePermission(packageInstalled = true, permissionGranted = false))
+        assertFalse(RunCommandContract.shouldRequestRuntimePermission(packageInstalled = true, permissionGranted = true))
     }
 }
