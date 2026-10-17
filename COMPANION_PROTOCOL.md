@@ -52,8 +52,8 @@ or Sahara/Firehose (EDL companion).
 
 The room-fleet map lives in `docs/FLEET_CONTROL.md` and `core-security.KnownFleet`.
 Add a member to `KnownCompanions` only when it is a genuine dependent companion
-APK (HackerAI, Pentest-Swarm, EDL-Commander). File Manager is an EXTERNAL_NODE
-like RootForge — never `KnownCompanions`.
+APK (HackerAI, Pentest-Swarm, EDL-Commander). File Manager and Keyboard are
+EXTERNAL_NODE like RootForge — never `KnownCompanions`.
 
 ## Fleet slots that are not companions
 
@@ -117,6 +117,37 @@ product, the same class as RootForge. It is **not** a companion.
   implement a live Messenger client bind.
 - Status: **PLANNED** (not LIVE, not PARTIAL). Wiring: when their
   identity/default-off PR lands; after the RootForge Messenger client exists.
+
+### Victorious Keyboard — EXTERNAL_NODE (Messenger)
+
+Victorious Keyboard (`Victorious93/Victorious-Keyboard`) is an independent
+product, the same class as RootForge and File Manager. It is **not** a
+companion.
+
+- Package: `com.victorious.keyboard` (debug: `com.victorious.keyboard.debug`;
+  benchmark: `com.victorious.keyboard.bench`).
+- Planned service: `com.victorious.keyboard.fleet.KeyboardBridgeService`
+  (Messenger).
+- Planned action: `com.victorious.keyboard.action.BRIDGE`, `protocol_major` 1,
+  `dca_required:false`, `fleet_class` `external_node`.
+- Transport: Message what=1 Bundle key `request` (JSON); reply what=2 Bundle
+  key `response`. Envelope fields match RootForge (`protocol_major`,
+  `request_id`, `target_node_id` / `node_id`, `operation`, `timeout_ms`,
+  `parameters` / `ok`, `result`, `error {category, message}`).
+- Planned ops: `keyboard.capabilities.get` (read), `keyboard.status` (read).
+  The bridge **never forwards typed text or keystrokes**.
+- Keyboard-side: external control default OFF; caller allowlist
+  `ai.droidcommand.app` and `ai.droidcommand.app.debug`; error categories
+  `external_control_disabled` and `unauthorized_caller`.
+- **Never** `DependencyGuard`, **never** a shared signing key, **never**
+  `KnownCompanions`, **never** a `BIND_*` signature permission, **never**
+  AIDL. Removing DCA must not disable Keyboard.
+- Catalog stub: `keyboard_status` (`PlannedFleetTool`). Always
+  `ToolResult.Failure` / `REQUIRES_EXTERNAL_SERVICE`. This repo does **not**
+  implement a live Messenger client bind.
+- Status: **PLANNED** (not LIVE, not PARTIAL). Wiring: catalog only until
+  Don decides direction (hub queries the keyboard vs the keyboard surfaces
+  fleet slash-commands). See `docs/FLEET_CONTROL.md`.
 
 ### EDL-Commander — bound companion (not a host tool)
 

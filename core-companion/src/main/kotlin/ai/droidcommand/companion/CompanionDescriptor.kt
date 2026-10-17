@@ -25,8 +25,8 @@ data class CompanionDescriptor(
  * HackerAI and Pentest-Swarm have AIDL + APK source. EDL-Commander is the
  * same class (AIDL + same-signing + DependencyGuard) but the APK/AIDL are
  * still PLANNED — do not bind it from [CompanionRegistry] until
- * `IEDLCommanderService` exists. RootForge, File Manager, VictorSuite, and
- * KYC-AuditLab are different classes — see `ai.droidcommand.security.KnownFleet`
+ * `IEDLCommanderService` exists. RootForge, File Manager, Keyboard, VictorSuite,
+ * and KYC-AuditLab are different classes — see `ai.droidcommand.security.KnownFleet`
  * and `docs/FLEET_CONTROL.md`. Do not add those here.
  */
 object KnownCompanions {

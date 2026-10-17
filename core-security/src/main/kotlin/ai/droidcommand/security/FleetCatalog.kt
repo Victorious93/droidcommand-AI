@@ -18,7 +18,7 @@ enum class FleetIntegrationClass {
     /**
      * Independent product. Live APK = Messenger + shared JSON envelope;
      * desktop/Docker = localhost API + bearer; SSH = CLI/ISO fallback.
-     * Never DependencyGuard. RootForge and File Manager are this class.
+     * Never DependencyGuard. RootForge, File Manager, and Keyboard are this class.
      */
     EXTERNAL_NODE,
 
@@ -84,13 +84,14 @@ data class FleetMemberDescriptor(
 }
 
 /**
- * The six room-fleet members. Wiring order (owner, 2026-10-14, File Manager
- * added 2026-10-15): Pentest (when the base repo exists) → RootForge
- * Messenger deepen → VictorSuite RUN_COMMAND → EDL companion APK → KYC
- * last → File Manager (when their identity/default-off PR lands; after
- * the RootForge Messenger client exists).
+ * The seven room-fleet members. Wiring order (owner, 2026-10-14, File Manager
+ * added 2026-10-15, Keyboard added 2026-10-17): Pentest (when the base repo
+ * exists) → RootForge Messenger deepen → VictorSuite RUN_COMMAND → EDL
+ * companion APK → KYC last → File Manager (when their identity/default-off
+ * PR lands; after the RootForge Messenger client exists) → Keyboard
+ * (catalog only; direction of hub-query vs keyboard slash-commands is open).
  *
- * HackerAI is already a bound companion in `KnownCompanions`; not one of these six.
+ * HackerAI is already a bound companion in `KnownCompanions`; not one of these seven.
  */
 object KnownFleet {
     val PENTEST_SWARM = FleetMemberDescriptor(
@@ -259,6 +260,44 @@ object KnownFleet {
             "live:false, mode:stub, dca_required:false. Default-off + caller allowlist still landing in their PR.",
     )
 
+    val KEYBOARD = FleetMemberDescriptor(
+        id = "keyboard",
+        displayName = "Victorious Keyboard",
+        repo = "Victorious93/Victorious-Keyboard",
+        packageOrBinary = "com.victorious.keyboard " +
+            "(debug: com.victorious.keyboard.debug; benchmark: com.victorious.keyboard.bench)",
+        integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
+        status = FleetHonestyStatus.PLANNED,
+        capabilityId = CapabilityId("fleet.keyboard.node"),
+        providerId = "keyboard",
+        existingToolNames = listOf("keyboard_status"),
+        catalogStubName = "keyboard_status",
+        wiringOrder = 7,
+        transports = listOf(
+            "messenger+json envelope (planned: service com.victorious.keyboard.fleet.KeyboardBridgeService, " +
+                "action com.victorious.keyboard.action.BRIDGE, protocol_major 1, " +
+                "dca_required:false, fleet_class external_node; " +
+                "Message what=1 Bundle key request, reply what=2 Bundle key response)",
+        ),
+        usesAidl = false,
+        usesDependencyGuard = false,
+        riskTier = RiskTier.READ_ONLY,
+        nextStep = "Catalog only until Don decides direction (hub queries the keyboard vs the keyboard " +
+            "surfaces fleet slash-commands). If hub-query is chosen, a Keyboard Messenger client can " +
+            "follow the RootForge Messenger client. Do not implement a live bind in this catalog slice. " +
+            "Never DependencyGuard, never shared signing key. Never forward typed text or keystrokes.",
+        refusalMessage = "Victorious Keyboard is PLANNED EXTERNAL_NODE — this stub does not bind Messenger. " +
+            "Planned action com.victorious.keyboard.action.BRIDGE (protocol_major 1, dca_required:false, " +
+            "fleet_class external_node). Planned ops keyboard.capabilities.get / keyboard.status. " +
+            "External control default OFF; allowlist ai.droidcommand.app and ai.droidcommand.app.debug; " +
+            "errors external_control_disabled / unauthorized_caller. Never forwards typed text or keystrokes. " +
+            "Capability state is REQUIRES_EXTERNAL_SERVICE.",
+        notes = "EXTERNAL_NODE like RootForge and File Manager. Never DependencyGuard, never shared signing " +
+            "key, never KnownCompanions, never BIND_* signature permission, never AIDL. Planned Messenger + " +
+            "JSON ops keyboard.capabilities.get / keyboard.status. Never forward typed text or keystrokes. " +
+            "Direction (hub queries keyboard vs keyboard surfaces fleet slash-commands) is undecided by Don.",
+    )
+
     val ALL: List<FleetMemberDescriptor> = listOf(
         PENTEST_SWARM,
         ROOTFORGE,
@@ -266,6 +305,7 @@ object KnownFleet {
         EDL_COMMANDER,
         KYC_AUDITLAB,
         FILE_MANAGER,
+        KEYBOARD,
     )
 
     fun member(id: String): FleetMemberDescriptor? = ALL.find { it.id == id }
@@ -291,9 +331,9 @@ object KnownFleet {
     }
 
     fun formatListing(): String = buildString {
-        appendLine("DroidCommand AI room fleet — 6 members. None is LIVE.")
-        appendLine("Wiring order: Pentest (when repo exists) → RootForge Messenger → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager (when their identity/default-off PR lands).")
-        appendLine("AIDL + DependencyGuard apply only to BOUND_COMPANION (Pentest, EDL). RootForge/File Manager Messenger is not that.")
+        appendLine("DroidCommand AI room fleet — 7 members. None is LIVE.")
+        appendLine("Wiring order: Pentest (when repo exists) → RootForge Messenger → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager (when their identity/default-off PR lands) → Keyboard (catalog only; direction open).")
+        appendLine("AIDL + DependencyGuard apply only to BOUND_COMPANION (Pentest, EDL). RootForge/File Manager/Keyboard Messenger is not that.")
         appendLine()
         for (member in ALL) {
             val repo = member.repo ?: "(repo unpublished / not found on public GitHub as of 2026-10-14)"
@@ -305,7 +345,7 @@ object KnownFleet {
             appendLine("  next: ${member.nextStep}")
             appendLine()
         }
-        appendLine("HackerAI (ai.hackerai.companion) is a BOUND_COMPANION already in KnownCompanions; not one of these six.")
+        appendLine("HackerAI (ai.hackerai.companion) is a BOUND_COMPANION already in KnownCompanions; not one of these seven.")
     }
 }
 

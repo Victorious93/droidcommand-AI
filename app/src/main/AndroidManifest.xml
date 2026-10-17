@@ -34,6 +34,7 @@
         <package android:name="com.termux" />
         <package android:name="ai.edlcommander.companion" />
         <package android:name="ai.victorious.filemanager" />
+        <package android:name="com.victorious.keyboard" />
     </queries>
 
     <!-- Phase 4 — Companion APK signature permissions.

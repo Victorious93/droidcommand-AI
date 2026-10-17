@@ -48,6 +48,7 @@ class MainTest {
                 "edl_commander_status",
                 "kyc_auditlab_status",
                 "filemanager_status",
+                "keyboard_status",
             ),
             specs.map { it.name },
         )
@@ -158,6 +159,12 @@ class MainTest {
     @Test
     fun `pilot filemanager_status fails honestly and never binds Messenger`() {
         val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("filemanager_status"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot keyboard_status fails honestly and never binds Messenger`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("keyboard_status"))
         assertEquals(1, exitCode)
     }
 
