@@ -91,7 +91,7 @@ Still UNVERIFIED on emulator and device: live chat against a real provider, a fi
 ./gradlew :cli:run --args="..."
 ```
 
-The debug APK bundles native llama.cpp and sherpa-onnx libraries and is large (hundreds of MB, all 4 ABIs). For a phone-sized build, dispatch `.github/workflows/android-apk.yml` with `abi=arm64-v8a` (or `./gradlew :app:assembleDebug -PincludeAndroid=true -PabiFilter=arm64-v8a`); that artifact is `app-arm64-debug-apk`. Both are **debug-signed**. An x86_64 build has been launched on an API 28 emulator (see Screenshots); it has not been installed on a physical device.
+The debug APK bundles native llama.cpp and sherpa-onnx libraries and is large (hundreds of MB, all 4 ABIs). For a phone-sized build, dispatch `.github/workflows/android-apk.yml` with `abi=arm64-v8a` (or `./gradlew :app:assembleDebug -PincludeAndroid=true -PabiFilter=arm64-v8a`); that artifact is `app-arm64-debug-apk`. Both are **debug-signed** with DroidCommand's own committed debug keystore (`signing/droidcommand-debug.keystore`) so CI builds share one fingerprint and install over each other. That key is debug-only — not a fleet/shared key, and not a release key (release keys stay in CI secrets). If an older debug APK was built before this key existed, uninstall it once; those used a random CI debug key. Details: [`docs/SIGNING.md`](docs/SIGNING.md). An x86_64 build has been launched on an API 28 emulator (see Screenshots); it has not been installed on a physical device.
 
 ## Project structure
 
