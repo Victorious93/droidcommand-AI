@@ -29,6 +29,7 @@ on:
       - main
     paths:
       - "app/**"
+      - "signing/**"
       - ".github/workflows/android-emulator.yml"
       - "settings.gradle.kts"
       - "build.gradle.kts"
