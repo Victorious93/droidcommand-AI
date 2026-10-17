@@ -38,6 +38,8 @@ on:
       - main
     paths:
       - ".github/workflows/android-apk.yml"
+      - "app/build.gradle.kts"
+      - "signing/**"
       - "core-llm-local-android/**"
       - "core-voice-neural-android/**"
       - "settings.gradle.kts"
@@ -160,6 +162,13 @@ jobs:
           BT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort | tail -1)
           "${BT}aapt2" dump badging "$APK" | grep -E "^package:|sdkVersion:|targetSdkVersion:|application-label:" || true
           unzip -l "$APK" | grep -E 'lib/.*/.*\.so$' | awk '{print $4}' | sort || true
+
+      - name: Print debug APK signing certificate
+        if: success()
+        run: |
+          APK=app/build/outputs/apk/debug/${APK_FILE}
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort | tail -1)
+          "${BT}apksigner" verify --print-certs "$APK"
 
       - name: Record APK checksum
         if: success()

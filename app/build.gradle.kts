@@ -61,6 +61,19 @@ android {
         }
     }
 
+    // Dedicated DroidCommand debug identity — not a fleet/shared keystore.
+    // Every CI and local debug APK gets the same signing fingerprint so updates
+    // install over previous debug builds. Release signing is unset here; release
+    // keys stay in CI secrets. See docs/SIGNING.md.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("signing/droidcommand-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     if (abiFilter == "arm64-v8a") {
         packaging {
             jniLibs {
