@@ -1,6 +1,7 @@
 package ai.droidcommand.integration
 
 import ai.droidcommand.agent.PermissionCategory
+import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolSpec
 import ai.droidcommand.metasploit.MetasploitTool
@@ -15,6 +16,7 @@ import ai.droidcommand.security.ActionRiskClassifier
 import ai.droidcommand.security.AutoApprovalDecision
 import ai.droidcommand.security.AutoApprovalPolicy
 import ai.droidcommand.security.DefaultActionRisks
+import ai.droidcommand.security.YoloMode
 import ai.droidcommand.setoolkit.NullSetExecutor
 import ai.droidcommand.setoolkit.SetTool
 import ai.droidcommand.shell.ProcessBuilderShellExecutor
@@ -118,5 +120,30 @@ class RiskAutoApprovalRealToolsTest {
             setOf("get_battery_status", "get_storage_info", "get_device_info", "list_installed_apps", "find_element"),
             freed,
         )
+    }
+
+    @Test
+    fun `YOLO on auto-approves real shell root and termux specs and still refuses kali metasploit and set`() {
+        val off = DefaultActionRisks.policy()
+        val on = DefaultActionRisks.policy(yoloMode = true)
+        listOf("run_shell_command", "run_root_command", "run_termux_command").forEach { name ->
+            assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(dangerousSpecs.getValue(name)), name)
+            val approved = assertIs<AutoApprovalDecision.AutoApprove>(on.evaluate(dangerousSpecs.getValue(name)), name)
+            assertTrue(approved.reason.contains(YoloMode.AUDIT_REASON), approved.reason)
+        }
+        listOf("run_metasploit_module", "run_setoolkit_attack", "run_kali_authorized_scan").forEach { name ->
+            assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(dangerousSpecs.getValue(name)), name)
+            assertIs<AutoApprovalDecision.RequireApproval>(on.evaluate(dangerousSpecs.getValue(name)), name)
+        }
+        val fleet = ToolSpec(
+            name = "rootforge_list_devices",
+            description = "d",
+            securityLevel = SecurityLevel.SENSITIVE,
+            permissionCategory = PermissionCategory.REMOTE_CONTROL,
+        )
+        assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(fleet))
+        assertIs<AutoApprovalDecision.AutoApprove>(on.evaluate(fleet))
+        assertTrue(YoloMode.WARNING.contains(LocalKaliPlaybookRunner.AUTHORIZED_CONFIRMATION_PHRASE))
+        assertEquals(LocalKaliPlaybookRunner.AUTHORIZED_CONFIRMATION_PHRASE, YoloMode.AUTHORIZED_CONFIRMATION_PHRASE)
     }
 }

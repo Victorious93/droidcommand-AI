@@ -103,4 +103,75 @@ class AutoApprovalPolicyTest {
     fun `modes default to both so only an explicit empty set is gated`() {
         assertEquals(AgentMode.entries.toSet(), readTool().allowedModes)
     }
+
+    @Test
+    fun `YOLO is off by default and must be passed explicitly`() {
+        assertEquals(false, YoloMode.ENABLED_DEFAULT)
+        assertEquals(false, AutoApprovalPolicy(ActionRiskClassifier()).yoloMode)
+        assertEquals(false, DefaultActionRisks.policy().yoloMode)
+        assertEquals(true, DefaultActionRisks.policy(yoloMode = true).yoloMode)
+    }
+
+    @Test
+    fun `YOLO off preserves the current hard-gate and READ_ONLY-only behavior`() {
+        val off = DefaultActionRisks.policy()
+        val onDefault = DefaultActionRisks.policy(yoloMode = false)
+        DefaultActionRisks.TOOLS.keys.forEach { name ->
+            assertEquals(off.evaluate(readTool(name)), onDefault.evaluate(readTool(name)), name)
+        }
+        assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(readTool("run_shell_command")))
+        assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(readTool("run_root_command").copy(requiresRoot = true)))
+        assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(readTool("rootforge_list_devices")))
+        assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(readTool("run_kali_authorized_scan")))
+    }
+
+    @Test
+    fun `YOLO on auto-approves shell root grant-gated and fleet and writes YOLO in the reason`() {
+        val policy = DefaultActionRisks.policy(yoloMode = true)
+        val waived = listOf(
+            readTool("run_shell_command"),
+            readTool("run_termux_command"),
+            readTool("run_root_command").copy(requiresRoot = true, securityLevel = SecurityLevel.ROOT),
+            readTool("granted").copy(grantCapability = "root"),
+            readTool("rootforge_list_devices").copy(permissionCategory = PermissionCategory.REMOTE_CONTROL),
+            readTool("flash_capabilities").copy(permissionCategory = PermissionCategory.REMOTE_CONTROL),
+            readTool("fleet_status"),
+            readTool("hackerai_status"),
+        )
+        waived.forEach { spec ->
+            val decision = assertIs<AutoApprovalDecision.AutoApprove>(policy.evaluate(spec), spec.name)
+            assertTrue(decision.reason.contains(YoloMode.AUDIT_REASON), decision.reason)
+        }
+    }
+
+    @Test
+    fun `YOLO on still does not auto-approve Kali pentest Metasploit SET or playbook steps`() {
+        val policy = DefaultActionRisks.policy(yoloMode = true)
+        val gated = listOf(
+            readTool("run_kali_authorized_scan"),
+            readTool(YoloMode.KALI_PLAYBOOK_STEP_PREFIX + "nmap"),
+            readTool("run_metasploit_module"),
+            readTool("run_setoolkit_attack"),
+            readTool("pentest_swarm_scan"),
+            readTool("pentest_swarm_run_playbook"),
+            readTool("msfconsole_search"),
+        )
+        gated.forEach { spec ->
+            val decision = assertIs<AutoApprovalDecision.RequireApproval>(policy.evaluate(spec), spec.name)
+            assertTrue(decision.reason.contains("never auto-approved"), decision.reason)
+        }
+    }
+
+    @Test
+    fun `YOLO warning documents the pentest exception and the confirmation phrase`() {
+        assertTrue(YoloMode.WARNING.contains(YoloMode.AUTHORIZED_CONFIRMATION_PHRASE))
+        assertTrue(YoloMode.WARNING.contains("ACTIVE"))
+        assertTrue(YoloMode.WARNING.contains("EXPLOIT"))
+        assertTrue(YoloMode.WARNING.contains("shell"))
+        assertTrue(YoloMode.WARNING.contains("Off by default"))
+        assertTrue(YoloMode.isPentestAuthorization("run_kali_authorized_scan"))
+        assertTrue(YoloMode.isPentestAuthorization(YoloMode.KALI_PLAYBOOK_STEP_PREFIX + "nmap"))
+        assertTrue(!YoloMode.isPentestAuthorization("run_shell_command"))
+        assertTrue(!YoloMode.isPentestAuthorization("rootforge_list_devices"))
+    }
 }

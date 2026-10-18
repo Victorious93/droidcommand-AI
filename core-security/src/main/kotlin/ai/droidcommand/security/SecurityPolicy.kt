@@ -24,8 +24,9 @@ import ai.droidcommand.agent.SecurityLevel
  *
  * [autoApprovalPolicy] is null by default, which keeps today's behavior exactly: every confirmation
  * [SecurityPolicyEnforcer] raises goes to the [ApprovalPrompt]. When set, it may only relax a
- * confirmation for a tool it classifies as genuinely read-only ([AutoApprovalPolicy]); it never
- * adds a permission and never overrides a [PolicyDecision.Deny].
+ * confirmation ([AutoApprovalPolicy]): declared READ_ONLY tools when YOLO is off, or every
+ * non-pentest confirmation when [YoloMode] is explicitly enabled. It never adds a permission and
+ * never overrides a [PolicyDecision.Deny].
  */
 class SecurityPolicy(
     val rootEnabled: Boolean = false,

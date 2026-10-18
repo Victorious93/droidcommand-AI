@@ -3,7 +3,8 @@ package ai.droidcommand.security
 /**
  * The tool-name → [ActionRisk] declarations the app ships with, for [ActionRiskClassifier]. Deliberately
  * short: a tool is listed only when its risk is certain, and only the [ActionRisk.READ_ONLY] entries can
- * ever skip a confirmation. Anything absent is unclassified and always asks.
+ * ever skip a confirmation unless [YoloMode] is explicitly enabled. Anything absent is unclassified and
+ * always asks (YOLO off).
  *
  * Every tool listed READ_ONLY here is local, side-effect-free, reads no personal content and is
  * `PermissionCategory.VIEW`. Each is currently `SecurityLevel.NORMAL` (already prompt-free), so this
@@ -32,5 +33,10 @@ object DefaultActionRisks {
         "delete_file" to ActionRisk.IRREVERSIBLE,
     )
 
-    fun policy(): AutoApprovalPolicy = AutoApprovalPolicy(ActionRiskClassifier(TOOLS))
+    /**
+     * @param yoloMode explicit opt-in; default [YoloMode.ENABLED_DEFAULT] (false). Passing true
+     *   auto-approves shell/root/fleet and still never auto-approves Kali/pentest authorization.
+     */
+    fun policy(yoloMode: Boolean = YoloMode.ENABLED_DEFAULT): AutoApprovalPolicy =
+        AutoApprovalPolicy(ActionRiskClassifier(TOOLS), yoloMode)
 }

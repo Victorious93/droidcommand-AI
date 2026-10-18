@@ -177,7 +177,8 @@ object AppModule {
     @Singleton
     fun provideSecurityPolicy(): SecurityPolicy = SecurityPolicy(
         grantedCategories = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK),
-        // Only waives the dialog for tools declared READ_ONLY; shell/termux/root/fleet/pentest tools are structurally excluded.
+        // READ_ONLY catalog only. YOLO stays off ([YoloMode.ENABLED_DEFAULT]); turning it on
+        // auto-approves shell/root/fleet but never Kali/pentest authorization. See [YoloMode.WARNING].
         autoApprovalPolicy = DefaultActionRisks.policy(),
     )
 

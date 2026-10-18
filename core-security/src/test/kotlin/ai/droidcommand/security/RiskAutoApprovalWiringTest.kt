@@ -138,4 +138,73 @@ class RiskAutoApprovalWiringTest {
         assertIs<PolicyDecision.RequireApproval>(enforcer.authorize(sensitiveView("other")))
         assertEquals(PolicyDecision.Allow, enforcer.authorize(sensitiveView("battery").copy(securityLevel = SecurityLevel.NORMAL, requiresConfirmation = false)))
     }
+
+    @Test
+    fun `YOLO on runs shell root and fleet without a prompt and the audit says YOLO`() {
+        val yolo = DefaultActionRisks.policy(yoloMode = true)
+        val cases = listOf(
+            sensitiveView("run_shell_command").copy(permissionCategory = PermissionCategory.TERMINAL) to
+                SecurityPolicy(
+                    grantedCategories = setOf(PermissionCategory.TERMINAL),
+                    autoApprovalPolicy = yolo,
+                ),
+            sensitiveView("run_root_command").copy(
+                requiresRoot = true,
+                securityLevel = SecurityLevel.ROOT,
+                permissionCategory = PermissionCategory.ROOT,
+            ) to SecurityPolicy(
+                rootEnabled = true,
+                rootAvailable = { true },
+                grantedCategories = setOf(PermissionCategory.ROOT),
+                autoApprovalPolicy = yolo,
+            ),
+            sensitiveView("rootforge_list_devices").copy(permissionCategory = PermissionCategory.REMOTE_CONTROL) to
+                SecurityPolicy(
+                    grantedCategories = setOf(PermissionCategory.REMOTE_CONTROL),
+                    autoApprovalPolicy = yolo,
+                ),
+        )
+        cases.forEach { (spec, policy) ->
+            val h = WiringHarness(spec, policy)
+            assertIs<ToolResult.Success>(h.run(), spec.name)
+            assertEquals(0, h.promptCalls, spec.name)
+            assertEquals(1, h.tool.invocations, spec.name)
+            val granted = h.audit.all().single { it.type == AuditEventType.ACCESS_GRANTED }
+            assertTrue(granted.detail.contains(YoloMode.AUDIT_REASON), granted.detail)
+        }
+    }
+
+    @Test
+    fun `YOLO on still prompts for Kali and pentest authorization steps`() {
+        val yolo = DefaultActionRisks.policy(yoloMode = true)
+        val gated = listOf(
+            sensitiveView("run_kali_authorized_scan").copy(permissionCategory = PermissionCategory.NETWORK),
+            sensitiveView(YoloMode.KALI_PLAYBOOK_STEP_PREFIX + "nmap").copy(permissionCategory = PermissionCategory.NETWORK),
+            sensitiveView("run_metasploit_module").copy(permissionCategory = PermissionCategory.NETWORK),
+            sensitiveView("run_setoolkit_attack").copy(permissionCategory = PermissionCategory.NETWORK),
+            sensitiveView("pentest_swarm_scan").copy(permissionCategory = PermissionCategory.NETWORK),
+        )
+        gated.forEach { spec ->
+            val h = WiringHarness(
+                spec,
+                SecurityPolicy(grantedCategories = setOf(PermissionCategory.NETWORK), autoApprovalPolicy = yolo),
+                answer = false,
+            )
+            assertIs<ToolResult.Failure>(h.run(), spec.name)
+            assertEquals(1, h.promptCalls, spec.name)
+            assertEquals(0, h.tool.invocations, spec.name)
+        }
+    }
+
+    @Test
+    fun `YOLO never overrides a hard deny from the permission-category gate`() {
+        val h = WiringHarness(
+            sensitiveView("run_shell_command").copy(permissionCategory = PermissionCategory.TERMINAL),
+            SecurityPolicy(grantedCategories = emptySet(), autoApprovalPolicy = DefaultActionRisks.policy(yoloMode = true)),
+        )
+        val result = assertIs<ToolResult.Failure>(h.run())
+        assertTrue(result.reason.contains("TERMINAL"), result.reason)
+        assertEquals(0, h.promptCalls)
+        assertEquals(0, h.tool.invocations)
+    }
 }

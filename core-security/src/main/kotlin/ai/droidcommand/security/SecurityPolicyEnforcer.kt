@@ -7,8 +7,9 @@ sealed class PolicyDecision {
     data class RequireApproval(val reason: String) : PolicyDecision()
 
     /**
-     * A confirmation that would have been required was waived by [AutoApprovalPolicy] because the tool is
-     * declared read-only. Runs like [Allow] but is distinct so the executor can audit why no prompt was shown.
+     * A confirmation that would have been required was waived by [AutoApprovalPolicy] (declared
+     * READ_ONLY, or [YoloMode] except pentest authorization gates). Runs like [Allow] but is
+     * distinct so the executor can audit why no prompt was shown.
      */
     data class AutoApproved(val risk: ActionRisk, val reason: String) : PolicyDecision()
     data class Deny(val reason: String) : PolicyDecision()

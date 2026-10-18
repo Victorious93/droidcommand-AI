@@ -19,8 +19,10 @@ import ai.droidcommand.agent.ToolSpec
  * Separate from [RiskTier] on purpose: [RiskTier] is the 4-value timeout/approval-flow axis used by
  * [ApprovalProvider], while this axis adds [SENSITIVE] (reads or sends private/personal data) and
  * [ADVANCED_CONTROL] (shell, root, remote nodes, pentest) because those are exactly the actions that
- * must never be waved through. An action with no declared risk is not a member of this enum at all —
- * [ActionRiskClassifier.classify] returns null for it, which every caller treats as "ask".
+ * must never be waved through unless [YoloMode] is explicitly enabled — and even then, pentest
+ * authorization gates still always prompt. An action with no declared risk is not a member of this
+ * enum at all — [ActionRiskClassifier.classify] returns null for it, which every caller treats as "ask"
+ * unless YOLO is on.
  */
 enum class ActionRisk(val severity: Int) {
     READ_ONLY(1),
@@ -43,7 +45,8 @@ enum class ActionRisk(val severity: Int) {
  *    what anyone declares (root, grants, remote initiators, non-VIEW permission categories, tools never
  *    offered to the planners, and a name deny-list for shell/termux/root/fleet/pentest tooling). A
  *    declaration cannot override these; they exist so a mislabelled catalog entry cannot relax a
- *    dangerous tool.
+ *    dangerous tool. [YoloMode] is the only explicit override of this floor, and it still refuses
+ *    [YoloMode.PENTEST_AUTHORIZATION_NAME_TOKENS].
  * 2. [declared] — an explicit tool-name → [ActionRisk] catalog supplied by the caller. A tool that is
  *    not in the catalog is unclassified (null), never READ_ONLY by default.
  */
@@ -66,10 +69,13 @@ class ActionRiskClassifier(private val declared: Map<String, ActionRisk> = empty
     fun classify(spec: ToolSpec): ActionRisk? = declared[spec.name]
 
     companion object {
-        /** Substrings of a lower-cased tool name that always require a human tap. */
+        /**
+         * Substrings of a lower-cased tool name that [hardGate] always refuses. [YoloMode] may waive
+         * the non-pentest tokens (shell/termux/root/fleet/…); [YoloMode.PENTEST_AUTHORIZATION_NAME_TOKENS]
+         * stay refused even with YOLO on.
+         */
         val NEVER_AUTO_APPROVE_NAME_TOKENS: Set<String> = setOf(
-            "shell", "termux", "root", "adb", "ssh", "fleet", "flash", "kali", "pentest", "swarm",
-            "metasploit", "msf", "setoolkit", "hackerai", "exploit", "playbook",
-        )
+            "shell", "termux", "root", "adb", "ssh", "fleet", "flash", "hackerai",
+        ) + YoloMode.PENTEST_AUTHORIZATION_NAME_TOKENS
     }
 }
