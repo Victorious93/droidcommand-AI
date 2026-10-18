@@ -66,6 +66,7 @@ class FleetStatusTest {
         assertEquals(FleetInstallState.NOT_APPLICABLE, rootforge.installed)
         assertTrue(rootforge.status.contains("Not paired"))
         assertTrue(rootforge.status.contains("Messenger"))
+        assertTrue(rootforge.status.contains("Not LIVE"))
         assertTrue(rootforge.member.summary.contains("Never DependencyGuard"))
 
         assertEquals(FleetInstallState.NOT_INSTALLED, edl.installed)
@@ -76,14 +77,14 @@ class FleetStatusTest {
         assertTrue(kyc.status.contains("/scope admin"))
 
         assertEquals(FleetInstallState.NOT_INSTALLED, fileManager.installed)
-        assertTrue(fileManager.status.contains("does not bind Messenger"))
+        assertTrue(fileManager.status.contains("not paired"))
         assertTrue(fileManager.status.contains("PLANNED"))
         assertTrue(fileManager.member.summary.contains("Never DependencyGuard"))
         assertTrue(fileManager.member.summary.contains("ai.victorious.filemanager.action.BRIDGE"))
         assertFalse(fileManager.status.contains("ready", ignoreCase = true), fileManager.status)
 
         assertEquals(FleetInstallState.NOT_INSTALLED, keyboard.installed)
-        assertTrue(keyboard.status.contains("does not bind Messenger"))
+        assertTrue(keyboard.status.contains("not paired"))
         assertTrue(keyboard.status.contains("PLANNED"))
         assertTrue(keyboard.member.summary.contains("Never DependencyGuard"))
         assertTrue(keyboard.member.summary.contains("com.victorious.keyboard.action.BRIDGE"))
@@ -106,6 +107,7 @@ class FleetStatusTest {
             .single { it.member.id == "file-manager" }
         assertEquals(FleetInstallState.INSTALLED, installedFm.installed)
         assertTrue(installedFm.status.contains("Package probe only"))
+        assertTrue(installedFm.status.contains("pairing"))
         assertTrue(installedFm.status.contains("PLANNED"))
         assertFalse(installedFm.status.contains("ready", ignoreCase = true), installedFm.status)
 

@@ -11,9 +11,17 @@ import kotlinx.serialization.json.JsonObject
  * `RootForgeClient`: decode, protocol major, node identity, correlation id, `ok:false`, `ok:true`
  * without a result. The node id check comes before the request id check so a reply from a different
  * machine is reported as an identity problem, not a correlation glitch.
+ *
+ * [ReplyExpectation.ACK] is the fire-and-forget exception to the last step: `ok:true` with no
+ * result is success (empty object). The node still has to pass every earlier check.
  */
 internal object BridgeResponseValidator {
-    fun validate(responseJson: String, node: PairedNode, requestId: String): RootForgeResult<JsonObject> {
+    fun validate(
+        responseJson: String,
+        node: PairedNode,
+        requestId: String,
+        expect: ReplyExpectation = ReplyExpectation.RESULT,
+    ): RootForgeResult<JsonObject> {
         if (responseJson.length > MessengerWire.MAX_RESPONSE_CHARS) {
             return RootForgeResult.Failure(FailureKind.MALFORMED_RESPONSE, "response exceeds ${MessengerWire.MAX_RESPONSE_CHARS} characters")
         }
@@ -38,7 +46,11 @@ internal object BridgeResponseValidator {
             val err = response.error
             return RootForgeResult.Failure(FailureKind.REMOTE_ERROR, err?.message ?: "node reported an error", err?.category)
         }
-        return response.result?.let { RootForgeResult.Success(it) }
-            ?: RootForgeResult.Failure(FailureKind.MALFORMED_RESPONSE, "ok response without a result")
+        val result = response.result
+        return when {
+            result != null -> RootForgeResult.Success(result)
+            expect == ReplyExpectation.ACK -> RootForgeResult.Success(NodeOperations.EMPTY_PARAMETERS)
+            else -> RootForgeResult.Failure(FailureKind.MALFORMED_RESPONSE, "ok response without a result")
+        }
     }
 }

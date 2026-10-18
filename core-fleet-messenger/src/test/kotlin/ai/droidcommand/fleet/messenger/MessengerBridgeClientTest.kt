@@ -6,6 +6,7 @@ import ai.droidcommand.rootforge.RootForgeResult
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -31,7 +32,7 @@ class MessengerBridgeClientTest {
             setOf("protocol_major", "request_id", "target_node_id", "operation", "timeout_ms", "parameters"),
             raw.keys,
         )
-        assertEquals("1", raw.getValue("protocol_major").toString())
+        assertEquals(1, raw.getValue("protocol_major").jsonPrimitive.int)
         assertEquals("dca-test-1", raw.getValue("request_id").jsonPrimitive.content)
         val decoded = decodeRequest(sent)
         assertEquals(NODE_ID, decoded.targetNodeId)
@@ -48,12 +49,13 @@ class MessengerBridgeClientTest {
         assertEquals(10_000, decodeRequest(channel.sent.single()).timeoutMs)
         assertEquals(10_000L + MessengerWire.REPLY_GRACE_MS, channel.exchangeTimeoutMs)
         assertEquals(1, channel.closed)
+        assertEquals(NodeOperations.EMPTY_PARAMETERS, decodeRequest(channel.sent.single()).parameters)
     }
 
     @Test
     fun `generated request ids look like dca-uuid`() {
         val channel = echoing { response(it) }
-        val c = MessengerBridgeClient(NodeTrustVerifier(resolverOf(identity())), channel)
+        val c: ExternalNodeTransport = MessengerBridgeClient(NodeTrustVerifier(resolverOf(identity())), channel)
         c.call(pairedNode(), "node.ping")
         assertTrue(Regex("^dca-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").matches(decodeRequest(channel.sent.single()).requestId))
     }
@@ -171,6 +173,40 @@ class MessengerBridgeClientTest {
         }
         kotlin.runCatching { c.call(pairedNode(), " ") }.let { assertTrue(it.isFailure) }
         assertEquals(0, channel.opens)
+    }
+
+    @Test
+    fun `ok true without a result is ACK success for fire-and-forget up ops`() {
+        val channel = echoing { response(it, ok = true, result = null) }
+        val result = client(channel).call(pairedNode(), "mesh.up")
+        assertEquals(NodeOperations.EMPTY_PARAMETERS, assertIs<RootForgeResult.Success<JsonObject>>(result).value)
+        assertEquals(NodeOperations.EMPTY_PARAMETERS, decodeRequest(channel.sent.single()).parameters)
+        assertEquals(ReplyExpectation.ACK, NodeOperations.expectationFor("mesh.up"))
+    }
+
+    @Test
+    fun `fire-and-forget still validates protocol node and request id before treating an ack as success`() {
+        assertEquals(FailureKind.PROTOCOL_MISMATCH, failure(client(echoing { response(it, major = 9, result = null) }).call(pairedNode(), "mesh.up")).kind)
+        assertEquals(FailureKind.NODE_IDENTITY_MISMATCH, failure(client(echoing { response(it, nodeId = "other", result = null) }).call(pairedNode(), "mesh.up")).kind)
+        assertEquals(FailureKind.MALFORMED_RESPONSE, failure(client(echoing { response(it, requestId = "dca-x", result = null) }).call(pairedNode(), "mesh.up")).kind)
+    }
+
+    @Test
+    fun `forcing RESULT on an up op still rejects ok true with no result`() {
+        val f = failure(client(echoing { response(it, result = null) }).call(pairedNode(), "mesh.up", expect = ReplyExpectation.RESULT))
+        assertEquals(FailureKind.MALFORMED_RESPONSE, f.kind)
+    }
+
+    @Test
+    fun `node error categories unauthorized_caller external_control_disabled and invalid_parameters surface as REMOTE_ERROR`() {
+        for (category in listOf("unauthorized_caller", "external_control_disabled", "invalid_parameters")) {
+            val f = failure(
+                client(echoing { response(it, ok = false, result = null, error = BridgeErrorBody(category, "denied")) })
+                    .call(pairedNode(), "mesh.up"),
+            )
+            assertEquals(FailureKind.REMOTE_ERROR, f.kind)
+            assertEquals(category, f.remoteCategory)
+        }
     }
 
     @Test

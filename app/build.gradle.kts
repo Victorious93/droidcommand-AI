@@ -133,6 +133,10 @@ dependencies {
     implementation(project(":core-hackerai"))
     implementation(project(":core-pentest-swarm"))
 
+    // EXTERNAL_NODE Messenger transport: pure envelope/validation/trust logic (api-exposes core-rootforge's
+    // BridgeRequest/FailureKind). The Android Messenger plumbing is app/.../fleet/AndroidMessengerChannel.kt.
+    implementation(project(":core-fleet-messenger"))
+
     // compose-bom, navigation-compose, lifecycle-viewmodel-compose, core-ktx and
     // hilt-navigation-compose are each pinned one or two minors below Maven Central's latest
     // stable release (confirmed 2026-10-08): the next release of every one of them ships an

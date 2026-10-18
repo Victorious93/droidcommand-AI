@@ -33,10 +33,10 @@ object FleetCatalog {
     /** Planned. The APK has not landed; do not bind this. */
     const val EDLCOMMANDER_PACKAGE = "ai.edlcommander.companion"
 
-    /** EXTERNAL_NODE. Probe only — do not bind Messenger. */
+    /** EXTERNAL_NODE. Probe only until the owner pairs package + signing cert. */
     const val FILEMANAGER_PACKAGE = "ai.victorious.filemanager"
 
-    /** EXTERNAL_NODE. Probe only — do not bind Messenger. */
+    /** EXTERNAL_NODE. Probe only until the owner pairs package + signing cert. */
     const val KEYBOARD_PACKAGE = "com.victorious.keyboard"
 
     /** EXTERNAL_NODE. Probe only — do not bind Messenger. debug==release package. */
@@ -63,7 +63,7 @@ object FleetCatalog {
         name = "RootForge OS",
         packageName = null,
         kind = FleetKind.ROOTFORGE,
-        summary = "EXTERNAL_NODE. Live APK path on their main is Messenger + shared JSON (ai.rootforge.os.action.BRIDGE, protocol_major 1). SSH is CLI/ISO fallback only. Never DependencyGuard, never a shared signing key.",
+        summary = "EXTERNAL_NODE. Live APK path on their main is Messenger + shared JSON (ai.rootforge.os.action.BRIDGE, protocol_major 1). Generic Messenger client exists but does nothing until this node is paired (package + cert). SSH is CLI/ISO fallback only. Never DependencyGuard, never a shared signing key.",
     )
 
     val TERMUX = FleetMember(
@@ -96,8 +96,9 @@ object FleetCatalog {
         packageName = FILEMANAGER_PACKAGE,
         kind = FleetKind.EXTERNAL_NODE,
         summary = "EXTERNAL_NODE, PLANNED. Messenger action ai.victorious.filemanager.action.BRIDGE " +
-            "(protocol_major 1) already on their main; this app does not bind it. " +
-            "Never DependencyGuard, never a shared signing key. Identity/default-off PR still landing.",
+            "(protocol_major 1) already on their main. Generic client exists but is not started unless " +
+            "this node is paired (package + signing cert). Never DependencyGuard, never a shared signing key. " +
+            "Identity/default-off PR still landing.",
     )
 
     val KEYBOARD = FleetMember(
@@ -106,9 +107,9 @@ object FleetCatalog {
         packageName = KEYBOARD_PACKAGE,
         kind = FleetKind.EXTERNAL_NODE,
         summary = "EXTERNAL_NODE, PLANNED. Planned Messenger action com.victorious.keyboard.action.BRIDGE " +
-            "(protocol_major 1); this app does not bind it. " +
-            "Never DependencyGuard, never a shared signing key. Never forwards typed text or keystrokes. " +
-            "Direction (hub query vs keyboard slash-commands) is open.",
+            "(protocol_major 1). Generic client exists but is not started unless this node is paired " +
+            "(package + signing cert). Never DependencyGuard, never a shared signing key. Never forwards " +
+            "typed text or keystrokes. Direction (hub query vs keyboard slash-commands) is open.",
     )
 
     val MESH = FleetMember(
@@ -173,14 +174,14 @@ object FleetStatus {
                 "Not installed. After install, RUN_COMMAND still needs allow-external-apps=true and the RUN_COMMAND permission."
         }
         FleetKind.ROOTFORGE ->
-            "Not paired. Messenger + shared JSON is the live APK path on their main; this app does not bind it. SSH is fallback only, JVM/CLI."
+            "Not paired. Messenger transport exists but does nothing until the owner pairs package + signing cert. SSH is fallback only, JVM/CLI. Not LIVE."
         FleetKind.EXTERNAL_NODE -> when (state) {
             FleetInstallState.INSTALLED ->
-                "Installed. Package probe only — Messenger bind is not started. PLANNED, not LIVE."
+                "Installed. Package probe only — Messenger bind starts only after pairing (package + signing cert). PLANNED, not LIVE."
             FleetInstallState.NOT_INSTALLED ->
-                "Not installed. Probe only — this build does not bind Messenger. PLANNED, not LIVE."
+                "Not installed. Messenger transport exists but this node is not paired. PLANNED, not LIVE."
             FleetInstallState.NOT_APPLICABLE ->
-                "No APK on this row. This build does not bind Messenger. Not LIVE."
+                "No APK on this row. Messenger bind starts only after pairing. Not LIVE."
         }
         FleetKind.HOST_PROCESS ->
             "Not started. Simulator only, localhost only. The hub must not call /scope admin. Not LIVE."

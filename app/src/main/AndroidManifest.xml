@@ -44,6 +44,17 @@
         <!-- Controller-side node signature check (NodeSignatureGuard) plus Tools → Fleet
              package probe. Mesh is also KnownFleet.MESH (PLANNED EXTERNAL_NODE). -->
         <package android:name="com.victorious.mesh" />
+
+        <!-- Messenger transport (core-fleet-messenger): a paired EXTERNAL_NODE package is only visible to the
+             trust check if it is named here; an unnamed one reads as "not installed" and is refused. Debug /
+             bench variants are listed so a paired debug APK can be inspected; they are not probed by the
+             Fleet screen. RootForge's id is inferred from its documented action prefix
+             (ai.rootforge.os.action.BRIDGE) and has not been confirmed against a real install. -->
+        <package android:name="ai.victorious.filemanager.debug" />
+        <package android:name="com.victorious.keyboard.debug" />
+        <package android:name="com.victorious.keyboard.bench" />
+        <package android:name="ai.rootforge.os" />
+        <package android:name="ai.rootforge.os.debug" />
     </queries>
 
     <!-- Phase 4 — Companion APK signature permissions.

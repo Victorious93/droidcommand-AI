@@ -95,6 +95,31 @@ class PairingAndWireTest {
         assertEquals(FailureKind.UNTRUSTED_NODE, assertIs<RootForgeResult.Failure>(gateway.call(NODE_ID, "node.ping")).kind)
         assertEquals(0, channel.opens)
     }
+
+    @Test
+    fun `fire-and-forget and pollStatus send empty parameters and map up to status`() {
+        val channel = echoing { req ->
+            if (req.operation.endsWith(".up")) response(req, result = null) else response(req)
+        }
+        val gateway = PairedNodeGateway(InMemoryPairedNodeStore(listOf(pairedNode())), client(channel))
+        assertIs<RootForgeResult.Success<*>>(gateway.fireAndForget(NODE_ID, "mesh.up"))
+        assertEquals("mesh.up", decodeRequest(channel.sent[0]).operation)
+        assertEquals(NodeOperations.EMPTY_PARAMETERS, decodeRequest(channel.sent[0]).parameters)
+
+        assertIs<RootForgeResult.Success<*>>(gateway.pollStatus(NODE_ID, "mesh.up"))
+        assertEquals("mesh.status", decodeRequest(channel.sent[1]).operation)
+        assertEquals(NodeOperations.EMPTY_PARAMETERS, decodeRequest(channel.sent[1]).parameters)
+    }
+
+    @Test
+    fun `up suffix detection and status mapping`() {
+        assertTrue(NodeOperations.isFireAndForget("mesh.up"))
+        assertTrue(NodeOperations.isFireAndForget("rootforge.session.up"))
+        assertFalse(NodeOperations.isFireAndForget("mesh.status"))
+        assertFalse(NodeOperations.isFireAndForget("up"))
+        assertEquals("mesh.status", NodeOperations.statusOperation("mesh.up"))
+        assertFailsWith<IllegalArgumentException> { NodeOperations.statusOperation("mesh.status") }
+    }
 }
 
 class PendingReplyTest {

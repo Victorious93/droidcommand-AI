@@ -41,8 +41,9 @@ It is an independent product. Live APK path on *their* `main` is already a bound
 `protocol_major` 1; canonical doc `docs/DROIDCOMMAND_INTEGRATION.md` in
 `Victorious93/rootforge-os`). Desktop/Docker is a localhost headless API + bearer
 (planned). SSH is the CLI/ISO **fallback only** — that is what `core-rootforge`
-implements today. They are auditing gaps so this repo can call the Messenger
-bridge; do not treat SSH as the live APK path.
+implements today. The on-device Messenger client is `core-fleet-messenger` +
+`:app` (`AndroidMessengerChannel`); it is **off until a node is paired** (package
++ signing-cert SHA-256). Do not treat SSH as the live APK path.
 
 Never add a `DependencyGuard`, a shared signing key, or an "install DCA first"
 check to RootForge. A node that DCA cannot reach loses nothing; removing DCA
@@ -113,10 +114,13 @@ product, the same class as RootForge. It is **not** a companion.
   `KnownCompanions`, **never** a `BIND_*` signature permission, **never**
   AIDL. Removing DCA must not disable File Manager.
 - Catalog stub: `filemanager_status` (`PlannedFleetTool`). Always
-  `ToolResult.Failure` / `REQUIRES_EXTERNAL_SERVICE`. This repo does **not**
-  implement a live Messenger client bind.
-- Status: **PLANNED** (not LIVE, not PARTIAL). Wiring: when their
-  identity/default-off PR lands; after the RootForge Messenger client exists.
+  `ToolResult.Failure` / `REQUIRES_EXTERNAL_SERVICE`. The stub still does
+  **not** bind; the generic EXTERNAL_NODE Messenger client
+  (`core-fleet-messenger` + `:app`) exists but is not started unless this
+  node is paired (package + signing-cert SHA-256). No File Manager is paired
+  by default.
+- Status: **PLANNED** (not LIVE). Wiring: when their identity/default-off PR
+  lands; pair the node to call the existing client.
 
 ### Victorious Keyboard — EXTERNAL_NODE (Messenger)
 
@@ -143,11 +147,12 @@ companion.
   `KnownCompanions`, **never** a `BIND_*` signature permission, **never**
   AIDL. Removing DCA must not disable Keyboard.
 - Catalog stub: `keyboard_status` (`PlannedFleetTool`). Always
-  `ToolResult.Failure` / `REQUIRES_EXTERNAL_SERVICE`. This repo does **not**
-  implement a live Messenger client bind.
-- Status: **PLANNED** (not LIVE, not PARTIAL). Wiring: catalog only until
-  Don decides direction (hub queries the keyboard vs the keyboard surfaces
-  fleet slash-commands). See `docs/FLEET_CONTROL.md`.
+  `ToolResult.Failure` / `REQUIRES_EXTERNAL_SERVICE`. The stub still does
+  **not** bind; the generic EXTERNAL_NODE Messenger client exists but is
+  not started unless this node is paired. No Keyboard is paired by default.
+- Status: **PLANNED** (not LIVE). Wiring: catalog only until Don decides
+  direction (hub queries the keyboard vs the keyboard surfaces fleet
+  slash-commands). See `docs/FLEET_CONTROL.md`.
 
 ### Victorious Mesh — EXTERNAL_NODE (Messenger)
 
@@ -210,6 +215,46 @@ host-tool-only.
    a guessed binary or bind a missing APK.
 4. Update `docs/FLEET_CONTROL.md` and append an audit addendum. Do not mark
    the member LIVE.
+
+## EXTERNAL_NODE Messenger transport (implemented)
+
+Reusable client for **any** EXTERNAL_NODE that speaks the shared envelope over
+a bound Messenger (`RootForge-on-device`, Victorious File Manager, Victorious
+Keyboard, Victorious Mesh, …). It is **not** AIDL, **not** `DependencyGuard`,
+and does **not** assume a shared signing key.
+
+| Layer | Where | What |
+|---|---|---|
+| Envelope, validation, pairing, package+cert trust | `core-fleet-messenger` (pure JVM) | `BridgeRequest` / `BridgeResponse` (protocol major 1, `core-rootforge`), `NodeTrustVerifier`, `MessengerBridgeClient`, `PairedNodeGateway` |
+| Messenger plumbing | `:app` `AndroidMessengerChannel` | bind `<pkg>.action.BRIDGE`; send `Message.what=1` Bundle key `request`; await `what=2` key `response`; pin reply UID via `Message.sendingUid` |
+
+**Controller enforcement order** (nothing is bound or sent until this passes):
+
+1. **Caller/node identity.** The target package must be paired, installed, and
+   signed by **exactly** the paired certificate SHA-256 (`NodeTrustVerifier`).
+   Certs are never hardcoded; they come from the pairing document.
+2. **Enable switch.** Pairing is the controller-side switch (empty store by
+   default = nothing is contacted). The node's own external-control switch is
+   independent; if it is off, the reply is `ok:false` with
+   `external_control_disabled`.
+3. **Envelope validation**, same order as `RootForgeClient`: decode →
+   `protocol_major==1` → `node_id` matches the paired id → `request_id` matches
+   → `ok:false` (`REMOTE_ERROR` with `error.category`) → `ok:true` without a
+   result (`MALFORMED_RESPONSE`, except fire-and-forget `*.up`).
+
+**Messenger identity quirk:** both ends identify the other process via
+`Message.sendingUid`, **not** `Binder.getCallingUid()`. A Messenger Handler
+runs in the receiving process, so `getCallingUid()` would be that process.
+
+**Fire-and-forget:** `*.up` acks immediately (`ReplyExpectation.ACK`; empty
+result is success). Poll the matching `*.status` for the eventual outcome.
+Parameterless ops reject a non-empty `parameters` object with
+`invalid_parameters`; the client sends `{}` by default.
+
+**Default-off:** `:app` provides `PairedNodeGateway` in Hilt but registers no
+tool against it and the pairing store starts empty. Installing File Manager /
+Keyboard / RootForge / Mesh does not enable live control. Catalog stubs
+(`filemanager_status`, `keyboard_status`) still always fail.
 
 ## Security Model
 

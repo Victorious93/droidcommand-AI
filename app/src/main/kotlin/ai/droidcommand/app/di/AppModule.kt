@@ -12,6 +12,9 @@ import ai.droidcommand.app.approval.VoiceApprovalPrompt
 import ai.droidcommand.app.automation.AiPromptTool
 import ai.droidcommand.app.automation.AllowlistShellExecutor
 import ai.droidcommand.app.automation.AutomationShellTool
+import ai.droidcommand.app.fleet.AndroidMessengerChannel
+import ai.droidcommand.app.fleet.AndroidPackageIdentityResolver
+import ai.droidcommand.app.fleet.SharedPreferencesPairedNodeStore
 import ai.droidcommand.app.mode.AdvancedModeStore
 import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.prefs.AdvancedPrefs
@@ -19,6 +22,13 @@ import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.conversations.RoomConversationStore
+import ai.droidcommand.fleet.messenger.ExternalNodeTransport
+import ai.droidcommand.fleet.messenger.MessengerBridgeClient
+import ai.droidcommand.fleet.messenger.MessengerChannel
+import ai.droidcommand.fleet.messenger.NodeTrustVerifier
+import ai.droidcommand.fleet.messenger.PackageIdentityResolver
+import ai.droidcommand.fleet.messenger.PairedNodeGateway
+import ai.droidcommand.fleet.messenger.PairedNodeStore
 import ai.droidcommand.hackerai.HackerAiTool
 import ai.droidcommand.knowledge.android.RoomKnowledgeGraph
 import ai.droidcommand.llm.factory.CloudPromptClient
@@ -203,6 +213,36 @@ object AppModule {
     @Singleton
     fun provideAuditLog(@ApplicationContext context: Context): JsonFileAuditLog =
         JsonFileAuditLog(context.filesDir.toPath().resolve("audit").resolve("audit.jsonl"))
+
+    /**
+     * EXTERNAL_NODE Messenger transport (`core-fleet-messenger`). Available to any code that injects
+     * [PairedNodeGateway], but nothing in this module does: no tool is registered and nothing calls it, and the
+     * pairing store starts empty, so with no node paired no package is inspected, bound or messaged. A call
+     * refuses unless the target package is paired AND currently signed by exactly the paired certificate.
+     * No AIDL, no DependencyGuard, no shared signing key. Live control of RootForge / File Manager /
+     * Keyboard / Mesh is **not** enabled by default. Not run on a device yet.
+     */
+    @Provides
+    @Singleton
+    fun providePairedNodeStore(@ApplicationContext context: Context): PairedNodeStore = SharedPreferencesPairedNodeStore(context)
+
+    @Provides
+    @Singleton
+    fun providePackageIdentityResolver(@ApplicationContext context: Context): PackageIdentityResolver = AndroidPackageIdentityResolver(context)
+
+    @Provides
+    @Singleton
+    fun provideMessengerChannel(@ApplicationContext context: Context): MessengerChannel = AndroidMessengerChannel(context)
+
+    @Provides
+    @Singleton
+    fun provideExternalNodeTransport(resolver: PackageIdentityResolver, channel: MessengerChannel): ExternalNodeTransport =
+        MessengerBridgeClient(NodeTrustVerifier(resolver), channel)
+
+    @Provides
+    @Singleton
+    fun providePairedNodeGateway(store: PairedNodeStore, transport: ExternalNodeTransport): PairedNodeGateway =
+        PairedNodeGateway(store, transport)
 
     @Provides
     @Singleton

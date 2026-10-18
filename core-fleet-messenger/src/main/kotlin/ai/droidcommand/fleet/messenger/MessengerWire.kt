@@ -3,10 +3,15 @@ package ai.droidcommand.fleet.messenger
 import kotlinx.serialization.json.Json
 
 /**
- * The Messenger framing for the shared bridge envelope (COMPANION_PROTOCOL.md, "Victorious File Manager"
- * and "Victorious Keyboard"): the controller binds a service answering `<targetPackage>.action.BRIDGE`,
- * sends `Message.what = 1` whose Bundle holds the request JSON under `request`, and receives
+ * The Messenger framing for the shared bridge envelope (COMPANION_PROTOCOL.md EXTERNAL_NODE rows):
+ * the controller binds a service answering `<targetPackage>.action.BRIDGE`, sends
+ * `Message.what = 1` whose Bundle holds the request JSON under `request`, and receives
  * `Message.what = 2` whose Bundle holds the response JSON under `response`.
+ *
+ * Identity on a Messenger reply is `Message.sendingUid` (OS-stamped sender), never
+ * `Binder.getCallingUid()`: the Handler that receives the reply runs in this process, so
+ * `getCallingUid()` would be us. The same quirk applies on the node for identifying the
+ * controller.
  */
 object MessengerWire {
     const val WHAT_REQUEST = 1

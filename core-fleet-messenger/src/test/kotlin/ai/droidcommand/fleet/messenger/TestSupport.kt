@@ -62,7 +62,7 @@ class FakeChannel(private val reply: (requestJson: String) -> Result<String>) : 
 
 fun decodeRequest(json: String): BridgeRequest = messengerJson.decodeFromString(json)
 
-fun client(channel: MessengerChannel, identity: PackageIdentity? = identity(), requestId: String = "dca-test-1") =
+fun client(channel: MessengerChannel, identity: PackageIdentity? = identity(), requestId: String = "dca-test-1"): ExternalNodeTransport =
     MessengerBridgeClient(NodeTrustVerifier(resolverOf(identity)), channel) { requestId }
 
 /** A channel whose node answers with [build] applied to the decoded request. */
