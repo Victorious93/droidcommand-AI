@@ -93,7 +93,7 @@ enum class FleetControlMode {
     /** External node. The on-phone Messenger transport is not wired, so the hub can show status only. */
     PAIRING_REQUIRED,
 
-    /** Termux / VictorSuite. The default executor is still the refusing NullTermuxExecutor. */
+    /** Termux / VictorSuite. The Fleet Orchestrator has no Termux command channel (`termuxRunnerWired` is false). */
     NO_RUNNER_YET,
 
     /** Catalogued but nothing real to talk to yet (APK not landed, or a stub only). */
