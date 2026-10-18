@@ -9,8 +9,15 @@ import java.security.MessageDigest
  * This is the controller-side pin for a fleet NODE's signing identity.
  * It is not a shared fleet keystore and is not [DependencyGuard].
  */
-data class SigningCertSha256 internal constructor(val canonical: String) {
+class SigningCertSha256 private constructor(val canonical: String) {
     fun matches(other: String): Boolean = parse(other)?.canonical == canonical
+
+    override fun equals(other: Any?): Boolean =
+        other is SigningCertSha256 && other.canonical == canonical
+
+    override fun hashCode(): Int = canonical.hashCode()
+
+    override fun toString(): String = canonical
 
     companion object {
         fun parse(raw: String): SigningCertSha256? {
