@@ -8,10 +8,10 @@ Honesty: **LIVE** is reserved for runtime-verified control. Nothing here is LIVE
 
 Code: `core-security.KnownFleet`. Bound companions also appear in
 `core-companion.KnownCompanions`. RootForge, File Manager, Keyboard,
-VictorSuite, and KYC must not be added there.
+Mesh, VictorSuite, and KYC must not be added there.
 
 HackerAI (`ai.hackerai.companion`) is already a bound companion and is
-**not** one of these seven.
+**not** one of these eight.
 
 ## Wiring order
 
@@ -22,17 +22,18 @@ HackerAI (`ai.hackerai.companion`) is already a bound companion and is
 5. **KYC-AuditLab** — last
 6. **Victorious File Manager** — when their identity/default-off PR lands; after the RootForge Messenger client exists
 7. **Victorious Keyboard** — catalog only; direction (hub queries keyboard vs keyboard slash-commands) is open
+8. **Victorious Mesh** — catalog only; EXTERNAL_NODE with its own signing keys (debug==release package)
 
 ## Integration classes (do not mix)
 
 | Class | Security rules | Who |
 |---|---|---|
 | **BOUND_COMPANION** | AIDL + `protectionLevel="signature"` (same signing key) + companion `DependencyGuard`. Prefer one command-envelope service for new companions. `Initiator.REMOTE`. | Pentest-Swarm-AI, EDL-Commander (HackerAI, already mapped) |
-| **EXTERNAL_NODE** | Independent product. **Never** `DependencyGuard`, **never** a shared signing key, never "install DCA first". Live APK path on *their* main is bound **Messenger** + shared JSON (`protocol_major` 1). RootForge: `action ai.rootforge.os.action.BRIDGE`. File Manager: `action ai.victorious.filemanager.action.BRIDGE` (**PLANNED** here; their identity/default-off PR still landing). Keyboard: planned `action com.victorious.keyboard.action.BRIDGE` (**PLANNED**; never forwards typed text/keystrokes). Desktop/Docker = localhost headless API + bearer (planned, RootForge). SSH = CLI/ISO **fallback only** (RootForge). Removing DCA must not disable the node. | RootForge OS, Victorious File Manager, Victorious Keyboard |
+| **EXTERNAL_NODE** | Independent product. **Never** `DependencyGuard`, **never** a shared signing key, never "install DCA first". Live APK path on *their* main is bound **Messenger** + shared JSON (`protocol_major` 1). RootForge: `action ai.rootforge.os.action.BRIDGE`. File Manager: `action ai.victorious.filemanager.action.BRIDGE` (**PLANNED** here; their identity/default-off PR still landing). Keyboard: planned `action com.victorious.keyboard.action.BRIDGE` (**PLANNED**; never forwards typed text/keystrokes). Mesh: planned `action com.victorious.mesh.action.BRIDGE` (**PLANNED**; debug==release package `com.victorious.mesh`; Mesh keeps its own release key). Desktop/Docker = localhost headless API + bearer (planned, RootForge). SSH = CLI/ISO **fallback only** (RootForge). Removing DCA must not disable the node. | RootForge OS, Victorious File Manager, Victorious Keyboard, Victorious Mesh |
 | **TERMUX_IPC** | `com.termux.RUN_COMMAND` + plugin IPC + shared command schema. **Not** a new bound service. | VictorSuite |
 | **HOST_PROCESS_TOOL** | Localhost process behind a `Tool` + `SecureToolExecutor`. **Never** AIDL or DependencyGuard. | KYC-AuditLab only |
 
-## The seven
+## The eight
 
 | # | Member | Class | Repo / id | Package or binary | Status | Owns | What is actually wired | Next concrete code step |
 |---|---|---|---|---|---|---|---|---|
@@ -43,16 +44,17 @@ HackerAI (`ai.hackerai.companion`) is already a bound companion and is
 | 5 | **KYC-AuditLab** | HOST_PROCESS_TOOL | unpublished as of 2026-10-14 | IdentityShield simulator, localhost only | **PLANNED** | Simulator lab | Catalog stub `kyc_auditlab_status`. Always fails. | Last among the original five. Simulator only, localhost only. **Hub must not call `/scope` admin** until KYC adds auth. Do not log identity documents. |
 | 6 | **Victorious File Manager** | EXTERNAL_NODE | `Victorious93/File-Manager` (already on their `main`) | `ai.victorious.filemanager` (debug: `ai.victorious.filemanager.debug`); Messenger action `ai.victorious.filemanager.action.BRIDGE` | **PLANNED** | File listing / status over the shared JSON envelope (stub ops only on their side today) | Catalog stub `filemanager_status`. Always fails. **No live Messenger bind in this repo.** Their main already has `FileManagerBridgeService` (Message what=1 Bundle key `request`; reply what=2 Bundle key `response`; `protocol_major` 1). Stub ops: `filemanager.capabilities.get`, `filemanager.status`, `filemanager.list` (empty entries). Every reply currently `live:false`, `mode:stub`, `dca_required:false`. | When their identity/default-off PR lands (external control default OFF; caller identity = UID package + SHA-256 cert; allow only `ai.droidcommand.app` and `.debug`; error categories `external_control_disabled` / `unauthorized_caller`; `fleet_class` → `external_node`). After the RootForge Messenger client exists, a File Manager client can follow that pattern. Never DependencyGuard, never shared signing key, never `KnownCompanions`, never AIDL. |
 | 7 | **Victorious Keyboard** | EXTERNAL_NODE | `Victorious93/Victorious-Keyboard` | `com.victorious.keyboard` (debug: `com.victorious.keyboard.debug`; benchmark: `com.victorious.keyboard.bench`); planned Messenger action `com.victorious.keyboard.action.BRIDGE` | **PLANNED** | Keyboard capabilities / status over the shared JSON envelope. **Never forwards typed text or keystrokes.** | Catalog stub `keyboard_status`. Always fails. **No live Messenger bind in this repo.** Planned service `com.victorious.keyboard.fleet.KeyboardBridgeService` (Message what=1 Bundle key `request`; reply what=2 Bundle key `response`; `protocol_major` 1, `dca_required:false`, `fleet_class` `external_node`). Planned ops: `keyboard.capabilities.get`, `keyboard.status`. Keyboard-side: external control default OFF; caller allowlist `ai.droidcommand.app` and `ai.droidcommand.app.debug`; errors `external_control_disabled` / `unauthorized_caller`. | Catalog only until Don decides direction (hub queries the keyboard vs the keyboard surfaces fleet slash-commands). If hub-query is chosen, a Keyboard Messenger client can follow the RootForge Messenger client. Never DependencyGuard, never shared signing key, never `KnownCompanions`, never AIDL, never a `BIND_*` permission. Never forward typed text or keystrokes. |
+| 8 | **Victorious Mesh** | EXTERNAL_NODE | `Victorious93/victorious-mesh` | `com.victorious.mesh` (debug==release; **no** `applicationIdSuffix`); planned Messenger action `com.victorious.mesh.action.BRIDGE` | **PLANNED** | Mesh VPN / Headscale node capabilities, status, up, down, and IP over the shared JSON envelope | Catalog stub `mesh_status`. Always fails. **No live Messenger bind in this repo.** Planned Messenger (Message what=1 Bundle key `request`; reply what=2 Bundle key `response`; `protocol_major` 1, `dca_required:false`, `fleet_class` `external_node`). Planned ops: `mesh.capabilities.get`, `mesh.status`, `mesh.up`, `mesh.down`, `mesh.ip.get`. LLM tools: `mesh_capabilities` / `mesh_status` / `mesh_up` / `mesh_down` / `mesh_get_ip`. Node-id prefix `^mesh-[0-9a-f]{32}$`. Mesh-side: external control default OFF; caller allowlist `ai.droidcommand.app` and `ai.droidcommand.app.debug`. Mesh debug cert SHA-256 `F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4`. Mesh keeps its **own** release key — do not assume the shared fleet key. | Catalog only. After the RootForge Messenger client exists, a Mesh client can follow that pattern. Never DependencyGuard, never shared signing key, never `KnownCompanions`, never AIDL, never a `BIND_*` permission. |
 
 ## Shared command envelope
 
 RootForge Messenger / localhost API / SSH, File Manager Messenger,
-Keyboard Messenger, and VictorSuite plugin IPC are intended to speak the
-**same JSON command envelope** `core-rootforge` already mirrors
+Keyboard Messenger, Mesh Messenger, and VictorSuite plugin IPC are intended
+to speak the **same JSON command envelope** `core-rootforge` already mirrors
 (`BRIDGE_PROTOCOL_MAJOR` 1). Pentest and EDL companions, when their APKs
 exist, should each be **one** envelope service rather than a growing
 method list. This slice does not add a second schema, and it does not add
-a File Manager or Keyboard Messenger client.
+a File Manager, Keyboard, or Mesh Messenger client.
 
 ## What this slice added in-repo
 
@@ -108,6 +110,28 @@ Don has not decided whether:
 
 This catalog does not pick one. Wiring stays PLANNED until that call.
 
+## 2026-10-18 — Victorious Mesh (EXTERNAL_NODE, PLANNED)
+
+Eighth member. Same class rules as RootForge, File Manager, and Keyboard:
+**never** DependencyGuard, **never** a shared signing key, **never**
+`KnownCompanions`, **never** a `BIND_*` signature permission, **never**
+AIDL. Status stays **PLANNED** (not LIVE, not PARTIAL). No live Messenger
+client bind in this repo. Mesh keeps its **own** release key.
+
+- Package `com.victorious.mesh` is debug==release (no `applicationIdSuffix`).
+- Catalog stub `mesh_status` always fails (`REQUIRES_EXTERNAL_SERVICE`).
+- Tools → Fleet probes package `com.victorious.mesh` only. No run button.
+- Planned action `com.victorious.mesh.action.BRIDGE`; Messenger what=1
+  request / what=2 response; `protocol_major` 1; node-id prefix
+  `^mesh-[0-9a-f]{32}$`.
+- Planned ops: `mesh.capabilities.get`, `mesh.status`, `mesh.up`,
+  `mesh.down`, `mesh.ip.get`. LLM tools: `mesh_capabilities` /
+  `mesh_status` / `mesh_up` / `mesh_down` / `mesh_get_ip`.
+- Mesh-side: external control default OFF; caller allowlist
+  `ai.droidcommand.app` and `ai.droidcommand.app.debug`.
+- Mesh debug cert SHA-256
+  `F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4`.
+
 ## 2026-10-17 — VictorSuite on-device RUN_COMMAND_PENDING_INTENT (PARTIAL, UNVERIFIED)
 
 On-device `:app` now talks VictorSuite through `com.termux.RUN_COMMAND` +
@@ -150,7 +174,7 @@ and missing-observed refuse):
 | Member | Type | Package | SHA-256 |
 |---|---|---|---|
 | DroidCommand-AI | DEBUG | `ai.droidcommand.app` | `88:00:51:A6:D9:5D:38:DD:8D:81:E1:93:1E:17:05:48:03:87:D5:93:C3:09:43:53:99:68:E6:EF:11:A0:C8:4D` |
-| Victorious Mesh (not a wiring-order member) | DEBUG | `com.victorious.mesh` | `F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4` |
+| Victorious Mesh (8th wiring-order member, PLANNED catalog) | DEBUG | `com.victorious.mesh` | `F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4` |
 | Victorious Browser (not a wiring-order member) | DEBUG | `com.victorious.browser` | `2D:5D:9E:8B:53:8E:78:51:3D:B5:41:F4:DF:FD:67:BE:27:FF:EC:3F:37:EB:1A:D4:8D:77:83:AE:59:27:C3:E1` |
 | Pentest-Swarm-AI | DEBUG | `ai.pentestswarm.companion` | `5E:3A:B1:23:1F:7E:DA:18:78:B8:FF:D8:9E:AC:B1:F7:2E:EB:66:AF:3D:BA:2E:01:33:51:24:68:42:23:30:C7` |
 | EDL-Commander | DEBUG | `ai.edlcommander.companion` | `E5:60:B6:92:BD:E6:51:9E:B7:CB:B5:2C:E4:DC:91:5A:19:E4:41:A0:1A:5D:03:68:82:71:AC:99:78:8A:58:C8` |

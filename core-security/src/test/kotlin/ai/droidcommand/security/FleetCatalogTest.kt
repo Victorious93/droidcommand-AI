@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 
 class FleetCatalogTest {
     @Test
-    fun `the room fleet is the seven members in wiring order`() {
+    fun `the room fleet is the eight members in wiring order`() {
         assertEquals(
             listOf(
                 "pentestswarm",
@@ -21,14 +21,15 @@ class FleetCatalogTest {
                 "kyc-auditlab",
                 "file-manager",
                 "keyboard",
+                "mesh",
             ),
             KnownFleet.ALL.map { it.id },
         )
-        assertEquals(listOf(1, 2, 3, 4, 5, 6, 7), KnownFleet.ALL.map { it.wiringOrder })
+        assertEquals(listOf(1, 2, 3, 4, 5, 6, 7, 8), KnownFleet.ALL.map { it.wiringOrder })
     }
 
     @Test
-    fun `none of the seven is LIVE and the static checker never reports AVAILABLE`() {
+    fun `none of the eight is LIVE and the static checker never reports AVAILABLE`() {
         val checker = StaticFleetHealthChecker()
         for (member in KnownFleet.ALL) {
             assertNotEquals(FleetHonestyStatus.LIVE, member.status, member.id)
@@ -52,6 +53,8 @@ class FleetCatalogTest {
         assertEquals(FleetHonestyStatus.PLANNED, KnownFleet.FILE_MANAGER.status)
         assertEquals(FleetIntegrationClass.EXTERNAL_NODE, KnownFleet.KEYBOARD.integrationClass)
         assertEquals(FleetHonestyStatus.PLANNED, KnownFleet.KEYBOARD.status)
+        assertEquals(FleetIntegrationClass.EXTERNAL_NODE, KnownFleet.MESH.integrationClass)
+        assertEquals(FleetHonestyStatus.PLANNED, KnownFleet.MESH.status)
 
         assertTrue(KnownFleet.PENTEST_SWARM.usesAidl)
         assertTrue(KnownFleet.PENTEST_SWARM.usesDependencyGuard)
@@ -63,6 +66,7 @@ class FleetCatalogTest {
             KnownFleet.KYC_AUDITLAB,
             KnownFleet.FILE_MANAGER,
             KnownFleet.KEYBOARD,
+            KnownFleet.MESH,
         )) {
             assertFalse(member.usesAidl, member.id)
             assertFalse(member.usesDependencyGuard, member.id)
@@ -84,6 +88,12 @@ class FleetCatalogTest {
             KnownFleet.KEYBOARD.copy(usesAidl = true)
         }
         assertFailsWith<IllegalArgumentException> {
+            KnownFleet.MESH.copy(usesAidl = true)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            KnownFleet.MESH.copy(usesDependencyGuard = true)
+        }
+        assertFailsWith<IllegalArgumentException> {
             KnownFleet.EDL_COMMANDER.copy(usesAidl = false, usesDependencyGuard = false)
         }
         assertFailsWith<IllegalArgumentException> {
@@ -101,13 +111,14 @@ class FleetCatalogTest {
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.KYC_AUDITLAB.capabilityId, "kyc-auditlab").state)
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.FILE_MANAGER.capabilityId, "file-manager").state)
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.KEYBOARD.capabilityId, "keyboard").state)
+        assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.MESH.capabilityId, "mesh").state)
     }
 
     @Test
     fun `registerCapabilities fills the existing CapabilityRegistry`() {
         val registry = InMemoryCapabilityRegistry(StaticFleetHealthChecker())
         KnownFleet.registerCapabilities(registry, now = 1_000L)
-        assertEquals(7, registry.listCapabilities().size)
+        assertEquals(8, registry.listCapabilities().size)
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, registry.getCapability(KnownFleet.PENTEST_SWARM.capabilityId)?.state)
         val reverified = registry.reverify(KnownFleet.KYC_AUDITLAB.capabilityId)
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, reverified.state)
@@ -117,7 +128,7 @@ class FleetCatalogTest {
     }
 
     @Test
-    fun `planned stubs are Pentest EDL KYC File Manager and Keyboard and never succeed`() {
+    fun `planned stubs are Pentest EDL KYC File Manager Keyboard and Mesh and never succeed`() {
         val tools = KnownFleet.plannedStubs()
         assertEquals(
             listOf(
@@ -126,6 +137,7 @@ class FleetCatalogTest {
                 "kyc_auditlab_status",
                 "filemanager_status",
                 "keyboard_status",
+                "mesh_status",
             ),
             tools.map { it.spec.name },
         )
@@ -147,6 +159,10 @@ class FleetCatalogTest {
         assertTrue(keyboard.reason.contains("does not bind Messenger"))
         assertTrue(keyboard.reason.contains("com.victorious.keyboard.action.BRIDGE"))
         assertTrue(keyboard.reason.contains("Never forwards typed text"))
+        val mesh = tools.first { it.spec.name == "mesh_status" }.execute(emptyMap()) as ToolResult.Failure
+        assertTrue(mesh.reason.contains("does not bind Messenger"))
+        assertTrue(mesh.reason.contains("com.victorious.mesh.action.BRIDGE"))
+        assertTrue(mesh.reason.contains("mesh.capabilities.get"))
     }
 
     @Test
@@ -188,6 +204,19 @@ class FleetCatalogTest {
         assertTrue(KnownFleet.KEYBOARD.notes.contains("never KnownCompanions"))
         assertTrue(KnownFleet.KEYBOARD.notes.contains("Never forward typed text"))
         assertTrue(KnownFleet.KEYBOARD.notes.contains("undecided by Don"))
+        assertEquals("Victorious93/victorious-mesh", KnownFleet.MESH.repo)
+        assertTrue(KnownFleet.MESH.packageOrBinary.contains("com.victorious.mesh"))
+        assertFalse(KnownFleet.MESH.packageOrBinary.contains("com.victorious.mesh.debug"))
+        assertTrue(KnownFleet.MESH.packageOrBinary.contains("no applicationIdSuffix"))
+        assertTrue(KnownFleet.MESH.transports.any { it.contains("com.victorious.mesh.action.BRIDGE") })
+        assertTrue(KnownFleet.MESH.transports.any { it.contains("^mesh-[0-9a-f]{32}$") })
+        assertTrue(KnownFleet.MESH.notes.contains("Never DependencyGuard"))
+        assertTrue(KnownFleet.MESH.notes.contains("never KnownCompanions"))
+        assertTrue(KnownFleet.MESH.notes.contains("own release key"))
+        assertEquals(
+            listOf("mesh_capabilities", "mesh_status", "mesh_up", "mesh_down", "mesh_get_ip"),
+            KnownFleet.MESH.existingToolNames,
+        )
     }
 
     @Test
@@ -201,14 +230,16 @@ class FleetCatalogTest {
             "pentestswarm",
             "file-manager",
             "keyboard",
+            "mesh",
         )) {
             assertTrue(text.contains(id), id)
         }
         assertTrue(text.contains("None is LIVE"))
         assertTrue(text.contains("Pentest (when repo exists)"))
-        assertTrue(text.contains("RootForge/File Manager/Keyboard Messenger is not that"))
+        assertTrue(text.contains("RootForge/File Manager/Keyboard/Mesh Messenger is not that"))
         assertTrue(text.contains("ai.victorious.filemanager.action.BRIDGE"))
         assertTrue(text.contains("com.victorious.keyboard.action.BRIDGE"))
+        assertTrue(text.contains("com.victorious.mesh.action.BRIDGE"))
         assertTrue(text.contains("HackerAI"))
         assertTrue(text.contains("signingCertSha256: [Unknown]"))
         assertTrue(text.contains("Controller-side node signature check"))
@@ -248,6 +279,11 @@ class FleetCatalogTest {
             KnownFleet.KEYBOARD.expectedSigningCertSha256,
         )
         assertTrue(KnownFleet.FILE_MANAGER.expectedSigningCertSha256.isEmpty())
+        assertEquals(listOf("com.victorious.mesh"), KnownFleet.MESH.androidPackages)
+        assertEquals(
+            listOf(KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256),
+            KnownFleet.MESH.expectedSigningCertSha256,
+        )
         val catalog = KnownNodeSigningCatalog.all()
         assertTrue(catalog.any { it.packageName == "com.victorious.mesh" && it.expectedCerts.isNotEmpty() })
         assertTrue(catalog.any { it.packageName == "com.victorious.browser" && it.expectedCerts.isNotEmpty() })

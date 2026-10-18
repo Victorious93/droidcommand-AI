@@ -52,8 +52,8 @@ or Sahara/Firehose (EDL companion).
 
 The room-fleet map lives in `docs/FLEET_CONTROL.md` and `core-security.KnownFleet`.
 Add a member to `KnownCompanions` only when it is a genuine dependent companion
-APK (HackerAI, Pentest-Swarm, EDL-Commander). File Manager and Keyboard are
-EXTERNAL_NODE like RootForge — never `KnownCompanions`.
+APK (HackerAI, Pentest-Swarm, EDL-Commander). File Manager, Keyboard, and Mesh
+are EXTERNAL_NODE like RootForge — never `KnownCompanions`.
 
 ## Fleet slots that are not companions
 
@@ -148,6 +148,38 @@ companion.
 - Status: **PLANNED** (not LIVE, not PARTIAL). Wiring: catalog only until
   Don decides direction (hub queries the keyboard vs the keyboard surfaces
   fleet slash-commands). See `docs/FLEET_CONTROL.md`.
+
+### Victorious Mesh — EXTERNAL_NODE (Messenger)
+
+Victorious Mesh (`Victorious93/victorious-mesh`) is an independent
+product, the same class as RootForge, File Manager, and Keyboard. It is
+**not** a companion.
+
+- Package: `com.victorious.mesh` (debug==release; **no**
+  `applicationIdSuffix`).
+- Planned action: `com.victorious.mesh.action.BRIDGE`, `protocol_major` 1,
+  `dca_required:false`, `fleet_class` `external_node`.
+- Transport: Message what=1 Bundle key `request` (JSON); reply what=2 Bundle
+  key `response`. Envelope fields match RootForge (`protocol_major`,
+  `request_id`, `target_node_id` / `node_id`, `operation`, `timeout_ms`,
+  `parameters` / `ok`, `result`, `error {category, message}`).
+- Node-id prefix: `^mesh-[0-9a-f]{32}$`.
+- Planned ops: `mesh.capabilities.get`, `mesh.status`, `mesh.up`,
+  `mesh.down`, `mesh.ip.get`. LLM tools: `mesh_capabilities`,
+  `mesh_status`, `mesh_up`, `mesh_down`, `mesh_get_ip`.
+- Mesh-side: external control default OFF; caller allowlist
+  `ai.droidcommand.app` and `ai.droidcommand.app.debug`.
+- Mesh debug cert SHA-256:
+  `F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4`.
+  Mesh keeps its **own** release key — do not assume the shared fleet key.
+- **Never** `DependencyGuard`, **never** a shared signing key, **never**
+  `KnownCompanions`, **never** a `BIND_*` signature permission, **never**
+  AIDL. Removing DCA must not disable Mesh.
+- Catalog stub: `mesh_status` (`PlannedFleetTool`). Always
+  `ToolResult.Failure` / `REQUIRES_EXTERNAL_SERVICE`. This repo does **not**
+  implement a live Messenger client bind.
+- Status: **PLANNED** (not LIVE, not PARTIAL). Wiring: catalog only until
+  a Mesh Messenger client can follow the RootForge pattern.
 
 ### EDL-Commander — bound companion (not a host tool)
 
@@ -249,7 +281,7 @@ victorious-flash.
 Enforceable today (mismatch / missing-observed refuse):
 
 - DroidCommand-AI debug `ai.droidcommand.app` `88:00:51:A6:…:C8:4D`
-- Victorious Mesh debug `com.victorious.mesh` `F4:C9:25:B8:…:B9:F4` (not a wiring-order member)
+- Victorious Mesh debug `com.victorious.mesh` `F4:C9:25:B8:…:B9:F4` (8th wiring-order member, PLANNED catalog)
 - Victorious Browser debug `com.victorious.browser` `2D:5D:9E:8B:…:C3:E1` (not a wiring-order member)
 - Pentest-Swarm-AI debug `ai.pentestswarm.companion` `5E:3A:B1:23:…:30:C7`
 - EDL-Commander debug `ai.edlcommander.companion` `E5:60:B6:92:…:58:C8`

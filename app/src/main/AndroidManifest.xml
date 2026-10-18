@@ -41,7 +41,8 @@
         <package android:name="ai.edlcommander.companion" />
         <package android:name="ai.victorious.filemanager" />
         <package android:name="com.victorious.keyboard" />
-        <!-- Controller-side node signature check (NodeSignatureGuard) reads this package's cert. -->
+        <!-- Controller-side node signature check (NodeSignatureGuard) plus Tools → Fleet
+             package probe. Mesh is also KnownFleet.MESH (PLANNED EXTERNAL_NODE). -->
         <package android:name="com.victorious.mesh" />
     </queries>
 

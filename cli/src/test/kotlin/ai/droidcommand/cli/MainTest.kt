@@ -49,6 +49,7 @@ class MainTest {
                 "kyc_auditlab_status",
                 "filemanager_status",
                 "keyboard_status",
+                "mesh_status",
             ),
             specs.map { it.name },
         )
@@ -165,6 +166,12 @@ class MainTest {
     @Test
     fun `pilot keyboard_status fails honestly and never binds Messenger`() {
         val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("keyboard_status"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot mesh_status fails honestly and never binds Messenger`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("mesh_status"))
         assertEquals(1, exitCode)
     }
 

@@ -21,7 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
 /**
- * Honest roster: HackerAI plus the seven KnownFleet members.
+ * Honest roster: HackerAI plus the eight KnownFleet members.
  * Install state is a PackageManager probe only. Nothing on this screen
  * starts an AIDL bind, Messenger session, SSH session, or tool run.
  */
@@ -38,7 +38,7 @@ fun FleetScreen() {
     ) {
         ScreenTitle("Fleet")
         Text(
-            "Companions are separate APKs. RootForge, File Manager, and Keyboard are external nodes " +
+            "Companions are separate APKs. RootForge, File Manager, Keyboard, and Mesh are external nodes " +
                 "(Messenger + shared JSON) — never DependencyGuard. " +
                 "This screen reports install state only. No binder is started here, and no member is LIVE.",
             style = MaterialTheme.typography.bodySmall,
