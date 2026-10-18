@@ -242,20 +242,40 @@ value(s).
 
 **Catalog.** `FleetMemberDescriptor.expectedSigningCertSha256` holds zero or
 more fingerprints (debug + release is the intended shape). Empty means
-`[Unknown]` — **do not invent a fingerprint**. `KnownNodeSigningCatalog`
-also pins Victorious Mesh debug `com.victorious.mesh` =
-`F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4`
-(their committed debug keystore). Mesh is not a `KnownFleet` wiring-order
-member yet (their Fleet IPC Messenger is still TODO). Mesh **release** is
-`[Unknown]`.
+`[Unknown]` — **do not invent a fingerprint**. The catalogue is **partial**;
+fail-closed should be enabled only once it is complete. Do not catalogue
+victorious-flash.
+
+Enforceable today (mismatch / missing-observed refuse):
+
+- DroidCommand-AI debug `ai.droidcommand.app` `88:00:51:A6:…:C8:4D`
+- Victorious Mesh debug `com.victorious.mesh` `F4:C9:25:B8:…:B9:F4` (not a wiring-order member)
+- Pentest-Swarm-AI debug `ai.pentestswarm.companion` `5E:3A:B1:23:…:30:C7`
+- EDL-Commander debug `ai.edlcommander.companion` `E5:60:B6:92:…:58:C8`
+- HackerAI-Commander debug `ai.hackerai.companion` `AF:1C:8F:C5:…:23:55`
+- HackerAI-Commander RELEASE `9E:A7:B3:14:…:2D:8D` — firsthand verified (v0.1.0 APK signer in CI). **Only** member whose shared-fleet release cert is enforced.
+- RootForge debug `ai.rootforge.os.debug` `77:7A:C7:00:…:64:6F` (no release key yet)
+- Victorious Keyboard debug `com.victorious.keyboard` / `.debug` `47:1E:AD:6B:…:AF:4F` (`.bench` uncatalogued)
+- VictorSuite / Termux debug `com.termux` `67:17:C5:5A:…:31:D3`
+- VictorSuite **own** RELEASE `com.termux` `8C:BF:09:AA:…:19:80` (not the shared fleet key)
+
+Planned / unverified (documented as `SHARED_FLEET_RELEASE_SHA256`, **not**
+enforced): DroidCommand-AI / Pentest / EDL release `9E:A7:…`.
+
+Caveated / not enforced: File-Manager DEBUG `8C:1F:E3:C9:…:85:F2` is
+`[unstable/CI-secrets]` (CI injects from secrets, else generic Android
+debug key). Packages stay fail-open.
+
+Pending / out of scope: Mesh release, RootForge release, Keyboard release
+and `.bench`, File Manager release, KYC (no APK), victorious-flash,
+BakerPi.
 
 **Default for `[Unknown]` members: ALLOW.** Fail-closed
-(`MissingExpectedCertPolicy.REFUSE`) is available and preferred once
-fingerprints are catalogued, but turning it on today would block every
-current member (Pentest, RootForge, VictorSuite, EDL, KYC, File Manager,
-Keyboard, HackerAI). Set `DROIDCOMMAND_NODE_CERT_MISSING_EXPECTED=refuse`
-to switch. When expected certs **are** catalogued, mismatch and
-missing-observed always refuse — that path is not configurable.
+(`MissingExpectedCertPolicy.REFUSE`) is available
+(`DROIDCOMMAND_NODE_CERT_MISSING_EXPECTED=refuse`) but must not be the
+default until the catalogue is complete. When expected certs **are**
+catalogued, mismatch and missing-observed always refuse — that path is
+not configurable.
 
 This **adds** a check. It does not replace DependencyGuard, signature
 permissions, Kali/pentest authorization, or any other existing gate.

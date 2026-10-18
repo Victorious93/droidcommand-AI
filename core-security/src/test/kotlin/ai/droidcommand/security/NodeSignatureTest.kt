@@ -51,12 +51,15 @@ class NodeSignatureTest {
     }
 
     @Test
-    fun `missing expected cert is allowed under the documented default`() {
+    fun `uncatalogued member is allowed under the documented fail-open default`() {
         val decision = NodeSignatureVerifier().verify("ai.victorious.filemanager", listOf(attacker))
         val allowed = assertIs<NodeSignatureDecision.Allowed>(decision)
         assertNull(allowed.matchedFingerprint)
         assertTrue(allowed.message.contains("no catalogued signing cert"))
         assertTrue(allowed.message.contains("ALLOW"))
+        assertIs<NodeSignatureDecision.Allowed>(
+            NodeSignatureVerifier().verify("com.victorious.keyboard.bench", listOf(attacker)),
+        )
     }
 
     @Test
@@ -99,15 +102,50 @@ class NodeSignatureTest {
     }
 
     @Test
-    fun `every KnownFleet member currently has no catalogued cert`() {
-        for (member in KnownFleet.ALL) {
-            assertTrue(member.expectedSigningCertSha256.isEmpty(), member.id)
-            assertEquals("[Unknown]", member.signingCertLabel())
-        }
-        assertEquals(
-            listOf("ai.pentestswarm.companion"),
-            KnownFleet.PENTEST_SWARM.androidPackages,
+    fun `catalogued member plus matching cert is allowed`() {
+        val verifier = NodeSignatureVerifier()
+        val cases = listOf(
+            "ai.droidcommand.app" to KnownNodeSigningCatalog.DROIDCOMMAND_AI_DEBUG_SHA256,
+            "com.victorious.mesh" to KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256,
+            "ai.pentestswarm.companion" to KnownNodeSigningCatalog.PENTEST_SWARM_DEBUG_SHA256,
+            "ai.edlcommander.companion" to KnownNodeSigningCatalog.EDL_COMMANDER_DEBUG_SHA256,
+            "ai.hackerai.companion" to KnownNodeSigningCatalog.HACKERAI_DEBUG_SHA256,
+            "ai.hackerai.companion" to KnownNodeSigningCatalog.SHARED_FLEET_RELEASE_SHA256,
+            "ai.rootforge.os.debug" to KnownNodeSigningCatalog.ROOTFORGE_DEBUG_SHA256,
+            "com.victorious.keyboard" to KnownNodeSigningCatalog.KEYBOARD_DEBUG_SHA256,
+            "com.victorious.keyboard.debug" to KnownNodeSigningCatalog.KEYBOARD_DEBUG_SHA256,
+            "com.termux" to KnownNodeSigningCatalog.VICTORSUITE_DEBUG_SHA256,
+            "com.termux" to KnownNodeSigningCatalog.VICTORSUITE_RELEASE_SHA256,
         )
+        for ((pkg, fp) in cases) {
+            val allowed = assertIs<NodeSignatureDecision.Allowed>(verifier.verify(pkg, listOf(fp)), pkg)
+            assertEquals(fp, allowed.matchedFingerprint, pkg)
+        }
+    }
+
+    @Test
+    fun `catalogued member plus mismatched cert is refused`() {
+        val verifier = NodeSignatureVerifier()
+        for (pkg in listOf(
+            "ai.droidcommand.app",
+            "com.victorious.mesh",
+            "ai.pentestswarm.companion",
+            "ai.edlcommander.companion",
+            "ai.hackerai.companion",
+            "ai.rootforge.os.debug",
+            "com.victorious.keyboard",
+            "com.termux",
+        )) {
+            val refused = assertIs<NodeSignatureDecision.Refused>(verifier.verify(pkg, listOf(attacker)), pkg)
+            assertEquals(NodeSignatureRefusal.CERT_MISMATCH, refused.kind, pkg)
+        }
+    }
+
+    @Test
+    fun `KnownFleet android packages and which members are still uncatalogued`() {
+        assertEquals(listOf("ai.pentestswarm.companion"), KnownFleet.PENTEST_SWARM.androidPackages)
+        assertEquals(listOf("ai.rootforge.os.debug"), KnownFleet.ROOTFORGE.androidPackages)
+        assertEquals(listOf("com.termux"), KnownFleet.VICTORSUITE.androidPackages)
         assertEquals(
             listOf("ai.victorious.filemanager", "ai.victorious.filemanager.debug"),
             KnownFleet.FILE_MANAGER.androidPackages,
@@ -120,8 +158,10 @@ class NodeSignatureTest {
             ),
             KnownFleet.KEYBOARD.androidPackages,
         )
-        assertTrue(KnownFleet.ROOTFORGE.androidPackages.isEmpty())
         assertTrue(KnownFleet.KYC_AUDITLAB.androidPackages.isEmpty())
+        assertTrue(KnownFleet.FILE_MANAGER.expectedSigningCertSha256.isEmpty())
+        assertEquals("[Unknown]", KnownFleet.FILE_MANAGER.signingCertLabel())
+        assertEquals("[Unknown]", KnownFleet.KYC_AUDITLAB.signingCertLabel())
     }
 
     @Test
@@ -132,12 +172,64 @@ class NodeSignatureTest {
     }
 
     @Test
-    fun `HackerAI is catalogued as Unknown so the default ALLOW path still binds`() {
+    fun `HackerAI enforces debug and the firsthand-verified shared-fleet release`() {
         val identity = KnownNodeSigningCatalog.identityFor("ai.hackerai.companion")
         assertEquals("hackerai", identity?.memberId)
-        assertTrue(identity?.expectedCerts?.isEmpty() == true)
-        assertIs<NodeSignatureDecision.Allowed>(
-            NodeSignatureVerifier().verify("ai.hackerai.companion", listOf(attacker)),
+        assertEquals(
+            listOf(
+                KnownNodeSigningCatalog.HACKERAI_DEBUG_SHA256,
+                KnownNodeSigningCatalog.SHARED_FLEET_RELEASE_SHA256,
+            ),
+            identity?.expectedCerts?.map { it.canonical },
+        )
+    }
+
+    @Test
+    fun `shared fleet release is not enforced for DCA Pentest or EDL`() {
+        val planned = SigningCertSha256.parseOrThrow(KnownNodeSigningCatalog.SHARED_FLEET_RELEASE_SHA256)
+        for (pkg in listOf(
+            "ai.droidcommand.app",
+            "ai.pentestswarm.companion",
+            "ai.edlcommander.companion",
+        )) {
+            val certs = KnownNodeSigningCatalog.identityFor(pkg)?.expectedCerts.orEmpty()
+            assertTrue(planned !in certs, pkg)
+        }
+        assertTrue(
+            KnownFleet.PENTEST_SWARM.expectedSigningCertSha256.none {
+                SigningCertSha256.parseOrThrow(it) == planned
+            },
+        )
+        assertTrue(
+            KnownFleet.EDL_COMMANDER.expectedSigningCertSha256.none {
+                SigningCertSha256.parseOrThrow(it) == planned
+            },
+        )
+    }
+
+    @Test
+    fun `File-Manager unstable debug cert is documented but not enforced`() {
+        val unstable = SigningCertSha256.parseOrThrow(
+            KnownNodeSigningCatalog.FILE_MANAGER_DEBUG_UNSTABLE_CI_SECRETS,
+        )
+        for (pkg in listOf("ai.victorious.filemanager", "ai.victorious.filemanager.debug")) {
+            val identity = KnownNodeSigningCatalog.identityFor(pkg)
+            assertTrue(identity?.expectedCerts.isNullOrEmpty(), pkg)
+            assertIs<NodeSignatureDecision.Allowed>(
+                NodeSignatureVerifier().verify(pkg, listOf(unstable.canonical)),
+            )
+        }
+        assertTrue(
+            KnownNodeSigningCatalog.all().none { identity ->
+                unstable in identity.expectedCerts
+            },
+        )
+    }
+
+    @Test
+    fun `victorious-flash is not catalogued`() {
+        assertTrue(
+            KnownNodeSigningCatalog.all().none { it.packageName.contains("flash") },
         )
     }
 

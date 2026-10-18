@@ -40,5 +40,7 @@ class FleetCommandsTest {
         assertTrue(text.contains("RootForge/File Manager/Keyboard Messenger is not that"))
         assertTrue(text.contains("signingCertSha256: [Unknown]"))
         assertTrue(text.contains("com.victorious.mesh"))
+        assertTrue(text.contains("ai.rootforge.os.debug"))
+        assertTrue(text.contains("[planned/unverified]"))
     }
 }

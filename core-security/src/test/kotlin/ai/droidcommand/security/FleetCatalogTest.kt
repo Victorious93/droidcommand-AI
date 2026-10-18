@@ -213,22 +213,47 @@ class FleetCatalogTest {
         assertTrue(text.contains("signingCertSha256: [Unknown]"))
         assertTrue(text.contains("Controller-side node signature check"))
         assertTrue(text.contains("com.victorious.mesh"))
+        assertTrue(text.contains("ai.rootforge.os.debug"))
+        assertTrue(text.contains("[unstable/CI-secrets]"))
+        assertTrue(text.contains("[planned/unverified]"))
     }
 
     @Test
-    fun `EXTERNAL_NODE and BOUND_COMPANION members expose android packages and empty expected certs`() {
+    fun `fleet members expose android packages and the catalogued expected certs`() {
         assertEquals(listOf("ai.pentestswarm.companion"), KnownFleet.PENTEST_SWARM.androidPackages)
+        assertEquals(
+            listOf(KnownNodeSigningCatalog.PENTEST_SWARM_DEBUG_SHA256),
+            KnownFleet.PENTEST_SWARM.expectedSigningCertSha256,
+        )
         assertEquals(listOf("ai.edlcommander.companion"), KnownFleet.EDL_COMMANDER.androidPackages)
-        assertTrue(KnownFleet.PENTEST_SWARM.expectedSigningCertSha256.isEmpty())
-        assertTrue(KnownFleet.EDL_COMMANDER.expectedSigningCertSha256.isEmpty())
+        assertEquals(
+            listOf(KnownNodeSigningCatalog.EDL_COMMANDER_DEBUG_SHA256),
+            KnownFleet.EDL_COMMANDER.expectedSigningCertSha256,
+        )
+        assertEquals(listOf("ai.rootforge.os.debug"), KnownFleet.ROOTFORGE.androidPackages)
+        assertEquals(
+            listOf(KnownNodeSigningCatalog.ROOTFORGE_DEBUG_SHA256),
+            KnownFleet.ROOTFORGE.expectedSigningCertSha256,
+        )
+        assertEquals(
+            listOf(
+                KnownNodeSigningCatalog.VICTORSUITE_DEBUG_SHA256,
+                KnownNodeSigningCatalog.VICTORSUITE_RELEASE_SHA256,
+            ),
+            KnownFleet.VICTORSUITE.expectedSigningCertSha256,
+        )
+        assertEquals(
+            listOf(KnownNodeSigningCatalog.KEYBOARD_DEBUG_SHA256),
+            KnownFleet.KEYBOARD.expectedSigningCertSha256,
+        )
         assertTrue(KnownFleet.FILE_MANAGER.expectedSigningCertSha256.isEmpty())
-        assertTrue(KnownFleet.KEYBOARD.expectedSigningCertSha256.isEmpty())
-        assertTrue(KnownFleet.ROOTFORGE.expectedSigningCertSha256.isEmpty())
         val catalog = KnownNodeSigningCatalog.all()
         assertTrue(catalog.any { it.packageName == "com.victorious.mesh" && it.expectedCerts.isNotEmpty() })
         assertTrue(
-            catalog.filter { it.memberId in KnownFleet.ALL.map { m -> m.id } }
-                .all { it.expectedCerts.isEmpty() },
+            catalog.first { it.packageName == "com.victorious.keyboard.bench" }.expectedCerts.isEmpty(),
+        )
+        assertTrue(
+            catalog.first { it.packageName == "ai.victorious.filemanager" }.expectedCerts.isEmpty(),
         )
     }
 }

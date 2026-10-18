@@ -17,3 +17,5 @@
 ## Release
 
 Release keys are **not** in this repository. They stay in CI secrets (or a private store) and are not configured in `app/build.gradle.kts`. Do not reuse this debug keystore — or any fleet companion key — for release builds.
+
+The intended shared-fleet RELEASE SHA-256 (`9E:A7:B3:14:94:5B:0A:62:97:15:6F:F7:06:E7:0C:0A:B1:B7:24:DE:06:D5:09:9C:A5:12:8A:B4:43:F7:2D:8D`) is firsthand verified for **HackerAI-Commander only**. For DroidCommand-AI itself it remains **[planned/unverified]** — documented on `KnownNodeSigningCatalog.SHARED_FLEET_RELEASE_SHA256`, not wired into `ai.droidcommand.app`'s expected certs. See `docs/FLEET_CONTROL.md`.
