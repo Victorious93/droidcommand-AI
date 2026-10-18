@@ -163,6 +163,14 @@ object KnownNodeSigningCatalog {
     const val KEYBOARD_DEBUG_SHA256 =
         "47:1E:AD:6B:3F:96:7E:F3:C8:63:EF:49:08:74:8B:3B:E3:63:F9:1D:75:0B:FD:B1:E9:28:05:BC:F1:6B:AF:4F"
 
+    /**
+     * Victorious Browser debug (`com.victorious.browser`). Enforceable.
+     * RELEASE is [planned/unverified]: own key (NOT shared fleet 9E:A7),
+     * CI-only, cert TBD — do not invent a fingerprint.
+     */
+    const val VICTORIOUS_BROWSER_DEBUG_SHA256 =
+        "2D:5D:9E:8B:53:8E:78:51:3D:B5:41:F4:DF:FD:67:BE:27:FF:EC:3F:37:EB:1A:D4:8D:77:83:AE:59:27:C3:E1"
+
     /** VictorSuite / Termux (`com.termux`) committed debug signing cert. Enforceable. */
     const val VICTORSUITE_DEBUG_SHA256 =
         "67:17:C5:5A:BE:9E:0D:F8:C6:03:C9:A0:F3:F3:67:B6:CA:BD:B0:1F:3E:58:3A:4F:F6:44:E5:DF:3D:4C:31:D3"
@@ -231,6 +239,22 @@ object KnownNodeSigningCatalog {
     )
 
     /**
+     * Victorious Browser debug identity. EXTERNAL_NODE, not a
+     * [KnownFleet] wiring-order member. RELEASE is own-key
+     * [planned/unverified] (CI-only, cert TBD) — not [SHARED_FLEET_RELEASE_SHA256]
+     * and not listed in [expectedCerts].
+     */
+    val VICTORIOUS_BROWSER_DEBUG = NodeSigningIdentity(
+        packageName = "com.victorious.browser",
+        expectedCerts = listOf(SigningCertSha256.parseOrThrow(VICTORIOUS_BROWSER_DEBUG_SHA256)),
+        memberId = "browser",
+        integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
+        notes = "Victorious Browser debug. Enforceable. RELEASE is [planned/unverified] " +
+            "(own key, NOT shared fleet 9E:A7, CI-only, cert TBD). " +
+            "Never DependencyGuard, never a shared signing key. Not a KnownFleet wiring-order member.",
+    )
+
+    /**
      * HackerAI-Commander (`ai.hackerai.companion`). Debug is
      * committed; RELEASE [SHARED_FLEET_RELEASE_SHA256] is FIRSTHAND
      * VERIFIED (v0.1.0 APK signer in CI). This is the **only** member
@@ -265,6 +289,7 @@ object KnownNodeSigningCatalog {
     val EXTRAS: List<NodeSigningIdentity> = listOf(
         DROIDCOMMAND_AI_DEBUG,
         VICTORIOUS_MESH_DEBUG,
+        VICTORIOUS_BROWSER_DEBUG,
         HACKERAI,
         KEYBOARD_BENCH,
     )

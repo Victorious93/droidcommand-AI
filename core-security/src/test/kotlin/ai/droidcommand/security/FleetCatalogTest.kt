@@ -213,6 +213,7 @@ class FleetCatalogTest {
         assertTrue(text.contains("signingCertSha256: [Unknown]"))
         assertTrue(text.contains("Controller-side node signature check"))
         assertTrue(text.contains("com.victorious.mesh"))
+        assertTrue(text.contains("com.victorious.browser"))
         assertTrue(text.contains("ai.rootforge.os.debug"))
         assertTrue(text.contains("[unstable/CI-secrets]"))
         assertTrue(text.contains("[planned/unverified]"))
@@ -249,6 +250,7 @@ class FleetCatalogTest {
         assertTrue(KnownFleet.FILE_MANAGER.expectedSigningCertSha256.isEmpty())
         val catalog = KnownNodeSigningCatalog.all()
         assertTrue(catalog.any { it.packageName == "com.victorious.mesh" && it.expectedCerts.isNotEmpty() })
+        assertTrue(catalog.any { it.packageName == "com.victorious.browser" && it.expectedCerts.isNotEmpty() })
         assertTrue(
             catalog.first { it.packageName == "com.victorious.keyboard.bench" }.expectedCerts.isEmpty(),
         )

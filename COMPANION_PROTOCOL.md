@@ -250,6 +250,7 @@ Enforceable today (mismatch / missing-observed refuse):
 
 - DroidCommand-AI debug `ai.droidcommand.app` `88:00:51:A6:…:C8:4D`
 - Victorious Mesh debug `com.victorious.mesh` `F4:C9:25:B8:…:B9:F4` (not a wiring-order member)
+- Victorious Browser debug `com.victorious.browser` `2D:5D:9E:8B:…:C3:E1` (not a wiring-order member)
 - Pentest-Swarm-AI debug `ai.pentestswarm.companion` `5E:3A:B1:23:…:30:C7`
 - EDL-Commander debug `ai.edlcommander.companion` `E5:60:B6:92:…:58:C8`
 - HackerAI-Commander debug `ai.hackerai.companion` `AF:1C:8F:C5:…:23:55`
@@ -259,8 +260,9 @@ Enforceable today (mismatch / missing-observed refuse):
 - VictorSuite / Termux debug `com.termux` `67:17:C5:5A:…:31:D3`
 - VictorSuite **own** RELEASE `com.termux` `8C:BF:09:AA:…:19:80` (not the shared fleet key)
 
-Planned / unverified (documented as `SHARED_FLEET_RELEASE_SHA256`, **not**
-enforced): DroidCommand-AI / Pentest / EDL release `9E:A7:…`.
+Planned / unverified (**not** enforced): DroidCommand-AI / Pentest / EDL
+release `9E:A7:…` (`SHARED_FLEET_RELEASE_SHA256`); Victorious Browser
+RELEASE (own key, NOT shared fleet, CI-only, cert TBD).
 
 Caveated / not enforced: File-Manager DEBUG `8C:1F:E3:C9:…:85:F2` is
 `[unstable/CI-secrets]` (CI injects from secrets, else generic Android

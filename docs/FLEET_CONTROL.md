@@ -151,6 +151,7 @@ and missing-observed refuse):
 |---|---|---|---|
 | DroidCommand-AI | DEBUG | `ai.droidcommand.app` | `88:00:51:A6:D9:5D:38:DD:8D:81:E1:93:1E:17:05:48:03:87:D5:93:C3:09:43:53:99:68:E6:EF:11:A0:C8:4D` |
 | Victorious Mesh (not a wiring-order member) | DEBUG | `com.victorious.mesh` | `F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4` |
+| Victorious Browser (not a wiring-order member) | DEBUG | `com.victorious.browser` | `2D:5D:9E:8B:53:8E:78:51:3D:B5:41:F4:DF:FD:67:BE:27:FF:EC:3F:37:EB:1A:D4:8D:77:83:AE:59:27:C3:E1` |
 | Pentest-Swarm-AI | DEBUG | `ai.pentestswarm.companion` | `5E:3A:B1:23:1F:7E:DA:18:78:B8:FF:D8:9E:AC:B1:F7:2E:EB:66:AF:3D:BA:2E:01:33:51:24:68:42:23:30:C7` |
 | EDL-Commander | DEBUG | `ai.edlcommander.companion` | `E5:60:B6:92:BD:E6:51:9E:B7:CB:B5:2C:E4:DC:91:5A:19:E4:41:A0:1A:5D:03:68:82:71:AC:99:78:8A:58:C8` |
 | HackerAI-Commander | DEBUG | `ai.hackerai.companion` | `AF:1C:8F:C5:44:9F:58:4A:46:C8:96:CC:C9:7F:35:B0:7B:35:7E:96:EE:66:5F:3A:BF:CB:0D:28:4D:F5:23:55` |
@@ -168,6 +169,7 @@ and missing-observed refuse):
 | DroidCommand-AI | RELEASE | [planned/unverified] — same shared-fleet fingerprint, no verified in-repo release `signingConfig` |
 | Pentest-Swarm-AI | RELEASE | [planned/unverified] |
 | EDL-Commander | RELEASE | [planned/unverified] |
+| Victorious Browser | RELEASE | [planned/unverified] — **own** key (NOT shared fleet `9E:A7`), CI-only, cert TBD — do not invent |
 
 **Caveated** (documented, **not** enforced — packages stay fail-open):
 

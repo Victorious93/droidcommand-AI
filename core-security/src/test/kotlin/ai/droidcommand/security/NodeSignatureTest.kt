@@ -107,6 +107,7 @@ class NodeSignatureTest {
         val cases = listOf(
             "ai.droidcommand.app" to KnownNodeSigningCatalog.DROIDCOMMAND_AI_DEBUG_SHA256,
             "com.victorious.mesh" to KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256,
+            "com.victorious.browser" to KnownNodeSigningCatalog.VICTORIOUS_BROWSER_DEBUG_SHA256,
             "ai.pentestswarm.companion" to KnownNodeSigningCatalog.PENTEST_SWARM_DEBUG_SHA256,
             "ai.edlcommander.companion" to KnownNodeSigningCatalog.EDL_COMMANDER_DEBUG_SHA256,
             "ai.hackerai.companion" to KnownNodeSigningCatalog.HACKERAI_DEBUG_SHA256,
@@ -129,6 +130,7 @@ class NodeSignatureTest {
         for (pkg in listOf(
             "ai.droidcommand.app",
             "com.victorious.mesh",
+            "com.victorious.browser",
             "ai.pentestswarm.companion",
             "ai.edlcommander.companion",
             "ai.hackerai.companion",
@@ -191,6 +193,7 @@ class NodeSignatureTest {
             "ai.droidcommand.app",
             "ai.pentestswarm.companion",
             "ai.edlcommander.companion",
+            "com.victorious.browser",
         )) {
             val certs = KnownNodeSigningCatalog.identityFor(pkg)?.expectedCerts.orEmpty()
             assertTrue(planned !in certs, pkg)
@@ -231,6 +234,21 @@ class NodeSignatureTest {
         assertTrue(
             KnownNodeSigningCatalog.all().none { it.packageName.contains("flash") },
         )
+    }
+
+    @Test
+    fun `Victorious Browser debug is enforced and release stays planned`() {
+        val identity = KnownNodeSigningCatalog.VICTORIOUS_BROWSER_DEBUG
+        assertEquals("com.victorious.browser", identity.packageName)
+        assertEquals(FleetIntegrationClass.EXTERNAL_NODE, identity.integrationClass)
+        assertEquals(
+            listOf(KnownNodeSigningCatalog.VICTORIOUS_BROWSER_DEBUG_SHA256),
+            identity.expectedCerts.map { it.canonical },
+        )
+        assertEquals(identity, KnownNodeSigningCatalog.identityFor("com.victorious.browser"))
+        assertTrue(identity.notes.contains("[planned/unverified]"))
+        assertTrue(identity.notes.contains("NOT shared fleet"))
+        assertTrue(KnownFleet.ALL.none { "browser" in it.androidPackages })
     }
 
     @Test
