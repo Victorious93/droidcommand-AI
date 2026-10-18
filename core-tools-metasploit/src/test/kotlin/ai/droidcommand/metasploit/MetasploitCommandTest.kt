@@ -16,6 +16,17 @@ class MetasploitCommandTest {
     }
 
     @Test
+    fun `rejects a CIDR mass target`() {
+        assertFailsWith<IllegalArgumentException> {
+            MetasploitCommand(
+                moduleType = MetasploitModuleType.AUXILIARY,
+                modulePath = "auxiliary/scanner/portscan/tcp",
+                target = MetasploitTarget("10.0.0.0/24"),
+            )
+        }
+    }
+
+    @Test
     fun `rejects a blank target host`() {
         assertFailsWith<IllegalArgumentException> {
             MetasploitCommand(

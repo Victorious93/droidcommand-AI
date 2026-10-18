@@ -10,10 +10,10 @@ package ai.droidcommand.metasploit
 enum class MetasploitModuleType { EXPLOIT, AUXILIARY, POST, PAYLOAD }
 
 /**
- * [host] is required and never blank — this tool has no "scan everything"
- * mode; a caller must name one authorized target per invocation. [port]
- * stays a typed `Int?` rather than a string precisely so it can never carry
- * an injection payload the way a raw string RPORT could.
+ * [host] is required and must be a single authorized host — never blank,
+ * never a CIDR/subnet, never a comma-list or wildcard. [port] stays a typed
+ * `Int?` rather than a string precisely so it can never carry an injection
+ * payload the way a raw string RPORT could.
  */
 data class MetasploitTarget(val host: String, val port: Int? = null)
 
@@ -44,10 +44,7 @@ data class MetasploitCommand(
         require(modulePath.startsWith("${moduleType.name.lowercase()}/")) {
             "modulePath '$modulePath' does not start with the expected '${moduleType.name.lowercase()}/' prefix for moduleType $moduleType"
         }
-        require(target.host.isNotBlank()) {
-            "target.host must not be blank — this tool never runs against an unspecified/mass target"
-        }
-        assertSafeInterpolationValue("target.host", target.host)
+        AuthorizedTarget.requireSingleHost(target.host)
         payload?.let {
             require(MODULE_PATH_PATTERN.matches(it)) {
                 "payload '$it' does not match the required module-path pattern ${MODULE_PATH_PATTERN.pattern}"
@@ -75,7 +72,7 @@ data class MetasploitCommand(
          * `core-shell.ShellCommand`'s doc comment describes for argv
          * vectors, applied here to resource-script interpolation instead.
          */
-        internal fun assertSafeInterpolationValue(fieldName: String, value: String) {
+        fun assertSafeInterpolationValue(fieldName: String, value: String) {
             require(value.none { it in UNSAFE_CHARS }) {
                 "$fieldName contains a character (';', newline, or NUL) that could inject additional msfconsole commands"
             }

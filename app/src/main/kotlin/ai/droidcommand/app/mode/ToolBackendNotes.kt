@@ -10,9 +10,14 @@ object ToolBackendNotes {
         "run_root_command" ->
             "No rooted device is connected (NullRootExecutor). A run is refused."
         "run_termux_command" ->
-            "No Termux backend is configured (NullTermuxExecutor). A run is refused."
+            "VictorSuite RUN_COMMAND uses RUN_COMMAND_PENDING_INTENT (ClientBackedTermuxExecutor). " +
+                "On-device round-trip is UNVERIFIED; allow-external-apps=true and the RUN_COMMAND permission are required."
         "run_metasploit_module" ->
-            "No Metasploit program is connected (NullMetasploitExecutor). A run is refused."
+            "Metasploit runs inside VictorSuite Kali via RUN_COMMAND (TermuxMetasploitExecutor). " +
+                "On-device msfconsole round-trip is UNVERIFIED."
+        "run_kali_authorized_scan" ->
+            "Local nmap+msfconsole playbook inside VictorSuite Kali. Safety gates are mandatory. " +
+                "On-device msfconsole round-trip is UNVERIFIED."
         "run_setoolkit_attack" ->
             "No Social-Engineer Toolkit program is connected (NullSetExecutor). A run is refused."
         "run_hackerai_agent_task" ->

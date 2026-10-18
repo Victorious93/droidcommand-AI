@@ -38,8 +38,11 @@ on:
       - main
     paths:
       - ".github/workflows/android-apk.yml"
-      - "app/build.gradle.kts"
+      - "app/**"
       - "signing/**"
+      - "core-termux/**"
+      - "core-tools-metasploit/**"
+      - "core-pentest-swarm/**"
       - "core-llm-local-android/**"
       - "core-voice-neural-android/**"
       - "settings.gradle.kts"

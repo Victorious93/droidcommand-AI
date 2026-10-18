@@ -68,7 +68,7 @@ object FleetCatalog {
         name = "Termux / VictorSuite",
         packageName = TERMUX_PACKAGE,
         kind = FleetKind.TERMUX,
-        summary = "TERMUX_IPC. com.termux.RUN_COMMAND / plugin IPC, gated on VictorSuite PR #15. Not a new bound service. This build still uses NullTermuxExecutor.",
+        summary = "TERMUX_IPC. com.termux.RUN_COMMAND + RUN_COMMAND_PENDING_INTENT (ClientBackedTermuxExecutor), gated on VictorSuite PR #15. Not a new bound service. On-device Kali/msfconsole round-trip is UNVERIFIED.",
     )
 
     val EDL_COMMANDER = FleetMember(
@@ -153,9 +153,9 @@ object FleetStatus {
         }
         FleetKind.TERMUX -> when (state) {
             FleetInstallState.INSTALLED ->
-                "Installed. This build still uses NullTermuxExecutor, so a run is refused."
+                "Installed. RUN_COMMAND uses RUN_COMMAND_PENDING_INTENT. On-device Kali/msfconsole round-trip is UNVERIFIED."
             else ->
-                "Not installed. After install, this build still refuses Termux runs until a real executor is wired."
+                "Not installed. After install, RUN_COMMAND still needs allow-external-apps=true and the RUN_COMMAND permission."
         }
         FleetKind.ROOTFORGE ->
             "Not paired. Messenger + shared JSON is the live APK path on their main; this app does not bind it. SSH is fallback only, JVM/CLI."

@@ -56,7 +56,8 @@ class FleetStatusTest {
         assertTrue(swarm.status.contains("Not installed"))
 
         assertEquals(FleetInstallState.INSTALLED, termux.installed)
-        assertTrue(termux.status.contains("NullTermuxExecutor"))
+        assertTrue(termux.status.contains("RUN_COMMAND_PENDING_INTENT"))
+        assertTrue(termux.status.contains("UNVERIFIED"))
 
         assertEquals(FleetInstallState.NOT_APPLICABLE, rootforge.installed)
         assertTrue(rootforge.status.contains("Not paired"))

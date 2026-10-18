@@ -16,14 +16,19 @@ import ai.droidcommand.app.mode.AdvancedModeStore
 import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.security.createAndroidSecretsVault
+import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.conversations.RoomConversationStore
 import ai.droidcommand.hackerai.HackerAiTool
 import ai.droidcommand.knowledge.android.RoomKnowledgeGraph
 import ai.droidcommand.llm.factory.CloudPromptClient
 import ai.droidcommand.llm.factory.CloudProviderSpec
+import ai.droidcommand.metasploit.MetasploitExecutor
 import ai.droidcommand.metasploit.MetasploitTool
-import ai.droidcommand.metasploit.NullMetasploitExecutor
+import ai.droidcommand.metasploit.TermuxMetasploitExecutor
+import ai.droidcommand.pentestswarm.ApprovalPromptStepApprover
+import ai.droidcommand.pentestswarm.KaliAuthorizedScanTool
+import ai.droidcommand.pentestswarm.LocalKaliPlaybookRunner
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.remote.HttpUrlConnectionTransport
 import ai.droidcommand.root.NullRootExecutor
@@ -35,7 +40,8 @@ import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
 import ai.droidcommand.setoolkit.NullSetExecutor
 import ai.droidcommand.setoolkit.SetTool
-import ai.droidcommand.termux.NullTermuxExecutor
+import ai.droidcommand.termux.ClientBackedTermuxExecutor
+import ai.droidcommand.termux.TermuxExecutor
 import ai.droidcommand.termux.TermuxTool
 import ai.droidcommand.voice.android.AndroidSpeechToText
 import ai.droidcommand.voice.android.AndroidTextToSpeech
@@ -55,22 +61,13 @@ import javax.inject.Singleton
  * so Compose screens can `hiltViewModel()` their way to a shared,
  * singleton [ToolRunner].
  *
- * [MetasploitTool]/[SetTool] are registered exactly like [RootTool]/
- * [TermuxTool]: `SecurityLevel.SENSITIVE`, always confirmed via
- * [ComposeApprovalPrompt], denied by default until an operator wires in a
- * real `ShellBackedMetasploitExecutor`/`ProcessBackedSetExecutor`.
- *
- * **Deliberately still Null-backed here, unlike `cli.buildSession`
- * (updated to an opt-in `DROIDCOMMAND_CLI_METASPLOIT`/`DROIDCOMMAND_CLI_SETOOLKIT`
- * env-var switch).** Settings states that no program is connected; it does
- * not offer a toggle that would pretend otherwise. `msfconsole`/`setoolkit`
- * are Ruby/Python tools a
- * bare Android app process cannot `exec` unless they are themselves
- * reachable inside that process's own filesystem/PATH (e.g. a rooted
- * device or a Termux-hosted install) — a materially different, and
- * currently unverified, precondition from `cli`'s "runs on a PC that may
- * have msfconsole installed" assumption. Wiring a real backend remains
- * future work; this module does not invent a connected one.
+ * [MetasploitTool] on Android is bound to [TermuxMetasploitExecutor], which
+ * runs `msfconsole` inside VictorSuite Kali through [TermuxExecutor] /
+ * `com.termux.RUN_COMMAND` + `RUN_COMMAND_PENDING_INTENT`. That is **not**
+ * [ai.droidcommand.metasploit.ShellBackedMetasploitExecutor] (desktop
+ * ProcessBuilder) and **not** the Go pentest-swarm companion. SET stays
+ * [NullSetExecutor] (TermuxSetExecutor is a later task). A live msfconsole
+ * round-trip has not been run in the environment that wired this.
  * The shell allowlist starts empty (no executable is allowed) for the same
  * fail-closed reason `cli`'s own default is empty. The owner allows
  * executables on the Automation keys screen; this module never invents a
@@ -88,17 +85,48 @@ object AppModule {
      */
     @Provides
     @Singleton
+    fun provideTermuxExecutor(@ApplicationContext context: Context): TermuxExecutor =
+        ClientBackedTermuxExecutor(
+            client = AndroidPendingIntentRunCommandClient(context),
+            probeAvailable = {
+                AndroidPendingIntentRunCommandClient.isVictorSuiteInstalled(context) &&
+                    AndroidPendingIntentRunCommandClient.hasRunCommandPermission(context)
+            },
+        )
+
+    @Provides
+    @Singleton
+    fun provideMetasploitExecutor(termux: TermuxExecutor): MetasploitExecutor = TermuxMetasploitExecutor(termux)
+
+    @Provides
+    @Singleton
+    fun provideKaliPlaybookRunner(
+        termux: TermuxExecutor,
+        metasploit: MetasploitExecutor,
+        approvalPrompt: ApprovalPrompt,
+    ): LocalKaliPlaybookRunner = LocalKaliPlaybookRunner(
+        termux = termux,
+        metasploit = metasploit,
+        stepApprover = ApprovalPromptStepApprover(approvalPrompt),
+    )
+
+    @Provides
+    @Singleton
     fun provideToolRegistry(
         @ApplicationContext context: Context,
         vault: EncryptedSecretsVault,
         transport: HttpTransport,
         advanced: AdvancedPrefs,
+        termux: TermuxExecutor,
+        metasploit: MetasploitExecutor,
+        kaliPlaybookRunner: LocalKaliPlaybookRunner,
     ): ToolRegistry = ToolRegistry().apply {
         register(AutomationShellTool(AllowlistShellExecutor { advanced.shellAllowlist() }))
         register(AiPromptTool(CloudPromptClient(vault, transport)) { spec -> chatModelFor(context, spec) })
         register(RootTool(NullRootExecutor()))
-        register(TermuxTool(NullTermuxExecutor()))
-        register(MetasploitTool(NullMetasploitExecutor()))
+        register(TermuxTool(termux))
+        register(MetasploitTool(metasploit))
+        register(KaliAuthorizedScanTool(kaliPlaybookRunner))
         register(SetTool(NullSetExecutor()))
         // Always-fail stub: AIDL bind is not started in this module. Registering it keeps the
         // name visible to anything that asks the registry; Pilot as DEVICE_OWNER still hides

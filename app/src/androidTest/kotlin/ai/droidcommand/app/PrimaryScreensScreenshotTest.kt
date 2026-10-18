@@ -28,7 +28,7 @@ import java.io.FileOutputStream
  *
  * This is a real composition check, not a capture-only dump: each step asserts a
  * screen-specific string before taking the shot. Tool backends stay the existing
- * `Null*` executors — Metasploit is opened only far enough to raise the real
+ * Termux/VictorSuite wiring — Metasploit is opened only far enough to raise the real
  * [ai.droidcommand.app.approval.ApprovalHost] "Confirm action" dialog, then Denied.
  *
  * Host pull (see `scripts/capture-app-screenshots.sh`):
@@ -92,7 +92,7 @@ class PrimaryScreensScreenshotTest {
             tapNav("nav_tools")
             waitForText("Metasploit")
             compose.onNodeWithText("Metasploit").performScrollTo().performClick()
-            waitForText("No Metasploit program is connected")
+            waitForText("VictorSuite (Termux + proot Kali)")
             snap("tools-metasploit")
         }
         step("tool-approval") {
@@ -147,7 +147,7 @@ class PrimaryScreensScreenshotTest {
     /**
      * Narrower walk for the two screens the full [capturePrimaryScreens] walk
      * often loses on a TCG emulator (ANR / click timeout after Notes). Same
-     * Null* backends — Metasploit is opened only far enough to raise
+     * Termux/VictorSuite backends — Metasploit is opened only far enough to raise
      * [ai.droidcommand.app.approval.ApprovalHost], then Denied.
      */
     @Test
@@ -165,7 +165,7 @@ class PrimaryScreensScreenshotTest {
             tapNav("nav_tools")
             waitForText("Metasploit")
             compose.onNodeWithText("Metasploit").performScrollTo().performClick()
-            waitForText("No Metasploit program is connected")
+            waitForText("VictorSuite (Termux + proot Kali)")
             snap("tools-metasploit")
         }
         step("tool-approval") {

@@ -107,3 +107,18 @@ Don has not decided whether:
 2. the keyboard surfaces fleet slash-commands to the user.
 
 This catalog does not pick one. Wiring stays PLANNED until that call.
+
+## 2026-10-17 — VictorSuite on-device RUN_COMMAND_PENDING_INTENT (PARTIAL, UNVERIFIED)
+
+On-device `:app` now talks VictorSuite through `com.termux.RUN_COMMAND` +
+`RUN_COMMAND_PENDING_INTENT` (`ClientBackedTermuxExecutor`). That is the
+non-root result path VictorSuite already ships; no VictorSuite change is
+required. CLI still defaults to `NullTermuxExecutor` unless
+`DROIDCOMMAND_CLI_ADB=1` (PC-over-adb `AdbTermuxExecutor`, root scrape).
+
+Status stays **PARTIAL**. A live Kali/msfconsole round-trip has not been
+run. Not LIVE.
+
+End-user device config (not code): `allow-external-apps=true`, hold
+`com.termux.permission.RUN_COMMAND`, background/app-shell runner. Kali
+bootstrap and the exact extras/result Bundle: `docs/VICTORSUITE_KALI_RUN_COMMAND.md`.
