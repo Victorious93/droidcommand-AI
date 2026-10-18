@@ -7,6 +7,7 @@ pluginManagement {
         id("com.android.library") version "8.13.2"
         id("org.jetbrains.kotlin.android") version "2.4.10"
         id("org.jetbrains.kotlin.plugin.compose") version "2.4.10"
+        id("org.jetbrains.kotlin.plugin.parcelize") version "2.4.10"
         id("com.google.devtools.ksp") version "2.3.12"
         id("com.google.dagger.hilt.android") version "2.58"
     }
@@ -72,6 +73,7 @@ include(":core-notes")
 if (providers.gradleProperty("includeAndroid").orNull == "true") {
     include(":app")
     include(":core-conversations")
+    include(":core-companion")
     include(":core-rag-android")
     include(":core-templates-android")
     include(":core-knowledge-android")
@@ -97,8 +99,7 @@ if (providers.gradleProperty("includeAndroid").orNull == "true") {
 //
 //   :core-companion (Android library — AIDL contracts + CompanionRegistry/
 //   CompanionCapabilityHealthChecker/CompanionTool for DCA ↔ companion APK
-//   IPC, added in Phase 4 of the Companion APK Integration). All source is
-//   complete, but the module requires Android SDK/AGP to compile (it uses
-//   PackageManager, ServiceConnection, @Parcelize). Excluded here for the
-//   same SDK-availability reason as :app. See core-companion/build.gradle.kts
-//   and docs/AUDIT_2026-09-05.md's "Phase 4" addendum for the full record.
+//   IPC, added in Phase 4 of the Companion APK Integration). It is in the
+//   includeAndroid block below (PackageManager, ServiceConnection and
+//   @Parcelize need an Android SDK) and :app depends on it for the Fleet
+//   Orchestrator. See docs/AUDIT_2026-09-05.md's 2026-10-18 addendum.

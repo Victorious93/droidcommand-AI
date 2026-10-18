@@ -24,7 +24,17 @@ data class FleetMember(
     val packageName: String?,
     val kind: FleetKind,
     val summary: String,
-)
+    /**
+     * Additional Android applicationIds this member may be installed as
+     * (debug / bench aliases). Named in `<queries>` so a paired debug APK
+     * is visible; the Fleet screen still probes [packageName] only.
+     */
+    val extraPackages: List<String> = emptyList(),
+) {
+    /** [packageName] plus [extraPackages] — the packages this row catalogues. */
+    val androidPackages: List<String>
+        get() = listOfNotNull(packageName) + extraPackages
+}
 
 object FleetCatalog {
     const val HACKERAI_PACKAGE = "ai.hackerai.companion"
@@ -49,6 +59,18 @@ object FleetCatalog {
     /** EXTERNAL_NODE. Probe only — do not bind Messenger. debug==release package. */
     const val MESH_PACKAGE = "com.victorious.mesh"
 
+    /** Debug applicationId for RootForge OS. Catalogued for Messenger pairing / trust checks. */
+    const val ROOTFORGE_DEBUG_PACKAGE = "ai.rootforge.os.debug"
+
+    /** Debug applicationId for Victorious File Manager. */
+    const val FILEMANAGER_DEBUG_PACKAGE = "ai.victorious.filemanager.debug"
+
+    /** Debug applicationId for Victorious Keyboard. */
+    const val KEYBOARD_DEBUG_PACKAGE = "com.victorious.keyboard.debug"
+
+    /** Benchmark applicationId for Victorious Keyboard. */
+    const val KEYBOARD_BENCH_PACKAGE = "com.victorious.keyboard.bench"
+
     val HACKERAI = FleetMember(
         id = "hackerai",
         name = "HackerAI",
@@ -71,6 +93,7 @@ object FleetCatalog {
         packageName = ROOTFORGE_PACKAGE,
         kind = FleetKind.ROOTFORGE,
         summary = "EXTERNAL_NODE. Live APK path on their main is Messenger + shared JSON (ai.rootforge.os.action.BRIDGE, protocol_major 1). Pair package + observed signing cert on this screen to run read-only status/capabilities. SSH is CLI/ISO fallback only. Never DependencyGuard, never a shared signing key.",
+        extraPackages = listOf(ROOTFORGE_DEBUG_PACKAGE),
     )
 
     val TERMUX = FleetMember(
@@ -106,6 +129,7 @@ object FleetCatalog {
             "(protocol_major 1) already on their main. Generic client exists but is not started unless " +
             "this node is paired (package + signing cert). Never DependencyGuard, never a shared signing key. " +
             "Identity/default-off PR still landing.",
+        extraPackages = listOf(FILEMANAGER_DEBUG_PACKAGE),
     )
 
     val KEYBOARD = FleetMember(
@@ -117,6 +141,7 @@ object FleetCatalog {
             "(protocol_major 1). Generic client exists but is not started unless this node is paired " +
             "(package + signing cert). Never DependencyGuard, never a shared signing key. Never forwards " +
             "typed text or keystrokes. Direction (hub query vs keyboard slash-commands) is open.",
+        extraPackages = listOf(KEYBOARD_DEBUG_PACKAGE, KEYBOARD_BENCH_PACKAGE),
     )
 
     val MESH = FleetMember(
@@ -142,6 +167,14 @@ object FleetCatalog {
         KEYBOARD,
         MESH,
     )
+
+    /**
+     * Every Android package the catalog names: Fleet-screen probes plus
+     * Messenger EXTERNAL_NODE debug/bench aliases. Must match the
+     * `<queries>` package list exactly (`ManifestPolicyTest`).
+     */
+    val queryPackages: Set<String>
+        get() = all.flatMap { it.androidPackages }.toSet()
 }
 
 enum class FleetInstallState {

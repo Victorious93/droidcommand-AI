@@ -132,6 +132,10 @@ dependencies {
     // those stubs to the live companion APKs at runtime.
     implementation(project(":core-hackerai"))
     implementation(project(":core-pentest-swarm"))
+    implementation(project(":core-companion"))
+    implementation(project(":core-rootforge"))
+    // core-rootforge's RootForgeResult<JsonObject> is part of its public API, so the compiler needs this on :app's classpath.
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     // EXTERNAL_NODE Messenger transport: pure envelope/validation/trust logic (api-exposes core-rootforge's
     // BridgeRequest/FailureKind). The Android Messenger plumbing is app/.../fleet/AndroidMessengerChannel.kt.

@@ -25,7 +25,6 @@ class CompanionCapabilityHealthChecker(
     private val registry: AndroidCompanionRegistry,
     private val descriptor: CompanionDescriptor,
 ) : CapabilityHealthChecker {
-
     override fun verify(id: CapabilityId, providerId: String): CapabilityMetadata {
         val state = determineState()
         return CapabilityMetadata(
@@ -38,7 +37,7 @@ class CompanionCapabilityHealthChecker(
             lastVerifiedAt = System.currentTimeMillis(),
             lastError = if (state == CapabilityState.ERROR) "companion unreachable" else null,
             description = "Companion APK capability: ${descriptor.id}",
-            riskTier = RiskTier.SENSITIVE,
+            riskTier = RiskTier.REVERSIBLE,
         )
     }
 

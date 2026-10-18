@@ -46,6 +46,7 @@ import ai.droidcommand.root.NullRootExecutor
 import ai.droidcommand.root.RootTool
 import ai.droidcommand.security.ApprovalPrompt
 import ai.droidcommand.security.DefaultActionRisks
+import ai.droidcommand.security.FleetCommandTool
 import ai.droidcommand.security.JsonFileAuditLog
 import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
@@ -132,6 +133,7 @@ object AppModule {
         termux: TermuxExecutor,
         metasploit: MetasploitExecutor,
         kaliPlaybookRunner: LocalKaliPlaybookRunner,
+        fleetCommandTool: FleetCommandTool,
     ): ToolRegistry = ToolRegistry().apply {
         register(AutomationShellTool(AllowlistShellExecutor { advanced.shellAllowlist() }))
         register(AiPromptTool(CloudPromptClient(vault, transport)) { spec -> chatModelFor(context, spec) })
@@ -144,6 +146,8 @@ object AppModule {
         // name visible to anything that asks the registry; Pilot as DEVICE_OWNER still hides
         // it because the tool is scoped to Initiator.REMOTE.
         register(HackerAiTool())
+        // Fleet Orchestrator action commands. SENSITIVE and always confirmed; hidden from the Pilot and Forge planners.
+        register(fleetCommandTool)
     }
 
     /** The model chat uses for [spec], read from the same preference chat writes. Falls back to the provider's suggestion. */

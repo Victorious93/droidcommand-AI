@@ -5,36 +5,43 @@
 //   - CompanionCapabilityHealthChecker (implements core-security's CapabilityHealthChecker)
 //   - CompanionTool (wraps any AIDL capability as a core-agent Tool)
 //
-// NOT INCLUDED in settings.gradle.kts — Android SDK required (PackageManager,
-// ServiceConnection, @Parcelize). Same exclusion pattern as :app. All files
-// here are genuinely complete; they have NOT been AGP-compiled or build-verified
-// in this environment. Confirm plugin/AGP version match with :app before adding
-// to settings.gradle.kts.
+// Opt-in via includeAndroid (needs an Android SDK), like :app. Plugin versions come from the
+// pluginManagement block in settings.gradle.kts. First compiled by the Fleet Orchestrator PR; it has
+// never run against a real companion APK.
 plugins {
-    id("com.android.library") version "8.7.2"
-    id("org.jetbrains.kotlin.android") version "2.4.10"
-    id("org.jetbrains.kotlin.plugin.parcelize") version "2.4.10"
+    id("com.android.library")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.parcelize")
+}
+
+repositories {
+    google()
+    mavenCentral()
 }
 
 android {
     namespace = "ai.droidcommand.companion"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 26
+    }
+
+    buildFeatures {
+        aidl = true
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
-
-    kotlinOptions {
-        jvmTarget = "21"
-    }
 }
 
 dependencies {
     implementation(project(":core-agent"))
     implementation(project(":core-security"))
+}
+
+kotlin {
+    jvmToolchain(21)
 }
