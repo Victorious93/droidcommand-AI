@@ -28,6 +28,27 @@ class FleetStatusTest {
         assertEquals(FleetCatalog.KEYBOARD_PACKAGE, FleetCatalog.KEYBOARD.packageName)
         assertEquals(FleetCatalog.MESH_PACKAGE, FleetCatalog.MESH.packageName)
         assertEquals(
+            listOf(FleetCatalog.ROOTFORGE_DEBUG_PACKAGE),
+            FleetCatalog.ROOTFORGE.extraPackages,
+        )
+        assertEquals(
+            listOf(FleetCatalog.FILEMANAGER_DEBUG_PACKAGE),
+            FleetCatalog.FILE_MANAGER.extraPackages,
+        )
+        assertEquals(
+            listOf(FleetCatalog.KEYBOARD_DEBUG_PACKAGE, FleetCatalog.KEYBOARD_BENCH_PACKAGE),
+            FleetCatalog.KEYBOARD.extraPackages,
+        )
+        assertEquals(
+            ExternalNodeCatalog.all.flatMap { it.packages }.toSet(),
+            setOf(
+                FleetCatalog.ROOTFORGE,
+                FleetCatalog.FILE_MANAGER,
+                FleetCatalog.KEYBOARD,
+                FleetCatalog.MESH,
+            ).flatMap { it.androidPackages }.toSet(),
+        )
+        assertEquals(
             listOf(
                 "hackerai",
                 "pentestswarm",
@@ -41,6 +62,7 @@ class FleetStatusTest {
             ),
             FleetCatalog.all.map { it.id },
         )
+        assertTrue(FleetCatalog.queryPackages.containsAll(FleetCatalog.all.mapNotNull { it.packageName }))
     }
 
     @Test

@@ -45,7 +45,6 @@ class AndroidCompanionRegistry(
         verifier = NodeSignatureVerifier(),
     ),
 ) : CompanionRegistry {
-
     private val connections = mutableMapOf<String, BoundCompanion>()
     private val signatureRefusals = mutableMapOf<String, NodeSignatureDecision.Refused>()
 

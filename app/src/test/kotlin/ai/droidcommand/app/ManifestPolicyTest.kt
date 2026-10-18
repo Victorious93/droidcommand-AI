@@ -50,7 +50,7 @@ class ManifestPolicyTest {
     @Test
     fun `queries name only catalogued fleet packages besides the speech and TTS intents`() {
         val declared = manifest.children("queries").single().children("package").map { it.androidAttr("name") }.toSet()
-        val catalogued = FleetCatalog.all.mapNotNull { it.packageName }.toSet()
+        val catalogued = FleetCatalog.queryPackages
         assertEquals(catalogued, declared)
     }
 
