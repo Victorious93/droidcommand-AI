@@ -1,5 +1,6 @@
 package ai.droidcommand.app.fleet
 
+import ai.droidcommand.fleet.messenger.ExternalNodeCatalog
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -13,10 +14,15 @@ class FleetStatusTest {
         assertEquals("ai.pentestswarm.companion", FleetCatalog.PENTESTSWARM_PACKAGE)
         assertEquals("com.termux", FleetCatalog.TERMUX_PACKAGE)
         assertEquals("ai.edlcommander.companion", FleetCatalog.EDLCOMMANDER_PACKAGE)
+        assertEquals("ai.rootforge.os", FleetCatalog.ROOTFORGE_PACKAGE)
         assertEquals("ai.victorious.filemanager", FleetCatalog.FILEMANAGER_PACKAGE)
         assertEquals("com.victorious.keyboard", FleetCatalog.KEYBOARD_PACKAGE)
         assertEquals("com.victorious.mesh", FleetCatalog.MESH_PACKAGE)
-        assertNull(FleetCatalog.ROOTFORGE.packageName)
+        assertEquals(FleetCatalog.ROOTFORGE_PACKAGE, FleetCatalog.ROOTFORGE.packageName)
+        assertEquals(ExternalNodeCatalog.ROOTFORGE.primaryPackage, FleetCatalog.ROOTFORGE_PACKAGE)
+        assertEquals(ExternalNodeCatalog.FILE_MANAGER.primaryPackage, FleetCatalog.FILEMANAGER_PACKAGE)
+        assertEquals(ExternalNodeCatalog.KEYBOARD.primaryPackage, FleetCatalog.KEYBOARD_PACKAGE)
+        assertEquals(ExternalNodeCatalog.MESH.primaryPackage, FleetCatalog.MESH_PACKAGE)
         assertNull(FleetCatalog.KYC_AUDITLAB.packageName)
         assertEquals(FleetCatalog.FILEMANAGER_PACKAGE, FleetCatalog.FILE_MANAGER.packageName)
         assertEquals(FleetCatalog.KEYBOARD_PACKAGE, FleetCatalog.KEYBOARD.packageName)
@@ -63,9 +69,10 @@ class FleetStatusTest {
         assertTrue(termux.status.contains("RUN_COMMAND_PENDING_INTENT"))
         assertTrue(termux.status.contains("UNVERIFIED"))
 
-        assertEquals(FleetInstallState.NOT_APPLICABLE, rootforge.installed)
-        assertTrue(rootforge.status.contains("Not paired"))
+        assertEquals(FleetInstallState.NOT_INSTALLED, rootforge.installed)
+        assertTrue(rootforge.status.contains("not paired"))
         assertTrue(rootforge.status.contains("Messenger"))
+        assertTrue(rootforge.status.contains("Not LIVE"))
         assertTrue(rootforge.member.summary.contains("Never DependencyGuard"))
 
         assertEquals(FleetInstallState.NOT_INSTALLED, edl.installed)
@@ -76,23 +83,21 @@ class FleetStatusTest {
         assertTrue(kyc.status.contains("/scope admin"))
 
         assertEquals(FleetInstallState.NOT_INSTALLED, fileManager.installed)
-        assertTrue(fileManager.status.contains("does not bind Messenger"))
-        assertTrue(fileManager.status.contains("PLANNED"))
+        assertTrue(fileManager.status.contains("not paired"))
         assertTrue(fileManager.member.summary.contains("Never DependencyGuard"))
         assertTrue(fileManager.member.summary.contains("ai.victorious.filemanager.action.BRIDGE"))
         assertFalse(fileManager.status.contains("ready", ignoreCase = true), fileManager.status)
 
         assertEquals(FleetInstallState.NOT_INSTALLED, keyboard.installed)
-        assertTrue(keyboard.status.contains("does not bind Messenger"))
-        assertTrue(keyboard.status.contains("PLANNED"))
+        assertTrue(keyboard.status.contains("not paired"))
         assertTrue(keyboard.member.summary.contains("Never DependencyGuard"))
         assertTrue(keyboard.member.summary.contains("com.victorious.keyboard.action.BRIDGE"))
         assertTrue(keyboard.member.summary.contains("Never forwards typed text"))
         assertFalse(keyboard.status.contains("ready", ignoreCase = true), keyboard.status)
 
         assertEquals(FleetInstallState.NOT_INSTALLED, mesh.installed)
-        assertTrue(mesh.status.contains("does not bind Messenger"))
-        assertTrue(mesh.status.contains("PLANNED"))
+        assertTrue(mesh.status.contains("not paired"))
+        assertTrue(mesh.status.contains("Not LIVE"))
         assertTrue(mesh.member.summary.contains("Never DependencyGuard"))
         assertTrue(mesh.member.summary.contains("com.victorious.mesh.action.BRIDGE"))
         assertTrue(mesh.member.summary.contains("own release key"))
@@ -105,22 +110,22 @@ class FleetStatusTest {
         val installedFm = FleetStatus.resolve(FleetCatalog.all) { it == FleetCatalog.FILEMANAGER_PACKAGE }
             .single { it.member.id == "file-manager" }
         assertEquals(FleetInstallState.INSTALLED, installedFm.installed)
-        assertTrue(installedFm.status.contains("Package probe only"))
-        assertTrue(installedFm.status.contains("PLANNED"))
+        assertTrue(installedFm.status.contains("Pair the observed signing-cert"))
+        assertTrue(installedFm.status.contains("Not LIVE"))
         assertFalse(installedFm.status.contains("ready", ignoreCase = true), installedFm.status)
 
         val installedKb = FleetStatus.resolve(FleetCatalog.all) { it == FleetCatalog.KEYBOARD_PACKAGE }
             .single { it.member.id == "keyboard" }
         assertEquals(FleetInstallState.INSTALLED, installedKb.installed)
-        assertTrue(installedKb.status.contains("Package probe only"))
-        assertTrue(installedKb.status.contains("PLANNED"))
+        assertTrue(installedKb.status.contains("Pair the observed signing-cert"))
+        assertTrue(installedKb.status.contains("Not LIVE"))
         assertFalse(installedKb.status.contains("ready", ignoreCase = true), installedKb.status)
 
         val installedMesh = FleetStatus.resolve(FleetCatalog.all) { it == FleetCatalog.MESH_PACKAGE }
             .single { it.member.id == "mesh" }
         assertEquals(FleetInstallState.INSTALLED, installedMesh.installed)
-        assertTrue(installedMesh.status.contains("Package probe only"))
-        assertTrue(installedMesh.status.contains("PLANNED"))
+        assertTrue(installedMesh.status.contains("Pair the observed signing-cert"))
+        assertTrue(installedMesh.status.contains("Not LIVE"))
         assertFalse(installedMesh.status.contains("ready", ignoreCase = true), installedMesh.status)
     }
 }

@@ -13,7 +13,9 @@ Messenger + shared JSON envelope (`action ai.rootforge.os.action.BRIDGE`,
 `protocol_major` 1; canonical `docs/DROIDCOMMAND_INTEGRATION.md` in
 `Victorious93/rootforge-os`). Desktop/Docker localhost API + bearer is planned.
 SSH is the CLI/ISO **fallback only** — that is what this module implements today.
-They are auditing gaps so `core-rootforge` can call the Messenger bridge; do not
+The on-device Messenger client is `core-fleet-messenger` + `:app`
+(`AndroidMessengerChannel`); it is off until a node is paired (package +
+signing-cert SHA-256) and does not change this module's SSH tools. Do not
 treat SSH as the live APK path. Room-fleet map: `docs/FLEET_CONTROL.md`.
 
 ## What this module does
@@ -44,9 +46,9 @@ never re-learned automatically.
 
 ## Honest limits
 
-* **JVM/CLI only.** The transport shells out to the system `ssh`. Android has no such
-  binary; an Android client needs another `RootForgeTransport` backed by a vetted SSH
-  library. Not built (the `:app` module is still unbuilt here).
+* **JVM/CLI only (this module).** The transport shells out to the system `ssh`. Android
+  has no such binary. The on-device path is the Messenger client in
+  `core-fleet-messenger` / `:app`, not an SSH library. Not runtime-verified on a device.
 * **Passive only.** Capabilities and device enumeration. No builds, jobs, artifacts,
   terminal, backup/restore, flashing — and none will be exposed until the gates listed in
   RootForge's document are repaired.

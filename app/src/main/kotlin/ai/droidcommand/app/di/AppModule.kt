@@ -12,6 +12,9 @@ import ai.droidcommand.app.approval.VoiceApprovalPrompt
 import ai.droidcommand.app.automation.AiPromptTool
 import ai.droidcommand.app.automation.AllowlistShellExecutor
 import ai.droidcommand.app.automation.AutomationShellTool
+import ai.droidcommand.app.fleet.AndroidMessengerChannel
+import ai.droidcommand.app.fleet.AndroidPackageIdentityResolver
+import ai.droidcommand.app.fleet.SharedPreferencesPairedNodeStore
 import ai.droidcommand.app.mode.AdvancedModeStore
 import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.prefs.AdvancedPrefs
@@ -19,6 +22,14 @@ import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.conversations.RoomConversationStore
+import ai.droidcommand.fleet.messenger.ExternalNodeTransport
+import ai.droidcommand.fleet.messenger.MessengerBridgeClient
+import ai.droidcommand.fleet.messenger.MessengerChannel
+import ai.droidcommand.fleet.messenger.MutablePairedNodeStore
+import ai.droidcommand.fleet.messenger.NodeTrustVerifier
+import ai.droidcommand.fleet.messenger.PackageIdentityResolver
+import ai.droidcommand.fleet.messenger.PairedNodeGateway
+import ai.droidcommand.fleet.messenger.PairedNodeStore
 import ai.droidcommand.hackerai.HackerAiTool
 import ai.droidcommand.knowledge.android.RoomKnowledgeGraph
 import ai.droidcommand.llm.factory.CloudPromptClient
@@ -203,6 +214,41 @@ object AppModule {
     @Singleton
     fun provideAuditLog(@ApplicationContext context: Context): JsonFileAuditLog =
         JsonFileAuditLog(context.filesDir.toPath().resolve("audit").resolve("audit.jsonl"))
+
+    /**
+     * EXTERNAL_NODE Messenger transport (`core-fleet-messenger`). The pairing store starts empty.
+     * Tools → Fleet can pair a node (package + observed cert) and then run read-only
+     * `*.capabilities.get` / `*.status` (and fire-and-forget `*.up` + poll). No tool is registered
+     * against the gateway, so Pilot/Forge/Kali/pentest paths are unchanged. Write/control ops other
+     * than documented `*.up` are refused by [ai.droidcommand.fleet.messenger.FleetMessengerController].
+     * No AIDL, no DependencyGuard, no shared signing key. Not run on a device yet.
+     */
+    @Provides
+    @Singleton
+    fun provideMutablePairedNodeStore(@ApplicationContext context: Context): MutablePairedNodeStore =
+        SharedPreferencesPairedNodeStore(context)
+
+    @Provides
+    @Singleton
+    fun providePairedNodeStore(store: MutablePairedNodeStore): PairedNodeStore = store
+
+    @Provides
+    @Singleton
+    fun providePackageIdentityResolver(@ApplicationContext context: Context): PackageIdentityResolver = AndroidPackageIdentityResolver(context)
+
+    @Provides
+    @Singleton
+    fun provideMessengerChannel(@ApplicationContext context: Context): MessengerChannel = AndroidMessengerChannel(context)
+
+    @Provides
+    @Singleton
+    fun provideExternalNodeTransport(resolver: PackageIdentityResolver, channel: MessengerChannel): ExternalNodeTransport =
+        MessengerBridgeClient(NodeTrustVerifier(resolver), channel)
+
+    @Provides
+    @Singleton
+    fun providePairedNodeGateway(store: PairedNodeStore, transport: ExternalNodeTransport): PairedNodeGateway =
+        PairedNodeGateway(store, transport)
 
     @Provides
     @Singleton

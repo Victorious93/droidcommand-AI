@@ -4,8 +4,12 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonObject
 import java.util.UUID
 
-/** Why a call failed, kept distinct so callers never mistake a transport fault for a node refusal. */
-enum class FailureKind { TRANSPORT, MALFORMED_RESPONSE, PROTOCOL_MISMATCH, NODE_IDENTITY_MISMATCH, REMOTE_ERROR }
+/**
+ * Why a call failed, kept distinct so callers never mistake a transport fault for a node refusal.
+ * [UNTRUSTED_NODE] is the controller-side refusal raised before anything is sent: the target is not
+ * paired, not installed, or its installed signing certificate is not the paired one (Messenger transport).
+ */
+enum class FailureKind { TRANSPORT, MALFORMED_RESPONSE, PROTOCOL_MISMATCH, NODE_IDENTITY_MISMATCH, REMOTE_ERROR, UNTRUSTED_NODE }
 
 sealed class RootForgeResult<out T> {
     data class Success<T>(val value: T) : RootForgeResult<T>()

@@ -174,15 +174,15 @@ object KnownFleet {
         usesAidl = false,
         usesDependencyGuard = false,
         riskTier = RiskTier.READ_ONLY,
-        nextStep = "Second: fill gaps so core-rootforge can call the existing Messenger bridge " +
-            "(docs/DROIDCOMMAND_INTEGRATION.md on rootforge-os, action ai.rootforge.os.action.BRIDGE). " +
-            "No DependencyGuard and no shared signing key. SSH stays fallback only. " +
-            "Owns target-phone control (USB OTG, later LAN/Tailscale). Does not own Termux/proot " +
-            "or Sahara — RootForge UI may call the EDL companion later for those.",
+        nextStep = "Pair a node (package + signing-cert SHA-256) to use the on-device Messenger client " +
+            "(core-fleet-messenger + :app). RootForge tools remain SSH-only. No DependencyGuard and no " +
+            "shared signing key. SSH stays CLI/ISO fallback. Owns target-phone control (USB OTG, later " +
+            "LAN/Tailscale). Does not own Termux/proot or Sahara — RootForge UI may call the EDL companion later.",
         refusalMessage = "RootForge is an independent node. Pair it (Messenger / localhost API / SSH fallback); " +
             "this catalog does not claim a live session.",
         notes = "Live APK path already exists on their main (Messenger + shared JSON). " +
-            "This repo's core-rootforge still only speaks SSH. Never DependencyGuard, never shared signing key. " +
+            "core-rootforge still only speaks SSH (CLI). On-device Messenger is core-fleet-messenger + :app, " +
+            "off until a node is paired. Never DependencyGuard, never shared signing key. " +
             "Controller-side DEBUG signing cert for ai.rootforge.os.debug is catalogued (enforceable). " +
             "No release key yet.",
         androidPackages = listOf("ai.rootforge.os.debug"),
@@ -299,10 +299,11 @@ object KnownFleet {
         usesAidl = false,
         usesDependencyGuard = false,
         riskTier = RiskTier.READ_ONLY,
-        nextStep = "When their identity/default-off PR lands (external control default OFF; caller identity = " +
-            "UID package + SHA-256 cert, allow only ai.droidcommand.app and its .debug build). After the " +
-            "RootForge Messenger client exists, a File Manager Messenger client can follow that pattern. " +
-            "Do not implement a live bind in this catalog slice. Never DependencyGuard, never shared signing key.",
+        nextStep = "Generic Messenger client exists (core-fleet-messenger + :app) but File Manager is not " +
+            "paired and the catalog stub still does not bind. When their identity/default-off PR lands " +
+            "(external control default OFF; caller identity = UID package + SHA-256 cert, allow only " +
+            "ai.droidcommand.app and its .debug build), pair the node to call it. Never DependencyGuard, " +
+            "never shared signing key.",
         refusalMessage = "Victorious File Manager is PLANNED EXTERNAL_NODE — this stub does not bind Messenger. " +
             "Their main already exposes action ai.victorious.filemanager.action.BRIDGE (protocol_major 1, " +
             "dca_required:false, live:false stub ops). Identity/default-off PR is still landing. " +
@@ -345,9 +346,9 @@ object KnownFleet {
         usesDependencyGuard = false,
         riskTier = RiskTier.READ_ONLY,
         nextStep = "Catalog only until Don decides direction (hub queries the keyboard vs the keyboard " +
-            "surfaces fleet slash-commands). If hub-query is chosen, a Keyboard Messenger client can " +
-            "follow the RootForge Messenger client. Do not implement a live bind in this catalog slice. " +
-            "Never DependencyGuard, never shared signing key. Never forward typed text or keystrokes.",
+            "surfaces fleet slash-commands). Generic Messenger client exists (core-fleet-messenger + :app) " +
+            "but Keyboard is not paired and the catalog stub still does not bind. Never DependencyGuard, " +
+            "never shared signing key. Never forward typed text or keystrokes.",
         refusalMessage = "Victorious Keyboard is PLANNED EXTERNAL_NODE — this stub does not bind Messenger. " +
             "Planned action com.victorious.keyboard.action.BRIDGE (protocol_major 1, dca_required:false, " +
             "fleet_class external_node). Planned ops keyboard.capabilities.get / keyboard.status. " +
@@ -395,9 +396,9 @@ object KnownFleet {
         usesAidl = false,
         usesDependencyGuard = false,
         riskTier = RiskTier.READ_ONLY,
-        nextStep = "Catalog only. After the RootForge Messenger client exists, a Mesh Messenger client can " +
-            "follow that pattern. External control default OFF. Do not implement a live bind in this " +
-            "catalog slice. Never DependencyGuard, never a shared signing key. Mesh keeps its own " +
+        nextStep = "Generic Messenger client exists (core-fleet-messenger + :app) but Mesh is not " +
+            "paired and the catalog stub still does not bind. Pair the node to call it. External " +
+            "control default OFF. Never DependencyGuard, never a shared signing key. Mesh keeps its own " +
             "release key; do not assume the shared fleet key.",
         refusalMessage = "Victorious Mesh is PLANNED EXTERNAL_NODE — this stub does not bind Messenger. " +
             "Planned action com.victorious.mesh.action.BRIDGE (protocol_major 1, dca_required:false, " +
