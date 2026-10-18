@@ -46,6 +46,7 @@ class AndroidMessengerChannel(private val context: Context) : MessengerChannel {
             return Result.failure(IOException("Messenger bridge calls must not run on the main thread"))
         }
         val intent = Intent(node.action).setPackage(node.packageName)
+
         @Suppress("DEPRECATION")
         val resolved = context.packageManager.resolveService(intent, 0)?.serviceInfo
             ?: return Result.failure(IOException("${node.packageName} exposes no service for ${node.action}"))
