@@ -297,7 +297,10 @@ class FleetMessengerControllerTest {
         val gateway = PairedNodeGateway(store, client(channel, null))
         val c = FleetMessengerController(store, resolver, gateway)
         val rows = c.snapshot()
-        assertEquals(3, rows.size)
+        assertEquals(
+            listOf("rootforge", "file-manager", "keyboard", "mesh"),
+            rows.map { it.spec.id },
+        )
         assertTrue(rows.all { it.state == NodePairingState.NOT_INSTALLED })
         assertTrue(rows.none { it.liveEnabled })
         assertEquals(0, channel.opens)
