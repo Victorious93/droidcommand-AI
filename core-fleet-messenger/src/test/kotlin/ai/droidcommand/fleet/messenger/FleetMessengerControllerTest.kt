@@ -1,7 +1,6 @@
 package ai.droidcommand.fleet.messenger
 
 import ai.droidcommand.rootforge.BridgeErrorBody
-import ai.droidcommand.rootforge.FailureKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -99,7 +98,7 @@ class FleetMessengerControllerTest {
     }
 
     @Test
-    fun `pair stores the observed package and cert; unpair clears it`() {
+    fun `pair stores the observed package and cert then unpair clears it`() {
         val store = InMemoryPairedNodeStore()
         val (c, _) = controller(store)
         val paired = assertIs<PairingResult.Paired>(c.pair("mesh")).node
@@ -257,8 +256,11 @@ class FleetMessengerControllerTest {
         var n = 0
         val channel = FakeChannel { req ->
             n++
-            if (n == 1) Result.success(response(decodeRequest(req), result = null))
-            else Result.failure(MessengerTimeoutException("no reply within 20 ms"))
+            if (n == 1) {
+                Result.success(response(decodeRequest(req), result = null))
+            } else {
+                Result.failure(MessengerTimeoutException("no reply within 20 ms"))
+            }
         }
         val (c, _, _) = pairedController(channel = channel)
         val result = assertIs<LiveCallResult.UpThenStatus>(c.bringUpAndPoll("mesh"))
