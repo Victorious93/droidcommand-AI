@@ -68,7 +68,7 @@ class FleetNodesTest {
     fun `the roster is exactly the catalogued members and nothing else`() {
         assertEquals(FleetCatalog.all.map { it.id }, FleetNodes.nodes().map { it.id })
         assertEquals(
-            listOf("hackerai", "pentestswarm", "rootforge", "termux", "edl-commander", "kyc-auditlab", "file-manager", "keyboard", "mesh"),
+            listOf("hackerai", "pentestswarm", "rootforge", "termux", "edl-commander", "kyc-auditlab", "file-manager", "keyboard", "mesh", "browser"),
             FleetNodes.nodes().map { it.id },
         )
     }
@@ -124,10 +124,11 @@ class FleetRowsTest {
         assertTrue(rows.getValue("file-manager").control.label.startsWith("pairing required"))
         assertTrue(rows.getValue("keyboard").control.label.startsWith("pairing required"))
         assertTrue(rows.getValue("mesh").control.label.startsWith("pairing required"))
+        assertTrue(rows.getValue("browser").control.label.startsWith("pairing required"))
         assertEquals("no runner yet", rows.getValue("termux").control.label)
         assertEquals(FleetControlMode.PLANNED, rows.getValue("kyc-auditlab").control.mode)
         assertEquals(FleetControlMode.PLANNED, rows.getValue("edl-commander").control.mode)
-        for (id in listOf("rootforge", "file-manager", "keyboard", "mesh", "termux", "kyc-auditlab", "edl-commander")) {
+        for (id in listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "termux", "kyc-auditlab", "edl-commander")) {
             assertTrue(rows.getValue(id).sendDisabledReason!!.startsWith("Commands are disabled"), id)
         }
         assertFalse(rows.getValue("kyc-auditlab").canCheckStatus)
@@ -337,7 +338,7 @@ class FleetOrchestratorWiringTest {
 
     @Test
     fun `read-only nodes refuse without ever opening the dialog`() {
-        for (id in listOf("rootforge", "termux", "kyc-auditlab", "edl-commander", "file-manager", "keyboard", "mesh")) {
+        for (id in listOf("rootforge", "termux", "kyc-auditlab", "edl-commander", "file-manager", "keyboard", "mesh", "browser")) {
             orchestrator.checkStatus(id)
             val state = orchestrator.sendCommand(id, "x", "{}")
             assertEquals(FleetCommandStatus.REFUSED, state.lastCommand!!.status, id)

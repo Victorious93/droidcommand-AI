@@ -248,7 +248,8 @@ class NodeSignatureTest {
         assertEquals(identity, KnownNodeSigningCatalog.identityFor("com.victorious.browser"))
         assertTrue(identity.notes.contains("[planned/unverified]"))
         assertTrue(identity.notes.contains("NOT shared fleet"))
-        assertTrue(KnownFleet.ALL.none { "browser" in it.androidPackages })
+        assertEquals(listOf("com.victorious.browser"), KnownFleet.BROWSER.androidPackages)
+        assertEquals(9, KnownFleet.BROWSER.wiringOrder)
     }
 
     @Test

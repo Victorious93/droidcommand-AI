@@ -57,17 +57,22 @@ class FleetMessengerControllerTest {
         assertEquals("ai.victorious.filemanager", ExternalNodeCatalog.FILE_MANAGER.primaryPackage)
         assertEquals("com.victorious.keyboard", ExternalNodeCatalog.KEYBOARD.primaryPackage)
         assertEquals("com.victorious.mesh", ExternalNodeCatalog.MESH.primaryPackage)
+        assertEquals("com.victorious.browser", ExternalNodeCatalog.BROWSER.primaryPackage)
         assertEquals("rootforge.capabilities.get", ExternalNodeCatalog.ROOTFORGE.capabilitiesOperation)
         assertEquals("filemanager.status", ExternalNodeCatalog.FILE_MANAGER.statusOperation)
         assertEquals("keyboard.capabilities.get", ExternalNodeCatalog.KEYBOARD.capabilitiesOperation)
         assertEquals("mesh.capabilities.get", ExternalNodeCatalog.MESH.capabilitiesOperation)
+        assertEquals("browser.capabilities.get", ExternalNodeCatalog.BROWSER.capabilitiesOperation)
+        assertEquals("browser.proxy.status", ExternalNodeCatalog.BROWSER.statusOperation)
         assertEquals("mesh.up", ExternalNodeCatalog.MESH.upOperation)
         assertNull(ExternalNodeCatalog.KEYBOARD.upOperation)
         assertNull(ExternalNodeCatalog.FILE_MANAGER.upOperation)
+        assertNull(ExternalNodeCatalog.BROWSER.upOperation)
         assertTrue(ExternalNodeCatalog.KEYBOARD.notes.contains("Never forwards typed text"))
         assertTrue(ExternalNodeCatalog.MESH.notes.contains("own release key"))
+        assertTrue(ExternalNodeCatalog.BROWSER.notes.contains("own release key"))
         assertEquals(
-            listOf("rootforge", "file-manager", "keyboard", "mesh"),
+            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser"),
             ExternalNodeCatalog.all.map { it.id },
         )
     }
@@ -298,7 +303,7 @@ class FleetMessengerControllerTest {
         val c = FleetMessengerController(store, resolver, gateway)
         val rows = c.snapshot()
         assertEquals(
-            listOf("rootforge", "file-manager", "keyboard", "mesh"),
+            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser"),
             rows.map { it.spec.id },
         )
         assertTrue(rows.all { it.state == NodePairingState.NOT_INSTALLED })

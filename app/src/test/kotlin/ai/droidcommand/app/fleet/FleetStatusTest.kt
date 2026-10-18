@@ -18,15 +18,18 @@ class FleetStatusTest {
         assertEquals("ai.victorious.filemanager", FleetCatalog.FILEMANAGER_PACKAGE)
         assertEquals("com.victorious.keyboard", FleetCatalog.KEYBOARD_PACKAGE)
         assertEquals("com.victorious.mesh", FleetCatalog.MESH_PACKAGE)
+        assertEquals("com.victorious.browser", FleetCatalog.BROWSER_PACKAGE)
         assertEquals(FleetCatalog.ROOTFORGE_PACKAGE, FleetCatalog.ROOTFORGE.packageName)
         assertEquals(ExternalNodeCatalog.ROOTFORGE.primaryPackage, FleetCatalog.ROOTFORGE_PACKAGE)
         assertEquals(ExternalNodeCatalog.FILE_MANAGER.primaryPackage, FleetCatalog.FILEMANAGER_PACKAGE)
         assertEquals(ExternalNodeCatalog.KEYBOARD.primaryPackage, FleetCatalog.KEYBOARD_PACKAGE)
         assertEquals(ExternalNodeCatalog.MESH.primaryPackage, FleetCatalog.MESH_PACKAGE)
+        assertEquals(ExternalNodeCatalog.BROWSER.primaryPackage, FleetCatalog.BROWSER_PACKAGE)
         assertNull(FleetCatalog.KYC_AUDITLAB.packageName)
         assertEquals(FleetCatalog.FILEMANAGER_PACKAGE, FleetCatalog.FILE_MANAGER.packageName)
         assertEquals(FleetCatalog.KEYBOARD_PACKAGE, FleetCatalog.KEYBOARD.packageName)
         assertEquals(FleetCatalog.MESH_PACKAGE, FleetCatalog.MESH.packageName)
+        assertEquals(FleetCatalog.BROWSER_PACKAGE, FleetCatalog.BROWSER.packageName)
         assertEquals(
             listOf(FleetCatalog.ROOTFORGE_DEBUG_PACKAGE),
             FleetCatalog.ROOTFORGE.extraPackages,
@@ -46,6 +49,7 @@ class FleetStatusTest {
                 FleetCatalog.FILE_MANAGER,
                 FleetCatalog.KEYBOARD,
                 FleetCatalog.MESH,
+                FleetCatalog.BROWSER,
             ).flatMap { it.androidPackages }.toSet(),
         )
         assertEquals(
@@ -59,6 +63,7 @@ class FleetStatusTest {
                 "file-manager",
                 "keyboard",
                 "mesh",
+                "browser",
             ),
             FleetCatalog.all.map { it.id },
         )
@@ -79,6 +84,7 @@ class FleetStatusTest {
         val fileManager = rows.single { it.member.id == "file-manager" }
         val keyboard = rows.single { it.member.id == "keyboard" }
         val mesh = rows.single { it.member.id == "mesh" }
+        val browser = rows.single { it.member.id == "browser" }
 
         assertEquals(FleetInstallState.INSTALLED, hacker.installed)
         assertTrue(hacker.status.contains("disconnected"))
@@ -125,6 +131,14 @@ class FleetStatusTest {
         assertTrue(mesh.member.summary.contains("own release key"))
         assertFalse(mesh.status.contains("ready", ignoreCase = true), mesh.status)
 
+        assertEquals(FleetInstallState.NOT_INSTALLED, browser.installed)
+        assertTrue(browser.status.contains("not paired"))
+        assertTrue(browser.status.contains("Not LIVE"))
+        assertTrue(browser.member.summary.contains("Never DependencyGuard"))
+        assertTrue(browser.member.summary.contains("com.victorious.browser.action.BRIDGE"))
+        assertTrue(browser.member.summary.contains("own release key"))
+        assertFalse(browser.status.contains("ready", ignoreCase = true), browser.status)
+
         rows.forEach { row ->
             assertFalse(row.status.contains("ready", ignoreCase = true), row.status)
         }
@@ -149,5 +163,12 @@ class FleetStatusTest {
         assertTrue(installedMesh.status.contains("Pair the observed signing-cert"))
         assertTrue(installedMesh.status.contains("Not LIVE"))
         assertFalse(installedMesh.status.contains("ready", ignoreCase = true), installedMesh.status)
+
+        val installedBrowser = FleetStatus.resolve(FleetCatalog.all) { it == FleetCatalog.BROWSER_PACKAGE }
+            .single { it.member.id == "browser" }
+        assertEquals(FleetInstallState.INSTALLED, installedBrowser.installed)
+        assertTrue(installedBrowser.status.contains("Pair the observed signing-cert"))
+        assertTrue(installedBrowser.status.contains("Not LIVE"))
+        assertFalse(installedBrowser.status.contains("ready", ignoreCase = true), installedBrowser.status)
     }
 }

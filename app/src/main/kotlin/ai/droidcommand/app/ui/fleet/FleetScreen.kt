@@ -36,12 +36,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
 /**
- * Fleet orchestrator: HackerAI plus the eight KnownFleet members. Companions stay
- * install-probe only; EXTERNAL_NODE members (RootForge, File Manager, Keyboard, Mesh)
- * can be paired (package + observed signing-cert SHA-256, explicit confirm) and then
- * run read-only Messenger status/capabilities. `*.up` is fire-and-forget after a second
- * confirm, then this screen polls `*.status`. Nothing connects until the owner pairs
- * a node. Compiles; never run on a device.
+ * Fleet orchestrator: HackerAI plus the nine KnownFleet members. Companions stay
+ * install-probe only; EXTERNAL_NODE members (RootForge, File Manager, Keyboard, Mesh,
+ * Browser) can be paired (package + observed signing-cert SHA-256, explicit confirm)
+ * and then run read-only Messenger status/capabilities. `*.up` is fire-and-forget
+ * after a second confirm, then this screen polls `*.status`. Nothing connects until
+ * the owner pairs a node. Compiles; never run on a device.
  */
 @Composable
 fun FleetScreen(viewModel: FleetViewModel = hiltViewModel()) {
@@ -54,7 +54,7 @@ fun FleetScreen(viewModel: FleetViewModel = hiltViewModel()) {
     ) {
         ScreenTitle("Fleet")
         Text(
-            "Companions are separate APKs (AIDL + DependencyGuard). RootForge, File Manager, Keyboard, and Mesh " +
+            "Companions are separate APKs (AIDL + DependencyGuard). RootForge, File Manager, Keyboard, Mesh, and Browser " +
                 "are external nodes (Messenger + shared JSON) — never DependencyGuard. Pairing is an explicit " +
                 "trust decision: eyeball the observed cert, then confirm. Nothing is LIVE; Kali/pentest " +
                 "approval gates are unchanged.",

@@ -50,6 +50,7 @@ class MainTest {
                 "filemanager_status",
                 "keyboard_status",
                 "mesh_status",
+                "browser_status",
             ),
             specs.map { it.name },
         )
@@ -172,6 +173,12 @@ class MainTest {
     @Test
     fun `pilot mesh_status fails honestly and never binds Messenger`() {
         val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("mesh_status"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot browser_status fails honestly and never binds Messenger`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("browser_status"))
         assertEquals(1, exitCode)
     }
 

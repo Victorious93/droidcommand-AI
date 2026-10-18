@@ -83,7 +83,19 @@ object ExternalNodeCatalog {
             "Mesh keeps its own release key. Node-id prefix ^mesh-[0-9a-f]{32}$.",
     )
 
-    val all: List<ExternalNodeSpec> = listOf(ROOTFORGE, FILE_MANAGER, KEYBOARD, MESH)
+    val BROWSER = ExternalNodeSpec(
+        id = "browser",
+        displayName = "Victorious Browser",
+        nodeId = "browser",
+        packages = listOf("com.victorious.browser"),
+        capabilitiesOperation = "browser.capabilities.get",
+        statusOperation = "browser.proxy.status",
+        notes = "EXTERNAL_NODE. Planned action com.victorious.browser.action.BRIDGE. Never DependencyGuard. " +
+            "Browser keeps its own release key (CI-only; [planned/unverified]). " +
+            "Caller identity = Message.sendingUid. Node-id prefix ^browser-[0-9a-f]{32}$.",
+    )
+
+    val all: List<ExternalNodeSpec> = listOf(ROOTFORGE, FILE_MANAGER, KEYBOARD, MESH, BROWSER)
 
     fun byId(id: String): ExternalNodeSpec? = all.find { it.id == id }
 }
