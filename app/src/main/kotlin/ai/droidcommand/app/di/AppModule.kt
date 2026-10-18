@@ -25,6 +25,7 @@ import ai.droidcommand.conversations.RoomConversationStore
 import ai.droidcommand.fleet.messenger.ExternalNodeTransport
 import ai.droidcommand.fleet.messenger.MessengerBridgeClient
 import ai.droidcommand.fleet.messenger.MessengerChannel
+import ai.droidcommand.fleet.messenger.MutablePairedNodeStore
 import ai.droidcommand.fleet.messenger.NodeTrustVerifier
 import ai.droidcommand.fleet.messenger.PackageIdentityResolver
 import ai.droidcommand.fleet.messenger.PairedNodeGateway
@@ -215,16 +216,21 @@ object AppModule {
         JsonFileAuditLog(context.filesDir.toPath().resolve("audit").resolve("audit.jsonl"))
 
     /**
-     * EXTERNAL_NODE Messenger transport (`core-fleet-messenger`). Available to any code that injects
-     * [PairedNodeGateway], but nothing in this module does: no tool is registered and nothing calls it, and the
-     * pairing store starts empty, so with no node paired no package is inspected, bound or messaged. A call
-     * refuses unless the target package is paired AND currently signed by exactly the paired certificate.
-     * No AIDL, no DependencyGuard, no shared signing key. Live control of RootForge / File Manager /
-     * Keyboard / Mesh is **not** enabled by default. Not run on a device yet.
+     * EXTERNAL_NODE Messenger transport (`core-fleet-messenger`). The pairing store starts empty.
+     * Tools → Fleet can pair a node (package + observed cert) and then run read-only
+     * `*.capabilities.get` / `*.status` (and fire-and-forget `*.up` + poll). No tool is registered
+     * against the gateway, so Pilot/Forge/Kali/pentest paths are unchanged. Write/control ops other
+     * than documented `*.up` are refused by [ai.droidcommand.fleet.messenger.FleetMessengerController].
+     * No AIDL, no DependencyGuard, no shared signing key. Not run on a device yet.
      */
     @Provides
     @Singleton
-    fun providePairedNodeStore(@ApplicationContext context: Context): PairedNodeStore = SharedPreferencesPairedNodeStore(context)
+    fun provideMutablePairedNodeStore(@ApplicationContext context: Context): MutablePairedNodeStore =
+        SharedPreferencesPairedNodeStore(context)
+
+    @Provides
+    @Singleton
+    fun providePairedNodeStore(store: MutablePairedNodeStore): PairedNodeStore = store
 
     @Provides
     @Singleton

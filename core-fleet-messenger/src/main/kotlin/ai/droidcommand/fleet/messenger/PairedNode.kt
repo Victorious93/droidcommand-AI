@@ -43,6 +43,9 @@ data class PairedNode(
             PairedNode(packageName, nodeId, normalizeCertSha256(certSha256), customAction)
 
         fun normalizeCertSha256(raw: String): String = raw.trim().replace(":", "").lowercase()
+
+        /** Colon-separated lower-case hex, the form `apksigner` / keytool print, for the pairing UI to eyeball. */
+        fun displayCertSha256(raw: String): String = normalizeCertSha256(raw).chunked(2).joinToString(":")
     }
 }
 
@@ -51,9 +54,21 @@ interface PairedNodeStore {
     fun all(): List<PairedNode>
 
     fun find(nodeId: String): PairedNode? = all().firstOrNull { it.nodeId == nodeId }
+
+    fun findByPackage(packageName: String): PairedNode? = all().firstOrNull { it.packageName == packageName }
 }
 
-class InMemoryPairedNodeStore(nodes: List<PairedNode> = emptyList()) : PairedNodeStore {
+/**
+ * Pair / unpair. Duplicate `node_id` or package is refused (a pairing is replaced by the
+ * controller unpairing first, never by silently overwriting a cert).
+ */
+interface MutablePairedNodeStore : PairedNodeStore {
+    fun pair(node: PairedNode)
+
+    fun unpair(nodeId: String): Boolean
+}
+
+class InMemoryPairedNodeStore(nodes: List<PairedNode> = emptyList()) : MutablePairedNodeStore {
     private val nodes = nodes.toMutableList()
 
     init {
@@ -64,13 +79,13 @@ class InMemoryPairedNodeStore(nodes: List<PairedNode> = emptyList()) : PairedNod
     override fun all(): List<PairedNode> = nodes.toList()
 
     @Synchronized
-    fun pair(node: PairedNode) {
+    override fun pair(node: PairedNode) {
         PairedNodeCodec.requireDistinct(nodes + node)
         nodes += node
     }
 
     @Synchronized
-    fun unpair(nodeId: String): Boolean = nodes.removeAll { it.nodeId == nodeId }
+    override fun unpair(nodeId: String): Boolean = nodes.removeAll { it.nodeId == nodeId }
 }
 
 @Serializable

@@ -38,7 +38,7 @@ HackerAI (`ai.hackerai.companion`) is already a bound companion and is
 | # | Member | Class | Repo / id | Package or binary | Status | Owns | What is actually wired | Next concrete code step |
 |---|---|---|---|---|---|---|---|---|
 | 1 | **Pentest-Swarm-AI** | BOUND_COMPANION | `Victorious93/Pentest-Swarm-AI` (older fork exists; room says **awaiting base repo** for the envelope companion) | `ai.pentestswarm.companion` | **PLANNED** | Swarm campaigns via one command-envelope service (when ready) | This checkout still has `core-pentest-swarm` + `IPentestSwarmService` from an earlier slice. Catalog stub: `pentest_swarm_status`. Not LIVE. | Wait for the base repo, then one envelope AIDL + same-signing + DependencyGuard. |
-| 2 | **RootForge OS** | EXTERNAL_NODE | `Victorious93/rootforge-os` | Messenger action `ai.rootforge.os.action.BRIDGE` / localhost API / SSH fallback | **PARTIAL** | Target-phone control (USB OTG, later LAN/Tailscale). Does **not** own Termux/proot or Sahara. | SSH fallback in `core-rootforge` (passive `rootforge_capabilities` / `rootforge_list_devices`). On-device Messenger client is `core-fleet-messenger` + `:app`, **off until paired**. | Pair a node (package + cert) to use Messenger. No DependencyGuard, no shared signing key. SSH stays CLI fallback. UI may call the EDL companion later for Sahara/Firehose. |
+| 2 | **RootForge OS** | EXTERNAL_NODE | `Victorious93/rootforge-os` | Messenger action `ai.rootforge.os.action.BRIDGE` / localhost API / SSH fallback | **PARTIAL** | Target-phone control (USB OTG, later LAN/Tailscale). Does **not** own Termux/proot or Sahara. | SSH fallback in `core-rootforge` (passive `rootforge_capabilities` / `rootforge_list_devices`). On-device Messenger client + pairing UI is `core-fleet-messenger` + `:app`, **off until paired**. | Pair package + cert on Tools → Fleet for read-only Messenger ops. No DependencyGuard, no shared signing key. SSH stays CLI fallback. Device-unverified. |
 | 3 | **VictorSuite** | TERMUX_IPC | `Victorious93/VictorSuite` (documented; **not publicly resolvable** 2026-10-14) | `com.termux` | **PARTIAL** | On-device Termux / proot / X11 / plugins | `core-termux` `run_termux_command`. CLI default `NullTermuxExecutor` unless `DROIDCOMMAND_CLI_ADB=1`. | Keep RUN_COMMAND / plugin IPC. **Not** a new bound service. Gated on VictorSuite **PR #15** (package/signing cleanup). |
 | 4 | **EDL-Commander** | BOUND_COMPANION | `Victorious93/EDL-Commander` (scaffold + AIDL + USB 9008/Sahara + OnePlus 7T **in progress**) | `ai.edlcommander.companion` (planned) | **PLANNED** | Sahara / Firehose | Catalog stub `edl_commander_status`. Always fails. No AIDL file in this repo yet. No flash tool. | When the APK lands: `IEDLCommanderService` + `BIND_EDLCOMMANDER` same-signing + DependencyGuard, like Pentest. RootForge UI may call this later. Do **not** mark host-tool-only. |
 | 5 | **KYC-AuditLab** | HOST_PROCESS_TOOL | unpublished as of 2026-10-14 | IdentityShield simulator, localhost only | **PLANNED** | Simulator lab | Catalog stub `kyc_auditlab_status`. Always fails. | Last among the original five. Simulator only, localhost only. **Hub must not call `/scope` admin** until KYC adds auth. Do not log identity documents. |
@@ -240,3 +240,28 @@ package+cert trust live in pure-JVM `core-fleet-messenger`. Android bind /
 - **Fire-and-forget:** `*.up` acks immediately; poll `*.status`. Parameterless
   ops send `{}` (`invalid_parameters` otherwise).
 - Never AIDL, never DependencyGuard, never a shared signing key.
+
+## 2026-10-18 — pairing UI + live read-only ops (default-off until paired)
+
+Tools → Fleet now pairs EXTERNAL_NODE members and can run live **read-only**
+ops against a trusted pairing. State: `SharedPreferencesPairedNodeStore`
+(`fleet_paired_nodes` / `nodes_v1`). Logic: `FleetMessengerController`
+(JVM). UI is thin Compose (`FleetScreen` / `FleetViewModel`).
+
+- **Pairing:** list RootForge / File Manager / Keyboard; show installed
+  package and observed cert SHA-256; owner confirms to store package + cert.
+  Install does not pair. Re-sign → cert-mismatch until explicit re-pair.
+  Unpair clears the store entry.
+- **Live ops after TRUSTED pairing only:**
+  - RootForge: `rootforge.capabilities.get`, `rootforge.status`;
+    `rootforge.up` is fire-and-forget then poll `rootforge.status`.
+  - File Manager: `filemanager.capabilities.get`, `filemanager.status`
+    (no `*.up`).
+  - Keyboard: `keyboard.capabilities.get`, `keyboard.status` (no `*.up`;
+    never typed text / keystrokes).
+- **Still gated / not on this screen:** any other write/control op (refused
+  as gated, channel never opened); Kali / pentest authorization;
+  DependencyGuard / AIDL companions; catalog stubs
+  (`filemanager_status`, `keyboard_status`) still always fail; no Pilot/Forge
+  tool registered against `PairedNodeGateway`.
+- Default-safe: empty store, nothing contacted. Not LIVE. Device-unverified.

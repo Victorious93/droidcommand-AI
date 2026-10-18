@@ -396,9 +396,9 @@ object KnownFleet {
         usesAidl = false,
         usesDependencyGuard = false,
         riskTier = RiskTier.READ_ONLY,
-        nextStep = "Catalog only. After the RootForge Messenger client exists, a Mesh Messenger client can " +
-            "follow that pattern. External control default OFF. Do not implement a live bind in this " +
-            "catalog slice. Never DependencyGuard, never a shared signing key. Mesh keeps its own " +
+        nextStep = "Generic Messenger client exists (core-fleet-messenger + :app) but Mesh is not " +
+            "paired and the catalog stub still does not bind. Pair the node to call it. External " +
+            "control default OFF. Never DependencyGuard, never a shared signing key. Mesh keeps its own " +
             "release key; do not assume the shared fleet key.",
         refusalMessage = "Victorious Mesh is PLANNED EXTERNAL_NODE — this stub does not bind Messenger. " +
             "Planned action com.victorious.mesh.action.BRIDGE (protocol_major 1, dca_required:false, " +

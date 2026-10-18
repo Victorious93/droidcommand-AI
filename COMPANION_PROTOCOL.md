@@ -251,10 +251,14 @@ result is success). Poll the matching `*.status` for the eventual outcome.
 Parameterless ops reject a non-empty `parameters` object with
 `invalid_parameters`; the client sends `{}` by default.
 
-**Default-off:** `:app` provides `PairedNodeGateway` in Hilt but registers no
-tool against it and the pairing store starts empty. Installing File Manager /
-Keyboard / RootForge / Mesh does not enable live control. Catalog stubs
-(`filemanager_status`, `keyboard_status`) still always fail.
+**Default-off:** the pairing store starts empty. Installing File Manager /
+Keyboard / RootForge / Mesh does not enable live control. Tools → Fleet can
+pair a node (package + observed cert, explicit confirm) and then run
+read-only `*.capabilities.get` / `*.status` (and fire-and-forget `*.up` +
+poll where the catalog has an up op). `:app` still registers no tool against
+`PairedNodeGateway`. Catalog stubs (`filemanager_status`, `keyboard_status`)
+still always fail. Write/control names other than documented `*.up` are
+refused by `FleetMessengerController` without opening the channel.
 
 ## Security Model
 
