@@ -210,5 +210,25 @@ class FleetCatalogTest {
         assertTrue(text.contains("ai.victorious.filemanager.action.BRIDGE"))
         assertTrue(text.contains("com.victorious.keyboard.action.BRIDGE"))
         assertTrue(text.contains("HackerAI"))
+        assertTrue(text.contains("signingCertSha256: [Unknown]"))
+        assertTrue(text.contains("Controller-side node signature check"))
+        assertTrue(text.contains("com.victorious.mesh"))
+    }
+
+    @Test
+    fun `EXTERNAL_NODE and BOUND_COMPANION members expose android packages and empty expected certs`() {
+        assertEquals(listOf("ai.pentestswarm.companion"), KnownFleet.PENTEST_SWARM.androidPackages)
+        assertEquals(listOf("ai.edlcommander.companion"), KnownFleet.EDL_COMMANDER.androidPackages)
+        assertTrue(KnownFleet.PENTEST_SWARM.expectedSigningCertSha256.isEmpty())
+        assertTrue(KnownFleet.EDL_COMMANDER.expectedSigningCertSha256.isEmpty())
+        assertTrue(KnownFleet.FILE_MANAGER.expectedSigningCertSha256.isEmpty())
+        assertTrue(KnownFleet.KEYBOARD.expectedSigningCertSha256.isEmpty())
+        assertTrue(KnownFleet.ROOTFORGE.expectedSigningCertSha256.isEmpty())
+        val catalog = KnownNodeSigningCatalog.all()
+        assertTrue(catalog.any { it.packageName == "com.victorious.mesh" && it.expectedCerts.isNotEmpty() })
+        assertTrue(
+            catalog.filter { it.memberId in KnownFleet.ALL.map { m -> m.id } }
+                .all { it.expectedCerts.isEmpty() },
+        )
     }
 }

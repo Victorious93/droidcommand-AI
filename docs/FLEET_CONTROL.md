@@ -122,3 +122,42 @@ run. Not LIVE.
 End-user device config (not code): `allow-external-apps=true`, hold
 `com.termux.permission.RUN_COMMAND`, background/app-shell runner. Kali
 bootstrap and the exact extras/result Bundle: `docs/VICTORSUITE_KALI_RUN_COMMAND.md`.
+
+## 2026-10-18 — Controller-side node signature verification
+
+The (package → cert SHA-256) trust check used to live only on the **node**
+(the node verifies the controller). The controller now pins each fleet
+NODE's app signing certificate before bind/command.
+
+Code: `core-security.NodeSignatureVerifier` / `NodeSignatureGuard` /
+`KnownNodeSigningCatalog`. Android PackageManager is a thin observer
+(`:app.AndroidSigningCertObserver`, `core-companion` duplicate).
+`AndroidCompanionRegistry.bind` refuses on `NodeSignatureDecision.Refused`.
+
+This **adds** a check. DependencyGuard, signature permissions, and
+Kali/pentest authorization are unchanged.
+
+### Expected certs
+
+| Member | Class | Android packages | Expected SHA-256 |
+|---|---|---|---|
+| Pentest-Swarm-AI | BOUND_COMPANION | `ai.pentestswarm.companion` | **[Unknown]** |
+| RootForge OS | EXTERNAL_NODE | (none in this repo) | **[Unknown]** |
+| VictorSuite | TERMUX_IPC | `com.termux` | **[Unknown]** |
+| EDL-Commander | BOUND_COMPANION | `ai.edlcommander.companion` | **[Unknown]** |
+| KYC-AuditLab | HOST_PROCESS_TOOL | (no APK) | n/a |
+| Victorious File Manager | EXTERNAL_NODE | `ai.victorious.filemanager`, `.debug` | **[Unknown]** |
+| Victorious Keyboard | EXTERNAL_NODE | `com.victorious.keyboard`, `.debug`, `.bench` | **[Unknown]** |
+| HackerAI (KnownCompanions, not one of the seven) | BOUND_COMPANION | `ai.hackerai.companion` | **[Unknown]** |
+| Victorious Mesh (signing identity only; not a wiring-order member yet) | EXTERNAL_NODE | `com.victorious.mesh` | Debug `F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4`. Release **[Unknown]**. |
+
+Do **not** invent fingerprints. When a real debug+release pair is
+documented, list both; a match against either is enough.
+
+### Default for `[Unknown]`: ALLOW (documented)
+
+Fail-closed (`MissingExpectedCertPolicy.REFUSE`) is the stronger posture and
+is available (`DROIDCOMMAND_NODE_CERT_MISSING_EXPECTED=refuse`). The
+**default is ALLOW** so existing flows for members with no catalogued cert
+are not blocked. When a cert **is** catalogued (Mesh debug today),
+mismatch and missing-observed always refuse.
