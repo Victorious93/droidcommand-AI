@@ -153,6 +153,22 @@ JVM-only core modules now:
   now flagged `EXTRA_IS_SENSITIVE` (Android 13+ hides them from the on-screen preview); that does not stop another
   app in the foreground from reading the clipboard.
 
+- **Update 2026-10-18 — key protection level and secret access.** The vault's key is created in the
+  AndroidKeyStore, trying StrongBox first and falling through to the platform default (a trusted
+  execution environment where the device has one, otherwise a software-backed keystore key).
+  `EncryptedSecretsVault.protectionLevel()` reports which one the existing key actually is
+  (`KeyProtectionLevel`: `STRONGBOX`, `TRUSTED_ENVIRONMENT`, `SOFTWARE`, `UNKNOWN`).
+  **Hardware-backed strength depends on the device**: emulators and some phones end up `SOFTWARE`, and
+  `UNKNOWN` must be read as "not shown to be hardware-backed". Fallback behaviour, stated plainly: there
+  is no fallback to a key in app memory, app files or plaintext. If the keystore is unusable, `putSecret`
+  throws `SecretStorageException` and `getSecret` returns `null` / `inspect` says `Unrecoverable`, so the
+  user re-enters the key. An existing key is never regenerated to upgrade its level (that would orphan the
+  stored records). `useSecret(id) { bytes -> }` gives the value as a byte array that is zeroed afterwards
+  and never becomes a `String` inside the vault; callers that copy it into a `String` lose that benefit,
+  and `getSecret` still returns an ordinary `String`. A Keystore `ProviderException` (broken or wiped
+  keystore) is now treated like a lost key instead of escaping as a crash. Release-signing keys are out of
+  scope and stay in CI secrets. Not run on a device; the `KeyInfo` read is unverified on real hardware.
+
 ### Logging
 - Structured events (request id, tool name, outcome, duration, coarse
   error category) — never secrets, auth headers, cookies, full file

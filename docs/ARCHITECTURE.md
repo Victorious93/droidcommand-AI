@@ -120,8 +120,15 @@ DroidCommand AI
 │                            fail-closed getSecret, SecretState for re-entry
 │                            prompts). Cipher/storage are interfaces: JceAesGcmCipher
 │                            takes a SecretKey supplier, so an Android Keystore key
-│                            plugs in later. JVM-tested only; the Android Keystore
-│                            key loader and SharedPreferences storage are NOT built.
+│                            plugs in later. The Android Keystore key loader and
+│                            SharedPreferences storage now exist in :app
+│                            (security/AndroidSecretsVault.kt; compiles, never run
+│                            on a device). 2026-10-18: StrongBox-then-default key
+│                            creation, protectionLevel() (core-security
+│                            KeyProtectionLevel: STRONGBOX / TRUSTED_ENVIRONMENT /
+│                            SOFTWARE / UNKNOWN, a per-device report, not a promise),
+│                            useSecret() (byte-array access, zeroed after use) and
+│                            ProviderException fail-closed handling.
 │                            Design adapted from OpenDroid (Apache-2.0).
 │
 ├── core-remote HttpUrlConnectionTransport (2026-10-07, Phase 1) — Android-safe
