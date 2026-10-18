@@ -158,9 +158,10 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * gate as every other tool here regardless of which client backs it.
  *
  * `pentest_swarm_status` / `edl_commander_status` / `kyc_auditlab_status` /
- * `filemanager_status` / `keyboard_status` / `mesh_status` (`KnownFleet.plannedStubs`)
- * are catalog stubs. Pentest and EDL are planned bound companions; KYC is a
- * host-process simulator; File Manager, Keyboard, and Mesh are planned
+ * `filemanager_status` / `keyboard_status` / `mesh_status` / `browser_status`
+ * (`KnownFleet.plannedStubs`) are catalog stubs. Pentest and EDL are planned
+ * bound companions; KYC is a host-process simulator; File Manager, Keyboard,
+ * Mesh, and Browser are planned
  * EXTERNAL_NODE members. All always fail without binding or spawning.
  * See `docs/FLEET_CONTROL.md`.
  *
@@ -268,7 +269,7 @@ internal fun printUsage() {
 
         Usage:
           list-tools                     List every registered tool and its spec
-          list-fleet                     List the eight room-fleet members and their honest status
+          list-fleet                     List the nine room-fleet members and their honest status
           pilot <tool> [key=value ...]   Run a single Pilot Mode tool invocation
           forge <objective text...>      Run a Forge Mode objective via an LLM planner
                                           [--finalization-steps <n>]
@@ -336,14 +337,14 @@ internal fun printUsage() {
         (both set tries Brave first, falling back to SerpAPI on failure); with neither
         set it fails without making any network call. Still requires approval either way.
 
-        list-fleet prints the eight room-fleet members from core-security.KnownFleet.
+        list-fleet prints the nine room-fleet members from core-security.KnownFleet.
         None is LIVE. Wiring order: Pentest (when repo exists) → RootForge Messenger
         → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager
         (when their identity/default-off PR lands) → Keyboard (catalog only;
         direction of hub-query vs keyboard slash-commands is open) → Mesh
-        (catalog only; own signing keys).
+        (catalog only; own signing keys) → Browser (catalog only; own signing keys).
         pentest_swarm_status / edl_commander_status / kyc_auditlab_status /
-        filemanager_status / keyboard_status / mesh_status are planned stubs
+        filemanager_status / keyboard_status / mesh_status / browser_status are planned stubs
         and always fail.
         See docs/FLEET_CONTROL.md.
 

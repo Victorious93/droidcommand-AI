@@ -9,7 +9,7 @@ import ai.droidcommand.security.KnownFleet
 
 /**
  * The Fleet Orchestrator's roster: exactly the members [FleetCatalog] already lists (HackerAI plus the
- * `KnownFleet` members, including Victorious Mesh). It adds no member of its own.
+ * `KnownFleet` members, including Victorious Mesh and Victorious Browser). It adds no member of its own.
  */
 object FleetNodes {
     /**

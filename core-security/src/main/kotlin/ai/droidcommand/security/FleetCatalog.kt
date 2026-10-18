@@ -18,7 +18,7 @@ enum class FleetIntegrationClass {
     /**
      * Independent product. Live APK = Messenger + shared JSON envelope;
      * desktop/Docker = localhost API + bearer; SSH = CLI/ISO fallback.
-     * Never DependencyGuard. RootForge, File Manager, Keyboard, and Mesh are this class.
+     * Never DependencyGuard. RootForge, File Manager, Keyboard, Mesh, and Browser are this class.
      */
     EXTERNAL_NODE,
 
@@ -113,15 +113,17 @@ data class FleetMemberDescriptor(
 }
 
 /**
- * The eight room-fleet members. Wiring order (owner, 2026-10-14, File Manager
- * added 2026-10-15, Keyboard added 2026-10-17, Mesh added 2026-10-18): Pentest
+ * The nine room-fleet members. Wiring order (owner, 2026-10-14, File Manager
+ * added 2026-10-15, Keyboard added 2026-10-17, Mesh added 2026-10-18,
+ * Browser added 2026-10-18): Pentest
  * (when the base repo exists) → RootForge Messenger deepen → VictorSuite
  * RUN_COMMAND → EDL companion APK → KYC last → File Manager (when their
  * identity/default-off PR lands; after the RootForge Messenger client exists)
  * → Keyboard (catalog only; direction of hub-query vs keyboard slash-commands
- * is open) → Mesh (catalog only; EXTERNAL_NODE, own signing keys).
+ * is open) → Mesh (catalog only; EXTERNAL_NODE, own signing keys)
+ * → Browser (catalog only; EXTERNAL_NODE, own signing keys).
  *
- * HackerAI is already a bound companion in `KnownCompanions`; not one of these eight.
+ * HackerAI is already a bound companion in `KnownCompanions`; not one of these nine.
  */
 object KnownFleet {
     val PENTEST_SWARM = FleetMemberDescriptor(
@@ -419,6 +421,55 @@ object KnownFleet {
         expectedSigningCertSha256 = listOf(KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256),
     )
 
+    val BROWSER = FleetMemberDescriptor(
+        id = "browser",
+        displayName = "Victorious Browser",
+        repo = null,
+        packageOrBinary = "com.victorious.browser",
+        integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
+        status = FleetHonestyStatus.PLANNED,
+        capabilityId = CapabilityId("fleet.browser.node"),
+        providerId = "browser",
+        existingToolNames = listOf("browser_status"),
+        catalogStubName = "browser_status",
+        wiringOrder = 9,
+        transports = listOf(
+            "messenger+json envelope (planned: action com.victorious.browser.action.BRIDGE; " +
+                "Message what=1 request, reply what=2 response; " +
+                "caller identity = Message.sendingUid, not Binder.getCallingUid; " +
+                "node-id prefix ^browser-[0-9a-f]{32}$)",
+        ),
+        usesAidl = false,
+        usesDependencyGuard = false,
+        riskTier = RiskTier.READ_ONLY,
+        nextStep = "Generic Messenger client exists (core-fleet-messenger + :app) but Browser is not " +
+            "paired and the catalog stub still does not bind. Pair the node to call it. External " +
+            "control default OFF. Never DependencyGuard, never a shared signing key. Browser keeps its own " +
+            "release key (CI-only; not the shared fleet key). Release cert is [planned/unverified].",
+        refusalMessage = "Victorious Browser is PLANNED EXTERNAL_NODE — this stub does not bind Messenger. " +
+            "Planned action com.victorious.browser.action.BRIDGE (Message what=1 request / what=2 response). " +
+            "Documented ops browser.capabilities.get / browser.open_url{url} / browser.panel.list / " +
+            "browser.panel.open{panel_id} / browser.recon.summary{limit?,since?} / " +
+            "browser.proxy.set{enabled} (fire-and-forget) + pollable browser.proxy.status. " +
+            "Error categories invalid_parameters / not_paired / not_found / proxy_error / internal. " +
+            "External control default OFF; caller identity = Message.sendingUid (not Binder.getCallingUid). " +
+            "Node-id prefix ^browser-[0-9a-f]{32}$. Browser keeps its own release key (CI-only; not the " +
+            "shared fleet key). Debug SHA-256 2D:5D:9E:8B:53:8E:78:51:3D:B5:41:F4:DF:FD:67:BE:27:FF:EC:3F:" +
+            "37:EB:1A:D4:8D:77:83:AE:59:27:C3:E1. Release cert is [planned/unverified]. " +
+            "Capability state is REQUIRES_EXTERNAL_SERVICE.",
+        notes = "EXTERNAL_NODE like RootForge, File Manager, Keyboard, and Mesh. Never DependencyGuard, never " +
+            "shared signing key, never KnownCompanions, never BIND_* signature permission, never AIDL. " +
+            "Package com.victorious.browser. Browser keeps its own release key (CI-only; not the shared " +
+            "fleet key); release cert is [planned/unverified]. Planned Messenger + JSON ops " +
+            "browser.capabilities.get / browser.open_url / browser.panel.list / browser.panel.open / " +
+            "browser.recon.summary / browser.proxy.set / browser.proxy.status. External control " +
+            "default OFF. Caller identity = Message.sendingUid (not Binder.getCallingUid). " +
+            "Node-id prefix ^browser-[0-9a-f]{32}$. Controller-side DEBUG cert is catalogued " +
+            "(KnownNodeSigningCatalog.VICTORIOUS_BROWSER_DEBUG_SHA256, enforceable).",
+        androidPackages = listOf("com.victorious.browser"),
+        expectedSigningCertSha256 = listOf(KnownNodeSigningCatalog.VICTORIOUS_BROWSER_DEBUG_SHA256),
+    )
+
     val ALL: List<FleetMemberDescriptor> = listOf(
         PENTEST_SWARM,
         ROOTFORGE,
@@ -428,6 +479,7 @@ object KnownFleet {
         FILE_MANAGER,
         KEYBOARD,
         MESH,
+        BROWSER,
     )
 
     fun member(id: String): FleetMemberDescriptor? = ALL.find { it.id == id }
@@ -453,9 +505,9 @@ object KnownFleet {
     }
 
     fun formatListing(): String = buildString {
-        appendLine("DroidCommand AI room fleet — 8 members. None is LIVE.")
-        appendLine("Wiring order: Pentest (when repo exists) → RootForge Messenger → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager (when their identity/default-off PR lands) → Keyboard (catalog only; direction open) → Mesh (catalog only; own signing keys).")
-        appendLine("AIDL + DependencyGuard apply only to BOUND_COMPANION (Pentest, EDL). RootForge/File Manager/Keyboard/Mesh Messenger is not that.")
+        appendLine("DroidCommand AI room fleet — 9 members. None is LIVE.")
+        appendLine("Wiring order: Pentest (when repo exists) → RootForge Messenger → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager (when their identity/default-off PR lands) → Keyboard (catalog only; direction open) → Mesh (catalog only; own signing keys) → Browser (catalog only; own signing keys).")
+        appendLine("AIDL + DependencyGuard apply only to BOUND_COMPANION (Pentest, EDL). RootForge/File Manager/Keyboard/Mesh/Browser Messenger is not that.")
         appendLine()
         for (member in ALL) {
             val repo = member.repo ?: "(repo unpublished / not found on public GitHub as of 2026-10-14)"
@@ -470,7 +522,7 @@ object KnownFleet {
             appendLine("  next: ${member.nextStep}")
             appendLine()
         }
-        appendLine("HackerAI (ai.hackerai.companion) is a BOUND_COMPANION already in KnownCompanions; not one of these eight.")
+        appendLine("HackerAI (ai.hackerai.companion) is a BOUND_COMPANION already in KnownCompanions; not one of these nine.")
         appendLine("Controller-side node signature check: NodeSignatureVerifier (core-security). Default missing-expected policy is ALLOW.")
         appendLine("Catalogue is partial — fail-closed should be enabled only once remaining members and verified release pins are catalogued.")
         appendLine("Enforceable: DCA debug; Mesh debug (com.victorious.mesh); Browser debug (com.victorious.browser); Pentest debug; EDL debug; HackerAI debug+verified release 9E:A7; RootForge debug (ai.rootforge.os.debug); Keyboard debug (not .bench); VictorSuite debug + own release.")

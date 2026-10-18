@@ -3,7 +3,7 @@ package ai.droidcommand.app.fleet
 /**
  * Package-probe roster for Tools → Fleet. This is the UI half of
  * `core-security.KnownFleet` plus HackerAI (already a bound companion,
- * not one of the eight room-fleet items).
+ * not one of the nine room-fleet items).
  *
  * Lives in `:app` so the default JVM build does not have to compile the
  * AIDL module. Companion rows stay a PackageManager probe. EXTERNAL_NODE
@@ -58,6 +58,9 @@ object FleetCatalog {
 
     /** EXTERNAL_NODE. Probe only — do not bind Messenger. debug==release package. */
     const val MESH_PACKAGE = "com.victorious.mesh"
+
+    /** EXTERNAL_NODE. Probe only — do not bind Messenger. */
+    const val BROWSER_PACKAGE = "com.victorious.browser"
 
     /** Debug applicationId for RootForge OS. Catalogued for Messenger pairing / trust checks. */
     const val ROOTFORGE_DEBUG_PACKAGE = "ai.rootforge.os.debug"
@@ -156,6 +159,17 @@ object FleetCatalog {
             "External control default OFF.",
     )
 
+    val BROWSER = FleetMember(
+        id = "browser",
+        name = "Victorious Browser",
+        packageName = BROWSER_PACKAGE,
+        kind = FleetKind.EXTERNAL_NODE,
+        summary = "EXTERNAL_NODE, PLANNED. Planned Messenger action com.victorious.browser.action.BRIDGE " +
+            "(Message what=1 request / what=2 response); this app does not bind it. " +
+            "Never DependencyGuard, never a shared signing key. Browser keeps its own release key " +
+            "(CI-only; [planned/unverified]). External control default OFF.",
+    )
+
     val all: List<FleetMember> = listOf(
         HACKERAI,
         PENTEST_SWARM,
@@ -166,6 +180,7 @@ object FleetCatalog {
         FILE_MANAGER,
         KEYBOARD,
         MESH,
+        BROWSER,
     )
 
     /**

@@ -8,10 +8,10 @@ Honesty: **LIVE** is reserved for runtime-verified control. Nothing here is LIVE
 
 Code: `core-security.KnownFleet`. Bound companions also appear in
 `core-companion.KnownCompanions`. RootForge, File Manager, Keyboard,
-Mesh, VictorSuite, and KYC must not be added there.
+Mesh, Browser, VictorSuite, and KYC must not be added there.
 
 HackerAI (`ai.hackerai.companion`) is already a bound companion and is
-**not** one of these eight.
+**not** one of these nine.
 
 ## Wiring order
 
@@ -23,17 +23,18 @@ HackerAI (`ai.hackerai.companion`) is already a bound companion and is
 6. **Victorious File Manager** — when their identity/default-off PR lands; after the RootForge Messenger client exists
 7. **Victorious Keyboard** — catalog only; direction (hub queries keyboard vs keyboard slash-commands) is open
 8. **Victorious Mesh** — catalog only; EXTERNAL_NODE with its own signing keys (debug==release package)
+9. **Victorious Browser** — catalog only; EXTERNAL_NODE with its own signing keys (release CI-only, not the shared fleet key)
 
 ## Integration classes (do not mix)
 
 | Class | Security rules | Who |
 |---|---|---|
 | **BOUND_COMPANION** | AIDL + `protectionLevel="signature"` (same signing key) + companion `DependencyGuard`. Prefer one command-envelope service for new companions. `Initiator.REMOTE`. | Pentest-Swarm-AI, EDL-Commander (HackerAI, already mapped) |
-| **EXTERNAL_NODE** | Independent product. **Never** `DependencyGuard`, **never** a shared signing key, never "install DCA first". Live APK path on *their* main is bound **Messenger** + shared JSON (`protocol_major` 1). RootForge: `action ai.rootforge.os.action.BRIDGE`. File Manager: `action ai.victorious.filemanager.action.BRIDGE` (**PLANNED** as a product slot; generic client exists, off until paired). Keyboard: planned `action com.victorious.keyboard.action.BRIDGE` (**PLANNED**; never forwards typed text/keystrokes). Mesh: planned `action com.victorious.mesh.action.BRIDGE` (**PLANNED**; debug==release package `com.victorious.mesh`; Mesh keeps its own release key; generic client exists, off until paired). Desktop/Docker = localhost headless API + bearer (planned, RootForge). SSH = CLI/ISO **fallback only** (RootForge). Removing DCA must not disable the node. | RootForge OS, Victorious File Manager, Victorious Keyboard, Victorious Mesh |
+| **EXTERNAL_NODE** | Independent product. **Never** `DependencyGuard`, **never** a shared signing key, never "install DCA first". Live APK path on *their* main is bound **Messenger** + shared JSON (`protocol_major` 1). RootForge: `action ai.rootforge.os.action.BRIDGE`. File Manager: `action ai.victorious.filemanager.action.BRIDGE` (**PLANNED** as a product slot; generic client exists, off until paired). Keyboard: planned `action com.victorious.keyboard.action.BRIDGE` (**PLANNED**; never forwards typed text/keystrokes). Mesh: planned `action com.victorious.mesh.action.BRIDGE` (**PLANNED**; debug==release package `com.victorious.mesh`; Mesh keeps its own release key; generic client exists, off until paired). Browser: planned `action com.victorious.browser.action.BRIDGE` (**PLANNED**; package `com.victorious.browser`; caller identity = `Message.sendingUid`, not `Binder.getCallingUid`; Browser keeps its own release key, CI-only). Desktop/Docker = localhost headless API + bearer (planned, RootForge). SSH = CLI/ISO **fallback only** (RootForge). Removing DCA must not disable the node. | RootForge OS, Victorious File Manager, Victorious Keyboard, Victorious Mesh, Victorious Browser |
 | **TERMUX_IPC** | `com.termux.RUN_COMMAND` + plugin IPC + shared command schema. **Not** a new bound service. | VictorSuite |
 | **HOST_PROCESS_TOOL** | Localhost process behind a `Tool` + `SecureToolExecutor`. **Never** AIDL or DependencyGuard. | KYC-AuditLab only |
 
-## The eight
+## The nine
 
 | # | Member | Class | Repo / id | Package or binary | Status | Owns | What is actually wired | Next concrete code step |
 |---|---|---|---|---|---|---|---|---|
@@ -45,17 +46,19 @@ HackerAI (`ai.hackerai.companion`) is already a bound companion and is
 | 6 | **Victorious File Manager** | EXTERNAL_NODE | `Victorious93/File-Manager` (already on their `main`) | `ai.victorious.filemanager` (debug: `ai.victorious.filemanager.debug`); Messenger action `ai.victorious.filemanager.action.BRIDGE` | **PLANNED** | File listing / status over the shared JSON envelope (stub ops only on their side today) | Catalog stub `filemanager_status`. Always fails. Generic Messenger client exists (`core-fleet-messenger` + `:app`) but **is not started unless this node is paired**. Their main already has `FileManagerBridgeService` (Message what=1 Bundle key `request`; reply what=2 Bundle key `response`; `protocol_major` 1). Stub ops: `filemanager.capabilities.get`, `filemanager.status`, `filemanager.list` (empty entries). Every reply currently `live:false`, `mode:stub`, `dca_required:false`. | When their identity/default-off PR lands (external control default OFF; caller identity = UID package + SHA-256 cert; allow only `ai.droidcommand.app` and `.debug`; error categories `external_control_disabled` / `unauthorized_caller`; `fleet_class` → `external_node`), pair package + cert to call the existing client. Never DependencyGuard, never shared signing key, never `KnownCompanions`, never AIDL. |
 | 7 | **Victorious Keyboard** | EXTERNAL_NODE | `Victorious93/Victorious-Keyboard` | `com.victorious.keyboard` (debug: `com.victorious.keyboard.debug`; benchmark: `com.victorious.keyboard.bench`); planned Messenger action `com.victorious.keyboard.action.BRIDGE` | **PLANNED** | Keyboard capabilities / status over the shared JSON envelope. **Never forwards typed text or keystrokes.** | Catalog stub `keyboard_status`. Always fails. Generic Messenger client exists (`core-fleet-messenger` + `:app`) but **is not started unless this node is paired**. Planned service `com.victorious.keyboard.fleet.KeyboardBridgeService` (Message what=1 Bundle key `request`; reply what=2 Bundle key `response`; `protocol_major` 1, `dca_required:false`, `fleet_class` `external_node`). Planned ops: `keyboard.capabilities.get`, `keyboard.status`. Keyboard-side: external control default OFF; caller allowlist `ai.droidcommand.app` and `ai.droidcommand.app.debug`; errors `external_control_disabled` / `unauthorized_caller`. | Catalog only until Don decides direction (hub queries the keyboard vs the keyboard surfaces fleet slash-commands). Never DependencyGuard, never shared signing key, never `KnownCompanions`, never AIDL, never a `BIND_*` permission. Never forward typed text or keystrokes. |
 | 8 | **Victorious Mesh** | EXTERNAL_NODE | `Victorious93/victorious-mesh` | `com.victorious.mesh` (debug==release; **no** `applicationIdSuffix`); planned Messenger action `com.victorious.mesh.action.BRIDGE` | **PLANNED** | Mesh VPN / Headscale node capabilities, status, up, down, and IP over the shared JSON envelope | Catalog stub `mesh_status`. Always fails. Generic Messenger client exists (`core-fleet-messenger` + `:app`) but **is not started unless this node is paired**. Planned Messenger (Message what=1 Bundle key `request`; reply what=2 Bundle key `response`; `protocol_major` 1, `dca_required:false`, `fleet_class` `external_node`). Planned ops: `mesh.capabilities.get`, `mesh.status`, `mesh.up`, `mesh.down`, `mesh.ip.get`. LLM tools: `mesh_capabilities` / `mesh_status` / `mesh_up` / `mesh_down` / `mesh_get_ip`. Node-id prefix `^mesh-[0-9a-f]{32}$`. Mesh-side: external control default OFF; caller allowlist `ai.droidcommand.app` and `ai.droidcommand.app.debug`. Mesh debug cert SHA-256 `F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4`. Mesh keeps its **own** release key — do not assume the shared fleet key. | Catalog only. Pair package + cert to call the existing generic client. Never DependencyGuard, never shared signing key, never `KnownCompanions`, never AIDL, never a `BIND_*` permission. |
+| 9 | **Victorious Browser** | EXTERNAL_NODE | unpublished as of 2026-10-18 (repo not in ratified facts) | `com.victorious.browser`; planned Messenger action `com.victorious.browser.action.BRIDGE` | **PLANNED** | Browser capabilities, URL open, panel list/open, recon summary, and proxy set/status over the shared JSON envelope | Catalog stub `browser_status`. Always fails. Generic Messenger client exists (`core-fleet-messenger` + `:app`) but **is not started unless this node is paired**. Planned Messenger (Message what=1 request; reply what=2 response). Documented ops: `browser.capabilities.get`, `browser.open_url{url}`, `browser.panel.list`, `browser.panel.open{panel_id}`, `browser.recon.summary{limit?,since?}`, `browser.proxy.set{enabled}` (fire-and-forget) + pollable `browser.proxy.status`. Error categories: `invalid_parameters`, `not_paired`, `not_found`, `proxy_error`, `internal`. Node-id prefix `^browser-[0-9a-f]{32}$`. Browser-side: external control default OFF; caller identity = `Message.sendingUid` (**not** `Binder.getCallingUid`). Browser debug cert SHA-256 `2D:5D:9E:8B:53:8E:78:51:3D:B5:41:F4:DF:FD:67:BE:27:FF:EC:3F:37:EB:1A:D4:8D:77:83:AE:59:27:C3:E1`. Browser keeps its **own** release key (CI-only; **not** the shared fleet key) — release is **[planned/unverified]**. | Catalog only. Pair package + cert to call the existing generic client. Never DependencyGuard, never shared signing key, never `KnownCompanions`, never AIDL, never a `BIND_*` permission. |
 
 ## Shared command envelope
 
 RootForge Messenger / localhost API / SSH, File Manager Messenger,
-Keyboard Messenger, Mesh Messenger, and VictorSuite plugin IPC are intended
-to speak the **same JSON command envelope** `core-rootforge` already mirrors
-(`BRIDGE_PROTOCOL_MAJOR` 1). Pentest and EDL companions, when their APKs
-exist, should each be **one** envelope service rather than a growing
-method list. This slice does not add a second schema. The generic
-Messenger client (`core-fleet-messenger`) speaks that same envelope for
-any EXTERNAL_NODE; nothing is contacted until a node is paired.
+Keyboard Messenger, Mesh Messenger, Browser Messenger, and VictorSuite
+plugin IPC are intended to speak the **same JSON command envelope**
+`core-rootforge` already mirrors (`BRIDGE_PROTOCOL_MAJOR` 1). Pentest and
+EDL companions, when their APKs exist, should each be **one** envelope
+service rather than a growing method list. This slice does not add a
+second schema. The generic Messenger client (`core-fleet-messenger`)
+speaks that same envelope for any EXTERNAL_NODE; nothing is contacted
+until a node is paired.
 
 ## What this slice added in-repo
 
@@ -83,6 +86,36 @@ Sixth member. Same class rules as RootForge: **never** DependencyGuard,
 - Tools → Fleet probes package `ai.victorious.filemanager` only. No run button.
 - Their `main` already has the Messenger stub (`action ai.victorious.filemanager.action.BRIDGE`).
   Identity/default-off PR is still landing.
+
+## 2026-10-18 — Victorious Browser (EXTERNAL_NODE, PLANNED)
+
+Ninth member (Mesh already took wiring order 8). Same class rules as RootForge, File Manager, Keyboard, and Mesh:
+**never** DependencyGuard, **never** a shared signing key, **never**
+`KnownCompanions`, **never** a `BIND_*` signature permission, **never**
+AIDL. Status stays **PLANNED** (not LIVE, not PARTIAL). No live Messenger
+client bind in this repo. Browser keeps its **own** release key (CI-only;
+not the shared fleet key).
+
+- Package `com.victorious.browser` (the only package in the ratified facts).
+- Catalog stub `browser_status` always fails (`REQUIRES_EXTERNAL_SERVICE`).
+- Tools → Fleet probes package `com.victorious.browser` only. No run button.
+- Planned action `com.victorious.browser.action.BRIDGE`; Messenger what=1
+  request / what=2 response; node-id prefix `^browser-[0-9a-f]{32}$`.
+- Documented ops: `browser.capabilities.get`, `browser.open_url{url}`,
+  `browser.panel.list`, `browser.panel.open{panel_id}`,
+  `browser.recon.summary{limit?,since?}`, `browser.proxy.set{enabled}`
+  (fire-and-forget) + pollable `browser.proxy.status`.
+- Error categories: `invalid_parameters`, `not_paired`, `not_found`,
+  `proxy_error`, `internal`.
+- Browser-side: external control default OFF; caller identity =
+  `Message.sendingUid` (**not** `Binder.getCallingUid`).
+- Browser debug cert SHA-256 (committed, enforceable):
+  `2D:5D:9E:8B:53:8E:78:51:3D:B5:41:F4:DF:FD:67:BE:27:FF:EC:3F:37:EB:1A:D4:8D:77:83:AE:59:27:C3:E1`.
+- Browser release: own key, CI-only — **[planned/unverified]**. Do not invent
+  a release fingerprint.
+- Controller-side DEBUG cert is catalogued
+  (`KnownNodeSigningCatalog.VICTORIOUS_BROWSER_DEBUG_SHA256`, enforceable).
+  Release stays **[planned/unverified]**.
 
 ## 2026-10-17 — Victorious Keyboard (EXTERNAL_NODE, PLANNED)
 
@@ -176,7 +209,7 @@ and missing-observed refuse):
 |---|---|---|---|
 | DroidCommand-AI | DEBUG | `ai.droidcommand.app` | `88:00:51:A6:D9:5D:38:DD:8D:81:E1:93:1E:17:05:48:03:87:D5:93:C3:09:43:53:99:68:E6:EF:11:A0:C8:4D` |
 | Victorious Mesh (8th wiring-order member, PLANNED catalog) | DEBUG | `com.victorious.mesh` | `F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4` |
-| Victorious Browser (not a wiring-order member) | DEBUG | `com.victorious.browser` | `2D:5D:9E:8B:53:8E:78:51:3D:B5:41:F4:DF:FD:67:BE:27:FF:EC:3F:37:EB:1A:D4:8D:77:83:AE:59:27:C3:E1` |
+| Victorious Browser (9th wiring-order member, PLANNED catalog) | DEBUG | `com.victorious.browser` | `2D:5D:9E:8B:53:8E:78:51:3D:B5:41:F4:DF:FD:67:BE:27:FF:EC:3F:37:EB:1A:D4:8D:77:83:AE:59:27:C3:E1` |
 | Pentest-Swarm-AI | DEBUG | `ai.pentestswarm.companion` | `5E:3A:B1:23:1F:7E:DA:18:78:B8:FF:D8:9E:AC:B1:F7:2E:EB:66:AF:3D:BA:2E:01:33:51:24:68:42:23:30:C7` |
 | EDL-Commander | DEBUG | `ai.edlcommander.companion` | `E5:60:B6:92:BD:E6:51:9E:B7:CB:B5:2C:E4:DC:91:5A:19:E4:41:A0:1A:5D:03:68:82:71:AC:99:78:8A:58:C8` |
 | HackerAI-Commander | DEBUG | `ai.hackerai.companion` | `AF:1C:8F:C5:44:9F:58:4A:46:C8:96:CC:C9:7F:35:B0:7B:35:7E:96:EE:66:5F:3A:BF:CB:0D:28:4D:F5:23:55` |

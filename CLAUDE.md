@@ -333,15 +333,17 @@ inflate any entry's status past what those addenda actually say:
   surface area in VictorSuite's own repo, out of scope here. See
   `docs/AUDIT_2026-09-05.md`'s addendum for the full record.
 
-The eight-member **room fleet** Don asked DCA to control (RootForge OS,
+The nine-member **room fleet** Don asked DCA to control (RootForge OS,
 VictorSuite, KYC-AuditLab, EDL-Commander, Pentest-Swarm-AI, Victorious
-File Manager, Victorious Keyboard, Victorious Mesh) is catalogued in
+File Manager, Victorious Keyboard, Victorious Mesh, Victorious Browser)
+is catalogued in
 `docs/FLEET_CONTROL.md` and `core-security.KnownFleet`. Wiring order:
 Pentest (when the base repo exists) → RootForge Messenger deepen →
 VictorSuite `RUN_COMMAND` → EDL companion APK → KYC last → File Manager
 (when their identity/default-off PR lands; after the RootForge Messenger
 client exists) → Keyboard (catalog only; direction of hub-query vs
-keyboard slash-commands is open) → Mesh (catalog only; own signing keys).
+keyboard slash-commands is open) → Mesh (catalog only; own signing keys)
+→ Browser (catalog only; own signing keys).
 RootForge
 is an **EXTERNAL_NODE** — live APK path on their `main` is already Messenger +
 shared JSON (`docs/DROIDCOMMAND_INTEGRATION.md` in `rootforge-os`, action
@@ -362,10 +364,16 @@ typed text or keystrokes. Victorious Mesh is a fourth **EXTERNAL_NODE**,
 `applicationIdSuffix`), planned action `com.victorious.mesh.action.BRIDGE`;
 this repo does not bind it, must never get DependencyGuard / a shared
 signing key / `KnownCompanions` / AIDL / a `BIND_*` permission. Mesh keeps
-its own release key. EDL-Commander is a **bound companion** (AIDL +
+its own release key. Victorious Browser is a fifth **EXTERNAL_NODE**,
+**PLANNED** — package `com.victorious.browser`, planned action
+`com.victorious.browser.action.BRIDGE`; this repo does not bind it, must
+never get DependencyGuard / a shared signing key / `KnownCompanions` /
+AIDL / a `BIND_*` permission. Browser keeps its own release key (CI-only;
+not the shared fleet key). Caller identity is `Message.sendingUid`, not
+`Binder.getCallingUid`. EDL-Commander is a **bound companion** (AIDL +
 same-signing + DependencyGuard), PLANNED until the APK lands — do not mark
 it host-tool-only. KYC-AuditLab is a host-process simulator (localhost only;
-the hub must not call `/scope` admin). None of the eight is LIVE. Do not
+the hub must not call `/scope` admin). None of the nine is LIVE. Do not
 invent a parallel control plane.
 
 ---

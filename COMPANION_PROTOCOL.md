@@ -53,8 +53,8 @@ or Sahara/Firehose (EDL companion).
 
 The room-fleet map lives in `docs/FLEET_CONTROL.md` and `core-security.KnownFleet`.
 Add a member to `KnownCompanions` only when it is a genuine dependent companion
-APK (HackerAI, Pentest-Swarm, EDL-Commander). File Manager, Keyboard, and Mesh
-are EXTERNAL_NODE like RootForge — never `KnownCompanions`.
+APK (HackerAI, Pentest-Swarm, EDL-Commander). File Manager, Keyboard, Mesh,
+and Browser are EXTERNAL_NODE like RootForge — never `KnownCompanions`.
 
 ## Fleet slots that are not companions
 
@@ -185,6 +185,44 @@ product, the same class as RootForge, File Manager, and Keyboard. It is
   implement a live Messenger client bind.
 - Status: **PLANNED** (not LIVE, not PARTIAL). Wiring: catalog only until
   a Mesh Messenger client can follow the RootForge pattern.
+
+### Victorious Browser — EXTERNAL_NODE (Messenger)
+
+Victorious Browser is an independent product, the same class as RootForge,
+File Manager, and Keyboard. It is **not** a companion. Repo was not in the
+ratified facts (unpublished as of 2026-10-18).
+
+- Package: `com.victorious.browser`.
+- Planned action: `com.victorious.browser.action.BRIDGE`.
+- Transport: Message what=1 request; reply what=2 response. Envelope
+  fields match the shared EXTERNAL_NODE JSON (`protocol_major`,
+  `request_id`, `target_node_id` / `node_id`, `operation`, `timeout_ms`,
+  `parameters` / `ok`, `result`, `error {category, message}`).
+- Node-id prefix: `^browser-[0-9a-f]{32}$`.
+- Documented ops: `browser.capabilities.get`, `browser.open_url{url}`,
+  `browser.panel.list`, `browser.panel.open{panel_id}`,
+  `browser.recon.summary{limit?,since?}`, `browser.proxy.set{enabled}`
+  (fire-and-forget) + pollable `browser.proxy.status`.
+- Error categories: `invalid_parameters`, `not_paired`, `not_found`,
+  `proxy_error`, `internal`.
+- Browser-side: external control default OFF; caller identity =
+  `Message.sendingUid` (**not** `Binder.getCallingUid`).
+- Browser debug cert SHA-256 (committed, enforceable):
+  `2D:5D:9E:8B:53:8E:78:51:3D:B5:41:F4:DF:FD:67:BE:27:FF:EC:3F:37:EB:1A:D4:8D:77:83:AE:59:27:C3:E1`.
+  Browser keeps its **own** release key (CI-only; **not** the shared fleet
+  key). Release is **[planned/unverified]** — do not invent a fingerprint.
+- Controller-side DEBUG cert is catalogued
+  (`KnownNodeSigningCatalog.VICTORIOUS_BROWSER_DEBUG_SHA256`, enforceable).
+  Release stays **[planned/unverified]**.
+- **Never** `DependencyGuard`, **never** a shared signing key, **never**
+  `KnownCompanions`, **never** a `BIND_*` signature permission, **never**
+  AIDL. Removing DCA must not disable Browser.
+- Catalog stub: `browser_status` (`PlannedFleetTool`). Always
+  `ToolResult.Failure` / `REQUIRES_EXTERNAL_SERVICE`. This repo does **not**
+  implement a live Messenger client bind. No extra tool UI was added —
+  same probe-only Fleet screen as Keyboard.
+- Status: **PLANNED** (not LIVE, not PARTIAL). Wiring: catalog only until
+  a Browser Messenger client can follow the RootForge pattern.
 
 ### EDL-Commander — bound companion (not a host tool)
 
@@ -331,7 +369,7 @@ Enforceable today (mismatch / missing-observed refuse):
 
 - DroidCommand-AI debug `ai.droidcommand.app` `88:00:51:A6:…:C8:4D`
 - Victorious Mesh debug `com.victorious.mesh` `F4:C9:25:B8:…:B9:F4` (8th wiring-order member, PLANNED catalog)
-- Victorious Browser debug `com.victorious.browser` `2D:5D:9E:8B:…:C3:E1` (not a wiring-order member)
+- Victorious Browser debug `com.victorious.browser` `2D:5D:9E:8B:…:C3:E1` (9th wiring-order member, PLANNED catalog)
 - Pentest-Swarm-AI debug `ai.pentestswarm.companion` `5E:3A:B1:23:…:30:C7`
 - EDL-Commander debug `ai.edlcommander.companion` `E5:60:B6:92:…:58:C8`
 - HackerAI-Commander debug `ai.hackerai.companion` `AF:1C:8F:C5:…:23:55`

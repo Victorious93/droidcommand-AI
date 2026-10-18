@@ -49,8 +49,10 @@
         <package android:name="ai.victorious.filemanager" />
         <package android:name="com.victorious.keyboard" />
         <!-- Controller-side node signature check (NodeSignatureGuard) plus Tools → Fleet
-             package probe. Mesh is also KnownFleet.MESH (PLANNED EXTERNAL_NODE). -->
+             package probe. Mesh is KnownFleet.MESH; Browser is KnownFleet.BROWSER
+             (both PLANNED EXTERNAL_NODE). -->
         <package android:name="com.victorious.mesh" />
+        <package android:name="com.victorious.browser" />
 
         <!-- Messenger transport (core-fleet-messenger): a paired EXTERNAL_NODE package is only visible to the
              trust check if it is named here; an unnamed one reads as "not installed" and is refused. Debug /

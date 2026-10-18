@@ -240,10 +240,10 @@ object KnownNodeSigningCatalog {
     )
 
     /**
-     * Victorious Browser debug identity. EXTERNAL_NODE, not a
-     * [KnownFleet] wiring-order member. RELEASE is own-key
-     * [planned/unverified] (CI-only, cert TBD) — not [SHARED_FLEET_RELEASE_SHA256]
-     * and not listed in [expectedCerts].
+     * Victorious Browser debug identity. [KnownFleet.BROWSER], EXTERNAL_NODE,
+     * wiring order 9, PLANNED. RELEASE is own-key [planned/unverified]
+     * (CI-only, cert TBD) — not [SHARED_FLEET_RELEASE_SHA256] and not listed
+     * in [expectedCerts].
      */
     val VICTORIOUS_BROWSER_DEBUG = NodeSigningIdentity(
         packageName = "com.victorious.browser",
@@ -252,7 +252,8 @@ object KnownNodeSigningCatalog {
         integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
         notes = "Victorious Browser debug. Enforceable. RELEASE is [planned/unverified] " +
             "(own key, NOT shared fleet 9E:A7, CI-only, cert TBD). " +
-            "Never DependencyGuard, never a shared signing key. Not a KnownFleet wiring-order member.",
+            "KnownFleet.BROWSER (EXTERNAL_NODE, wiring order 9, PLANNED). " +
+            "Never DependencyGuard, never a shared signing key.",
     )
 
     /**
