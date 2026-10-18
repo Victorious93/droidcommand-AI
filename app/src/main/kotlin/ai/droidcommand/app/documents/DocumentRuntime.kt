@@ -47,7 +47,7 @@ fun interface EmbedderProvider {
 @Singleton
 class DocumentRuntime @Inject constructor(@ApplicationContext private val context: Context) {
     private val spec = EmbeddingModelCatalog.NOMIC_EMBED_TEXT_V1_5_Q4_K_M
-    private val models = ModelRepository(File(context.filesDir, "embedding-models")).also { it.register(spec.metadata) }
+    private val models = ModelRepository(File(context.filesDir, "embedding-models"), requireGguf = true).also { it.register(spec.metadata) }
     private val embedderLock = Any()
     private var loadedEmbedder: Embedder? = null
 
@@ -76,7 +76,9 @@ class DocumentRuntime @Inject constructor(@ApplicationContext private val contex
         loadedEmbedder?.let { return it }
         val check = models.verify(spec.metadata.id)
         if (check !is ModelCheck.Verified) {
-            if (check is ModelCheck.Mismatch) embedderProblem = "The downloaded embedding model failed its integrity check; download it again."
+            if (check is ModelCheck.Mismatch || check is ModelCheck.Rejected) {
+                embedderProblem = "The downloaded embedding model failed its integrity check; download it again."
+            }
             return null
         }
         val backend = LlamaCppEmbeddingBackend()

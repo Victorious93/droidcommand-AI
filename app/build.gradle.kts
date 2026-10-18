@@ -168,6 +168,10 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
+    // Background, resumable model downloads (localmodels/download). 2.10.5 is the newest 2.10.x; it builds against
+    // compileSdk 35, within this project's compileSdk 36. 2.11.x was not tried.
+    implementation("androidx.work:work-runtime-ktx:2.10.5")
+
     testImplementation(kotlin("test"))
 
     // Instrumented launch smoke test (app/src/androidTest). These androidx.test
