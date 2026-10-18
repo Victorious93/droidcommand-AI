@@ -7,7 +7,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.content.pm.PackageManager
 import android.os.IBinder
 
 /**
@@ -23,6 +22,9 @@ interface CompanionRegistry {
     fun getHackerAiService(): IHackerAIService?
     fun getPentestSwarmService(): IPentestSwarmService?
     fun allConnectedPackages(): Set<String>
+
+    /** The raw bound binder for [packageName], or null when not connected. Lets a caller inspect its interface descriptor. */
+    fun getBinder(packageName: String): IBinder?
 }
 
 /**
@@ -127,6 +129,9 @@ class AndroidCompanionRegistry(
         connections[KnownCompanions.PENTESTSWARM_PACKAGE]?.binder?.let {
             IPentestSwarmService.Stub.asInterface(it)
         }
+
+    @Synchronized
+    override fun getBinder(packageName: String): IBinder? = connections[packageName]?.binder
 
     @Synchronized
     override fun allConnectedPackages(): Set<String> =

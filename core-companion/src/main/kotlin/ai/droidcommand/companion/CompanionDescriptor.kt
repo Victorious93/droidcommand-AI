@@ -32,6 +32,7 @@ data class CompanionDescriptor(
 object KnownCompanions {
     const val HACKERAI_PACKAGE = "ai.hackerai.companion"
     const val PENTESTSWARM_PACKAGE = "ai.pentestswarm.companion"
+
     /** Planned package id. The APK does not exist; do not bind this. */
     const val EDLCOMMANDER_PACKAGE = "ai.edlcommander.companion"
 
