@@ -1,6 +1,7 @@
 package ai.droidcommand.app
 
 import ai.droidcommand.app.fleet.FleetCatalog
+import ai.droidcommand.app.fleet.FleetNodes
 import org.w3c.dom.Element
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
@@ -37,6 +38,20 @@ class ManifestPolicyTest {
         val probed = FleetCatalog.all.mapNotNull { it.packageName }.toSet()
         // Without an entry, Android 11+ throws NameNotFoundException for an installed app and the screen says "not installed".
         assertTrue(declared.containsAll(probed), "Missing from <queries>: ${probed - declared}")
+    }
+
+    @Test
+    fun `every package the fleet orchestrator binds or probes is named in queries`() {
+        val declared = manifest.children("queries").single().children("package").map { it.androidAttr("name") }.toSet()
+        val used = FleetNodes.nodes().mapNotNull { it.packageName }.toSet() + FleetNodes.BOUND_COMPANION_PACKAGES
+        assertTrue(declared.containsAll(used), "Missing from <queries>: ${used - declared}")
+    }
+
+    @Test
+    fun `queries name only catalogued fleet packages besides the speech and TTS intents`() {
+        val declared = manifest.children("queries").single().children("package").map { it.androidAttr("name") }.toSet()
+        val catalogued = FleetCatalog.all.mapNotNull { it.packageName }.toSet()
+        assertEquals(catalogued, declared)
     }
 
     @Test

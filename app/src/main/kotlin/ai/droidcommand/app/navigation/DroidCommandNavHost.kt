@@ -5,6 +5,7 @@ import ai.droidcommand.app.clipboard.ClipboardScreen
 import ai.droidcommand.app.ui.automation.AutomationScreen
 import ai.droidcommand.app.ui.chat.ChatScreen
 import ai.droidcommand.app.ui.coding.CodingScreen
+import ai.droidcommand.app.ui.fleet.FleetOrchestratorScreen
 import ai.droidcommand.app.ui.fleet.FleetScreen
 import ai.droidcommand.app.ui.logs.LogsScreen
 import ai.droidcommand.app.ui.memory.MemoryScreen
@@ -85,6 +86,7 @@ object Routes {
     const val CODING = "tools/coding"
     const val NOTES = "tools/notes"
     const val FLEET = "tools/fleet"
+    const val FLEET_ORCHESTRATOR = "tools/fleet/orchestrator"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -146,6 +148,7 @@ fun DroidCommandNavHost(
             composable(Routes.CODING) { CodingScreen() }
             composable(Routes.NOTES) { NotesScreen() }
             composable(Routes.FLEET) { FleetScreen() }
+            composable(Routes.FLEET_ORCHESTRATOR) { FleetOrchestratorScreen() }
         }
     }
 }

@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 
@@ -38,9 +39,12 @@ fun ToolsScreen(navController: NavHostController) {
                 Text("Fleet", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "DCA is the hub. Companions stay install-probe only. External nodes " +
-                        "(RootForge, File Manager, Keyboard) can be paired on the fleet screen " +
+                        "(RootForge, File Manager, Keyboard, Mesh) can be paired on the fleet screen " +
                         "(package + observed signing cert) and then run read-only Messenger status. " +
-                        "Nothing is LIVE. No companion is bound until you pair a node.",
+                        "Nothing is LIVE. No companion is bound until you pair a node. " +
+                        "Fleet Orchestrator checks reachability per node (read-only) and can send an approved " +
+                        "command to a bound companion. External nodes show \"pairing required\", Termux shows " +
+                        "\"no runner yet\", and KYC-AuditLab and EDL-Commander are planned.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -48,6 +52,10 @@ fun ToolsScreen(navController: NavHostController) {
                     onClick = { navController.navigate(Routes.FLEET) },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Open fleet status") }
+                Button(
+                    onClick = { navController.navigate(Routes.FLEET_ORCHESTRATOR) },
+                    modifier = Modifier.fillMaxWidth().testTag("tools_open_fleet_orchestrator"),
+                ) { Text("Open Fleet Orchestrator") }
             }
         }
 
