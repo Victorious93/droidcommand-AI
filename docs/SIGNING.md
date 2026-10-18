@@ -12,6 +12,12 @@
 
 `:app`'s debug `signingConfig` points at this file (`app/build.gradle.kts`). Every CI debug APK and every local `./gradlew :app:assembleDebug` build should carry that fingerprint, so a new debug build installs over an older one instead of failing with **App not installed**.
 
+There is **no** `applicationIdSuffix`. Debug and release APKs are both
+`ai.droidcommand.app`. Fleet nodes must pin that one package to the two
+real certs (this debug fingerprint and the release fingerprint
+`9E:A7:B3:14:...:2D:8D`). `ai.droidcommand.app.debug` is never produced
+and is not a valid caller identity.
+
 **One-time uninstall:** debug APKs built before this keystore landed used the default Android debug key (a random per-CI-runner identity). Those cannot be updated in place. Uninstall the old `ai.droidcommand.app` debug APK once, then install a build signed with this key.
 
 ## Release

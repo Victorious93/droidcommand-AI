@@ -15,10 +15,12 @@ class FleetStatusTest {
         assertEquals("ai.edlcommander.companion", FleetCatalog.EDLCOMMANDER_PACKAGE)
         assertEquals("ai.victorious.filemanager", FleetCatalog.FILEMANAGER_PACKAGE)
         assertEquals("com.victorious.keyboard", FleetCatalog.KEYBOARD_PACKAGE)
+        assertEquals("com.victorious.mesh", FleetCatalog.MESH_PACKAGE)
         assertNull(FleetCatalog.ROOTFORGE.packageName)
         assertNull(FleetCatalog.KYC_AUDITLAB.packageName)
         assertEquals(FleetCatalog.FILEMANAGER_PACKAGE, FleetCatalog.FILE_MANAGER.packageName)
         assertEquals(FleetCatalog.KEYBOARD_PACKAGE, FleetCatalog.KEYBOARD.packageName)
+        assertEquals(FleetCatalog.MESH_PACKAGE, FleetCatalog.MESH.packageName)
         assertEquals(
             listOf(
                 "hackerai",
@@ -29,6 +31,7 @@ class FleetStatusTest {
                 "kyc-auditlab",
                 "file-manager",
                 "keyboard",
+                "mesh",
             ),
             FleetCatalog.all.map { it.id },
         )
@@ -47,6 +50,7 @@ class FleetStatusTest {
         val kyc = rows.single { it.member.id == "kyc-auditlab" }
         val fileManager = rows.single { it.member.id == "file-manager" }
         val keyboard = rows.single { it.member.id == "keyboard" }
+        val mesh = rows.single { it.member.id == "mesh" }
 
         assertEquals(FleetInstallState.INSTALLED, hacker.installed)
         assertTrue(hacker.status.contains("disconnected"))
@@ -86,6 +90,14 @@ class FleetStatusTest {
         assertTrue(keyboard.member.summary.contains("Never forwards typed text"))
         assertFalse(keyboard.status.contains("ready", ignoreCase = true), keyboard.status)
 
+        assertEquals(FleetInstallState.NOT_INSTALLED, mesh.installed)
+        assertTrue(mesh.status.contains("does not bind Messenger"))
+        assertTrue(mesh.status.contains("PLANNED"))
+        assertTrue(mesh.member.summary.contains("Never DependencyGuard"))
+        assertTrue(mesh.member.summary.contains("com.victorious.mesh.action.BRIDGE"))
+        assertTrue(mesh.member.summary.contains("own release key"))
+        assertFalse(mesh.status.contains("ready", ignoreCase = true), mesh.status)
+
         rows.forEach { row ->
             assertFalse(row.status.contains("ready", ignoreCase = true), row.status)
         }
@@ -103,5 +115,12 @@ class FleetStatusTest {
         assertTrue(installedKb.status.contains("Package probe only"))
         assertTrue(installedKb.status.contains("PLANNED"))
         assertFalse(installedKb.status.contains("ready", ignoreCase = true), installedKb.status)
+
+        val installedMesh = FleetStatus.resolve(FleetCatalog.all) { it == FleetCatalog.MESH_PACKAGE }
+            .single { it.member.id == "mesh" }
+        assertEquals(FleetInstallState.INSTALLED, installedMesh.installed)
+        assertTrue(installedMesh.status.contains("Package probe only"))
+        assertTrue(installedMesh.status.contains("PLANNED"))
+        assertFalse(installedMesh.status.contains("ready", ignoreCase = true), installedMesh.status)
     }
 }

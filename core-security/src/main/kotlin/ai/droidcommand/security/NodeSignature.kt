@@ -226,8 +226,8 @@ object KnownNodeSigningCatalog {
      * Victorious Mesh debug identity. Release is `[Unknown]` — not
      * invented here.
      *
-     * Mesh is an EXTERNAL_NODE. It is **not** yet a [KnownFleet]
-     * wiring-order member (their Fleet IPC Messenger is still TODO).
+     * Mesh is [KnownFleet.MESH], EXTERNAL_NODE, wiring order 8, PLANNED.
+     * Fleet IPC Messenger bind is still TODO.
      */
     val VICTORIOUS_MESH_DEBUG = NodeSigningIdentity(
         packageName = "com.victorious.mesh",
@@ -235,6 +235,7 @@ object KnownNodeSigningCatalog {
         memberId = "mesh",
         integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
         notes = "Victorious Mesh debug keystore. Enforceable. Release fingerprint is [Unknown]. " +
+            "KnownFleet.MESH (EXTERNAL_NODE, wiring order 8, PLANNED). " +
             "Never DependencyGuard, never a shared signing key. Fleet IPC Messenger is TODO on their side.",
     )
 
@@ -269,7 +270,7 @@ object KnownNodeSigningCatalog {
         memberId = "hackerai",
         integrationClass = FleetIntegrationClass.BOUND_COMPANION,
         notes = "HackerAI-Commander debug + firsthand-verified RELEASE 9E:A7:… (v0.1.0). " +
-            "Enforceable. Not one of the seven KnownFleet members.",
+            "Enforceable. Not one of the eight KnownFleet members.",
     )
 
     /**

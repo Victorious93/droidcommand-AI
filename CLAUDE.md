@@ -333,14 +333,16 @@ inflate any entry's status past what those addenda actually say:
   surface area in VictorSuite's own repo, out of scope here. See
   `docs/AUDIT_2026-09-05.md`'s addendum for the full record.
 
-The seven-member **room fleet** Don asked DCA to control (RootForge OS,
+The eight-member **room fleet** Don asked DCA to control (RootForge OS,
 VictorSuite, KYC-AuditLab, EDL-Commander, Pentest-Swarm-AI, Victorious
-File Manager, Victorious Keyboard) is catalogued in `docs/FLEET_CONTROL.md`
-and `core-security.KnownFleet`. Wiring order: Pentest (when the base repo
-exists) → RootForge Messenger deepen → VictorSuite `RUN_COMMAND` → EDL
-companion APK → KYC last → File Manager (when their identity/default-off
-PR lands; after the RootForge Messenger client exists) → Keyboard (catalog
-only; direction of hub-query vs keyboard slash-commands is open). RootForge
+File Manager, Victorious Keyboard, Victorious Mesh) is catalogued in
+`docs/FLEET_CONTROL.md` and `core-security.KnownFleet`. Wiring order:
+Pentest (when the base repo exists) → RootForge Messenger deepen →
+VictorSuite `RUN_COMMAND` → EDL companion APK → KYC last → File Manager
+(when their identity/default-off PR lands; after the RootForge Messenger
+client exists) → Keyboard (catalog only; direction of hub-query vs
+keyboard slash-commands is open) → Mesh (catalog only; own signing keys).
+RootForge
 is an **EXTERNAL_NODE** — live APK path on their `main` is already Messenger +
 shared JSON (`docs/DROIDCOMMAND_INTEGRATION.md` in `rootforge-os`, action
 `ai.rootforge.os.action.BRIDGE`, `protocol_major` 1); SSH is CLI/ISO
@@ -355,10 +357,15 @@ package `com.victorious.keyboard` (debug `.debug`, benchmark `.bench`),
 planned action `com.victorious.keyboard.action.BRIDGE`; this repo does not
 bind it, must never get DependencyGuard / a shared signing key /
 `KnownCompanions` / AIDL / a `BIND_*` permission, and must never forward
-typed text or keystrokes. EDL-Commander is a **bound companion** (AIDL +
+typed text or keystrokes. Victorious Mesh is a fourth **EXTERNAL_NODE**,
+**PLANNED** — package `com.victorious.mesh` (debug==release, no
+`applicationIdSuffix`), planned action `com.victorious.mesh.action.BRIDGE`;
+this repo does not bind it, must never get DependencyGuard / a shared
+signing key / `KnownCompanions` / AIDL / a `BIND_*` permission. Mesh keeps
+its own release key. EDL-Commander is a **bound companion** (AIDL +
 same-signing + DependencyGuard), PLANNED until the APK lands — do not mark
 it host-tool-only. KYC-AuditLab is a host-process simulator (localhost only;
-the hub must not call `/scope` admin). None of the seven is LIVE. Do not
+the hub must not call `/scope` admin). None of the eight is LIVE. Do not
 invent a parallel control plane.
 
 ---
