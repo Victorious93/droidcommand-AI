@@ -3,6 +3,10 @@ package ai.droidcommand.app.localmodels
 import ai.droidcommand.llm.factory.LocalProviderResources
 import ai.droidcommand.llm.local.InferenceBackend
 import ai.droidcommand.llm.local.InferenceException
+import ai.droidcommand.llm.local.ModelDownloadPolicy
+import ai.droidcommand.llm.local.ModelDownloader
+import ai.droidcommand.llm.local.ModelInstallResult
+import ai.droidcommand.llm.local.ModelMetadata
 import ai.droidcommand.llm.local.ModelRepository
 import ai.droidcommand.llm.local.android.LlamaCppBackend
 import android.content.Context
@@ -22,14 +26,17 @@ import javax.inject.Singleton
  * Blocking work (file reads, digests, the copy): call these off the main thread.
  */
 @Singleton
-class LocalModelRuntime @Inject constructor(@ApplicationContext context: Context) {
-    private val dir = File(context.filesDir, DIRECTORY)
+class LocalModelRuntime internal constructor(private val dir: File) {
+    @Inject
+    constructor(@ApplicationContext context: Context) : this(File(context.filesDir, DIRECTORY))
+
     private val registry = LocalModelRegistry(dir)
     private val importer = LocalModelImporter(dir)
     private val lock = Any()
     private var models: List<ImportedModel>? = null
 
-    val repository = ModelRepository(dir)
+    /** GGUF header checking is on: a file that is not a GGUF is never reported loadable, whatever its digest. */
+    val repository = ModelRepository(dir, requireGguf = true)
 
     /** Passed to `ChatSession`. A device without the native library fails the turn with a message instead of crashing. */
     val resources = LocalProviderResources(repository, backendFactory = { newBackend() })
@@ -50,6 +57,44 @@ class LocalModelRuntime @Inject constructor(@ApplicationContext context: Context
             }
         }
         return outcome
+    }
+
+    /**
+     * Downloads [metadata] into the same directory the imports use and registers it, so it appears in [list] like an
+     * imported model. Blocking and network/disk heavy: call off the main thread (the WorkManager worker does).
+     *
+     * Refuses an entry [ModelDownloadPolicy] rejects (no pinned URL, no published size) before any request. The file is
+     * registered only after `ModelRepository.install` has checked its size, GGUF header and SHA-256; a file that fails
+     * is deleted and nothing is registered. A model already installed under this id is returned as installed without a
+     * request. The download itself runs outside [lock], so [list] and imports stay responsive.
+     */
+    fun installDownloadable(
+        metadata: ModelMetadata,
+        downloader: ModelDownloader,
+        onProgress: (Long) -> Unit,
+        cancelled: () -> Boolean,
+    ): ModelInstallResult {
+        ModelDownloadPolicy.problem(metadata)?.let { return ModelInstallResult.Failed("Model '${metadata.id}' cannot be downloaded: $it") }
+        // The directory also holds the registry and `import-*.part` files, which discardAbandonedImports deletes.
+        if (metadata.fileName == LocalModelRegistry.FILE_NAME || metadata.fileName.startsWith("import-")) {
+            return ModelInstallResult.Failed("Model '${metadata.id}' has a reserved file name")
+        }
+        val known = list().firstOrNull { it.id == metadata.id }
+        if (known != null && (known.metadata.sha256 != metadata.sha256 || known.metadata.fileName != metadata.fileName)) {
+            return ModelInstallResult.Failed("A different model is already installed under '${metadata.id}'")
+        }
+        // A throwaway repository, because the shared one has no unregister and keeps the URL-less record a restart reloads.
+        val installer = ModelRepository(dir, requireGguf = true).also { it.register(metadata) }
+        val result = installer.install(metadata.id, downloader, onProgress, cancelled)
+        if (result is ModelInstallResult.Installed && known == null) {
+            synchronized(lock) {
+                val updated = current() + ImportedModel(metadata.copy(url = null), System.currentTimeMillis())
+                if (repository.get(metadata.id) == null) repository.register(metadata.copy(url = null))
+                registry.save(updated)
+                models = updated
+            }
+        }
+        return result
     }
 
     /** Forgets [id] and deletes its file. Callers unload any loaded copy first. */

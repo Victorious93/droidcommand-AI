@@ -63,6 +63,9 @@ class LocalLlmProvider(
                     is ModelCheck.Mismatch -> return LlmResponse.Error(
                         LlmError.ModelUnavailable("SHA-256 mismatch for '$modelId' (got ${check.actual}); refusing to load"),
                     )
+                    is ModelCheck.Rejected -> return LlmResponse.Error(
+                        LlmError.ModelUnavailable("Model '$modelId' failed its integrity check (${check.detail}); refusing to load"),
+                    )
                     is ModelCheck.Verified -> backend.load(check.path, meta.contextTokens)
                 }
                 loaded = true

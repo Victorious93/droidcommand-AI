@@ -10,6 +10,13 @@
          metered, so it can confirm before using mobile data. It reveals nothing beyond that flag. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Background model downloads run as a WorkManager foreground service of type dataSync (the system requires the
+         type to be declared). POST_NOTIFICATIONS lets its progress notification show on Android 13+; the app does not
+         prompt for it yet, so until it is granted the download runs without a visible notification. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- VictorSuite / Termux RUN_COMMAND (dangerous). Required to start
          com.termux.app.RunCommandService. Also requested at runtime from the
          Metasploit screen; denial refuses the Kali/msfconsole dispatch. -->
@@ -98,5 +105,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
     </application>
 </manifest>
