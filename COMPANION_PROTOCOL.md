@@ -106,11 +106,7 @@ product, the same class as RootForge. It is **not** a companion.
   Every reply currently carries `live:false`, `mode:stub`, `dca_required:false`.
 - Their identity/default-off PR is still landing: external control default
   OFF; caller identity = UID package + SHA-256 cert; allow only
-  `ai.droidcommand.app` pinned to the two real certs (debug
-  `88:00:51:A6:D9:5D:38:DD:8D:81:E1:93:1E:17:05:48:03:87:D5:93:C3:09:43:53:99:68:E6:EF:11:A0:C8:4D`
-  and release `9E:A7:B3:14:...:2D:8D`); there is no
-  `ai.droidcommand.app.debug` package (the DCA build has no
-  `applicationIdSuffix`); error categories
+  `ai.droidcommand.app` and its `.debug` build; error categories
   `external_control_disabled` and `unauthorized_caller`; `fleet_class` →
   `external_node`.
 - **Never** `DependencyGuard`, **never** a shared signing key, **never**
@@ -141,10 +137,7 @@ companion.
 - Planned ops: `keyboard.capabilities.get` (read), `keyboard.status` (read).
   The bridge **never forwards typed text or keystrokes**.
 - Keyboard-side: external control default OFF; caller allowlist
-  `ai.droidcommand.app` pinned to the two real certs (debug
-  `88:00:51:A6:D9:5D:38:DD:8D:81:E1:93:1E:17:05:48:03:87:D5:93:C3:09:43:53:99:68:E6:EF:11:A0:C8:4D`
-  and release `9E:A7:B3:14:...:2D:8D`); there is no
-  `ai.droidcommand.app.debug` package; error categories
+  `ai.droidcommand.app` and `ai.droidcommand.app.debug`; error categories
   `external_control_disabled` and `unauthorized_caller`.
 - **Never** `DependencyGuard`, **never** a shared signing key, **never**
   `KnownCompanions`, **never** a `BIND_*` signature permission, **never**
@@ -175,10 +168,7 @@ product, the same class as RootForge, File Manager, and Keyboard. It is
   `mesh.down`, `mesh.ip.get`. LLM tools: `mesh_capabilities`,
   `mesh_status`, `mesh_up`, `mesh_down`, `mesh_get_ip`.
 - Mesh-side: external control default OFF; caller allowlist
-  `ai.droidcommand.app` pinned to the two real certs (debug
-  `88:00:51:A6:D9:5D:38:DD:8D:81:E1:93:1E:17:05:48:03:87:D5:93:C3:09:43:53:99:68:E6:EF:11:A0:C8:4D`
-  and release `9E:A7:B3:14:...:2D:8D`); there is no
-  `ai.droidcommand.app.debug` package.
+  `ai.droidcommand.app` and `ai.droidcommand.app.debug`.
 - Mesh debug cert SHA-256:
   `F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4`.
   Mesh keeps its **own** release key — do not assume the shared fleet key.

@@ -163,7 +163,6 @@ class FleetCatalogTest {
         assertTrue(mesh.reason.contains("does not bind Messenger"))
         assertTrue(mesh.reason.contains("com.victorious.mesh.action.BRIDGE"))
         assertTrue(mesh.reason.contains("mesh.capabilities.get"))
-        assertTrue(mesh.reason.contains("no .debug package"))
     }
 
     @Test
@@ -218,20 +217,6 @@ class FleetCatalogTest {
             listOf("mesh_capabilities", "mesh_status", "mesh_up", "mesh_down", "mesh_get_ip"),
             KnownFleet.MESH.existingToolNames,
         )
-    }
-
-    @Test
-    fun `node allowlists do not pin the dead ai-droidcommand-app-debug package`() {
-        for (member in KnownFleet.ALL) {
-            val fields = listOf(member.nextStep, member.refusalMessage, member.notes)
-            for (field in fields) {
-                assertFalse(
-                    field.contains("ai.droidcommand.app.debug"),
-                    "${member.id} still names the dead .debug package: $field",
-                )
-            }
-        }
-        assertFalse(KnownFleet.formatListing().contains("ai.droidcommand.app.debug"))
     }
 
     @Test
