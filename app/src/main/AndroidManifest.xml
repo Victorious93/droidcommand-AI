@@ -41,6 +41,8 @@
         <package android:name="ai.edlcommander.companion" />
         <package android:name="ai.victorious.filemanager" />
         <package android:name="com.victorious.keyboard" />
+        <!-- Controller-side node signature check (NodeSignatureGuard) reads this package's cert. -->
+        <package android:name="com.victorious.mesh" />
     </queries>
 
     <!-- Phase 4 — Companion APK signature permissions.

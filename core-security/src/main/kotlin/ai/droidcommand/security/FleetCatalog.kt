@@ -48,6 +48,11 @@ enum class FleetHonestyStatus {
  * [usesAidl] / [usesDependencyGuard] are true only for
  * [FleetIntegrationClass.BOUND_COMPANION]. RootForge's planned Messenger
  * bind is not that pair.
+ *
+ * [androidPackages] / [expectedSigningCertSha256] are the controller-side
+ * node-signature pin (see [NodeSignatureVerifier]). Empty expected certs
+ * mean `[Unknown]` — do not invent fingerprints. The default
+ * [MissingExpectedCertPolicy.ALLOW] then lets existing flows proceed.
  */
 data class FleetMemberDescriptor(
     val id: String,
@@ -68,6 +73,19 @@ data class FleetMemberDescriptor(
     val nextStep: String,
     val refusalMessage: String,
     val notes: String,
+    /**
+     * Android applicationIds this member may be bound or commanded as.
+     * Empty when there is no APK (KYC) or no single package in this repo
+     * (RootForge). Debug / release / benchmark ids are listed separately.
+     */
+    val androidPackages: List<String> = emptyList(),
+    /**
+     * Expected APK signing-certificate SHA-256 fingerprints (colon-separated
+     * hex). One or more, e.g. debug + release. Empty = `[Unknown]`.
+     * Applies to every id in [androidPackages]; a match against any entry
+     * is enough. Parsed at construction — invalid values fail closed.
+     */
+    val expectedSigningCertSha256: List<String> = emptyList(),
 ) {
     init {
         require(id.matches(Regex("""^[a-z0-9][a-z0-9._-]*$"""))) { "Invalid fleet member id: $id" }
@@ -80,7 +98,18 @@ data class FleetMemberDescriptor(
                 "$displayName is $integrationClass and must not use AIDL or DependencyGuard"
             }
         }
+        for (fp in expectedSigningCertSha256) {
+            SigningCertSha256.parse(fp)
+                ?: throw IllegalArgumentException("$displayName has an invalid signing cert SHA-256: $fp")
+        }
     }
+
+    fun signingCertLabel(): String =
+        if (expectedSigningCertSha256.isEmpty()) {
+            "[Unknown]"
+        } else {
+            expectedSigningCertSha256.joinToString()
+        }
 }
 
 /**
@@ -116,7 +145,12 @@ object KnownFleet {
         refusalMessage = "Pentest-Swarm is PLANNED — awaiting the base companion repo. " +
             "Capability state is REQUIRES_EXTERNAL_SERVICE. This stub does not bind or scan.",
         notes = "Room consensus 2026-10-14: PLANNED, no source for the envelope companion yet. " +
-            "Older JVM REST + multi-method AIDL in this repo is leftover from an earlier slice.",
+            "Older JVM REST + multi-method AIDL in this repo is leftover from an earlier slice. " +
+            "Controller-side DEBUG signing cert SHA-256 is catalogued (enforceable). " +
+            "Shared fleet RELEASE 9E:A7:… is [planned/unverified] — not enforced " +
+            "(no verified release signingConfig yet).",
+        androidPackages = listOf("ai.pentestswarm.companion"),
+        expectedSigningCertSha256 = listOf(KnownNodeSigningCatalog.PENTEST_SWARM_DEBUG_SHA256),
     )
 
     val ROOTFORGE = FleetMemberDescriptor(
@@ -147,7 +181,11 @@ object KnownFleet {
         refusalMessage = "RootForge is an independent node. Pair it (Messenger / localhost API / SSH fallback); " +
             "this catalog does not claim a live session.",
         notes = "Live APK path already exists on their main (Messenger + shared JSON). " +
-            "This repo's core-rootforge still only speaks SSH. Never DependencyGuard, never shared signing key.",
+            "This repo's core-rootforge still only speaks SSH. Never DependencyGuard, never shared signing key. " +
+            "Controller-side DEBUG signing cert for ai.rootforge.os.debug is catalogued (enforceable). " +
+            "No release key yet.",
+        androidPackages = listOf("ai.rootforge.os.debug"),
+        expectedSigningCertSha256 = listOf(KnownNodeSigningCatalog.ROOTFORGE_DEBUG_SHA256),
     )
 
     val VICTORSUITE = FleetMemberDescriptor(
@@ -173,7 +211,14 @@ object KnownFleet {
             "run_termux_command is the existing tool; this catalog does not add a bound service.",
         notes = "Gated on Victorious93/VictorSuite PR #15 (package/signing). " +
             "Repo was not publicly resolvable on GitHub as of 2026-10-14. " +
-            "Shares Termux's applicationId; only one of Termux or VictorSuite can be installed.",
+            "Shares Termux's applicationId; only one of Termux or VictorSuite can be installed. " +
+            "Controller-side DEBUG + VictorSuite-own RELEASE certs are catalogued (enforceable). " +
+            "VictorSuite RELEASE is not the shared fleet key.",
+        androidPackages = listOf("com.termux"),
+        expectedSigningCertSha256 = listOf(
+            KnownNodeSigningCatalog.VICTORSUITE_DEBUG_SHA256,
+            KnownNodeSigningCatalog.VICTORSUITE_RELEASE_SHA256,
+        ),
     )
 
     val EDL_COMMANDER = FleetMemberDescriptor(
@@ -200,7 +245,11 @@ object KnownFleet {
         refusalMessage = "EDL-Commander companion APK has not landed. PLANNED. " +
             "Capability state is REQUIRES_EXTERNAL_SERVICE. This tool does not bind, flash, write, or restore.",
         notes = "Bound companion (AIDL + same-signing), like Pentest. Don explicitly chose this over host-tool-only. " +
-            "APK not landed; no AIDL in this repo yet.",
+            "APK not landed; no AIDL in this repo yet. Controller-side DEBUG signing cert " +
+            "SHA-256 is catalogued (enforceable). Shared fleet RELEASE 9E:A7:… is " +
+            "[planned/unverified] — not enforced (no verified release signingConfig yet).",
+        androidPackages = listOf("ai.edlcommander.companion"),
+        expectedSigningCertSha256 = listOf(KnownNodeSigningCatalog.EDL_COMMANDER_DEBUG_SHA256),
     )
 
     val KYC_AUDITLAB = FleetMemberDescriptor(
@@ -223,7 +272,10 @@ object KnownFleet {
             "Never AIDL. Do not log identity-document contents.",
         refusalMessage = "KYC-AuditLab is PLANNED. Simulator only, localhost only, no auth yet. " +
             "The hub must not call /scope admin. This tool does not run the lab.",
-        notes = "Host tool. No public repo as of 2026-10-14. /scope admin is off-limits until they add auth.",
+        notes = "Host tool. No public repo as of 2026-10-14. /scope admin is off-limits until they add auth. " +
+            "No Android package, so no signing-cert pin.",
+        androidPackages = emptyList(),
+        expectedSigningCertSha256 = emptyList(),
     )
 
     val FILE_MANAGER = FleetMemberDescriptor(
@@ -257,7 +309,16 @@ object KnownFleet {
         notes = "EXTERNAL_NODE like RootForge. Never DependencyGuard, never shared signing key, never " +
             "KnownCompanions, never BIND_* signature permission, never AIDL. Their main already has " +
             "Messenger + JSON stub ops (filemanager.capabilities.get / status / list). Every reply currently " +
-            "live:false, mode:stub, dca_required:false. Default-off + caller allowlist still landing in their PR.",
+            "live:false, mode:stub, dca_required:false. Default-off + caller allowlist still landing in their PR. " +
+            "Controller-side DEBUG cert is [unstable/CI-secrets] " +
+            "(KnownNodeSigningCatalog.FILE_MANAGER_DEBUG_UNSTABLE_CI_SECRETS) — documented, " +
+            "not enforced. CI injects from secrets and falls back to the generic Android debug " +
+            "key without them. No release key yet. Packages stay fail-open.",
+        androidPackages = listOf(
+            "ai.victorious.filemanager",
+            "ai.victorious.filemanager.debug",
+        ),
+        expectedSigningCertSha256 = emptyList(),
     )
 
     val KEYBOARD = FleetMemberDescriptor(
@@ -295,7 +356,15 @@ object KnownFleet {
         notes = "EXTERNAL_NODE like RootForge and File Manager. Never DependencyGuard, never shared signing " +
             "key, never KnownCompanions, never BIND_* signature permission, never AIDL. Planned Messenger + " +
             "JSON ops keyboard.capabilities.get / keyboard.status. Never forward typed text or keystrokes. " +
-            "Direction (hub queries keyboard vs keyboard surfaces fleet slash-commands) is undecided by Don.",
+            "Direction (hub queries keyboard vs keyboard surfaces fleet slash-commands) is undecided by Don. " +
+            "Controller-side DEBUG cert is catalogued for com.victorious.keyboard and .debug (enforceable). " +
+            "No release key yet. .bench is uncatalogued (fail-open) via KnownNodeSigningCatalog.KEYBOARD_BENCH.",
+        androidPackages = listOf(
+            "com.victorious.keyboard",
+            "com.victorious.keyboard.debug",
+            "com.victorious.keyboard.bench",
+        ),
+        expectedSigningCertSha256 = listOf(KnownNodeSigningCatalog.KEYBOARD_DEBUG_SHA256),
     )
 
     val ALL: List<FleetMemberDescriptor> = listOf(
@@ -342,10 +411,18 @@ object KnownFleet {
             appendLine("  transports: ${member.transports.joinToString(" | ")}")
             appendLine("  tools: ${member.existingToolNames.joinToString()}")
             appendLine("  aidl=${member.usesAidl}  dependencyGuard=${member.usesDependencyGuard}")
+            val pkgs = if (member.androidPackages.isEmpty()) "(none)" else member.androidPackages.joinToString()
+            appendLine("  androidPackages: $pkgs")
+            appendLine("  signingCertSha256: ${member.signingCertLabel()}")
             appendLine("  next: ${member.nextStep}")
             appendLine()
         }
         appendLine("HackerAI (ai.hackerai.companion) is a BOUND_COMPANION already in KnownCompanions; not one of these seven.")
+        appendLine("Controller-side node signature check: NodeSignatureVerifier (core-security). Default missing-expected policy is ALLOW.")
+        appendLine("Catalogue is partial — fail-closed should be enabled only once remaining members and verified release pins are catalogued.")
+        appendLine("Enforceable: DCA debug; Mesh debug (com.victorious.mesh); Browser debug (com.victorious.browser); Pentest debug; EDL debug; HackerAI debug+verified release 9E:A7; RootForge debug (ai.rootforge.os.debug); Keyboard debug (not .bench); VictorSuite debug + own release.")
+        appendLine("HackerAI is the only member whose shared-fleet RELEASE 9E:A7:… is firsthand verified and enforced. DCA/Pentest/EDL release stays [planned/unverified]. Browser RELEASE is own-key [planned/unverified] (CI-only, cert TBD).")
+        appendLine("File-Manager DEBUG is [unstable/CI-secrets] — documented, not enforced. victorious-flash / BakerPi / KYC are not catalogued.")
     }
 }
 

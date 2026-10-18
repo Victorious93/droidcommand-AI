@@ -122,3 +122,77 @@ run. Not LIVE.
 End-user device config (not code): `allow-external-apps=true`, hold
 `com.termux.permission.RUN_COMMAND`, background/app-shell runner. Kali
 bootstrap and the exact extras/result Bundle: `docs/VICTORSUITE_KALI_RUN_COMMAND.md`.
+
+## 2026-10-18 — Controller-side node signature verification
+
+The (package → cert SHA-256) trust check used to live only on the **node**
+(the node verifies the controller). The controller now pins each fleet
+NODE's app signing certificate before bind/command.
+
+Code: `core-security.NodeSignatureVerifier` / `NodeSignatureGuard` /
+`KnownNodeSigningCatalog`. Android PackageManager is a thin observer
+(`:app.AndroidSigningCertObserver`, `core-companion` duplicate).
+`AndroidCompanionRegistry.bind` refuses on `NodeSignatureDecision.Refused`.
+
+This **adds** a check. DependencyGuard, signature permissions, and
+Kali/pentest authorization are unchanged.
+
+### Expected certs
+
+The catalogue is **partial**. Do **not** invent fingerprints. Do **not**
+catalogue victorious-flash (debug cert is non-deterministic until they
+land a fixed keystore). Fail-closed should be enabled only once remaining
+members and verified release pins are catalogued.
+
+**Enforceable** (in `expectedSigningCertSha256` / `expectedCerts`; mismatch
+and missing-observed refuse):
+
+| Member | Type | Package | SHA-256 |
+|---|---|---|---|
+| DroidCommand-AI | DEBUG | `ai.droidcommand.app` | `88:00:51:A6:D9:5D:38:DD:8D:81:E1:93:1E:17:05:48:03:87:D5:93:C3:09:43:53:99:68:E6:EF:11:A0:C8:4D` |
+| Victorious Mesh (not a wiring-order member) | DEBUG | `com.victorious.mesh` | `F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4` |
+| Victorious Browser (not a wiring-order member) | DEBUG | `com.victorious.browser` | `2D:5D:9E:8B:53:8E:78:51:3D:B5:41:F4:DF:FD:67:BE:27:FF:EC:3F:37:EB:1A:D4:8D:77:83:AE:59:27:C3:E1` |
+| Pentest-Swarm-AI | DEBUG | `ai.pentestswarm.companion` | `5E:3A:B1:23:1F:7E:DA:18:78:B8:FF:D8:9E:AC:B1:F7:2E:EB:66:AF:3D:BA:2E:01:33:51:24:68:42:23:30:C7` |
+| EDL-Commander | DEBUG | `ai.edlcommander.companion` | `E5:60:B6:92:BD:E6:51:9E:B7:CB:B5:2C:E4:DC:91:5A:19:E4:41:A0:1A:5D:03:68:82:71:AC:99:78:8A:58:C8` |
+| HackerAI-Commander | DEBUG | `ai.hackerai.companion` | `AF:1C:8F:C5:44:9F:58:4A:46:C8:96:CC:C9:7F:35:B0:7B:35:7E:96:EE:66:5F:3A:BF:CB:0D:28:4D:F5:23:55` |
+| HackerAI-Commander | RELEASE | `ai.hackerai.companion` | `9E:A7:B3:14:94:5B:0A:62:97:15:6F:F7:06:E7:0C:0A:B1:B7:24:DE:06:D5:09:9C:A5:12:8A:B4:43:F7:2D:8D` (firsthand verified, v0.1.0 APK signer in CI — **only** member whose shared-fleet release cert is enforced) |
+| RootForge OS | DEBUG | `ai.rootforge.os.debug` | `77:7A:C7:00:87:05:A8:B4:B8:93:AC:EF:0E:03:E9:1C:7F:49:52:C9:52:FE:B2:6E:06:D7:90:B9:14:86:64:6F` |
+| Victorious Keyboard | DEBUG | `com.victorious.keyboard`, `.debug` | `47:1E:AD:6B:3F:96:7E:F3:C8:63:EF:49:08:74:8B:3B:E3:63:F9:1D:75:0B:FD:B1:E9:28:05:BC:F1:6B:AF:4F` |
+| VictorSuite / Termux | DEBUG | `com.termux` | `67:17:C5:5A:BE:9E:0D:F8:C6:03:C9:A0:F3:F3:67:B6:CA:BD:B0:1F:3E:58:3A:4F:F6:44:E5:DF:3D:4C:31:D3` |
+| VictorSuite / Termux | RELEASE (own key, **not** the shared fleet key) | `com.termux` | `8C:BF:09:AA:5D:0D:24:6B:5A:97:C9:5D:2E:70:DC:0C:5F:5B:D3:33:8C:39:9A:97:88:91:09:A1:0D:CE:19:80` |
+
+**Planned / unverified** (documented constant `SHARED_FLEET_RELEASE_SHA256` =
+`9E:A7:…`; **not** in those members' expected lists):
+
+| Member | Type | Status |
+|---|---|---|
+| DroidCommand-AI | RELEASE | [planned/unverified] — same shared-fleet fingerprint, no verified in-repo release `signingConfig` |
+| Pentest-Swarm-AI | RELEASE | [planned/unverified] |
+| EDL-Commander | RELEASE | [planned/unverified] |
+| Victorious Browser | RELEASE | [planned/unverified] — **own** key (NOT shared fleet `9E:A7`), CI-only, cert TBD — do not invent |
+
+**Caveated** (documented, **not** enforced — packages stay fail-open):
+
+| Member | Type | SHA-256 | Why unenforced |
+|---|---|---|---|
+| Victorious File Manager | DEBUG | `8C:1F:E3:C9:E5:34:F2:71:05:C0:68:8F:45:28:D7:7E:47:11:AE:0A:79:DD:08:D1:E8:59:30:B9:E9:48:85:F2` | **[unstable/CI-secrets]**. Not committed; CI injects from secrets and falls back to the generic Android debug key without them. Enforcing it would refuse the fallback. No release key yet. |
+
+**Pending / out of scope** (fail-open; do not invent):
+
+| Member | Why |
+|---|---|
+| Victorious Mesh RELEASE | Not supplied |
+| RootForge RELEASE | No release key yet |
+| Keyboard RELEASE and `.bench` | No release key; `.bench` not in the debug pin |
+| File Manager RELEASE | No release key yet |
+| KYC-AuditLab | HOST_PROCESS_TOOL — no APK |
+| victorious-flash | Debug cert is non-deterministic until they land a fixed keystore — **do not catalogue** |
+| BakerPi | Out of scope |
+
+### Default for `[Unknown]`: ALLOW (documented)
+
+Fail-closed (`MissingExpectedCertPolicy.REFUSE`) is the stronger posture and
+is available (`DROIDCOMMAND_NODE_CERT_MISSING_EXPECTED=refuse`). The
+**default is ALLOW** so existing flows for members with no catalogued cert
+are not blocked. When a cert **is** catalogued, mismatch and
+missing-observed always refuse.

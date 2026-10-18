@@ -1,5 +1,8 @@
 package ai.droidcommand.companion
 
+import ai.droidcommand.security.NodeSignatureDecision
+import ai.droidcommand.security.NodeSignatureGuard
+import ai.droidcommand.security.NodeSignatureVerifier
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -33,9 +36,16 @@ interface CompanionRegistry {
  * NOT RUNTIME VERIFIED in this environment (no Android SDK). Excluded from
  * settings.gradle.kts for the same reason as :app.
  */
-class AndroidCompanionRegistry(private val context: Context) : CompanionRegistry {
+class AndroidCompanionRegistry(
+    private val context: Context,
+    private val signatureGuard: NodeSignatureGuard = NodeSignatureGuard(
+        observer = AndroidSigningCertObserver(context),
+        verifier = NodeSignatureVerifier(),
+    ),
+) : CompanionRegistry {
 
     private val connections = mutableMapOf<String, BoundCompanion>()
+    private val signatureRefusals = mutableMapOf<String, NodeSignatureDecision.Refused>()
 
     private data class BoundCompanion(
         val packageName: String,
@@ -43,11 +53,31 @@ class AndroidCompanionRegistry(private val context: Context) : CompanionRegistry
         var binder: IBinder? = null,
     )
 
+    /**
+     * Last controller-side signature refusal for [packageName], if [bind]
+     * refused to proceed. Null when the package was allowed or never checked.
+     */
+    @Synchronized
+    fun lastSignatureRefusal(packageName: String): NodeSignatureDecision.Refused? =
+        signatureRefusals[packageName]
+
     @Synchronized
     override fun bind(descriptor: CompanionDescriptor) {
         if (connections.containsKey(descriptor.packageName)) return
         // Planned slot — APK/AIDL have not landed. Do not invent a bind action.
         if (descriptor.packageName == KnownCompanions.EDLCOMMANDER_PACKAGE) return
+
+        // Controller-side node signature check. Adds a pin; does not replace
+        // DependencyGuard or protectionLevel="signature". Default
+        // MissingExpectedCertPolicy.ALLOW keeps HackerAI/Pentest flowing
+        // while their certs are still [Unknown].
+        when (val decision = signatureGuard.check(descriptor.packageName)) {
+            is NodeSignatureDecision.Refused -> {
+                signatureRefusals[descriptor.packageName] = decision
+                return
+            }
+            is NodeSignatureDecision.Allowed -> signatureRefusals.remove(descriptor.packageName)
+        }
 
         val intent = Intent().apply {
             setPackage(descriptor.packageName)

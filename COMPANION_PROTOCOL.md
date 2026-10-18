@@ -169,7 +169,9 @@ host-tool-only.
 
 1. Add a `FleetMemberDescriptor` to `KnownFleet` with the correct
    `FleetIntegrationClass`. The constructor requires AIDL + `DependencyGuard`
-   for `BOUND_COMPANION` and forbids them otherwise.
+   for `BOUND_COMPANION` and forbids them otherwise. Fill
+   `androidPackages` and `expectedSigningCertSha256` when the fingerprint is
+   documented; leave the cert list empty (`[Unknown]`) rather than guessing.
 2. New dependent APK: follow "Adding a new companion capability" (AIDL sync +
    `KnownCompanions`).
 3. Planned members get a `PlannedFleetTool` that fails honestly. Do not spawn
@@ -219,6 +221,66 @@ is installed at every AIDL call. If DCA is absent:
 This is a defence-in-depth measure — the signature permission already prevents
 an attacker from binding, but `DependencyGuard` also prevents a compromised
 companion from operating if DCA is later removed.
+
+### Controller-side node signature verification
+
+The checks above are **node-side** (the companion/node verifies the controller)
+or **same-key** (`protectionLevel="signature"`). They do not, by themselves,
+stop the controller from binding or commanding a substituted APK that happens
+to occupy a catalogued package name.
+
+`core-security.NodeSignatureVerifier` is the **controller-side** pin: before
+DCA binds or commands a node, it resolves the target package's installed
+signing-certificate SHA-256 and compares it to the catalogued expected
+value(s).
+
+| Piece | Where | Android? |
+|---|---|---|
+| Comparison, catalog, typed allow/refuse | `core-security.NodeSignatureVerifier` / `NodeSignatureGuard` / `KnownNodeSigningCatalog` | No. JVM-tested. |
+| PackageManager `GET_SIGNING_CERTIFICATES` | `:app` `AndroidSigningCertObserver`; duplicate in `core-companion` (that module is still excluded from the default build) | Thin adapter only. Returns cert **bytes**; SHA-256 stays in `core-security`. |
+| Bind gate | `AndroidCompanionRegistry.bind` refuses to bind on `NodeSignatureDecision.Refused` | Yes. |
+
+**Catalog.** `FleetMemberDescriptor.expectedSigningCertSha256` holds zero or
+more fingerprints (debug + release is the intended shape). Empty means
+`[Unknown]` — **do not invent a fingerprint**. The catalogue is **partial**;
+fail-closed should be enabled only once it is complete. Do not catalogue
+victorious-flash.
+
+Enforceable today (mismatch / missing-observed refuse):
+
+- DroidCommand-AI debug `ai.droidcommand.app` `88:00:51:A6:…:C8:4D`
+- Victorious Mesh debug `com.victorious.mesh` `F4:C9:25:B8:…:B9:F4` (not a wiring-order member)
+- Victorious Browser debug `com.victorious.browser` `2D:5D:9E:8B:…:C3:E1` (not a wiring-order member)
+- Pentest-Swarm-AI debug `ai.pentestswarm.companion` `5E:3A:B1:23:…:30:C7`
+- EDL-Commander debug `ai.edlcommander.companion` `E5:60:B6:92:…:58:C8`
+- HackerAI-Commander debug `ai.hackerai.companion` `AF:1C:8F:C5:…:23:55`
+- HackerAI-Commander RELEASE `9E:A7:B3:14:…:2D:8D` — firsthand verified (v0.1.0 APK signer in CI). **Only** member whose shared-fleet release cert is enforced.
+- RootForge debug `ai.rootforge.os.debug` `77:7A:C7:00:…:64:6F` (no release key yet)
+- Victorious Keyboard debug `com.victorious.keyboard` / `.debug` `47:1E:AD:6B:…:AF:4F` (`.bench` uncatalogued)
+- VictorSuite / Termux debug `com.termux` `67:17:C5:5A:…:31:D3`
+- VictorSuite **own** RELEASE `com.termux` `8C:BF:09:AA:…:19:80` (not the shared fleet key)
+
+Planned / unverified (**not** enforced): DroidCommand-AI / Pentest / EDL
+release `9E:A7:…` (`SHARED_FLEET_RELEASE_SHA256`); Victorious Browser
+RELEASE (own key, NOT shared fleet, CI-only, cert TBD).
+
+Caveated / not enforced: File-Manager DEBUG `8C:1F:E3:C9:…:85:F2` is
+`[unstable/CI-secrets]` (CI injects from secrets, else generic Android
+debug key). Packages stay fail-open.
+
+Pending / out of scope: Mesh release, RootForge release, Keyboard release
+and `.bench`, File Manager release, KYC (no APK), victorious-flash,
+BakerPi.
+
+**Default for `[Unknown]` members: ALLOW.** Fail-closed
+(`MissingExpectedCertPolicy.REFUSE`) is available
+(`DROIDCOMMAND_NODE_CERT_MISSING_EXPECTED=refuse`) but must not be the
+default until the catalogue is complete. When expected certs **are**
+catalogued, mismatch and missing-observed always refuse — that path is
+not configurable.
+
+This **adds** a check. It does not replace DependencyGuard, signature
+permissions, Kali/pentest authorization, or any other existing gate.
 
 ### Initiator mapping
 
