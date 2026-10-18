@@ -21,6 +21,11 @@ import ai.droidcommand.agent.SecurityLevel
  * taxonomy — consulted only via [isCategoryGranted], not by
  * [SecurityPolicyEnforcer.authorize], so no existing caller is affected by
  * its addition.
+ *
+ * [autoApprovalPolicy] is null by default, which keeps today's behavior exactly: every confirmation
+ * [SecurityPolicyEnforcer] raises goes to the [ApprovalPrompt]. When set, it may only relax a
+ * confirmation for a tool it classifies as genuinely read-only ([AutoApprovalPolicy]); it never
+ * adds a permission and never overrides a [PolicyDecision.Deny].
  */
 class SecurityPolicy(
     val rootEnabled: Boolean = false,
@@ -28,4 +33,5 @@ class SecurityPolicy(
     val grantedPermissions: Set<String> = emptySet(),
     val autoApprove: Set<SecurityLevel> = setOf(SecurityLevel.NORMAL),
     val grantedCategories: Set<PermissionCategory> = emptySet(),
+    val autoApprovalPolicy: AutoApprovalPolicy? = null,
 )

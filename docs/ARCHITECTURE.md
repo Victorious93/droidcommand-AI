@@ -566,6 +566,14 @@ DroidCommand AI
 │                            injected functions (rootAvailable,
 │                            grantedPermissions), so the policy itself
 │                            stays device-agnostic and fully testable.
+│                            ActionRisk/ActionRiskClassifier/
+│                            AutoApprovalPolicy (2026-10-18, design from
+│                            Victorious93/opendroid, Apache-2.0): optional
+│                            SecurityPolicy.autoApprovalPolicy (null =
+│                            unchanged) may waive the confirmation prompt
+│                            only for tools explicitly declared READ_ONLY
+│                            and not structurally hard-gated. JVM-tested
+│                            against fakes; never run on a device.
 │
 ├── core-config               ConfigSource/ConfigReader plus LlmConfigLoader
 │                            and SecurityPolicyLoader, which build
