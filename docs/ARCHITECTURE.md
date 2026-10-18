@@ -566,6 +566,19 @@ DroidCommand AI
 │                            injected functions (rootAvailable,
 │                            grantedPermissions), so the policy itself
 │                            stays device-agnostic and fully testable.
+│                            ActionRisk/ActionRiskClassifier/
+│                            AutoApprovalPolicy / YoloMode (2026-10-18,
+│                            design from Victorious93/opendroid,
+│                            Apache-2.0): optional
+│                            SecurityPolicy.autoApprovalPolicy (null =
+│                            unchanged) may waive the confirmation prompt
+│                            only for tools explicitly declared READ_ONLY
+│                            and not structurally hard-gated. YoloMode is
+│                            an explicit, default-off override that also
+│                            waives shell/Termux/root/grant-gated/fleet
+│                            confirmations; Kali/pentest authorization
+│                            gates still always prompt. JVM-tested
+│                            against fakes; never run on a device.
 │
 ├── core-config               ConfigSource/ConfigReader plus LlmConfigLoader
 │                            and SecurityPolicyLoader, which build
@@ -824,10 +837,16 @@ architecture; the server half is out of scope for this repository.
 exists, a fixture in tests), `grantedPermissions`, and `autoApprove` (which
 `SecurityLevel`s bypass interactive confirmation; only `NORMAL` by default).
 `SecurityPolicyEnforcer.authorize(spec: ToolSpec)` returns `Allow`,
-`RequireApproval(reason)`, or `Deny(reason)` — root and permission checks
-are evaluated first and are hard denials, never downgraded to a mere
-prompt: a `ROOT` tool with a missing permission is denied outright, not
-asked-and-approved-around.
+`RequireApproval(reason)`, `AutoApproved(risk, reason)`, or `Deny(reason)`
+— root and permission checks are evaluated first and are hard denials,
+never downgraded to a mere prompt: a `ROOT` tool with a missing permission
+is denied outright, not asked-and-approved-around. An optional
+`SecurityPolicy.autoApprovalPolicy` may waive only the confirmation step:
+default is declared `READ_ONLY` with no hard gate; `YoloMode` (`yoloMode =
+true`, off by default) also waives shell/Termux/root/grant-gated/fleet
+confirmations. Kali/pentest authorization (the exact phrase `I confirm
+these targets are authorized` and per-step ACTIVE/EXPLOIT approvals) is
+never waived and is routed straight to `ApprovalPrompt`.
 
 `SecureToolExecutor` wraps `ToolExecutor` with that check: a `Deny` returns
 a `ToolResult.Failure` without the underlying `Tool.execute` ever being
@@ -1258,7 +1277,7 @@ there is still no asynchronous/polling variant of the protocol.
 | core-llm-openai: OpenAiLlmProvider (real HTTP LlmProvider) | IMPLEMENTED (real, not mocked) | Real request encoding/response parsing over `RemoteClient`, reusing its built-in bearer-token auth; status-code -> LlmError mapping identical to core-llm-anthropic; tested against a real local `HttpServer`, never api.openai.com or a self-hosted server |
 | Streaming responses (ROADMAP-058): core-remote `StreamingHttpTransport` / `ServerSentEventParser` / `RemoteClient.sendStreaming` + core-llm `StreamingLlmProvider` / `completeStreaming` + `AnthropicLlmProvider.stream` / `OpenAiLlmProvider.stream` | IMPLEMENTED (never exercised against a live API) | Added 2026-09-26. `JdkHttpTransport` streams a 2xx body line by line (`BodyHandlers.ofLines`) and collects a non-2xx body whole. `ServerSentEventParser` is a spec-following incremental `text/event-stream` parser. `RemoteClient.sendStreaming` keeps `send`'s retry rules but never retries once any line has reached the caller, so output is never duplicated. Both real providers implement `StreamingLlmProvider.stream`: text deltas go to the caller as they arrive, streamed tool-call fragments are accumulated into one `ToolCall` (never sent as text), and in-stream error events become `LlmResponse.Error`. `completeStreaming` falls back to `complete` for non-streaming providers. Tested against real loopback servers sending the real SSE shapes (`StreamingTransportTest`, `AnthropicStreamingIntegrationTest`, `OpenAiStreamingIntegrationTest`) plus unit tests. `ModelRouter`, `LlmPlanner`, and `cli` do not stream yet. |
 | Structured output (ROADMAP-060): core-llm `LlmRequest.responseFormat` / `ResponseFormat.Json` / `ResponseFormat.Schema` + both real providers | IMPLEMENTED (never exercised against a live API) | Added 2026-09-26. The OpenAI-compatible provider maps it to the API's own `response_format` (`json_object`, or `json_schema` with an opt-in `strict`). Anthropic's Messages API version used here has no JSON mode, so `AnthropicLlmProvider` sends the schema as a single tool's `input_schema` with a forced `tool_choice`, and returns that tool call's input as the JSON text rather than as a `ToolCall`. Both return `LlmResponse.Text` holding a JSON object, check that it parses as one (including after streaming), and reject a request that combines `responseFormat` with `tools` before sending. The response is not validated against the schema itself. Tested against real local servers (`AnthropicStructuredOutputTest`, `OpenAiStructuredOutputTest`). No existing caller (`ObjectiveAnalyzer`, `LlmTaskVerifier`, the extractors) opts in yet. |
-| core-security: SecurityPolicy / SecurityPolicyEnforcer | IMPLEMENTED | `SecurityPolicy.kt`, `SecurityPolicyEnforcer.kt`, compiles, unit-tested |
+| core-security: ActionRisk / ActionRiskClassifier / AutoApprovalPolicy / DefaultActionRisks / YoloMode | IMPLEMENTED (JVM-tested; never run on a device) | Added 2026-10-18 (opendroid design, Apache-2.0, reimplemented against `ToolSpec`). Default: auto-approve only declared READ_ONLY with no hard gate. `YoloMode` is an explicit opt-in (`yoloMode = true`, default false) that also waives shell / Termux / root / grant-gated / fleet confirmations; Kali/Metasploit/SET/Pentest-Swarm authorization (the `I confirm these targets are authorized` phrase and per-step ACTIVE/EXPLOIT `ApprovalPrompt` calls) is never waived. Every YOLO waiver is audited with `YoloMode.AUDIT_REASON`. `YoloMode.WARNING` is the UI copy; no Settings toggle is shipped. |
 | core-security: SecureToolExecutor (controlled execution boundary) | IMPLEMENTED | `SecureToolExecutor.kt`, unit-tested incl. "denied tool is never invoked" and "AwaitingApproval before prompting". As of 2026-09-05, also enforces an optional grant lifecycle and audit-log fail-closed behavior (both additive, default off). As of 2026-09-12, implements `core-agent.ToolRunner` (so it can stand in for `ToolExecutor` inside `DroidCommandSession`/`ObjectiveEngine`) and enforces `ToolSpec.allowedModes` for real — see `core-agent`'s `ToolRunner` row for the full record of the bug this closed and the fix |
 | core-security: real root detection / real Android permission grants | PLANNED | `rootAvailable`/`grantedPermissions` are injected functions, now exercised end-to-end by `core-root.RootToolSecureExecutorIntegrationTest` — but still only against fixtures, not a real device |
 | core-security: Grant / GrantStore (authorization-grant lifecycle: issue, single-use consumption only on success, expiry, revocation) | IMPLEMENTED | Added 2026-09-05, `Grant.kt`/`GrantStore.kt`; `InMemoryGrantStore` fails closed at capacity (refuses a new grant rather than evicting an older one). Deliberately avoids DroidPilot's own documented single-use-grant bug (PHASE_3_BUGS.md P3-01) by consuming only after the delegate call actually succeeds, never merely once every gate passes |

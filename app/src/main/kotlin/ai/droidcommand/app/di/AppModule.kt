@@ -45,6 +45,7 @@ import ai.droidcommand.remote.HttpUrlConnectionTransport
 import ai.droidcommand.root.NullRootExecutor
 import ai.droidcommand.root.RootTool
 import ai.droidcommand.security.ApprovalPrompt
+import ai.droidcommand.security.DefaultActionRisks
 import ai.droidcommand.security.JsonFileAuditLog
 import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
@@ -174,8 +175,12 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideSecurityPolicy(): SecurityPolicy =
-        SecurityPolicy(grantedCategories = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK))
+    fun provideSecurityPolicy(): SecurityPolicy = SecurityPolicy(
+        grantedCategories = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK),
+        // READ_ONLY catalog only. YOLO stays off ([YoloMode.ENABLED_DEFAULT]); turning it on
+        // auto-approves shell/root/fleet but never Kali/pentest authorization. See [YoloMode.WARNING].
+        autoApprovalPolicy = DefaultActionRisks.policy(),
+    )
 
     /**
      * The gate every approval-requiring tool goes through. Voice approvals are off by default, in which case

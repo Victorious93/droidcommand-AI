@@ -104,6 +104,7 @@ class SecureToolExecutor(
             )
         }
 
+        var autoApprovalNote = ""
         when (val decision = enforcer.authorize(spec)) {
             is PolicyDecision.Deny -> return deny(decision.reason, AuditEventType.ACCESS_DENIED)
 
@@ -113,6 +114,8 @@ class SecureToolExecutor(
                     return deny("User denied authorization: ${decision.reason}", AuditEventType.ACCESS_DENIED)
                 }
             }
+
+            is PolicyDecision.AutoApproved -> autoApprovalNote = " (auto-approved ${decision.risk}: ${decision.reason})"
 
             PolicyDecision.Allow -> Unit
         }
@@ -131,7 +134,7 @@ class SecureToolExecutor(
             }
 
             if (auditLog != null && spec.securityLevel != SecurityLevel.NORMAL) {
-                val recorded = auditLog.record(AuditEvent(AuditEventType.ACCESS_GRANTED, toolName, "authorized, invoking"))
+                val recorded = auditLog.record(AuditEvent(AuditEventType.ACCESS_GRANTED, toolName, "authorized$autoApprovalNote, invoking"))
                 if (!recorded) {
                     return deny("Audit log is at capacity; refusing to run '$toolName' unaudited", AuditEventType.ACCESS_DENIED)
                 }
