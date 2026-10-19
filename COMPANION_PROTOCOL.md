@@ -176,7 +176,10 @@ product, the same class as RootForge, File Manager, and Keyboard. It is
   `ai.droidcommand.app` and `ai.droidcommand.app.debug`.
 - Mesh debug cert SHA-256:
   `F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4`.
-  Mesh keeps its **own** release key — do not assume the shared fleet key.
+  Mesh **own** RELEASE SHA-256:
+  `76:E9:15:83:31:40:DA:96:69:D3:CC:5D:54:F6:66:A9:01:51:51:FC:F6:4C:59:B6:3D:DA:6E:D2:8F:83:A4:0D`
+  (RSA 4096, alias `victoriousmeshrelease`, CI-secrets only — **not** the
+  shared fleet key).
 - **Never** `DependencyGuard`, **never** a shared signing key, **never**
   `KnownCompanions`, **never** a `BIND_*` signature permission, **never**
   AIDL. Removing DCA must not disable Mesh.
@@ -369,6 +372,7 @@ Enforceable today (mismatch / missing-observed refuse):
 
 - DroidCommand-AI debug `ai.droidcommand.app` `88:00:51:A6:…:C8:4D`
 - Victorious Mesh debug `com.victorious.mesh` `F4:C9:25:B8:…:B9:F4` (8th wiring-order member, PLANNED catalog)
+- Victorious Mesh **own** RELEASE `com.victorious.mesh` `76:E9:15:83:…:A4:0D` (not the shared fleet key; RSA 4096, alias `victoriousmeshrelease`, CI-secrets only)
 - Victorious Browser debug `com.victorious.browser` `2D:5D:9E:8B:…:C3:E1` (9th wiring-order member, PLANNED catalog)
 - Pentest-Swarm-AI debug `ai.pentestswarm.companion` `5E:3A:B1:23:…:30:C7`
 - EDL-Commander debug `ai.edlcommander.companion` `E5:60:B6:92:…:58:C8`
@@ -387,7 +391,7 @@ Caveated / not enforced: File-Manager DEBUG `8C:1F:E3:C9:…:85:F2` is
 `[unstable/CI-secrets]` (CI injects from secrets, else generic Android
 debug key). Packages stay fail-open.
 
-Pending / out of scope: Mesh release, RootForge release, Keyboard release
+Pending / out of scope: RootForge release, Keyboard release
 and `.bench`, File Manager release, KYC (no APK), victorious-flash,
 BakerPi.
 

@@ -323,7 +323,10 @@ class FleetCatalogTest {
         assertTrue(KnownFleet.FILE_MANAGER.expectedSigningCertSha256.isEmpty())
         assertEquals(listOf("com.victorious.mesh"), KnownFleet.MESH.androidPackages)
         assertEquals(
-            listOf(KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256),
+            listOf(
+                KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256,
+                KnownNodeSigningCatalog.VICTORIOUS_MESH_RELEASE_SHA256,
+            ),
             KnownFleet.MESH.expectedSigningCertSha256,
         )
         assertEquals(listOf("com.victorious.browser"), KnownFleet.BROWSER.androidPackages)
@@ -332,7 +335,14 @@ class FleetCatalogTest {
             KnownFleet.BROWSER.expectedSigningCertSha256,
         )
         val catalog = KnownNodeSigningCatalog.all()
-        assertTrue(catalog.any { it.packageName == "com.victorious.mesh" && it.expectedCerts.isNotEmpty() })
+        val meshCerts = catalog.first { it.packageName == "com.victorious.mesh" }.expectedCerts.map { it.canonical }
+        assertEquals(
+            listOf(
+                KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256,
+                KnownNodeSigningCatalog.VICTORIOUS_MESH_RELEASE_SHA256,
+            ),
+            meshCerts,
+        )
         assertTrue(catalog.any { it.packageName == "com.victorious.browser" && it.expectedCerts.isNotEmpty() })
         assertTrue(
             catalog.first { it.packageName == "com.victorious.keyboard.bench" }.expectedCerts.isEmpty(),

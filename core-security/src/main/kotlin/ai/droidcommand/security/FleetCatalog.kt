@@ -418,16 +418,22 @@ object KnownFleet {
             "mesh_get_ip. External control default OFF; allowlist ai.droidcommand.app and " +
             "ai.droidcommand.app.debug. Node-id prefix ^mesh-[0-9a-f]{32}$. Mesh keeps its own " +
             "release key (debug SHA-256 F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:" +
-            "30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4). Capability state is REQUIRES_EXTERNAL_SERVICE.",
+            "30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4; own RELEASE SHA-256 76:E9:15:83:31:40:DA:96:69:D3:CC:" +
+            "5D:54:F6:66:A9:01:51:51:FC:F6:4C:59:B6:3D:DA:6E:D2:8F:83:A4:0D). Capability state is " +
+            "REQUIRES_EXTERNAL_SERVICE.",
         notes = "EXTERNAL_NODE like RootForge, File Manager, and Keyboard. Never DependencyGuard, never " +
             "shared signing key, never KnownCompanions, never BIND_* signature permission, never AIDL. " +
             "debug==release package com.victorious.mesh (no applicationIdSuffix). Mesh keeps its own " +
             "release key; do not assume the shared fleet key. Planned Messenger + JSON ops " +
             "mesh.capabilities.get / mesh.status / mesh.up / mesh.down / mesh.ip.get. External control " +
-            "default OFF. Node-id prefix ^mesh-[0-9a-f]{32}$. Controller-side DEBUG cert is catalogued " +
-            "(KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256, enforceable). Mesh release is [Unknown].",
+            "default OFF. Node-id prefix ^mesh-[0-9a-f]{32}$. Controller-side DEBUG + Mesh-own RELEASE " +
+            "certs are catalogued (KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256 / " +
+            "VICTORIOUS_MESH_RELEASE_SHA256, enforceable).",
         androidPackages = listOf("com.victorious.mesh"),
-        expectedSigningCertSha256 = listOf(KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256),
+        expectedSigningCertSha256 = listOf(
+            KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256,
+            KnownNodeSigningCatalog.VICTORIOUS_MESH_RELEASE_SHA256,
+        ),
     )
 
     val BROWSER = FleetMemberDescriptor(
@@ -534,7 +540,7 @@ object KnownFleet {
         appendLine("HackerAI (ai.hackerai.companion) is a BOUND_COMPANION already in KnownCompanions; not one of these nine.")
         appendLine("Controller-side node signature check: NodeSignatureVerifier (core-security). Default missing-expected policy is ALLOW.")
         appendLine("Catalogue is partial — fail-closed should be enabled only once remaining members and verified release pins are catalogued.")
-        appendLine("Enforceable: DCA debug; Mesh debug (com.victorious.mesh); Browser debug (com.victorious.browser); Pentest debug; EDL debug; HackerAI debug+verified release 9E:A7; RootForge debug (ai.rootforge.os.debug); Keyboard debug (not .bench); VictorSuite debug + own release.")
+        appendLine("Enforceable: DCA debug; Mesh debug+own release (com.victorious.mesh); Browser debug (com.victorious.browser); Pentest debug; EDL debug; HackerAI debug+verified release 9E:A7; RootForge debug (ai.rootforge.os.debug); Keyboard debug (not .bench); VictorSuite debug + own release.")
         appendLine("HackerAI is the only member whose shared-fleet RELEASE 9E:A7:… is firsthand verified and enforced. DCA/Pentest/EDL release stays [planned/unverified]. Browser RELEASE is own-key [planned/unverified] (CI-only, cert TBD).")
         appendLine("File-Manager DEBUG is [unstable/CI-secrets] — documented, not enforced. victorious-flash / BakerPi / KYC are not catalogued.")
     }
