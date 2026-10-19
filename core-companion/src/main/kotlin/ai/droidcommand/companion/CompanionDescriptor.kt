@@ -1,5 +1,7 @@
 package ai.droidcommand.companion
 
+import ai.droidcommand.security.EdlCompanionIds
+
 /**
  * Static description of a companion APK known to DroidCommand AI.
  *
@@ -23,18 +25,21 @@ data class CompanionDescriptor(
  * Well-known **bound companion APK** descriptors.
  *
  * HackerAI and Pentest-Swarm have AIDL + APK source. EDL-Commander is the
- * same class (AIDL + same-signing + DependencyGuard) but the APK/AIDL are
- * still PLANNED — do not bind it from [CompanionRegistry] until
- * `IEDLCommanderService` exists. RootForge, File Manager, Keyboard, VictorSuite,
- * and KYC-AuditLab are different classes — see `ai.droidcommand.security.KnownFleet`
- * and `docs/FLEET_CONTROL.md`. Do not add those here.
+ * same class (AIDL + same-signing + DependencyGuard). Its AIDL lives in
+ * [EdlCompanionIds.AIDL_PACKAGE] (`IEdlCompanion`), copied from EDL main.
+ * The Fleet orchestrator still does not auto-bind it (never device-verified).
+ * RootForge, File Manager, Keyboard, VictorSuite, and KYC-AuditLab are
+ * different classes — see `ai.droidcommand.security.KnownFleet` and
+ * `docs/FLEET_CONTROL.md`. Do not add those here.
  */
 object KnownCompanions {
     const val HACKERAI_PACKAGE = "ai.hackerai.companion"
     const val PENTESTSWARM_PACKAGE = "ai.pentestswarm.companion"
 
-    /** Planned package id. The APK does not exist; do not bind this. */
-    const val EDLCOMMANDER_PACKAGE = "ai.edlcommander.companion"
+    /** applicationId on EDL main after PR #8. */
+    const val EDLCOMMANDER_PACKAGE = EdlCompanionIds.PACKAGE
+    const val EDLCOMMANDER_BIND_ACTION = EdlCompanionIds.BIND_ACTION
+    const val EDLCOMMANDER_BIND_PERMISSION = EdlCompanionIds.BIND_PERMISSION
 
     val HACKERAI = CompanionDescriptor(
         id = "hackerai",
@@ -59,8 +64,9 @@ object KnownCompanions {
     )
 
     /**
-     * Planned slot only. Version `0.0.0-planned` means there is no APK and
-     * no AIDL yet. [CompanionRegistry] must not bind this package.
+     * Planned slot. AIDL is copied; the Fleet orchestrator does not auto-bind
+     * this package. Version `0.0.0-planned` means this repo has never
+     * device-verified a live bind.
      */
     val EDLCOMMANDER = CompanionDescriptor(
         id = "edlcommander",

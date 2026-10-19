@@ -14,8 +14,9 @@ import ai.droidcommand.security.KnownFleet
 object FleetNodes {
     /**
      * Wiring facts, each backed by code in this app today:
-     * - Bound companions the registry will actually bind: HackerAI and Pentest-Swarm. EDL-Commander is deliberately
-     *   absent (`AndroidCompanionRegistry` refuses it until its APK and AIDL exist).
+     * - Bound companions the registry will actually bind: HackerAI and Pentest-Swarm. EDL-Commander AIDL
+     *   (`IEdlCompanion`, action `ai.edlcommander.companion.BIND`) is copied; it is deliberately
+     *   absent from this set so the orchestrator does not auto-bind (never device-verified).
      * - **2026-10-19:** the on-phone Messenger transport for external nodes (RootForge, File Manager, Keyboard,
      *   Mesh, Browser) is now wired — `FleetModule.provideFleetNodeTransport`'s EXTERNAL_NODE entry is
      *   `MessengerFleetTransport` over the real `core-fleet-messenger` `PairedNodeGateway`, not

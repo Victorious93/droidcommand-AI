@@ -5,6 +5,7 @@ import ai.droidcommand.security.CapabilityId
 import ai.droidcommand.security.CapabilityMetadata
 import ai.droidcommand.security.CapabilityState
 import ai.droidcommand.security.RiskTier
+import ai.edlcommander.companion.aidl.IEdlCompanion
 
 /**
  * [CapabilityHealthChecker] for companion APK capabilities.
@@ -48,6 +49,7 @@ class CompanionCapabilityHealthChecker(
         val service = when (descriptor.packageName) {
             KnownCompanions.HACKERAI_PACKAGE -> registry.getHackerAiService()
             KnownCompanions.PENTESTSWARM_PACKAGE -> registry.getPentestSwarmService()
+            KnownCompanions.EDLCOMMANDER_PACKAGE -> registry.getEdlCompanionService()
             else -> null
         } ?: return CapabilityState.ERROR
 
@@ -55,6 +57,7 @@ class CompanionCapabilityHealthChecker(
             val pingResult = when (service) {
                 is IHackerAIService -> service.healthCheck() != null
                 is IPentestSwarmService -> service.isSwarmReady()
+                is IEdlCompanion -> service.getProtocolVersion() == IEdlCompanion.PROTOCOL_VERSION
                 else -> false
             }
             if (pingResult) CapabilityState.AVAILABLE else CapabilityState.ERROR

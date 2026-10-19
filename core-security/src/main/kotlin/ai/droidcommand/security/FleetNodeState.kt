@@ -122,7 +122,11 @@ class FleetControlPolicy(private val wiring: FleetWiring = FleetWiring()) {
             if (node.id in wiring.boundCompanionIds) {
                 FleetControl(FleetControlMode.INTERACTIVE, "bound companion", canCheckStatus = true)
             } else {
-                FleetControl(FleetControlMode.PLANNED, "planned: companion APK has not landed", canCheckStatus = false)
+                FleetControl(
+                    FleetControlMode.PLANNED,
+                    "planned: companion bind is not started in this build",
+                    canCheckStatus = false,
+                )
             }
 
         FleetIntegrationClass.EXTERNAL_NODE ->

@@ -158,7 +158,7 @@ class FleetCatalogTest {
             assertTrue(result is ToolResult.Failure, tool.spec.name)
         }
         val edl = tools.first { it.spec.name == "edl_commander_status" }.execute(emptyMap()) as ToolResult.Failure
-        assertTrue(edl.reason.contains("companion APK has not landed"))
+        assertTrue(edl.reason.contains("never been bound"))
         assertTrue(edl.reason.contains("does not bind, flash"))
         val kyc = tools.first { it.spec.name == "kyc_auditlab_status" }.execute(emptyMap()) as ToolResult.Failure
         assertTrue(kyc.reason.contains("/scope admin"))
@@ -299,7 +299,7 @@ class FleetCatalogTest {
             listOf(KnownNodeSigningCatalog.PENTEST_SWARM_DEBUG_SHA256),
             KnownFleet.PENTEST_SWARM.expectedSigningCertSha256,
         )
-        assertEquals(listOf("ai.edlcommander.companion"), KnownFleet.EDL_COMMANDER.androidPackages)
+        assertEquals(listOf(EdlCompanionIds.PACKAGE), KnownFleet.EDL_COMMANDER.androidPackages)
         assertEquals(
             listOf(KnownNodeSigningCatalog.EDL_COMMANDER_DEBUG_SHA256),
             KnownFleet.EDL_COMMANDER.expectedSigningCertSha256,

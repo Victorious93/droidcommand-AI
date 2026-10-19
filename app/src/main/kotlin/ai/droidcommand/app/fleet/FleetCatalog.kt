@@ -1,5 +1,7 @@
 package ai.droidcommand.app.fleet
 
+import ai.droidcommand.security.EdlCompanionIds
+
 /**
  * Package-probe roster for Tools → Fleet. This is the UI half of
  * `core-security.KnownFleet` plus HackerAI (already a bound companion,
@@ -41,8 +43,10 @@ object FleetCatalog {
     const val PENTESTSWARM_PACKAGE = "ai.pentestswarm.companion"
     const val TERMUX_PACKAGE = "com.termux"
 
-    /** Planned. The APK has not landed; do not bind this. */
-    const val EDLCOMMANDER_PACKAGE = "ai.edlcommander.companion"
+    /** applicationId on EDL main after PR #8. */
+    const val EDLCOMMANDER_PACKAGE = EdlCompanionIds.PACKAGE
+    const val EDLCOMMANDER_BIND_ACTION = EdlCompanionIds.BIND_ACTION
+    const val EDLCOMMANDER_BIND_PERMISSION = EdlCompanionIds.BIND_PERMISSION
 
     /**
      * EXTERNAL_NODE on-device package, inferred from action `ai.rootforge.os.action.BRIDGE`.
@@ -112,7 +116,10 @@ object FleetCatalog {
         name = "EDL-Commander",
         packageName = EDLCOMMANDER_PACKAGE,
         kind = FleetKind.COMPANION_APK,
-        summary = "BOUND_COMPANION, PLANNED. Owns Sahara/Firehose. AIDL + same-signing when the APK lands. Do not mark host-tool-only.",
+        summary = "BOUND_COMPANION, PLANNED. Package ai.edlcommander.companion. AIDL IEdlCompanion + " +
+            "bind action ai.edlcommander.companion.BIND + uses-permission " +
+            "ai.edlcommander.companion.permission.BIND_COMPANION. Owns Sahara/Firehose. " +
+            "Never device-verified. Do not mark host-tool-only.",
     )
 
     val KYC_AUDITLAB = FleetMember(
@@ -217,7 +224,8 @@ object FleetStatus {
     private fun statusLine(member: FleetMember, state: FleetInstallState): String = when (member.kind) {
         FleetKind.COMPANION_APK -> when {
             member.id == "edl-commander" ->
-                "Companion APK has not landed. No AIDL bind. Not LIVE."
+                "AIDL IEdlCompanion copied. Bind action ai.edlcommander.companion.BIND. " +
+                    "Fleet orchestrator does not auto-bind. Not LIVE."
             state == FleetInstallState.INSTALLED ->
                 "Installed. AIDL bind is not started in this build, so its tools stay disconnected."
             else ->

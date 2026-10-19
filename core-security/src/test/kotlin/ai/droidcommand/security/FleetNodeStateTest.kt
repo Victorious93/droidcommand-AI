@@ -96,7 +96,7 @@ class FleetNodeStateTest {
             assertFalse(state.commandChannel, state.nodeId)
         }
         assertEquals(FleetNodeState.NOT_CHECKED, h.board.state("hackerai")!!.detail)
-        assertEquals("planned: companion APK has not landed", h.board.state("edl-commander")!!.detail)
+        assertEquals("planned: companion bind is not started in this build", h.board.state("edl-commander")!!.detail)
         assertEquals("planned: stub only", h.board.state("kyc-auditlab")!!.detail)
     }
 

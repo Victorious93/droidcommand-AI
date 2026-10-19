@@ -19,10 +19,14 @@ DroidCommand AI (ai.droidcommand.app)
         │       └── HackerAI companion APK (ai.hackerai.companion)
         │               └── IHackerAIService.Stub
         │
-        └── bindService() + ai.droidcommand.permission.BIND_PENTESTSWARM
-                └── Pentest-Swarm companion APK (ai.pentestswarm.companion)
-                        └── IPentestSwarmService.Stub
-                                └── SwarmProcess → pentestswarm binary (Go)
+        ├── bindService() + ai.droidcommand.permission.BIND_PENTESTSWARM
+        │       └── Pentest-Swarm companion APK (ai.pentestswarm.companion)
+        │               └── IPentestSwarmService.Stub
+        │                       └── SwarmProcess → pentestswarm binary (Go)
+        │
+        └── bindService() + uses-permission ai.edlcommander.companion.permission.BIND_COMPANION
+                └── EDL-Commander companion APK (ai.edlcommander.companion)
+                        └── IEdlCompanion.Stub  (action ai.edlcommander.companion.BIND)
 ```
 
 Both companions are **optional and independently installable**. If a companion
@@ -233,15 +237,25 @@ Don explicitly chose EDL-Commander as a **bound companion APK**, same model
 as Pentest-Swarm: AIDL + same-signing + `DependencyGuard`. Do not mark it
 host-tool-only.
 
-- Planned package: `ai.edlcommander.companion` (`KnownCompanions.EDLCOMMANDER`).
-- Repo: `Victorious93/EDL-Commander`. Scaffold + AIDL + USB 9008/Sahara +
-  OnePlus 7T path is **in progress there**. This repo has no
-  `IEDLCommanderService` yet — do not invent the AIDL file until the APK lands.
+- Package: `ai.edlcommander.companion` (`KnownCompanions.EDLCOMMANDER`,
+  `EdlCompanionIds.PACKAGE`; EDL PR #8 renamed the applicationId).
+- Bind action: `ai.edlcommander.companion.BIND`.
+- Signature permission: `ai.edlcommander.companion.permission.BIND_COMPANION`
+  (defined by EDL; this hub declares `<uses-permission>` — it does **not**
+  invent `ai.droidcommand.permission.BIND_EDLCOMMANDER`).
+- AIDL: `IEdlCompanion` / `CommandEnvelope` / `ResultEnvelope` in
+  `core-companion/src/main/aidl/ai/edlcommander/companion/aidl/` (package
+  `ai.edlcommander.companion.aidl`), copied verbatim from EDL main. Do not
+  invent `IEDLCommanderService`.
+- Repo: `Victorious93/EDL-Commander`. USB 9008/Sahara + OnePlus 7T path is
+  **in progress there**. This repo has never bound a real EDL APK.
 - Catalog stub: `edl_commander_status` (always `ToolResult.Failure` /
-  `REQUIRES_EXTERNAL_SERVICE`). No flash/write/restore tool.
+  `REQUIRES_EXTERNAL_SERVICE`). No flash/write/restore tool. The Fleet
+  orchestrator does not auto-bind EDL.
 - EDL owns Sahara/Firehose. RootForge is the target-phone UI front end and
   may call this companion later.
-- Status: **PLANNED** until the APK lands.
+- DEBUG cert SHA-256 is unchanged: `E5:60:B6:92:…:58:C8`.
+- Status: **PLANNED** (AIDL on disk, never device-verified).
 
 ### Adding a fleet slot
 
@@ -491,6 +505,21 @@ interface IPentestSwarmService {
 }
 ```
 
+### `IEdlCompanion.aidl` (package `ai.edlcommander.companion.aidl`)
+
+Copied verbatim from EDL-Commander. Envelope parcelables, not JSON strings.
+Bind with action `ai.edlcommander.companion.BIND`.
+
+```aidl
+package ai.edlcommander.companion.aidl;
+
+interface IEdlCompanion {
+    const int PROTOCOL_VERSION = 1;
+    int getProtocolVersion();
+    ResultEnvelope execute(in CommandEnvelope command);
+}
+```
+
 ### JSON transport rationale
 
 All methods pass and return JSON strings rather than typed Parcelables. This
@@ -574,6 +603,13 @@ The AIDL files in each companion repo are **copies** of the canonical files in
 - `core-companion/src/main/aidl/ai/droidcommand/companion/IHackerAIService.aidl`
 - `core-companion/src/main/aidl/ai/droidcommand/companion/IPentestSwarmService.aidl`
 - `core-companion/src/main/aidl/ai/droidcommand/companion/CompanionCapabilityParcel.aidl`
+- `core-companion/src/main/aidl/ai/edlcommander/companion/aidl/IEdlCompanion.aidl`
+- `core-companion/src/main/aidl/ai/edlcommander/companion/aidl/CommandEnvelope.aidl`
+- `core-companion/src/main/aidl/ai/edlcommander/companion/aidl/ResultEnvelope.aidl`
+
+EDL's AIDL package `ai.edlcommander.companion.aidl` is part of the wire
+contract. Copy that directory from `Victorious93/EDL-Commander` verbatim;
+do not re-home it under `ai.droidcommand.companion`.
 
 When modifying any AIDL file, update all three locations atomically:
 
