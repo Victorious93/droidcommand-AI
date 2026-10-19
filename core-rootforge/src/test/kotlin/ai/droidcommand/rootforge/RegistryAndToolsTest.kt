@@ -51,16 +51,15 @@ class RegistryAndToolsTest {
     }
 
     @Test fun `tools are sensitive remote-control tools`() {
-        for (
-            spec in listOf(
-                RootForgeListDevicesTool(registry()).spec,
-                RootForgeCapabilitiesTool(registry()).spec,
-                RootForgeDeviceInfoTool(registry()).spec,
-                RootForgeAdbShellTool(registry()).spec,
-                RootForgeAdbRebootTool(registry()).spec,
-                RootForgeFastbootRebootTool(registry()).spec,
-            )
-        ) {
+        val specs = listOf(
+            RootForgeListDevicesTool(registry()).spec,
+            RootForgeCapabilitiesTool(registry()).spec,
+            RootForgeDeviceInfoTool(registry()).spec,
+            RootForgeAdbShellTool(registry()).spec,
+            RootForgeAdbRebootTool(registry()).spec,
+            RootForgeFastbootRebootTool(registry()).spec,
+        )
+        for (spec in specs) {
             assertEquals(SecurityLevel.SENSITIVE, spec.securityLevel)
             assertEquals(PermissionCategory.REMOTE_CONTROL, spec.permissionCategory)
             assertTrue(spec.requiresConfirmation)
