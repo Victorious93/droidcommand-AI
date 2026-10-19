@@ -4,8 +4,8 @@ import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.mode.ModeLabels
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prefs.CodingTunnelChoice
-import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.app.shizuku.ShizukuStatusSection
+import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import ai.droidcommand.app.ui.components.SectionLabel
