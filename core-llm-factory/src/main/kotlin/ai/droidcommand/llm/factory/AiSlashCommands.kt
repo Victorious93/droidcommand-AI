@@ -1,7 +1,7 @@
 package ai.droidcommand.llm.factory
 
 /**
- * Slash commands that send one message to a named cloud provider: `/claude`, `/chatgpt`, `/gemini`, `/groq`.
+ * Slash commands that send one message to a named cloud provider: `/claude`, `/chatgpt`, `/gemini`, `/groq`, `/grok`, `/openrouter`.
  *
  * `/claude` reaches Claude through the Anthropic API. It does not start Claude Code: the Claude Code CLI is a desktop
  * tool that this app cannot run or reach from a phone.
@@ -17,6 +17,8 @@ object AiSlashCommands {
         "chatgpt" to "openai",
         "gemini" to "google",
         "groq" to "groq",
+        "grok" to "xai",
+        "openrouter" to "openrouter",
     )
 
     /** Command names without the leading slash, in display order. */

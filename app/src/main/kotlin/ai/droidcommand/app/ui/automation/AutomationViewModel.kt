@@ -74,7 +74,7 @@ class AutomationViewModel @Inject constructor(
             when (val parsed = AiSlashCommands.parse(slashCommand)) {
                 is AiSlashCommands.Parsed.Command -> AutomationAction.Ai(parsed.providerId, parsed.prompt)
                 is AiSlashCommands.Parsed.MissingPrompt -> return refuse("Add a prompt after /${parsed.command}.")
-                AiSlashCommands.Parsed.NotCommand -> return refuse("Start with a command: /claude, /chatgpt, /gemini or /groq.")
+                AiSlashCommands.Parsed.NotCommand -> return refuse("Start with a command: /claude, /chatgpt, /gemini, /groq, /grok or /openrouter.")
             }
         }
         val key = AutomationKey(UUID.randomUUID().toString(), cleanLabel, action)

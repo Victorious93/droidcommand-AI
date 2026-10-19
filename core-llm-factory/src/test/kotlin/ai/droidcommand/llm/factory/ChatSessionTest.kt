@@ -87,6 +87,7 @@ class ChatSessionTest {
         memoryScopes: Set<String> = emptySet(),
         memoryWriter: MemoryWriter? = null,
         memoryWriteScope: String = "",
+        autoRemember: Int = 0,
     ): Triple<ChatSession, InMemoryConversationStore, InMemorySecretsVault> {
         val vault = InMemorySecretsVault()
         vaultKey?.let {
@@ -98,7 +99,7 @@ class ChatSessionTest {
             val p: LlmProvider = if (spec.id == "google") GeminiLlmProvider(c, JdkHttpTransport(), requireHttps = false) else GroqLlmProvider(c, JdkHttpTransport(), requireHttps = false)
             p
         }
-        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge, knowledgeGraph = graph, webSearch = search, documents = documents, memory = memory, memoryScopes = memoryScopes, memoryWriter = memoryWriter, memoryWriteScope = memoryWriteScope), store, vault)
+        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge, knowledgeGraph = graph, webSearch = search, documents = documents, memory = memory, memoryScopes = memoryScopes, memoryWriter = memoryWriter, memoryWriteScope = memoryWriteScope, autoRememberEveryTurns = autoRemember), store, vault)
     }
 
     @Test
@@ -187,9 +188,9 @@ class ChatSessionTest {
     }
 
     @Test
-    fun `the catalog covers the four providers with distinct secret ids`() {
-        assertEquals(setOf("anthropic", "openai", "google", "groq"), CloudProviderCatalog.all.map { it.id }.toSet())
-        assertEquals(4, CloudProviderCatalog.all.map { it.secretId }.toSet().size)
+    fun `the catalog covers the six providers with distinct secret ids`() {
+        assertEquals(setOf("anthropic", "openai", "google", "groq", "xai", "openrouter"), CloudProviderCatalog.all.map { it.id }.toSet())
+        assertEquals(6, CloudProviderCatalog.all.map { it.secretId }.toSet().size)
     }
 
     private fun routerGraph(): KnowledgeGraph = InMemoryKnowledgeGraph().also {
@@ -385,6 +386,34 @@ class ChatSessionTest {
 
         assertEquals(MemoryResult.Saved(1, 0), result)
         assertEquals(listOf("Home Router"), graph.searchEntities("router").map { it.label })
+    }
+
+    @Test
+    fun `auto-remember extracts after every Nth reply and is off by default`() {
+        val graph = InMemoryKnowledgeGraph()
+        var call = 0
+        // chat 1, chat 2, then the extraction fired by the 2nd reply.
+        val base = startRouting { if (call++ < 2) sse("""{"choices":[{"delta":{"content":"hi"}}]}""") else graphJson() }
+        val (chat, _, _) = session(base, graph = graph, autoRemember = 2)
+
+        chat.send(groq, "", "my router is slow")
+        assertEquals(emptyList(), graph.searchEntities("router").map { it.label })
+        chat.send(groq, "", "still slow")
+        assertEquals(listOf("Home Router"), graph.searchEntities("router").map { it.label })
+    }
+
+    @Test
+    fun `an auto-remember failure leaves the reply intact with a notice`() {
+        val graph = InMemoryKnowledgeGraph()
+        var call = 0
+        val base = startRouting(status = { if (call == 1) 500 else 200 }) {
+            if (call++ == 0) sse("""{"choices":[{"delta":{"content":"hi"}}]}""") else "{}"
+        }
+        val (chat, _, _) = session(base, graph = graph, autoRemember = 1)
+
+        val reply = assertIs<ChatResult.Reply>(chat.send(groq, "", "my router is slow"))
+        assertEquals("hi", reply.text)
+        assertTrue(reply.notice!!.startsWith("Auto-remember failed"))
     }
 
     @Test
