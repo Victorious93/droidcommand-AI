@@ -301,8 +301,8 @@ ops against a trusted pairing. State: `SharedPreferencesPairedNodeStore`
 
 ## 2026-10-19 — EDL-Commander applicationId rename
 
-EDL-Commander's app-ID rename merged on their `main` (PR #8). The old
-placeholder `io.github.victorious93.edlcommander` is gone.
+EDL-Commander's app-ID rename merged on their `main` (PR #8). The previous
+GitHub-style applicationId placeholder is gone.
 
 | Piece | Value |
 |---|---|
