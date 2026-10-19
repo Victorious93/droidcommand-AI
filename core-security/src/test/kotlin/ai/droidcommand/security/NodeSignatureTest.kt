@@ -11,6 +11,8 @@ import kotlin.test.assertTrue
 class NodeSignatureTest {
     private val meshDebug =
         "F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4"
+    private val meshRelease =
+        "76:E9:15:83:31:40:DA:96:69:D3:CC:5D:54:F6:66:A9:01:51:51:FC:F6:4C:59:B6:3D:DA:6E:D2:8F:83:A4:0D"
     private val meshReleasePlaceholder =
         "11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00"
     private val attacker =
@@ -39,7 +41,7 @@ class NodeSignatureTest {
         assertEquals(NodeSignatureRefusal.CERT_MISMATCH, refused.kind)
         assertTrue(refused.message.contains("does not match"))
         assertEquals(listOf(attacker), refused.observed)
-        assertEquals(listOf(meshDebug), refused.expected)
+        assertEquals(listOf(meshDebug, meshRelease), refused.expected)
     }
 
     @Test
@@ -107,6 +109,7 @@ class NodeSignatureTest {
         val cases = listOf(
             "ai.droidcommand.app" to KnownNodeSigningCatalog.DROIDCOMMAND_AI_DEBUG_SHA256,
             "com.victorious.mesh" to KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256,
+            "com.victorious.mesh" to KnownNodeSigningCatalog.VICTORIOUS_MESH_RELEASE_SHA256,
             "com.victorious.browser" to KnownNodeSigningCatalog.VICTORIOUS_BROWSER_DEBUG_SHA256,
             "ai.pentestswarm.companion" to KnownNodeSigningCatalog.PENTEST_SWARM_DEBUG_SHA256,
             "ai.edlcommander.companion" to KnownNodeSigningCatalog.EDL_COMMANDER_DEBUG_SHA256,
@@ -194,6 +197,7 @@ class NodeSignatureTest {
             "ai.pentestswarm.companion",
             "ai.edlcommander.companion",
             "com.victorious.browser",
+            "com.victorious.mesh",
         )) {
             val certs = KnownNodeSigningCatalog.identityFor(pkg)?.expectedCerts.orEmpty()
             assertTrue(planned !in certs, pkg)
@@ -253,12 +257,27 @@ class NodeSignatureTest {
     }
 
     @Test
-    fun `Victorious Mesh debug fingerprint is the documented value`() {
+    fun `Victorious Mesh debug and own release fingerprints are the documented values`() {
         val identity = KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG
         assertEquals("com.victorious.mesh", identity.packageName)
         assertEquals(FleetIntegrationClass.EXTERNAL_NODE, identity.integrationClass)
-        assertEquals(listOf(meshDebug), identity.expectedCerts.map { it.canonical })
+        assertEquals(
+            listOf(
+                KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256,
+                KnownNodeSigningCatalog.VICTORIOUS_MESH_RELEASE_SHA256,
+            ),
+            identity.expectedCerts.map { it.canonical },
+        )
+        assertEquals(listOf(meshDebug, meshRelease), identity.expectedCerts.map { it.canonical })
         assertEquals(identity, KnownNodeSigningCatalog.identityFor("com.victorious.mesh"))
+        assertTrue(identity.notes.contains("NOT shared fleet"))
+        assertEquals(
+            listOf(
+                KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256,
+                KnownNodeSigningCatalog.VICTORIOUS_MESH_RELEASE_SHA256,
+            ),
+            KnownFleet.MESH.expectedSigningCertSha256,
+        )
     }
 
     @Test

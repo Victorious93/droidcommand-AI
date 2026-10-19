@@ -46,8 +46,8 @@ class SigningCertSha256 private constructor(val canonical: String) {
  *
  * Fail-closed ([REFUSE]) is the stronger posture, but the documented
  * **default is [ALLOW]** so existing flows for members whose cert is
- * still `[Unknown]` (File Manager, Keyboard `.bench`, Mesh release,
- * KYC, victorious-flash, …) keep working. Flip to [REFUSE] via
+ * still `[Unknown]` (File Manager, Keyboard `.bench`, KYC,
+ * victorious-flash, …) keep working. Flip to [REFUSE] via
  * [fromEnvironment] (`DROIDCOMMAND_NODE_CERT_MISSING_EXPECTED=refuse`)
  * only once the catalogue is complete — it is still partial.
  *
@@ -143,6 +143,14 @@ object KnownNodeSigningCatalog {
     const val VICTORIOUS_MESH_DEBUG_SHA256 =
         "F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4"
 
+    /**
+     * Victorious Mesh **own** RELEASE cert (not the shared fleet key).
+     * RSA 4096, alias `victoriousmeshrelease`, CI-secrets only — never
+     * committed. Enforceable for `com.victorious.mesh` only.
+     */
+    const val VICTORIOUS_MESH_RELEASE_SHA256 =
+        "76:E9:15:83:31:40:DA:96:69:D3:CC:5D:54:F6:66:A9:01:51:51:FC:F6:4C:59:B6:3D:DA:6E:D2:8F:83:A4:0D"
+
     /** Pentest-Swarm-AI committed debug signing cert. Enforceable. */
     const val PENTEST_SWARM_DEBUG_SHA256 =
         "5E:3A:B1:23:1F:7E:DA:18:78:B8:FF:D8:9E:AC:B1:F7:2E:EB:66:AF:3D:BA:2E:01:33:51:24:68:42:23:30:C7"
@@ -223,18 +231,24 @@ object KnownNodeSigningCatalog {
     )
 
     /**
-     * Victorious Mesh debug identity. Release is `[Unknown]` — not
-     * invented here.
+     * Victorious Mesh debug + own RELEASE identity.
      *
      * Mesh is [KnownFleet.MESH], EXTERNAL_NODE, wiring order 8, PLANNED.
-     * Fleet IPC Messenger bind is still TODO.
+     * Fleet IPC Messenger bind is still TODO. RELEASE is Mesh's own key
+     * (NOT shared fleet 9E:A7), RSA 4096, alias `victoriousmeshrelease`,
+     * CI-secrets only — public SHA-256 only; no keystore in this repo.
      */
     val VICTORIOUS_MESH_DEBUG = NodeSigningIdentity(
         packageName = "com.victorious.mesh",
-        expectedCerts = listOf(SigningCertSha256.parseOrThrow(VICTORIOUS_MESH_DEBUG_SHA256)),
+        expectedCerts = listOf(
+            SigningCertSha256.parseOrThrow(VICTORIOUS_MESH_DEBUG_SHA256),
+            SigningCertSha256.parseOrThrow(VICTORIOUS_MESH_RELEASE_SHA256),
+        ),
         memberId = "mesh",
         integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
-        notes = "Victorious Mesh debug keystore. Enforceable. Release fingerprint is [Unknown]. " +
+        notes = "Victorious Mesh debug + own RELEASE. Enforceable. " +
+            "RELEASE is Mesh's own key (NOT shared fleet 9E:A7; RSA 4096; " +
+            "alias victoriousmeshrelease; CI-secrets only). " +
             "KnownFleet.MESH (EXTERNAL_NODE, wiring order 8, PLANNED). " +
             "Never DependencyGuard, never a shared signing key. Fleet IPC Messenger is TODO on their side.",
     )
