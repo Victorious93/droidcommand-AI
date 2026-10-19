@@ -22,6 +22,9 @@ import ai.droidcommand.setoolkit.SetTool
 import ai.droidcommand.shell.ProcessBuilderShellExecutor
 import ai.droidcommand.shell.ShellSecurityPolicy
 import ai.droidcommand.shell.ShellTool
+import ai.droidcommand.shizuku.NullPrivilegedShell
+import ai.droidcommand.shizuku.ShizukuTool
+import ai.droidcommand.shizuku.ShizukuToolKind
 import ai.droidcommand.termux.NullTermuxExecutor
 import ai.droidcommand.termux.TermuxTool
 import ai.droidcommand.tools.android.CopyFileTool
@@ -68,6 +71,9 @@ class RiskAutoApprovalRealToolsTest {
         ShellTool(ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf("echo")))),
         RootTool(NullRootExecutor()),
         TermuxTool(NullTermuxExecutor()),
+        ShizukuTool(NullPrivilegedShell(), ShizukuToolKind.EXEC),
+        ShizukuTool(NullPrivilegedShell(), ShizukuToolKind.DEVICE_STATE),
+        ShizukuTool(NullPrivilegedShell(), ShizukuToolKind.PM_GRANT),
         MetasploitTool(NullMetasploitExecutor()),
         SetTool(NullSetExecutor()),
         KaliAuthorizedScanTool(
@@ -99,7 +105,7 @@ class RiskAutoApprovalRealToolsTest {
         dangerousSpecs.forEach { (name, spec) ->
             assertIs<AutoApprovalDecision.RequireApproval>(policy.evaluate(spec), "$name must always need a tap")
         }
-        assertTrue(dangerousSpecs.keys.containsAll(listOf("run_shell_command", "run_root_command", "run_termux_command")))
+        assertTrue(dangerousSpecs.keys.containsAll(listOf("run_shell_command", "run_root_command", "run_termux_command", "run_shizuku_command")))
     }
 
     @Test
@@ -126,7 +132,7 @@ class RiskAutoApprovalRealToolsTest {
     fun `YOLO on auto-approves real shell root and termux specs and still refuses kali metasploit and set`() {
         val off = DefaultActionRisks.policy()
         val on = DefaultActionRisks.policy(yoloMode = true)
-        listOf("run_shell_command", "run_root_command", "run_termux_command").forEach { name ->
+        listOf("run_shell_command", "run_root_command", "run_termux_command", "run_shizuku_command").forEach { name ->
             assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(dangerousSpecs.getValue(name)), name)
             val approved = assertIs<AutoApprovalDecision.AutoApprove>(on.evaluate(dangerousSpecs.getValue(name)), name)
             assertTrue(approved.reason.contains(YoloMode.AUDIT_REASON), approved.reason)

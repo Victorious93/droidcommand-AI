@@ -40,6 +40,9 @@ class MainTest {
                 "run_shell_command",
                 "run_root_command",
                 "run_termux_command",
+                "run_shizuku_command",
+                "shizuku_read_device_state",
+                "shizuku_pm_grant",
                 "victorsuite_capabilities",
                 "build_project",
                 "run_metasploit_module",
@@ -78,6 +81,12 @@ class MainTest {
     @Test
     fun `pilot run_termux_command fails cleanly against NullTermuxExecutor, even when approved`() {
         val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("run_termux_command", "executable=echo"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot run_shizuku_command fails cleanly against NullPrivilegedShell, even when approved`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("run_shizuku_command", "executable=id"))
         assertEquals(1, exitCode)
     }
 

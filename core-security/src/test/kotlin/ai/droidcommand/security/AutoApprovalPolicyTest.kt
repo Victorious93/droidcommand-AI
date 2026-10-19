@@ -61,6 +61,7 @@ class AutoApprovalPolicyTest {
             "automation" to readTool("automation").copy(permissionCategory = PermissionCategory.AUTOMATION),
             "no_category" to readTool("no_category").copy(permissionCategory = null),
             "run_shell_command" to readTool("run_shell_command"),
+            "run_shizuku_command" to readTool("run_shizuku_command"),
             "termux_run" to readTool("termux_run"),
             "rootforge_list_devices" to readTool("rootforge_list_devices"),
             "fleet_status" to readTool("fleet_status"),
@@ -120,6 +121,7 @@ class AutoApprovalPolicyTest {
             assertEquals(off.evaluate(readTool(name)), onDefault.evaluate(readTool(name)), name)
         }
         assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(readTool("run_shell_command")))
+        assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(readTool("run_shizuku_command")))
         assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(readTool("run_root_command").copy(requiresRoot = true)))
         assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(readTool("rootforge_list_devices")))
         assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(readTool("run_kali_authorized_scan")))
@@ -131,6 +133,7 @@ class AutoApprovalPolicyTest {
         val waived = listOf(
             readTool("run_shell_command"),
             readTool("run_termux_command"),
+            readTool("run_shizuku_command"),
             readTool("run_root_command").copy(requiresRoot = true, securityLevel = SecurityLevel.ROOT),
             readTool("granted").copy(grantCapability = "root"),
             readTool("rootforge_list_devices").copy(permissionCategory = PermissionCategory.REMOTE_CONTROL),
@@ -168,10 +171,12 @@ class AutoApprovalPolicyTest {
         assertTrue(YoloMode.WARNING.contains("ACTIVE"))
         assertTrue(YoloMode.WARNING.contains("EXPLOIT"))
         assertTrue(YoloMode.WARNING.contains("shell"))
+        assertTrue(YoloMode.WARNING.contains("Shizuku"))
         assertTrue(YoloMode.WARNING.contains("Off by default"))
         assertTrue(YoloMode.isPentestAuthorization("run_kali_authorized_scan"))
         assertTrue(YoloMode.isPentestAuthorization(YoloMode.KALI_PLAYBOOK_STEP_PREFIX + "nmap"))
         assertTrue(!YoloMode.isPentestAuthorization("run_shell_command"))
+        assertTrue(!YoloMode.isPentestAuthorization("run_shizuku_command"))
         assertTrue(!YoloMode.isPentestAuthorization("rootforge_list_devices"))
     }
 }

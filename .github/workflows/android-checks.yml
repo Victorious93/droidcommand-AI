@@ -85,7 +85,7 @@ jobs:
             fi
             echo "::endgroup::"
             if ! grep -qE \
-              'Could not (GET|HEAD|resolve|download)|Received status code 429|Connection reset|SocketTimeout|UnknownHostException|Connection timed out|503 Service Unavailable|502 Bad Gateway' \
+              'Could not GET |Could not HEAD |Could not download |Received status code 429|Connection reset|SocketTimeout|UnknownHostException|Connection timed out|503 Service Unavailable|502 Bad Gateway' \
               "$log"; then
               echo "Non-transient failure; not retrying"
               rm -f "$log"

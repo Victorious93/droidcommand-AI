@@ -90,6 +90,7 @@ android {
 
     buildFeatures {
         compose = true
+        aidl = true
     }
 
     compileOptions {
@@ -122,6 +123,10 @@ dependencies {
     implementation(project(":core-shell"))
     implementation(project(":core-root"))
     implementation(project(":core-termux"))
+    implementation(project(":core-shizuku"))
+    // Current stable Shizuku/Sui API (same artifacts for both). MIT.
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
     implementation(project(":core-tools-metasploit"))
     implementation(project(":core-tools-setoolkit"))
 
@@ -195,6 +200,21 @@ dependencies {
 
 kotlin {
     jvmToolchain(21)
+}
+
+// :app:compileDebugAidl resolves debugCompileClasspath (flatDir sherpa-onnx AAR)
+// without going through :core-voice-neural-android:preBuild. Shizuku's
+// IPrivilegedShell.aidl created this task; CI then failed with
+// "Could not find :sherpa-onnx-1.13.8:" before fetchSherpaOnnx ran
+// (Actions 39336466435). Tie fetch to the tasks that resolve that classpath.
+tasks.named("preBuild") {
+    dependsOn(":core-voice-neural-android:fetchSherpaOnnx")
+}
+tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Aidl") }.configureEach {
+    dependsOn(":core-voice-neural-android:fetchSherpaOnnx")
+}
+tasks.matching { it.name.contains("AarMetadata") }.configureEach {
+    dependsOn(":core-voice-neural-android:fetchSherpaOnnx")
 }
 
 // Hilt bundles a kotlin-metadata-jvm that reads metadata only up to Kotlin 2.3; this module is

@@ -2,6 +2,7 @@ package ai.droidcommand.app
 
 import ai.droidcommand.app.fleet.FleetCatalog
 import ai.droidcommand.app.fleet.FleetNodes
+import ai.droidcommand.shizuku.ShizukuPackages
 import org.w3c.dom.Element
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
@@ -48,9 +49,9 @@ class ManifestPolicyTest {
     }
 
     @Test
-    fun `queries name only catalogued fleet packages besides the speech and TTS intents`() {
+    fun `queries name only catalogued fleet packages besides the speech and TTS intents and Shizuku`() {
         val declared = manifest.children("queries").single().children("package").map { it.androidAttr("name") }.toSet()
-        val catalogued = FleetCatalog.queryPackages
+        val catalogued = FleetCatalog.queryPackages + ShizukuPackages.queryPackages
         assertEquals(catalogued, declared)
     }
 
@@ -64,6 +65,19 @@ class ManifestPolicyTest {
     fun `VictorSuite RUN_COMMAND permission is declared`() {
         val permissions = manifest.children("uses-permission").map { it.androidAttr("name") }
         assertTrue("com.termux.permission.RUN_COMMAND" in permissions)
+    }
+
+    @Test
+    fun `Shizuku provider permission and queries are declared`() {
+        val permissions = manifest.children("uses-permission").map { it.androidAttr("name") }
+        assertTrue(ShizukuPackages.API_PERMISSION in permissions)
+        val declared = manifest.children("queries").single().children("package").map { it.androidAttr("name") }.toSet()
+        assertTrue(declared.containsAll(ShizukuPackages.queryPackages))
+        val provider = application.children("provider").single { it.androidAttr("name") == "rikka.shizuku.ShizukuProvider" }
+        assertEquals("true", provider.androidAttr("exported"))
+        assertEquals("false", provider.androidAttr("multiprocess"))
+        assertEquals("\${applicationId}.shizuku", provider.androidAttr("authorities"))
+        assertEquals("android.permission.INTERACT_ACROSS_USERS_FULL", provider.androidAttr("permission"))
     }
 
     @Test
@@ -92,7 +106,7 @@ class ManifestPolicyTest {
             .flatMap { application.children(it) }
             .filter { it.androidAttr("exported") == "true" }
             .map { it.androidAttr("name") }
-        assertEquals(listOf(".MainActivity"), exported)
+        assertEquals(listOf(".MainActivity", "rikka.shizuku.ShizukuProvider"), exported)
     }
 
     @Test

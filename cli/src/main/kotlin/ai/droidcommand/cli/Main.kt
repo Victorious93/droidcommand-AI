@@ -40,6 +40,8 @@ import ai.droidcommand.setoolkit.SetTool
 import ai.droidcommand.shell.ProcessBuilderShellExecutor
 import ai.droidcommand.shell.ShellSecurityPolicy
 import ai.droidcommand.shell.ShellTool
+import ai.droidcommand.shizuku.NullPrivilegedShell
+import ai.droidcommand.shizuku.ShizukuTool
 import ai.droidcommand.termux.TermuxTool
 import ai.droidcommand.termux.VictorSuiteCapabilitiesTool
 import ai.droidcommand.websearch.WebSearchTool
@@ -127,6 +129,9 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * `DROIDCOMMAND_CLI_ADB`, off by default): then it reaches the adb-connected phone's Termux or
  * VictorSuite through `ai.droidcommand.termux.AdbTermuxExecutor` (`IMPLEMENTED — NOT RUNTIME
  * VERIFIED`), still behind the same approval gate ([termuxExecutorFor]);
+ * `run_shizuku_command` / `shizuku_read_device_state` / `shizuku_pm_grant` are registered against
+ * `NullPrivilegedShell` here (this CLI has no Shizuku binder) and still go through the same
+ * `SecureToolExecutor` confirmation gate — Kali/pentest authorization is unchanged;
  * `build_project` uses [LocalProcessBuildExecutor], the same real, allow-listed
  * [ProcessBuilderShellExecutor] [ShellTool] uses — a build command is, at the OS level, just another
  * shell command, so both tools share one allowlist rather than this CLI inventing a second, separate
@@ -183,6 +188,7 @@ internal fun buildSession(
         register(ShellTool(ProcessBuilderShellExecutor(shellSecurityPolicy())))
         register(RootTool(NullRootExecutor()))
         register(TermuxTool(termuxExecutorFor(device)))
+        ShizukuTool.all(NullPrivilegedShell()).forEach { register(it) }
         register(VictorSuiteCapabilitiesTool(termuxExecutorFor(device)))
         register(BuildTool(buildPipeline(), ::buildRequestFromInput))
         register(MetasploitTool(metasploitExecutorFor()))
@@ -196,7 +202,7 @@ internal fun buildSession(
     val delegate = ToolExecutor(registry, stateMachine)
     // REMOTE_CONTROL is granted only when the operator explicitly configured RootForge nodes; the
     // tools are still SENSITIVE, so each call also goes through the approval prompt.
-    val granted = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK) +
+    val granted = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK, PermissionCategory.DEVICE_CONTROL) +
         (if (rootForge.isEmpty() && flashTools.isEmpty()) emptySet() else setOf(PermissionCategory.REMOTE_CONTROL))
     val policy = SecurityPolicy(grantedCategories = granted)
     val secure = SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(policy), approvalPrompt)
