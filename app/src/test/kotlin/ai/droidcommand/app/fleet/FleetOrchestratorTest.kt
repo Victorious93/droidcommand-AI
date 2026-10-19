@@ -94,9 +94,9 @@ class FleetNodesTest {
     }
 
     @Test
-    fun `only the companions the registry binds are wired as bound`() {
+    fun `wiring reflects which transports are real`() {
         assertEquals(setOf("hackerai", "pentestswarm"), FleetNodes.WIRING.boundCompanionIds)
-        assertFalse(FleetNodes.WIRING.messengerTransportWired)
+        assertTrue(FleetNodes.WIRING.messengerTransportWired)
         assertFalse(FleetNodes.WIRING.termuxRunnerWired)
     }
 }
@@ -117,18 +117,20 @@ class FleetRowsTest {
     }
 
     @Test
-    fun `read-only and planned nodes say why`() {
+    fun `wired, no-runner and planned nodes say why`() {
         val rows = rows()
-        assertEquals(FleetControlMode.PAIRING_REQUIRED, rows.getValue("rootforge").control.mode)
-        assertEquals("pairing required", rows.getValue("rootforge").control.label)
-        assertTrue(rows.getValue("file-manager").control.label.startsWith("pairing required"))
-        assertTrue(rows.getValue("keyboard").control.label.startsWith("pairing required"))
-        assertTrue(rows.getValue("mesh").control.label.startsWith("pairing required"))
-        assertTrue(rows.getValue("browser").control.label.startsWith("pairing required"))
+        // EXTERNAL_NODE now has a real transport (messengerTransportWired=true), so its control mode is
+        // INTERACTIVE — but nothing is paired in this test, so sending is still refused: not by "Commands are
+        // disabled" (that's for a class with no transport at all) but because status has never been checked.
+        for (id in listOf("rootforge", "file-manager", "keyboard", "mesh", "browser")) {
+            assertEquals(FleetControlMode.INTERACTIVE, rows.getValue(id).control.mode, id)
+            assertEquals("external node", rows.getValue(id).control.label, id)
+            assertEquals("Node is not known to be reachable. Check status first.", rows.getValue(id).sendDisabledReason, id)
+        }
         assertEquals("no runner yet", rows.getValue("termux").control.label)
         assertEquals(FleetControlMode.PLANNED, rows.getValue("kyc-auditlab").control.mode)
         assertEquals(FleetControlMode.PLANNED, rows.getValue("edl-commander").control.mode)
-        for (id in listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "termux", "kyc-auditlab", "edl-commander")) {
+        for (id in listOf("termux", "kyc-auditlab", "edl-commander")) {
             assertTrue(rows.getValue(id).sendDisabledReason!!.startsWith("Commands are disabled"), id)
         }
         assertFalse(rows.getValue("kyc-auditlab").canCheckStatus)

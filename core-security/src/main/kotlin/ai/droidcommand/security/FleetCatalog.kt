@@ -165,28 +165,34 @@ object KnownFleet {
         status = FleetHonestyStatus.PARTIAL,
         capabilityId = CapabilityId("fleet.rootforge.passive"),
         providerId = "rootforge",
-        existingToolNames = listOf("rootforge_capabilities", "rootforge_list_devices"),
+        existingToolNames = listOf(
+            "rootforge_capabilities", "rootforge_list_devices", "rootforge_device_info",
+            "rootforge_adb_shell", "rootforge_adb_reboot", "rootforge_fastboot_reboot",
+        ),
         catalogStubName = null,
         wiringOrder = 2,
         transports = listOf(
             "messenger+json envelope (live APK path on rootforge-os main: action ai.rootforge.os.action.BRIDGE, protocol_major 1)",
             "localhost headless API + bearer (desktop/Docker, planned)",
-            "ssh+json (CLI/ISO fallback only; what core-rootforge implements today)",
+            "ssh+json (CLI/ISO fallback; what core-rootforge's cli tools speak today — 2026-10-19: deviceInfo/adbShell/adbReboot/fastbootReboot added alongside capabilities/listDevices)",
         ),
         usesAidl = false,
         usesDependencyGuard = false,
         riskTier = RiskTier.READ_ONLY,
-        nextStep = "Pair a node (package + signing-cert SHA-256) to use the on-device Messenger client " +
-            "(core-fleet-messenger + :app). RootForge tools remain SSH-only. No DependencyGuard and no " +
-            "shared signing key. SSH stays CLI/ISO fallback. Owns target-phone control (USB OTG, later " +
-            "LAN/Tailscale). Does not own Termux/proot or Sahara — RootForge UI may call the EDL companion later.",
+        nextStep = "Pair a node (package + signing-cert SHA-256) to use the on-device Messenger client. " +
+            "2026-10-19: the client code itself is now wired (core-fleet-messenger.PairedNodeGateway via " +
+            "MessengerFleetTransport in :app's Fleet Orchestrator) — only pairing a real node remains. " +
+            "`cli`'s rootforge_* tools remain SSH-only (device-free CLI has no Android bind path). " +
+            "No DependencyGuard and no shared signing key. SSH stays CLI/ISO fallback. Owns target-phone " +
+            "control (USB OTG, later LAN/Tailscale). Does not own Termux/proot or Sahara — RootForge UI " +
+            "may call the EDL companion later.",
         refusalMessage = "RootForge is an independent node. Pair it (Messenger / localhost API / SSH fallback); " +
             "this catalog does not claim a live session.",
         notes = "Live APK path already exists on their main (Messenger + shared JSON). " +
-            "core-rootforge still only speaks SSH (CLI). On-device Messenger is core-fleet-messenger + :app, " +
-            "off until a node is paired. Never DependencyGuard, never shared signing key. " +
-            "Controller-side DEBUG signing cert for ai.rootforge.os.debug is catalogued (enforceable). " +
-            "No release key yet.",
+            "core-rootforge's cli tools speak SSH only. On-device Messenger is core-fleet-messenger + :app " +
+            "(MessengerFleetTransport, 2026-10-19), off in practice until a node is paired. Never " +
+            "DependencyGuard, never shared signing key. Controller-side DEBUG signing cert for " +
+            "ai.rootforge.os.debug is catalogued (enforceable). No release key yet.",
         androidPackages = listOf("ai.rootforge.os.debug"),
         expectedSigningCertSha256 = listOf(KnownNodeSigningCatalog.ROOTFORGE_DEBUG_SHA256),
     )
