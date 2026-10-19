@@ -610,13 +610,13 @@ class ChatViewModel @Inject constructor(
         mutableState.update { it.copy(memoryEnabled = enabled) }
     }
 
-    /** K3: extracts and saves the current conversation to the knowledge graph, using the last-used provider. */
     /** Persists the choice for the next time this screen is opened. Each run costs one extra request to the chat provider. */
     fun setAutoRemember(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_AUTO_REMEMBER, enabled) }
         mutableState.update { it.copy(autoRemember = enabled) }
     }
 
+    /** K3: extracts and saves the current conversation to the knowledge graph, using the last-used provider. */
     fun rememberChat() {
         if (mutableState.value.sending) return
         mutableState.update { it.copy(memoryStatus = "Remembering…") }
