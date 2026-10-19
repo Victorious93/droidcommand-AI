@@ -9,7 +9,7 @@ import ai.droidcommand.agent.ToolSpec
  * [ActionRisk.READ_ONLY] tool with no [ActionRiskClassifier.hardGate] skips a tap.
  *
  * **On:** auto-approves every confirmation the policy would otherwise raise,
- * including the structural hard gates: shell, Termux, root, grant-gated tools,
+ * including the structural hard gates: shell, Termux, Shizuku, root, grant-gated tools,
  * and fleet nodes (RootForge / Flash / companions). It still cannot add a
  * permission, cannot override a [PolicyDecision.Deny], and cannot skip a missing
  * grant — those run before/after this policy.
@@ -34,7 +34,7 @@ object YoloMode {
      */
     const val WARNING: String =
         "YOLO auto-approves every action except Kali/pentest authorization gates — " +
-            "including shell, Termux, root, grant-gated tools, and fleet nodes " +
+            "including shell, Termux, Shizuku, root, grant-gated tools, and fleet nodes " +
             "(RootForge / Flash / companions). It never auto-approves the confirmation " +
             "'I confirm these targets are authorized' or per-step ACTIVE/EXPLOIT " +
             "approvals for Kali, Metasploit, SET, or Pentest-Swarm. Those always prompt. " +

@@ -90,6 +90,7 @@ android {
 
     buildFeatures {
         compose = true
+        aidl = true
     }
 
     compileOptions {
@@ -122,6 +123,10 @@ dependencies {
     implementation(project(":core-shell"))
     implementation(project(":core-root"))
     implementation(project(":core-termux"))
+    implementation(project(":core-shizuku"))
+    // Current stable Shizuku/Sui API (same artifacts for both). MIT.
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
     implementation(project(":core-tools-metasploit"))
     implementation(project(":core-tools-setoolkit"))
 

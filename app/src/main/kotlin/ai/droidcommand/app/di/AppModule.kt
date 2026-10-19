@@ -19,6 +19,8 @@ import ai.droidcommand.app.mode.AdvancedModeStore
 import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.security.createAndroidSecretsVault
+import ai.droidcommand.app.shizuku.AndroidShizukuHost
+import ai.droidcommand.app.shizuku.BoundPrivilegedShell
 import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.conversations.RoomConversationStore
@@ -53,6 +55,10 @@ import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
 import ai.droidcommand.setoolkit.NullSetExecutor
 import ai.droidcommand.setoolkit.SetTool
+import ai.droidcommand.shizuku.PrivilegedShell
+import ai.droidcommand.shizuku.ShizukuHost
+import ai.droidcommand.shizuku.ShizukuManager
+import ai.droidcommand.shizuku.ShizukuTool
 import ai.droidcommand.termux.ClientBackedTermuxExecutor
 import ai.droidcommand.termux.TermuxExecutor
 import ai.droidcommand.termux.TermuxTool
@@ -134,11 +140,13 @@ object AppModule {
         metasploit: MetasploitExecutor,
         kaliPlaybookRunner: LocalKaliPlaybookRunner,
         fleetCommandTool: FleetCommandTool,
+        privilegedShell: PrivilegedShell,
     ): ToolRegistry = ToolRegistry().apply {
         register(AutomationShellTool(AllowlistShellExecutor { advanced.shellAllowlist() }))
         register(AiPromptTool(CloudPromptClient(vault, transport)) { spec -> chatModelFor(context, spec) })
         register(RootTool(NullRootExecutor()))
         register(TermuxTool(termux))
+        ShizukuTool.all(privilegedShell).forEach { register(it) }
         register(MetasploitTool(metasploit))
         register(KaliAuthorizedScanTool(kaliPlaybookRunner))
         register(SetTool(NullSetExecutor()))
@@ -180,9 +188,9 @@ object AppModule {
     @Provides
     @Singleton
     fun provideSecurityPolicy(): SecurityPolicy = SecurityPolicy(
-        grantedCategories = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK),
+        grantedCategories = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK, PermissionCategory.DEVICE_CONTROL),
         // READ_ONLY catalog only. YOLO stays off ([YoloMode.ENABLED_DEFAULT]); turning it on
-        // auto-approves shell/root/fleet but never Kali/pentest authorization. See [YoloMode.WARNING].
+        // auto-approves shell/root/fleet/Shizuku but never Kali/pentest authorization. See [YoloMode.WARNING].
         autoApprovalPolicy = DefaultActionRisks.policy(),
     )
 
@@ -258,6 +266,25 @@ object AppModule {
     @Singleton
     fun providePairedNodeGateway(store: PairedNodeStore, transport: ExternalNodeTransport): PairedNodeGateway =
         PairedNodeGateway(store, transport)
+
+    @Provides
+    @Singleton
+    fun provideShizukuHost(@ApplicationContext context: Context): ShizukuHost = AndroidShizukuHost(context)
+
+    @Provides
+    @Singleton
+    fun provideShizukuManager(host: ShizukuHost): ShizukuManager = ShizukuManager(host)
+
+    /**
+     * Binds the Shizuku UserService lazily on the first *approved* privileged op.
+     * Unprivileged until then; missing/not-running Shizuku never crashes the app.
+     */
+    @Provides
+    @Singleton
+    fun providePrivilegedShell(
+        @ApplicationContext context: Context,
+        manager: ShizukuManager,
+    ): PrivilegedShell = BoundPrivilegedShell(context, manager)
 
     @Provides
     @Singleton

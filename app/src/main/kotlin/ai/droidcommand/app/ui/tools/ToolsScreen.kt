@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.tools
 
 import ai.droidcommand.app.navigation.Routes
+import ai.droidcommand.app.shizuku.ShizukuStatusSection
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +34,8 @@ fun ToolsScreen(navController: NavHostController) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ScreenTitle("Tools")
+
+        ShizukuStatusSection()
 
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

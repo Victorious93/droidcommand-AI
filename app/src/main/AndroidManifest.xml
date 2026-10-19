@@ -22,6 +22,10 @@
          Metasploit screen; denial refuses the Kali/msfconsole dispatch. -->
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
 
+    <!-- Shizuku/Sui API (runtime, requested via Shizuku.requestPermission, not the
+         platform permission dialog). Same permission for Shizuku and Sui. -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+
     <!-- Phase 4 voice input. Requested at runtime only when the user taps the mic; denial degrades to a
          message, never a crash. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -64,6 +68,10 @@
         <package android:name="com.victorious.keyboard.bench" />
         <package android:name="ai.rootforge.os" />
         <package android:name="ai.rootforge.os.debug" />
+
+        <!-- Shizuku manager + Sui. Without these, Android 11+ reports them as not installed. -->
+        <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="rikka.sui" />
     </queries>
 
     <!-- Phase 4 — Companion APK signature permissions.
@@ -113,5 +121,15 @@
             android:exported="false"
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
+
+        <!-- Official Shizuku provider. exported + INTERACT_ACROSS_USERS_FULL is the
+             documented setup; only the system can hold that permission. -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     </application>
 </manifest>

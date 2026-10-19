@@ -12,6 +12,9 @@ object ToolBackendNotes {
         "run_termux_command" ->
             "VictorSuite RUN_COMMAND uses RUN_COMMAND_PENDING_INTENT (ClientBackedTermuxExecutor). " +
                 "On-device round-trip is UNVERIFIED; allow-external-apps=true and the RUN_COMMAND permission are required."
+        "run_shizuku_command", "shizuku_read_device_state", "shizuku_pm_grant" ->
+            "Shizuku/Sui UserService (BoundPrivilegedShell). Each run still asks for confirmation. " +
+                "Without Shizuku the rest of the app still works. On-device round-trip is UNVERIFIED."
         "run_metasploit_module" ->
             "Metasploit runs inside VictorSuite Kali via RUN_COMMAND (TermuxMetasploitExecutor). " +
                 "On-device msfconsole round-trip is UNVERIFIED."

@@ -133,9 +133,10 @@ JVM-only core modules now:
   and mutual TLS (only `JdkHttpTransport` has them, and it cannot run on Android), response-size limits
   (`HttpUrlConnectionTransport` reads a whole body into memory), and cancellation of an in-flight request
   when a screen is left (it ends at the read timeout).
-- **Package visibility — IMPLEMENTED 2026-10-15.** The app asks Android about five other apps by name
+- **Package visibility — IMPLEMENTED 2026-10-15.** The app asks Android about named packages
   (`<queries><package …>`), never `QUERY_ALL_PACKAGES`. `ManifestPolicyTest` keeps the list in step with
-  `FleetCatalog` and fails if the broad permission appears.
+  `FleetCatalog` plus the Shizuku/Sui manager packages (`moe.shizuku.privileged.api`, `rikka.sui`)
+  and fails if the broad permission appears.
 
 ### Secrets
 - Provider credentials in Android Keystore-backed encrypted storage
@@ -193,6 +194,16 @@ JVM-only core modules now:
   gate is unchanged. Known limits: no speaker verification; the voice path
   adds a 120 s timeout the screen-only path does not have; not exercised
   with a real microphone.
+- **Shizuku / Sui (CAP-018 first slice, 2026-10-19e).** Privileged ADB-shell
+  ops (`run_shizuku_command`, `shizuku_read_device_state`, `shizuku_pm_grant`)
+  never auto-run. They are `SENSITIVE` / `DEVICE_CONTROL`, always go through
+  `SecureToolExecutor` → `ApprovalPrompt`, and their names contain `shizuku`
+  so `ActionRiskClassifier` hard-gates them. YOLO may waive Shizuku the same
+  way it may waive shell/root/Termux; it still cannot skip Kali / Metasploit /
+  SET / Pentest-Swarm authorization (the phrase "I confirm these targets are
+  authorized" and per-step ACTIVE/EXPLOIT prompts). Command stdout/stderr is
+  never logged. Missing or not-running Shizuku degrades to unprivileged use;
+  it does not crash or bypass confirmation. Not run against live Shizuku/Sui.
 
 ## Design note: per-tool `validate()` vs. externalized policy
 

@@ -5,6 +5,7 @@ import ai.droidcommand.app.mode.ModeLabels
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prefs.CodingTunnelChoice
 import ai.droidcommand.app.ui.chat.ToolbarToggle
+import ai.droidcommand.app.shizuku.ShizukuStatusSection
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import ai.droidcommand.app.ui.components.SectionLabel
@@ -81,10 +82,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             )
         }
         VoiceSettingsSection()
+        ShizukuStatusSection()
         SectionLabel("Device tools")
         DroidCard {
             Text(
-                "Root, Termux, Metasploit, and the Social-Engineer Toolkit are on the Tools screens. Each run still asks before it executes. No program is connected for any of them in this build, so a run is refused.",
+                "Root, Termux, Shizuku, Metasploit, and the Social-Engineer Toolkit are on the Tools screens. Each run still asks before it executes. Shizuku is optional: without it the rest of the app still works.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

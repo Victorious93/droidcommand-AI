@@ -75,7 +75,7 @@ class ActionRiskClassifier(private val declared: Map<String, ActionRisk> = empty
          * stay refused even with YOLO on.
          */
         val NEVER_AUTO_APPROVE_NAME_TOKENS: Set<String> = setOf(
-            "shell", "termux", "root", "adb", "ssh", "fleet", "flash", "hackerai",
+            "shell", "termux", "root", "adb", "ssh", "fleet", "flash", "hackerai", "shizuku",
         ) + YoloMode.PENTEST_AUTHORIZATION_NAME_TOKENS
     }
 }

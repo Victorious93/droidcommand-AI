@@ -16,6 +16,7 @@ dependencies {
     implementation(project(":core-shell"))
     implementation(project(":core-root"))
     implementation(project(":core-termux"))
+    implementation(project(":core-shizuku"))
     implementation(project(":core-build"))
     implementation(project(":core-build-local"))
     implementation(project(":core-prompt-regen"))
