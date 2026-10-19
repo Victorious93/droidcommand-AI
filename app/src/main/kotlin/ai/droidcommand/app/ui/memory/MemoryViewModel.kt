@@ -50,6 +50,13 @@ class MemoryViewModel @Inject constructor(graph: KnowledgeGraph) : ViewModel() {
         }
     }
 
+    fun rename(id: String, newLabel: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            controller.rename(id, newLabel)
+            refresh()
+        }
+    }
+
     fun clearAll() {
         viewModelScope.launch(Dispatchers.IO) {
             controller.clearAll()

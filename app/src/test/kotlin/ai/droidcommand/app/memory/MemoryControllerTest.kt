@@ -60,4 +60,34 @@ class MemoryControllerTest {
         assertTrue(controller.all().isEmpty())
         assertEquals(0, controller.clearAll(), "clearing an already-empty graph removes nothing")
     }
+
+    @Test
+    fun `rename changes the label, bumps updatedAt and keeps type, properties and relationships`() {
+        val graph = InMemoryKnowledgeGraph()
+        val original = Entity("a", EntityType.DEVICE, "Router", mapOf("k" to "v"), Instant.ofEpochSecond(1))
+        graph.addEntity(original)
+        graph.addEntity(entity("b", "Switch", Instant.ofEpochSecond(1)))
+        graph.addRelationship(Relationship("r", "a", "b", "connects_to"))
+
+        val updated = MemoryController(graph).rename("a", "  Home router  ")
+
+        assertEquals("Home router", updated?.label)
+        val stored = graph.getEntity("a")!!
+        assertEquals("Home router", stored.label)
+        assertEquals(EntityType.DEVICE, stored.type)
+        assertEquals(mapOf("k" to "v"), stored.properties)
+        assertTrue(stored.updatedAt.isAfter(original.updatedAt))
+        assertEquals(listOf("b"), graph.relationshipsFrom("a").map { it.toId })
+    }
+
+    @Test
+    fun `rename refuses a blank label or an unknown id and changes nothing`() {
+        val graph = InMemoryKnowledgeGraph()
+        graph.addEntity(entity("a", "Router", Instant.ofEpochSecond(1)))
+        val controller = MemoryController(graph)
+
+        assertEquals(null, controller.rename("a", "   "))
+        assertEquals(null, controller.rename("missing", "X"))
+        assertEquals("Router", graph.getEntity("a")?.label)
+    }
 }
