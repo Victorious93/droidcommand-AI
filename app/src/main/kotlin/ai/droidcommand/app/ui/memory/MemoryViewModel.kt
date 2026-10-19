@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.memory
 
 import ai.droidcommand.agent.Entity
+import ai.droidcommand.agent.EntityType
 import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.app.memory.MemoryController
 import androidx.lifecycle.ViewModel
@@ -50,9 +51,9 @@ class MemoryViewModel @Inject constructor(graph: KnowledgeGraph) : ViewModel() {
         }
     }
 
-    fun rename(id: String, newLabel: String) {
+    fun update(id: String, label: String, type: EntityType, properties: Map<String, String>) {
         viewModelScope.launch(Dispatchers.IO) {
-            controller.rename(id, newLabel)
+            controller.update(id, label, type, properties)
             refresh()
         }
     }
