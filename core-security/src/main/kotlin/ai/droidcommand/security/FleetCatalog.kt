@@ -200,16 +200,19 @@ object KnownFleet {
         status = FleetHonestyStatus.PARTIAL,
         capabilityId = CapabilityId("fleet.victorsuite.run-command"),
         providerId = "termux",
-        existingToolNames = listOf("run_termux_command"),
+        existingToolNames = listOf("run_termux_command", "victorsuite_capabilities"),
         catalogStubName = null,
         wiringOrder = 3,
-        transports = listOf("termux RUN_COMMAND", "plugin IPC + shared command schema (planned)"),
+        transports = listOf("termux RUN_COMMAND", "shared command schema (2026-10-19: VictorSuiteCapabilitiesProbe, read-only)"),
         usesAidl = false,
         usesDependencyGuard = false,
         riskTier = RiskTier.REVERSIBLE,
         nextStep = "Third: keep RUN_COMMAND / plugin IPC. Not a new bound service. " +
             "Gated on VictorSuite com.termux package/signing cleanup (their PR #15). " +
-            "Owns on-device Termux/proot/X11/plugins.",
+            "Owns on-device Termux/proot/X11/plugins. " +
+            "2026-10-19: victorsuite_capabilities (core-termux) is a first read-only probe over this " +
+            "same RUN_COMMAND path — no VictorSuite-side code change. Still PARTIAL: no write ops, " +
+            "no on-device run.",
         refusalMessage = "VictorSuite is reached as Termux (com.termux RUN_COMMAND / plugin IPC). " +
             "run_termux_command is the existing tool; this catalog does not add a bound service.",
         notes = "Gated on Victorious93/VictorSuite PR #15 (package/signing). " +

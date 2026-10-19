@@ -1,7 +1,11 @@
 package ai.droidcommand.cli
 
 import ai.droidcommand.agent.Tool
+import ai.droidcommand.rootforge.RootForgeAdbRebootTool
+import ai.droidcommand.rootforge.RootForgeAdbShellTool
 import ai.droidcommand.rootforge.RootForgeCapabilitiesTool
+import ai.droidcommand.rootforge.RootForgeDeviceInfoTool
+import ai.droidcommand.rootforge.RootForgeFastbootRebootTool
 import ai.droidcommand.rootforge.RootForgeListDevicesTool
 import ai.droidcommand.rootforge.RootForgeNodeConfig
 import ai.droidcommand.rootforge.RootForgeNodeRegistry
@@ -30,5 +34,14 @@ internal fun rootForgeTools(
         return emptyList()
     }
     val registry = RootForgeNodeRegistry(nodes)
-    return listOf(RootForgeCapabilitiesTool(registry), RootForgeListDevicesTool(registry))
+    // Destructive ops (fastboot.flash/unlock/lock/slot.set) are deliberately not wired here yet —
+    // see docs/AUDIT_2026-09-05.md's RootForge bridge client addendum.
+    return listOf(
+        RootForgeCapabilitiesTool(registry),
+        RootForgeListDevicesTool(registry),
+        RootForgeDeviceInfoTool(registry),
+        RootForgeAdbShellTool(registry),
+        RootForgeAdbRebootTool(registry),
+        RootForgeFastbootRebootTool(registry),
+    )
 }
