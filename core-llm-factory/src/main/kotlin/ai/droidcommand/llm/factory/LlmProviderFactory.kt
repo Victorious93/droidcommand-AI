@@ -7,6 +7,7 @@ import ai.droidcommand.config.ConfiguredLlmProvider
 import ai.droidcommand.config.MultiLlmConfigLoader
 import ai.droidcommand.llm.AiProviderSelector
 import ai.droidcommand.llm.DefaultAiProviderSelector
+import ai.droidcommand.llm.LlmConfig
 import ai.droidcommand.llm.LlmPlanner
 import ai.droidcommand.llm.LlmProvider
 import ai.droidcommand.llm.LocalFirstOrdering
@@ -81,13 +82,27 @@ class LocalProviderResources(
  * take as a parameter — without `core-agent` gaining any new dependency.
  */
 object LlmProviderFactory {
+    // Both are OpenAI-compatible hosts, so they reuse OpenAiLlmProvider with only the base URL changed (it
+    // appends v1/chat/completions). Not verified against the live APIs here; tests use a mock server.
+    private const val XAI_BASE_URL = "https://api.x.ai"
+    private const val OPENROUTER_BASE_URL = "https://openrouter.ai/api"
+
+    private fun withDefaultEndpoint(c: LlmConfig, endpoint: String) = LlmConfig(
+        provider = c.provider,
+        model = c.model,
+        endpoint = c.endpoint ?: endpoint,
+        temperature = c.temperature,
+        maxOutputTokens = c.maxOutputTokens,
+        authToken = c.authToken,
+    )
+
     /**
      * Constructs the real [ai.droidcommand.llm.LlmProvider] named by
      * [configured]'s `config.provider` (case-insensitive, matching
      * [MultiLlmConfigLoader]'s own case-insensitive `_TYPE`/`_CAPABILITIES`
      * parsing), paired with [configured]'s own [ConfiguredLlmProvider.info]
      * into a [RegisteredProvider]. Only `"anthropic"`/`"openai"`/`"google"` (alias
-     * `"gemini"`)/`"groq"` are recognized — the only concrete providers this repository has;
+     * `"gemini"`)/`"groq"`/`"xai"` (alias `"grok"`)/`"openrouter"`/`"local"` are recognized;
      * anything else throws [UnknownLlmProviderException] naming both the
      * bad value and the known set, rather than silently skipping it.
      */
@@ -101,9 +116,11 @@ object LlmProviderFactory {
             "openai" -> OpenAiLlmProvider(configured.config, transport)
             "google", "gemini" -> GeminiLlmProvider(configured.config, transport)
             "groq" -> GroqLlmProvider(configured.config, transport)
+            "xai", "grok" -> OpenAiLlmProvider(withDefaultEndpoint(configured.config, XAI_BASE_URL), transport)
+            "openrouter" -> OpenAiLlmProvider(withDefaultEndpoint(configured.config, OPENROUTER_BASE_URL), transport)
             "local" -> buildLocal(configured, local)
             else -> throw UnknownLlmProviderException(
-                "Unknown provider '${configured.config.provider}' for '${configured.info.id}'; expected one of anthropic, openai, google (alias gemini), groq, local",
+                "Unknown provider '${configured.config.provider}' for '${configured.info.id}'; expected one of anthropic, openai, google (alias gemini), groq, xai (alias grok), openrouter, local",
             )
         }
         return RegisteredProvider(configured.info, provider)

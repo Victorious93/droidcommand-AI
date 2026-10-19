@@ -14,6 +14,10 @@ object CloudProviderCatalog {
         CloudProviderSpec("openai", "OpenAI", "llm.openai.api_key", "gpt-4o-mini"),
         CloudProviderSpec("google", "Google (Gemini)", "llm.google.api_key", "gemini-2.5-flash"),
         CloudProviderSpec("groq", "Groq", "llm.groq.api_key", "llama-3.3-70b-versatile"),
+        // Suggestions only (model ids change; the user can edit them, and none were checked against a live API).
+        CloudProviderSpec("xai", "xAI (Grok)", "llm.xai.api_key", "grok-4"),
+        // "openrouter/free" routes to OpenRouter's free models; a key is still required.
+        CloudProviderSpec("openrouter", "OpenRouter (free models)", "llm.openrouter.api_key", "openrouter/free"),
     )
 
     fun byId(id: String): CloudProviderSpec? = all.firstOrNull { it.id == id }

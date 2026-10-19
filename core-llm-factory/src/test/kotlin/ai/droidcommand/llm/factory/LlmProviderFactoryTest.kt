@@ -57,6 +57,31 @@ class LlmProviderFactoryTest {
     }
 
     @Test
+    fun `xai, its grok alias and openrouter default to their own hosts but honour an explicit endpoint`() {
+        fun urlFor(provider: String, endpoint: String? = null): String {
+            val seen = mutableListOf<String>()
+            val transport = object : HttpTransport {
+                override fun send(request: HttpRequestSpec): HttpResponseSpec {
+                    seen += request.url
+                    return HttpResponseSpec(200, emptyMap(), """{"choices":[{"message":{"role":"assistant","content":"x"}}]}""")
+                }
+            }
+            val entry = ConfiguredLlmProvider(
+                LlmConfig(provider = provider, model = "m", endpoint = endpoint, authToken = { "k" }),
+                AiProviderInfo("p", "p", ProviderType.CLOUD, 1000),
+            )
+            LlmProviderFactory.build(entry, transport).provider.complete(
+                ai.droidcommand.llm.LlmRequest(null, listOf(ai.droidcommand.agent.Message(ai.droidcommand.agent.Role.USER, "hi"))),
+            )
+            return seen.single()
+        }
+        assertEquals("https://api.x.ai/v1/chat/completions", urlFor("xai"))
+        assertEquals("https://api.x.ai/v1/chat/completions", urlFor("grok"))
+        assertEquals("https://openrouter.ai/api/v1/chat/completions", urlFor("openrouter"))
+        assertEquals("https://example.test/v1/chat/completions", urlFor("xai", "https://example.test"))
+    }
+
+    @Test
     fun `provider match is case-insensitive`() {
         assertIs<AnthropicLlmProvider>(LlmProviderFactory.build(configured("p1", "Anthropic"), FakeHttpTransport()).provider)
         assertIs<OpenAiLlmProvider>(LlmProviderFactory.build(configured("p2", "OPENAI"), FakeHttpTransport()).provider)
