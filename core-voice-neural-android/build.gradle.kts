@@ -41,6 +41,8 @@ kotlin {
 
 val fetchSherpaOnnx by tasks.registering(Exec::class) {
     commandLine("bash", "$projectDir/scripts/fetch-sherpa-onnx.sh")
+    inputs.file("$projectDir/scripts/fetch-sherpa-onnx.sh")
+    outputs.file("$projectDir/libs/sherpa-onnx-1.13.8.aar")
 }
 tasks.matching { it.name == "preBuild" }.configureEach {
     dependsOn(fetchSherpaOnnx)

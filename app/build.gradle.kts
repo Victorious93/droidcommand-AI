@@ -202,6 +202,21 @@ kotlin {
     jvmToolchain(21)
 }
 
+// :app:compileDebugAidl resolves debugCompileClasspath (flatDir sherpa-onnx AAR)
+// without going through :core-voice-neural-android:preBuild. Shizuku's
+// IPrivilegedShell.aidl created this task; CI then failed with
+// "Could not find :sherpa-onnx-1.13.8:" before fetchSherpaOnnx ran
+// (Actions 39336466435). Tie fetch to the tasks that resolve that classpath.
+tasks.named("preBuild") {
+    dependsOn(":core-voice-neural-android:fetchSherpaOnnx")
+}
+tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Aidl") }.configureEach {
+    dependsOn(":core-voice-neural-android:fetchSherpaOnnx")
+}
+tasks.matching { it.name.contains("AarMetadata") }.configureEach {
+    dependsOn(":core-voice-neural-android:fetchSherpaOnnx")
+}
+
 // Hilt bundles a kotlin-metadata-jvm that reads metadata only up to Kotlin 2.3; this module is
 // compiled with Kotlin 2.4. Forcing a newer metadata reader is the workaround Hilt's own error
 // message names. Still required with Hilt 2.60.1 (verified 2026-10-08).
