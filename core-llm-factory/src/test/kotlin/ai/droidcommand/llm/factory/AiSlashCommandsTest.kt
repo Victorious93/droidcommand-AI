@@ -12,6 +12,8 @@ class AiSlashCommandsTest {
         assertEquals(AiSlashCommands.Parsed.Command("openai", "hi"), AiSlashCommands.parse("/chatgpt hi"))
         assertEquals(AiSlashCommands.Parsed.Command("google", "hi"), AiSlashCommands.parse("/gemini hi"))
         assertEquals(AiSlashCommands.Parsed.Command("groq", "hi"), AiSlashCommands.parse("/groq hi"))
+        assertEquals(AiSlashCommands.Parsed.Command("xai", "hi"), AiSlashCommands.parse("/grok hi"))
+        assertEquals(AiSlashCommands.Parsed.Command("openrouter", "hi"), AiSlashCommands.parse("/openrouter hi"))
     }
 
     @Test
@@ -38,7 +40,7 @@ class AiSlashCommandsTest {
 
     @Test
     fun `every command names a provider that exists in the catalog`() {
-        assertEquals(listOf("claude", "chatgpt", "gemini", "groq"), AiSlashCommands.commandNames)
+        assertEquals(listOf("claude", "chatgpt", "gemini", "groq", "grok", "openrouter"), AiSlashCommands.commandNames)
         AiSlashCommands.commandNames.forEach { name ->
             val parsed = assertIs<AiSlashCommands.Parsed.Command>(AiSlashCommands.parse("/$name hi"))
             assertNotNull(CloudProviderCatalog.byId(parsed.providerId))
