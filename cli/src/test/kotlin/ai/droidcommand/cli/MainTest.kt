@@ -40,6 +40,7 @@ class MainTest {
                 "run_shell_command",
                 "run_root_command",
                 "run_termux_command",
+                "victorsuite_capabilities",
                 "build_project",
                 "run_metasploit_module",
                 "run_setoolkit_attack",
@@ -77,6 +78,12 @@ class MainTest {
     @Test
     fun `pilot run_termux_command fails cleanly against NullTermuxExecutor, even when approved`() {
         val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("run_termux_command", "executable=echo"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot victorsuite_capabilities fails cleanly against NullTermuxExecutor, even when approved`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("victorsuite_capabilities"))
         assertEquals(1, exitCode)
     }
 

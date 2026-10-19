@@ -55,3 +55,19 @@ data class RemoteDevice(
 
 @Serializable
 data class DeviceListResult(val devices: List<RemoteDevice>)
+
+/** `rootforge.device.info` result: free-form key/value properties of the connected target. */
+@Serializable
+data class DeviceInfoResult(val info: Map<String, String> = emptyMap())
+
+/** `rootforge.adb.shell` result. */
+@Serializable
+data class AdbShellResult(
+    @SerialName("exit_code") val exitCode: Int,
+    val output: String,
+    val truncated: Boolean = false,
+)
+
+/** Shared shape for the reboot operations (`rootforge.adb.reboot`, `rootforge.fastboot.reboot`), which only ack the request. */
+@Serializable
+data class RequestedResult(val requested: String)

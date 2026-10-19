@@ -16,13 +16,18 @@ object FleetNodes {
      * Wiring facts, each backed by code in this app today:
      * - Bound companions the registry will actually bind: HackerAI and Pentest-Swarm. EDL-Commander is deliberately
      *   absent (`AndroidCompanionRegistry` refuses it until its APK and AIDL exist).
-     * - The on-phone Messenger transport for external nodes is NOT wired.
+     * - **2026-10-19:** the on-phone Messenger transport for external nodes (RootForge, File Manager, Keyboard,
+     *   Mesh, Browser) is now wired — `FleetModule.provideFleetNodeTransport`'s EXTERNAL_NODE entry is
+     *   `MessengerFleetTransport` over the real `core-fleet-messenger` `PairedNodeGateway`, not
+     *   `UnwiredMessengerTransport`. An unpaired node still reports `PAIRING_REQUIRED`-equivalent "pairing
+     *   required" from the transport's own probe; this flag only says a real path exists, not that any
+     *   specific node is paired or has run on a device.
      * - Termux/VictorSuite RUN_COMMAND is wired for TermuxTool/Metasploit/Kali in `AppModule`, but the Fleet
      *   Orchestrator still has no Termux command channel (`TermuxFleetTransport.sendCommand` refuses).
      */
     val WIRING = FleetWiring(
         boundCompanionIds = setOf("hackerai", "pentestswarm"),
-        messengerTransportWired = false,
+        messengerTransportWired = true,
         termuxRunnerWired = false,
     )
 

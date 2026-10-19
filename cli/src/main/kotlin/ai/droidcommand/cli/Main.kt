@@ -41,6 +41,7 @@ import ai.droidcommand.shell.ProcessBuilderShellExecutor
 import ai.droidcommand.shell.ShellSecurityPolicy
 import ai.droidcommand.shell.ShellTool
 import ai.droidcommand.termux.TermuxTool
+import ai.droidcommand.termux.VictorSuiteCapabilitiesTool
 import ai.droidcommand.websearch.WebSearchTool
 import java.nio.file.Path
 import kotlin.system.exitProcess
@@ -182,6 +183,7 @@ internal fun buildSession(
         register(ShellTool(ProcessBuilderShellExecutor(shellSecurityPolicy())))
         register(RootTool(NullRootExecutor()))
         register(TermuxTool(termuxExecutorFor(device)))
+        register(VictorSuiteCapabilitiesTool(termuxExecutorFor(device)))
         register(BuildTool(buildPipeline(), ::buildRequestFromInput))
         register(MetasploitTool(metasploitExecutorFor()))
         register(SetTool(setExecutorFor()))

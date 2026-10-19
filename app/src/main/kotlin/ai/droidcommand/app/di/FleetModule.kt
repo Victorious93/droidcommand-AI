@@ -3,13 +3,11 @@ package ai.droidcommand.app.di
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.app.fleet.AndroidCompanionLink
 import ai.droidcommand.app.fleet.BoundCompanionTransport
-import ai.droidcommand.app.fleet.ExternalNodeTransport
 import ai.droidcommand.app.fleet.FleetNodes
+import ai.droidcommand.app.fleet.MessengerFleetTransport
 import ai.droidcommand.app.fleet.PackageFleetProbe
 import ai.droidcommand.app.fleet.TermuxFleetTransport
-import ai.droidcommand.app.fleet.UnwiredMessengerTransport
-import ai.droidcommand.rootforge.RootForgeClient
-import ai.droidcommand.rootforge.RootForgeNodeRegistry
+import ai.droidcommand.fleet.messenger.PairedNodeGateway
 import ai.droidcommand.security.FleetCommandOutcomes
 import ai.droidcommand.security.FleetCommandTool
 import ai.droidcommand.security.FleetControlPolicy
@@ -31,8 +29,14 @@ import javax.inject.Singleton
  * Wires the Fleet Orchestrator. The command tool is registered in the same [ai.droidcommand.agent.ToolRegistry] that
  * backs the [ToolRunner] (a `SecureToolExecutor`), and [FleetOrchestrator] only ever sends an action through that runner,
  * so every action command reaches `ComposeApprovalPrompt` first. The transports are the existing per-class clients
- * ([BoundCompanionTransport] over `core-companion`, [ExternalNodeTransport] over `core-rootforge`,
- * [TermuxFleetTransport] over the existing `TermuxExecutor`); there is no new wire protocol.
+ * ([BoundCompanionTransport] over `core-companion`, [MessengerFleetTransport] over the real, already-tested
+ * `core-fleet-messenger` pairing/bridge ([PairedNodeGateway] — the same one `FleetViewModel`'s pairing screen
+ * uses), [TermuxFleetTransport] over the existing `TermuxExecutor`); there is no new wire protocol. **2026-10-19:**
+ * EXTERNAL_NODE used to get [ai.droidcommand.app.fleet.UnwiredMessengerTransport] here (a transport that always
+ * failed, honestly) — this now reaches the real Messenger bridge for every paired EXTERNAL_NODE member
+ * (RootForge, File Manager, Keyboard, Mesh, Browser alike), gated the same way every other fleet command is:
+ * [FleetOrchestrator]/[FleetCommandTool] still require actual approval, and [MessengerFleetTransport] still
+ * reports an unpaired node as "pairing required", never a fabricated reachable state.
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -51,13 +55,16 @@ object FleetModule {
 
     @Provides
     @Singleton
-    fun provideFleetNodeTransport(@ApplicationContext context: Context, termux: TermuxExecutor): FleetNodeTransport {
+    fun provideFleetNodeTransport(
+        @ApplicationContext context: Context,
+        termux: TermuxExecutor,
+        messengerGateway: PairedNodeGateway,
+    ): FleetNodeTransport {
         val probe = PackageFleetProbe(context)
-        val rootForge = RootForgeNodeRegistry(emptyList()) { RootForgeClient(it, UnwiredMessengerTransport()) }
         return FleetTransportRouter(
             mapOf(
                 FleetIntegrationClass.BOUND_COMPANION to BoundCompanionTransport(AndroidCompanionLink(context)),
-                FleetIntegrationClass.EXTERNAL_NODE to ExternalNodeTransport(rootForge, probe::isInstalled),
+                FleetIntegrationClass.EXTERNAL_NODE to MessengerFleetTransport(messengerGateway, probe::isInstalled),
                 FleetIntegrationClass.TERMUX_IPC to TermuxFleetTransport(termux, probe::isInstalled),
             ),
         )

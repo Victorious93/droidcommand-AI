@@ -72,4 +72,45 @@ class ClientTest {
         val t = FakeTransport { Result.success(okFrame("req-1", NODE_A, """{"devices":"nope"}""")) }
         assertEquals(FailureKind.MALFORMED_RESPONSE, assertIs<RootForgeResult.Failure>(client(t).listDevices()).kind)
     }
+
+    @Test fun `device info decodes and sends the right operation`() {
+        val t = FakeTransport { Result.success(okFrame("req-1", NODE_A, """{"info":{"Model":"Pixel 7"}}""")) }
+        val r = assertIs<RootForgeResult.Success<DeviceInfoResult>>(client(t).deviceInfo())
+        assertEquals("Pixel 7", r.value.info["Model"])
+        assertTrue(""""operation":"rootforge.device.info"""" in t.sent.single())
+    }
+
+    @Test fun `device info with no target connected decodes as empty`() {
+        val t = FakeTransport { Result.success(okFrame("req-1", NODE_A, """{"info":{}}""")) }
+        val r = assertIs<RootForgeResult.Success<DeviceInfoResult>>(client(t).deviceInfo())
+        assertTrue(r.value.info.isEmpty())
+    }
+
+    @Test fun `adb shell sends the command as a parameter and decodes the result`() {
+        val t = FakeTransport { Result.success(okFrame("req-1", NODE_A, """{"exit_code":0,"output":"hi","truncated":false}""")) }
+        val r = assertIs<RootForgeResult.Success<AdbShellResult>>(client(t).adbShell("echo hi"))
+        assertEquals(0, r.value.exitCode)
+        assertEquals("hi", r.value.output)
+        assertTrue(""""operation":"rootforge.adb.shell"""" in t.sent.single())
+        assertTrue(""""command":"echo hi"""" in t.sent.single())
+    }
+
+    @Test fun `adb reboot defaults target to empty and decodes requested`() {
+        val t = FakeTransport { Result.success(okFrame("req-1", NODE_A, """{"requested":"bootloader"}""")) }
+        val r = assertIs<RootForgeResult.Success<RequestedResult>>(client(t).adbReboot("bootloader"))
+        assertEquals("bootloader", r.value.requested)
+        assertTrue(""""target":"bootloader"""" in t.sent.single())
+    }
+
+    @Test fun `fastboot reboot sends target and decodes requested`() {
+        val t = FakeTransport { Result.success(okFrame("req-1", NODE_A, """{"requested":"system"}""")) }
+        val r = assertIs<RootForgeResult.Success<RequestedResult>>(client(t).fastbootReboot("system"))
+        assertEquals("system", r.value.requested)
+        assertTrue(""""operation":"rootforge.fastboot.reboot"""" in t.sent.single())
+    }
+
+    @Test fun `bad adb shell payload is malformed not a crash`() {
+        val t = FakeTransport { Result.success(okFrame("req-1", NODE_A, """{"exit_code":"nope"}""")) }
+        assertEquals(FailureKind.MALFORMED_RESPONSE, assertIs<RootForgeResult.Failure>(client(t).adbShell("x")).kind)
+    }
 }
