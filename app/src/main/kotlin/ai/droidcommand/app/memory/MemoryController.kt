@@ -1,6 +1,7 @@
 package ai.droidcommand.app.memory
 
 import ai.droidcommand.agent.Entity
+import ai.droidcommand.agent.EntityType
 import ai.droidcommand.agent.KnowledgeGraph
 import java.time.Instant
 
@@ -29,11 +30,25 @@ class MemoryController(private val graph: KnowledgeGraph) {
      * so it is stored as given.
      */
     fun rename(id: String, newLabel: String): Entity? {
-        val label = newLabel.trim()
-        if (label.isEmpty()) return null
         val existing = graph.getEntity(id) ?: return null
-        if (existing.label == label) return existing
-        val updated = existing.copy(label = label, updatedAt = Instant.now())
+        return update(id, newLabel, existing.type, existing.properties)
+    }
+
+    /**
+     * Replaces an entity's label, type and properties and bumps [Entity.updatedAt] when anything changed.
+     * Relationships are kept. Keys are trimmed and blank keys dropped; values are trimmed. Returns the stored
+     * entity, or `null` when [id] does not exist or [label] is blank (nothing is changed then).
+     */
+    fun update(id: String, label: String, type: EntityType, properties: Map<String, String>): Entity? {
+        val newLabel = label.trim()
+        if (newLabel.isEmpty()) return null
+        val existing = graph.getEntity(id) ?: return null
+        val cleaned = properties.entries
+            .map { (k, v) -> k.trim() to v.trim() }
+            .filter { (k, _) -> k.isNotEmpty() }
+            .toMap()
+        if (existing.label == newLabel && existing.type == type && existing.properties == cleaned) return existing
+        val updated = existing.copy(label = newLabel, type = type, properties = cleaned, updatedAt = Instant.now())
         graph.addEntity(updated)
         return updated
     }
@@ -43,5 +58,18 @@ class MemoryController(private val graph: KnowledgeGraph) {
         val ids = graph.searchEntities("").map { it.id }
         ids.forEach(graph::removeEntity)
         return ids.size
+    }
+
+    companion object {
+        /** One `key=value` per line, split on the first `=`. Lines without `=` or with a blank key are ignored; a repeated key keeps the last value. */
+        fun parseProperties(text: String): Map<String, String> =
+            text.lines().mapNotNull { line ->
+                val i = line.indexOf('=')
+                if (i <= 0) null else line.substring(0, i).trim().takeIf { it.isNotEmpty() }?.let { it to line.substring(i + 1).trim() }
+            }.toMap()
+
+        /** The inverse of [parseProperties], one `key=value` per line in key order. */
+        fun formatProperties(properties: Map<String, String>): String =
+            properties.entries.sortedBy { it.key }.joinToString("\n") { "${it.key}=${it.value}" }
     }
 }
