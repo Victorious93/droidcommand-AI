@@ -74,6 +74,7 @@ data class ChatUiState(
     val sending: Boolean = false,
     val error: String? = null,
     val memoryEnabled: Boolean = false,
+    val autoRemember: Boolean = false,
     val memoryStatus: String? = null,
     /** Chat-toolbar toggle; off by default because turning it on sends the message text to the search provider. */
     val webSearchEnabled: Boolean = false,
@@ -150,6 +151,7 @@ class ChatViewModel @Inject constructor(
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
     private val memoryEnabled = prefs.getBoolean(KEY_MEMORY, false)
+    private val autoRemember = memoryEnabled && prefs.getBoolean(KEY_AUTO_REMEMBER, false)
     private val session = ChatSession(
         vault,
         store,
@@ -159,6 +161,7 @@ class ChatViewModel @Inject constructor(
         webSearch = WebSearchCatalog.clientFor(vault, transport),
         documents = documentRuntime.retriever,
         local = onDeviceModels.resources,
+        autoRememberEveryTurns = if (autoRemember) AUTO_REMEMBER_TURNS else 0,
     )
 
     private val tts = AndroidTextToSpeech(context)
@@ -192,6 +195,7 @@ class ChatViewModel @Inject constructor(
             provider = provider,
             model = model,
             memoryEnabled = memoryEnabled,
+            autoRemember = prefs.getBoolean(KEY_AUTO_REMEMBER, false),
             webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false),
             speakMode = speakModeFromPrefs(),
             micAvailable = voice.sttAvailable,
@@ -607,6 +611,12 @@ class ChatViewModel @Inject constructor(
     }
 
     /** K3: extracts and saves the current conversation to the knowledge graph, using the last-used provider. */
+    /** Persists the choice for the next time this screen is opened. Each run costs one extra request to the chat provider. */
+    fun setAutoRemember(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_AUTO_REMEMBER, enabled) }
+        mutableState.update { it.copy(autoRemember = enabled) }
+    }
+
     fun rememberChat() {
         if (mutableState.value.sending) return
         mutableState.update { it.copy(memoryStatus = "Remembering…") }
@@ -722,6 +732,8 @@ class ChatViewModel @Inject constructor(
     private companion object {
         const val KEY_PROVIDER = "provider"
         const val KEY_MEMORY = "memory_enabled"
+        const val KEY_AUTO_REMEMBER = "auto_remember_enabled"
+        const val AUTO_REMEMBER_TURNS = 6
         const val KEY_WEB_SEARCH = "web_search_enabled"
         const val KEY_SPEAK_MODE = "speak_mode"
         const val KEY_LOCAL_MODEL = "local_model_id"

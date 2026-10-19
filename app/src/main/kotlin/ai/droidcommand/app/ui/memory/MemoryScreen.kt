@@ -18,6 +18,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,6 +47,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
     var confirmingClear by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<Entity?>(null) }
+    var draft by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 16.dp),
@@ -53,8 +56,8 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel()) {
     ) {
         ScreenTitle("Persistent Memory")
         Text(
-            "What DroidCommand AI has remembered from your conversations. Delete anything you don't " +
-                "want kept, or clear everything.",
+            "What DroidCommand AI has remembered from your conversations. Edit or delete anything " +
+                "that is wrong or you don't want kept, or clear everything.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -65,7 +68,14 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel()) {
             else -> {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(state.entities, key = { it.id }) { entity ->
-                        MemoryRow(entity, onDelete = { viewModel.delete(entity.id) })
+                        MemoryRow(
+                            entity,
+                            onEdit = {
+                                draft = entity.label
+                                editing = entity
+                            },
+                            onDelete = { viewModel.delete(entity.id) },
+                        )
                     }
                 }
                 OutlinedButton(
@@ -77,6 +87,31 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel()) {
                 }
             }
         }
+    }
+
+    editing?.let { target ->
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text("Edit memory") },
+            text = {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    label = { Text(target.type.name) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = draft.isNotBlank(),
+                    onClick = {
+                        viewModel.rename(target.id, draft)
+                        editing = null
+                    },
+                ) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } },
+        )
     }
 
     if (confirmingClear) {
@@ -107,7 +142,7 @@ private fun EmptyMemoryState() {
 }
 
 @Composable
-private fun MemoryRow(entity: Entity, onDelete: () -> Unit) {
+private fun MemoryRow(entity: Entity, onEdit: () -> Unit, onDelete: () -> Unit) {
     DroidCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -118,6 +153,7 @@ private fun MemoryRow(entity: Entity, onDelete: () -> Unit) {
                 Text(entity.type.name, style = MaterialTheme.typography.labelSmall, color = AccentCyan)
                 Text(entity.label, style = MaterialTheme.typography.bodyLarge)
             }
+            TextButton(onClick = onEdit) { Text("Edit") }
             TextButton(onClick = onDelete) { Text("Delete", color = AccentRed) }
         }
     }

@@ -356,6 +356,10 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
             }
             if (state.memoryEnabled) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Switch(checked = state.autoRemember, onCheckedChange = viewModel::setAutoRemember)
+                    Text("Auto-remember every 6 replies (one extra request each; applies next time you open Chat)", style = MaterialTheme.typography.bodySmall)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = viewModel::rememberChat, enabled = !state.sending) { Text("Remember this chat") }
                     state.memoryStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 }
