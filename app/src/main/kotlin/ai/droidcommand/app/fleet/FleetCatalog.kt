@@ -66,7 +66,7 @@ object FleetCatalog {
     /** EXTERNAL_NODE. Probe only — do not bind Messenger. */
     const val BROWSER_PACKAGE = "com.victorious.browser"
 
-    /** EXTERNAL_NODE. Probe only. debug==release. Certs TBD (fail-open). */
+    /** EXTERNAL_NODE. Probe only. debug==release. Debug cert documented [planned/pending-merge], unenforced. */
     const val VICTORSMS_PACKAGE = "com.victorious.sms"
 
     /** EXTERNAL_NODE. Novelty/prank caller-ID. Isolated from destructive. Certs TBD (fail-open). */
@@ -188,11 +188,13 @@ object FleetCatalog {
         name = "VictorSMS",
         packageName = VICTORSMS_PACKAGE,
         kind = FleetKind.EXTERNAL_NODE,
-        summary = "EXTERNAL_NODE, PLANNED. Messenger action com.victorious.sms.action.BRIDGE " +
-            "(Message what=1 request, protocol_major 1, op remote.command). debug==release package. " +
-            "Signing certs TBD — catalogue fail-open/unpinned. TODO pin debug+release SHA-256. " +
-            "Never DependencyGuard, never a shared signing key. SMS whitelist and code word live in " +
-            "VictorSMS. External control default OFF + explicit consent. Node-id victorsms-<32 hex>.",
+        summary = "EXTERNAL_NODE, PLANNED [planned/pending-merge]. Messenger action " +
+            "com.victorious.sms.action.BRIDGE (Message what=1 request, protocol_major 1, inbound op " +
+            "sms.remote_command.forward). debug==release package. Isolated from destructive paths. " +
+            "Debug SHA-256 documented (alias androiddebugkey) but unenforced — catalogue " +
+            "fail-open/unpinned. Release cert TBD. Never DependencyGuard, never a shared signing key. " +
+            "SMS whitelist and code word live in VictorSMS; DCA owns commandId→action. trigger{} is " +
+            "informational. External control default OFF + explicit consent. Node-id victorsms-<32 hex>.",
     )
 
     val VICTOR_SPOOF = FleetMember(

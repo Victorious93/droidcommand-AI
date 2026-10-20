@@ -338,6 +338,26 @@ or manual. Voice match is exact after normalize. Dry-run validates; live
 run is a stub. A macro with any independently classified destructive
 step requires approval at run.
 
+**VictorSMS** (`com.victorious.sms`, `KnownFleet.VICTOR_SMS`, wiring
+order 10, `EXTERNAL_NODE`) is a known fleet **target** in the
+`remote.command` registry / pairing table **alongside VictorSpoof**.
+Status: **[planned/pending-merge]** (scaffold PR still open/unmerged).
+Inbound SMS-trigger source op is `sms.remote_command.forward`.
+VictorSMS owns SMS-side gating (sender whitelist + secret code word in
+its own settings). DCA owns only the commandId→action mapping.
+`trigger.sourceNumber` / `matchedKeyword` / `rawExtras` ride in the
+informational `trigger:{}` sub-object and are **never** used for
+authorization. Catalogued ops are **isolated from privileged/destructive
+paths** the same way VictorSpoof is (the forward op itself never becomes
+wipe/power-off/lock/flash/bootloader / `remote_destructive`); a
+forwarded commandId that maps to wipe/lock is still classified
+independently. Debug cert SHA-256
+`BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A`
+(alias `androiddebugkey`) is **documented, not enforced** —
+`expectedSigningCertSha256` stays empty (fail-open). Release cert TBD.
+**TODO: enforce the debug pin after the scaffold PR merges; pin release
+later. Do not invent fingerprints.**
+
 **VictorSpoof** (`com.victorious.spoof`, `KnownFleet.VICTOR_SPOOF`,
 wiring order 11, `EXTERNAL_NODE`) is a known fleet **target**. ActionRefs
 (`spoof.profile.apply`, `spoof.profile.clear`, `spoof.status`) live in
@@ -384,6 +404,7 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 | Settings UI | Compose skeleton |
 | Status tray consume+publish | implemented, unit-tested (in-memory; **transport TBD**) |
 | Unified local backup (macros+mappings+pairings) | implemented, unit-tested (**unified schema TBD**) |
+| VictorSMS KnownFleet + isolated registry / pairing row | implemented, unit-tested (**debug cert documented, pin NOT enforced**, [planned/pending-merge]) |
 | VictorSpoof KnownFleet + isolated registry | implemented, unit-tested (**certs TBD**) |
 | Controller BRIDGE action constant | implemented (no exported receiver) |
 | Help / `docs/MANUAL.md` | on disk |
@@ -393,8 +414,11 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 
 ## 7. [CONTRACT TBD]
 
-1. **VictorSMS signing certs (debug + release).** Catalogue fail-open /
-   unpinned. **TODO pin both. Do not invent fingerprints.**
+1. **VictorSMS signing certs.** Debug SHA-256 is documented
+   (`BA:81:F5:…:D1:7A`, alias `androiddebugkey`) but **not enforced**
+   ([planned/pending-merge], scaffold PR still open). Release cert TBD.
+   Catalogue stays fail-open. **TODO: enforce debug pin after merge; pin
+   release later. Do not invent fingerprints.**
 2. **VictorSpoof signing certs (debug + release).** Catalogue fail-open /
    unpinned. **TODO pin both. Do not invent fingerprints.**
 3. Live AIDL parcel bump on `CommandEnvelope` / `ResultEnvelope` copies
@@ -435,7 +459,9 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 - Identity: `Message.sendingUid` + observed package/cert. Never
   `Binder.getCallingUid()`.
 - VictorSMS package `com.victorious.sms` (debug==release). Node-id
-  `^victorsms-[0-9a-f]{32}$`. Certs TBD (fail-open).
+  `^victorsms-[0-9a-f]{32}$`. Inbound op `sms.remote_command.forward`.
+  Debug cert documented, pin **not** enforced ([planned/pending-merge],
+  fail-open). Release cert TBD.
 - VictorSpoof package `com.victorious.spoof`. Certs TBD (fail-open).
   Isolated from destructive paths.
 

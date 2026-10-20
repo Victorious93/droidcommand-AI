@@ -103,9 +103,13 @@ object ExternalNodeCatalog {
         capabilitiesOperation = "sms.capabilities.get",
         statusOperation = "sms.status",
         notes = "EXTERNAL_NODE. Confirmed action com.victorious.sms.action.BRIDGE, protocol_major 1, " +
-            "what=1, inbound op remote.command. debug==release package com.victorious.sms. " +
-            "Node-id prefix ^victorsms-[0-9a-f]{32}$. Never DependencyGuard. Signing certs TBD — " +
-            "catalogue fail-open/unpinned. TODO: pin debug+release SHA-256. Fleet-messenger read ops " +
+            "what=1, inbound op sms.remote_command.forward (controller op remote.command). " +
+            "debug==release package com.victorious.sms. Node-id prefix ^victorsms-[0-9a-f]{32}$. " +
+            "Never DependencyGuard. Isolated from wipe/power-off/lock/flash/bootloader. " +
+            "VictorSMS owns whitelist + code word; DCA owns commandId→action. trigger{} is " +
+            "informational. Debug SHA-256 documented (alias androiddebugkey) but " +
+            "[planned/pending-merge] unenforced — catalogue fail-open/unpinned. Release cert TBD. " +
+            "TODO: enforce debug pin after scaffold merge. Fleet-messenger read ops " +
             "sms.capabilities.get / sms.status stay placeholders. The frozen remote-control op for " +
             "protocol minor 1 is capabilities.get (not a per-class field name).",
     )

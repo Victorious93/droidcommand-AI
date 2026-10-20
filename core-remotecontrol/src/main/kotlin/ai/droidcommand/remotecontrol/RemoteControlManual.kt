@@ -27,8 +27,14 @@ object RemoteControlManual {
 
         Triggers (four kinds)
         • SMS: VictorSMS (com.victorious.sms) on the paired device.
-          VictorSMS owns whitelist + code word. After those gates it
-          forwards a ratified envelope. That is delivery, not authorization.
+          Status [planned/pending-merge]. Inbound op
+          sms.remote_command.forward. VictorSMS owns whitelist + code
+          word. After those gates it forwards a ratified envelope. That
+          is delivery, not authorization. DCA owns only the
+          commandId→action mapping. Isolated from destructive paths
+          (a forwarded wipe commandId is still classified independently).
+          Debug cert is documented (alias androiddebugkey) but not
+          pinned yet (fail-open). Release cert TBD.
         • Voice: an exact phrase you configure here (local, not inbound).
         • Schedule: stored expression only; live scheduler is a stub.
         • Manual: Run on a mapping or macro (still asks first).

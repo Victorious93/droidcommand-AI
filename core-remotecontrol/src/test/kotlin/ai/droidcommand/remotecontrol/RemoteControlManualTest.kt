@@ -19,6 +19,8 @@ class RemoteControlManualTest {
         assertTrue(body.contains("UNTRUSTED"))
         assertTrue(body.contains("not authorization"))
         assertTrue(body.contains("VictorSpoof"))
+        assertTrue(body.contains("sms.remote_command.forward"))
+        assertTrue(body.contains("[planned/pending-merge]"))
         assertTrue(body.contains("external-control"))
         assertTrue(body.contains("status tray") || body.contains("Status tray"))
         assertTrue(body.contains("YOLO"))

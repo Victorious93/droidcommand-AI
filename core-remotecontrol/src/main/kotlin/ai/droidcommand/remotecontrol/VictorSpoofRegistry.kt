@@ -24,8 +24,26 @@ object VictorSpoofRegistry {
         "spoof.status",
     )
 
+    val TARGET: KnownRemoteTarget = KnownRemoteTarget(
+        id = ID,
+        displayName = DISPLAY_NAME,
+        packageName = PACKAGE,
+        bridgeAction = BRIDGE_ACTION,
+        documentedDebugCertSha256 = null,
+        enforcePin = false,
+        status = "[planned]",
+        isolatedFromDestructive = true,
+        cataloguedOps = ACTION_REFS,
+        notes = "EXTERNAL_NODE novelty/prank caller-ID. Isolated from " +
+            "wipe/power-off/lock/flash/bootloader. Certs TBD — fail-open / " +
+            "unpinned. TODO: pin later. Do not invent fingerprints.",
+    )
+
     fun isRegistered(actionRef: String): Boolean =
         actionRef in ACTION_REFS || actionRef.startsWith("spoof.")
+
+    fun suggestedPairing(sourceNodeRef: String): DevicePairing =
+        TARGET.suggestedPairing(sourceNodeRef)
 
     fun entry(actionRef: String): VictorSpoofEntry? {
         if (!isRegistered(actionRef)) return null
@@ -43,7 +61,9 @@ data class VictorSpoofEntry(val actionRef: String) {
 
 /**
  * Independent classification of [actionRef]. Envelope `destructive` is
- * never an input. VictorSpoof registry entries are never destructive.
+ * never an input. Catalogued VictorSpoof and VictorSMS ops (the forward
+ * op itself) are never destructive. A mapped commandId such as `wipe`
+ * is still classified independently.
  */
 object ActionRefClassifier {
     fun isDestructive(
@@ -53,6 +73,7 @@ object ActionRefClassifier {
         stepFlag: Boolean = false,
     ): Boolean {
         if (VictorSpoofRegistry.isRegistered(actionRef)) return false
+        if (VictorSmsRegistry.isRegistered(actionRef)) return false
         if (mapping != null) return mapping.effectiveDestructive
         if (macro != null) return macro.hasDestructiveStep
         val lowered = actionRef.lowercase()

@@ -215,6 +215,31 @@ class NodeSignatureTest {
     }
 
     @Test
+    fun `VictorSMS debug cert is documented but not enforced`() {
+        val documented = SigningCertSha256.parseOrThrow(
+            KnownNodeSigningCatalog.VICTOR_SMS_DEBUG_SHA256_UNENFORCED,
+        )
+        val identity = KnownNodeSigningCatalog.identityFor("com.victorious.sms")
+        assertTrue(identity?.expectedCerts.isNullOrEmpty())
+        assertTrue(KnownFleet.VICTOR_SMS.expectedSigningCertSha256.isEmpty())
+        assertIs<NodeSignatureDecision.Allowed>(
+            NodeSignatureVerifier().verify(
+                "com.victorious.sms",
+                listOf(documented.canonical),
+            ),
+        )
+        assertTrue(
+            KnownNodeSigningCatalog.all().none { candidate ->
+                documented in candidate.expectedCerts
+            },
+        )
+        assertEquals(
+            "BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A",
+            KnownNodeSigningCatalog.VICTOR_SMS_DEBUG_SHA256_UNENFORCED,
+        )
+    }
+
+    @Test
     fun `File-Manager unstable debug cert is documented but not enforced`() {
         val unstable = SigningCertSha256.parseOrThrow(
             KnownNodeSigningCatalog.FILE_MANAGER_DEBUG_UNSTABLE_CI_SECRETS,

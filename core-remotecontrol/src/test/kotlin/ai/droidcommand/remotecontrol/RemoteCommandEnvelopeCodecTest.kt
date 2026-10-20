@@ -55,6 +55,7 @@ class RemoteCommandEnvelopeCodecTest {
     @Test
     fun `operation and package constants match the ratified contract`() {
         assertEquals("remote.command", FleetRemoteEnvelope.OP_REMOTE_COMMAND)
+        assertEquals("sms.remote_command.forward", FleetRemoteEnvelope.OP_SMS_REMOTE_COMMAND_FORWARD)
         assertEquals("macro.step", FleetRemoteEnvelope.OP_MACRO_STEP)
         assertEquals("macro.run", FleetRemoteEnvelope.OP_MACRO_RUN)
         assertEquals("capabilities.get", FleetRemoteEnvelope.OP_CAPABILITIES_GET)

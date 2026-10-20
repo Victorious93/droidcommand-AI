@@ -76,6 +76,8 @@ data class FleetRemoteEnvelope(
         const val OP_REMOTE_COMMAND = "remote.command"
         const val OP_MACRO_STEP = "macro.step"
         const val OP_MACRO_RUN = "macro.run"
+        /** VictorSMS inbound SMS-trigger source op. Delivery, not authorization. */
+        const val OP_SMS_REMOTE_COMMAND_FORWARD = "sms.remote_command.forward"
 
         const val TARGET_CONTROLLER = "controller"
 

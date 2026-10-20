@@ -47,8 +47,10 @@ class RemoteCommandDispatcher(
                 resolveMacroRun(envelope)
             FleetRemoteEnvelope.OP_MACRO_STEP ->
                 resolveMacroStep(envelope)
-            FleetRemoteEnvelope.OP_REMOTE_COMMAND ->
-                resolveAction(envelope.actionRef, TriggerKind.SMS, envelope)
+            FleetRemoteEnvelope.OP_REMOTE_COMMAND,
+            FleetRemoteEnvelope.OP_SMS_REMOTE_COMMAND_FORWARD,
+            ->
+                resolveAction(resolveSmsCommandId(envelope, op), TriggerKind.SMS, envelope)
             else -> TrustPipeline.reject(
                 RemoteErrorCategory.UNSUPPORTED_OP,
                 "unsupported op '$op'",
@@ -81,6 +83,8 @@ class RemoteCommandDispatcher(
                 FleetRemoteEnvelope.OP_CAPABILITIES_GET
             } else if (envelope.steps != null) {
                 FleetRemoteEnvelope.OP_MACRO_RUN
+            } else if (isSmsForward(envelope)) {
+                FleetRemoteEnvelope.OP_SMS_REMOTE_COMMAND_FORWARD
             } else if (envelope.op != null) {
                 FleetRemoteEnvelope.OP_MACRO_STEP
             } else if (envelope.macroId != null && envelope.stepIndex != null) {
@@ -103,7 +107,18 @@ class RemoteCommandDispatcher(
     fun dispatchSms(rawJson: String, source: SourceIdentity): RemoteDispatchResult = dispatch(rawJson, source)
 
     fun dispatchSms(envelope: FleetRemoteEnvelope, source: SourceIdentity): RemoteDispatchResult =
-        dispatch(envelope, source)
+        dispatch(envelope, source, smsInboundOp(envelope))
+
+    private fun smsInboundOp(envelope: FleetRemoteEnvelope): String =
+        if (isSmsForward(envelope)) {
+            FleetRemoteEnvelope.OP_SMS_REMOTE_COMMAND_FORWARD
+        } else {
+            FleetRemoteEnvelope.OP_REMOTE_COMMAND
+        }
+
+    private fun isSmsForward(envelope: FleetRemoteEnvelope): Boolean =
+        envelope.op == FleetRemoteEnvelope.OP_SMS_REMOTE_COMMAND_FORWARD ||
+            envelope.actionRef == FleetRemoteEnvelope.OP_SMS_REMOTE_COMMAND_FORWARD
 
     fun dispatchVoice(transcript: String): RemoteDispatchResult {
         val config = store.load()
@@ -168,11 +183,29 @@ class RemoteCommandDispatcher(
             return RemoteDispatchResult.Ready(planMacro(macro, trigger, envelope))
         }
         val spoof = VictorSpoofRegistry.entry(actionRef)
+        if (spoof != null) {
+            return RemoteDispatchResult.Ready(planSpoof(spoof, trigger, envelope))
+        }
+        val sms = VictorSmsRegistry.entry(actionRef)
             ?: return TrustPipeline.reject(
                 RemoteErrorCategory.NOT_FOUND,
                 "no mapping for actionRef '$actionRef'",
             )
-        return RemoteDispatchResult.Ready(planSpoof(spoof, trigger, envelope))
+        return RemoteDispatchResult.Ready(planSms(sms, trigger, envelope))
+    }
+
+    /**
+     * VictorSMS's inbound op is [VictorSmsRegistry.FORWARD_OP]. The
+     * commandId that DCA maps onto an action lives in [FleetRemoteEnvelope.actionRef]
+     * (or `args.commandId` / `params.commandId` when actionRef is the
+     * forward op itself). Trigger extras are not read here.
+     */
+    private fun resolveSmsCommandId(envelope: FleetRemoteEnvelope, op: String): String {
+        if (op != FleetRemoteEnvelope.OP_SMS_REMOTE_COMMAND_FORWARD) return envelope.actionRef
+        if (envelope.actionRef != VictorSmsRegistry.FORWARD_OP) return envelope.actionRef
+        return envelope.args["commandId"]
+            ?: envelope.params["commandId"]
+            ?: envelope.actionRef
     }
 
     private fun resolveMacroRun(envelope: FleetRemoteEnvelope): RemoteDispatchResult {
@@ -227,6 +260,7 @@ class RemoteCommandDispatcher(
             mapping = mapping,
             macro = null,
             spoof = null,
+            sms = null,
             command = command,
             trigger = trigger,
             envelope = envelope,
@@ -245,6 +279,7 @@ class RemoteCommandDispatcher(
         mapping = null,
         macro = macro,
         spoof = null,
+        sms = null,
         command = null,
         trigger = trigger,
         envelope = envelope,
@@ -266,6 +301,7 @@ class RemoteCommandDispatcher(
         mapping = null,
         macro = null,
         spoof = spoof,
+        sms = null,
         command = envelope?.let {
             RemoteCommand(
                 target = NodeRef(
@@ -273,6 +309,37 @@ class RemoteCommandDispatcher(
                     integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
                 ),
                 actionRef = spoof.actionRef,
+                args = it.args,
+                nonce = it.nonce,
+                timestampMs = it.issuedAt,
+                requestId = it.requestId,
+                ttlMs = it.ttlMs,
+            )
+        },
+        trigger = trigger,
+        envelope = envelope,
+        toolName = RemoteControlToolNames.COMMAND,
+        destructive = false,
+        privilege = RequiredPrivilege.UNSPECIFIED,
+        advisoryDestructive = envelope?.destructive,
+    )
+
+    private fun planSms(
+        sms: VictorSmsEntry,
+        trigger: TriggerKind,
+        envelope: FleetRemoteEnvelope?,
+    ): RemoteDispatchPlan = RemoteDispatchPlan(
+        mapping = null,
+        macro = null,
+        spoof = null,
+        sms = sms,
+        command = envelope?.let {
+            RemoteCommand(
+                target = NodeRef(
+                    nodeId = it.targetNodeRef,
+                    integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
+                ),
+                actionRef = sms.actionRef,
                 args = it.args,
                 nonce = it.nonce,
                 timestampMs = it.issuedAt,
@@ -302,10 +369,11 @@ data class RemoteDispatchPlan(
     val privilege: RequiredPrivilege,
     val advisoryDestructive: Boolean? = null,
     val spoof: VictorSpoofEntry? = null,
+    val sms: VictorSmsEntry? = null,
 ) {
     init {
-        require(mapping != null || macro != null || spoof != null) {
-            "plan needs a mapping, a macro, or a VictorSpoof entry"
+        require(mapping != null || macro != null || spoof != null || sms != null) {
+            "plan needs a mapping, a macro, a VictorSpoof entry, or a VictorSMS entry"
         }
     }
 
@@ -327,6 +395,7 @@ data class RemoteDispatchPlan(
         }
         envelope?.args?.forEach { (key, value) -> input["extra.$key"] = value }
         spoof?.let { input["spoofActionRef"] = it.actionRef }
+        sms?.let { input["smsActionRef"] = it.actionRef }
         return input
     }
 }

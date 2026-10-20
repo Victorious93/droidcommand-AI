@@ -101,9 +101,18 @@ last command. Send command still asks first.
 DCA is the **sole authorizer**. An inbound command from a fleet node is
 an **UNTRUSTED REQUEST**.
 
-VictorSMS (`com.victorious.sms`) may check a sender whitelist **and** a
+VictorSMS (`com.victorious.sms`) is a known `remote.command`
+EXTERNAL_NODE ([planned/pending-merge]). Its inbound op is
+`sms.remote_command.forward`. It may check a sender whitelist **and** a
 secret code word on **its** side. That is **not authorization** — it
-only **delivers** the request. The controller then re-applies, in order:
+only **delivers** the request. DCA owns only the commandId→action
+mapping. `trigger.sourceNumber` / `matchedKeyword` / `rawExtras` are
+informational. Catalogued SMS ops are isolated from destructive paths
+(a forwarded wipe commandId is still classified independently). Debug
+cert is documented (alias `androiddebugkey`) but **not pinned yet**
+(fail-open); release cert TBD.
+
+The controller then re-applies, in order:
 
 1. Caller-id = package + cert pairing of the source node
 2. External-control switch (**OFF by default**) on **both** node ops and
@@ -151,7 +160,7 @@ without executing.
 
 ### Four trigger types
 
-1. **SMS** — VictorSMS delivers `remote.command` after its own gates.
+1. **SMS** — VictorSMS delivers `sms.remote_command.forward` after its own gates.
 2. **Voice** — exact phrase in Settings → Remote Control.
 3. **Schedule** — stored expression only; live scheduler is a stub.
 4. **Manual** — Run on a mapping or macro (still asks first).

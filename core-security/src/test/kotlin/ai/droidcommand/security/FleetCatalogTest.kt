@@ -208,8 +208,10 @@ class FleetCatalogTest {
         val victorSms = tools.first { it.spec.name == "victorsms_status" }.execute(emptyMap()) as ToolResult.Failure
         assertTrue(victorSms.reason.contains("does not bind Messenger"))
         assertTrue(victorSms.reason.contains("com.victorious.sms.action.BRIDGE"))
-        assertTrue(victorSms.reason.contains("remote.command"))
+        assertTrue(victorSms.reason.contains("sms.remote_command.forward"))
         assertTrue(victorSms.reason.contains("fail-open"))
+        assertTrue(victorSms.reason.contains("[planned/pending-merge]"))
+        assertTrue(victorSms.reason.contains("Isolated from"))
         val victorSpoof = tools.first { it.spec.name == "victorspoof_status" }.execute(emptyMap()) as ToolResult.Failure
         assertTrue(victorSpoof.reason.contains("does not bind Messenger"))
         assertTrue(victorSpoof.reason.contains("com.victorious.spoof.action.BRIDGE"))
@@ -291,11 +293,21 @@ class FleetCatalogTest {
         assertTrue(KnownFleet.VICTOR_SMS.packageOrBinary.contains("com.victorious.sms"))
         assertTrue(KnownFleet.VICTOR_SMS.packageOrBinary.contains("debug==release"))
         assertTrue(KnownFleet.VICTOR_SMS.transports.any { it.contains("com.victorious.sms.action.BRIDGE") })
+        assertTrue(KnownFleet.VICTOR_SMS.transports.any { it.contains("sms.remote_command.forward") })
         assertTrue(KnownFleet.VICTOR_SMS.transports.any { it.contains("remote.command") })
         assertTrue(KnownFleet.VICTOR_SMS.transports.any { it.contains("^victorsms-[0-9a-f]{32}$") })
         assertTrue(KnownFleet.VICTOR_SMS.notes.contains("Never DependencyGuard"))
         assertTrue(KnownFleet.VICTOR_SMS.notes.contains("fail-open"))
-        assertTrue(KnownFleet.VICTOR_SMS.notes.contains("TODO: pin debug+release SHA-256"))
+        assertTrue(KnownFleet.VICTOR_SMS.notes.contains("[planned/pending-merge]"))
+        assertTrue(KnownFleet.VICTOR_SMS.notes.contains("sms.remote_command.forward"))
+        assertTrue(KnownFleet.VICTOR_SMS.notes.contains("Isolated from privileged/destructive"))
+        assertTrue(
+            KnownFleet.VICTOR_SMS.notes.contains(
+                "BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A",
+            ),
+        )
+        assertTrue(KnownFleet.VICTOR_SMS.notes.contains("androiddebugkey"))
+        assertTrue(KnownFleet.VICTOR_SMS.notes.contains("not enforced"))
         assertEquals(listOf("victorsms_status"), KnownFleet.VICTOR_SMS.existingToolNames)
         assertEquals(listOf("com.victorious.sms"), KnownFleet.VICTOR_SMS.androidPackages)
         assertTrue(KnownFleet.VICTOR_SMS.expectedSigningCertSha256.isEmpty())
@@ -349,6 +361,7 @@ class FleetCatalogTest {
         assertTrue(text.contains("ai.rootforge.os.debug"))
         assertTrue(text.contains("[unstable/CI-secrets]"))
         assertTrue(text.contains("[planned/unverified]"))
+        assertTrue(text.contains("[planned/pending-merge]"))
     }
 
     @Test

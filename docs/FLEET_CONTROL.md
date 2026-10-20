@@ -235,6 +235,7 @@ and missing-observed refuse):
 | Member | Type | SHA-256 | Why unenforced |
 |---|---|---|---|
 | Victorious File Manager | DEBUG | `8C:1F:E3:C9:E5:34:F2:71:05:C0:68:8F:45:28:D7:7E:47:11:AE:0A:79:DD:08:D1:E8:59:30:B9:E9:48:85:F2` | **[unstable/CI-secrets]**. Not committed; CI injects from secrets and falls back to the generic Android debug key without them. Enforcing it would refuse the fallback. No release key yet. |
+| VictorSMS | DEBUG | `BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A` (alias `androiddebugkey`) | **[planned/pending-merge]**. Scaffold PR still open/unmerged. Documented, not enforced — `expectedSigningCertSha256` stays empty (fail-open). Release cert TBD. |
 
 **Pending / out of scope** (fail-open; do not invent):
 
@@ -243,6 +244,7 @@ and missing-observed refuse):
 | RootForge RELEASE | No release key yet |
 | Keyboard RELEASE and `.bench` | No release key; `.bench` not in the debug pin |
 | File Manager RELEASE | No release key yet |
+| VictorSMS RELEASE | Cert TBD — do not invent |
 | KYC-AuditLab | HOST_PROCESS_TOOL — no APK |
 | victorious-flash | Debug cert is non-deterministic until they land a fixed keystore — **do not catalogue** |
 | BakerPi | Out of scope |
@@ -384,3 +386,17 @@ local backup of macros+mappings+pairings are controller-side skeletons.
 Shared tray transport and unified fleet backup schema remain
 [CONTRACT TBD pending Fleet Orchestrator]. Live privileged execution is
 still absent.
+
+## 2026-10-20d — VictorSMS remote.command target registry row
+
+VictorSMS (`com.victorious.sms`) is now a `remote.command` EXTERNAL_NODE
+**target registry / pairing-table** row alongside VictorSpoof
+(`RemoteCommandTargetRegistry`). Inbound op `sms.remote_command.forward`.
+Status **[planned/pending-merge]** (scaffold PR still open). Debug
+SHA-256 `BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A`
+(alias `androiddebugkey`) is **documented, not enforced** —
+`expectedSigningCertSha256` stays empty (fail-open). Release cert TBD.
+Isolated from wipe/power-off/lock/flash/bootloader the same way
+VictorSpoof is; a forwarded commandId is classified independently.
+VictorSMS owns whitelist + code word; DCA owns commandId→action.
+`trigger{}` remains informational. Never DependencyGuard.

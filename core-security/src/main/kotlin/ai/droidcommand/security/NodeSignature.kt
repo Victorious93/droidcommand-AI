@@ -216,6 +216,19 @@ object KnownNodeSigningCatalog {
         "8C:1F:E3:C9:E5:34:F2:71:05:C0:68:8F:45:28:D7:7E:47:11:AE:0A:79:DD:08:D1:E8:59:30:B9:E9:48:85:F2"
 
     /**
+     * VictorSMS debug SHA-256 (`com.victorious.sms`, alias `androiddebugkey`).
+     *
+     * **[planned/pending-merge] — not enforced.** The VictorSMS scaffold
+     * PR is still open/unmerged. Release cert TBD — do not invent.
+     * Putting this in [NodeSigningIdentity.expectedCerts] would pin a
+     * package whose APK is not yet on their main, so
+     * [KnownFleet.VICTOR_SMS.expectedSigningCertSha256] stays empty
+     * (fail-open). TODO: enforce after merge; pin release later.
+     */
+    const val VICTOR_SMS_DEBUG_SHA256_UNENFORCED =
+        "BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A"
+
+    /**
      * DroidCommand AI hub debug identity (`ai.droidcommand.app`).
      * Shared fleet RELEASE [SHARED_FLEET_RELEASE_SHA256] is
      * [planned/unverified] for this package — not listed in

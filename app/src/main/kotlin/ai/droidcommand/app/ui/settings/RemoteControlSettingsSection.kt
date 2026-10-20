@@ -7,6 +7,7 @@ import ai.droidcommand.remotecontrol.Macro
 import ai.droidcommand.remotecontrol.MacroTriggerKind
 import ai.droidcommand.remotecontrol.RemoteAction
 import ai.droidcommand.remotecontrol.RemoteCommandMapping
+import ai.droidcommand.remotecontrol.RemoteCommandTargetRegistry
 import ai.droidcommand.remotecontrol.TargetDevice
 import ai.droidcommand.security.FleetIntegrationClass
 import androidx.compose.foundation.layout.Arrangement
@@ -158,10 +159,20 @@ private fun PairingEditor(viewModel: RemoteControlViewModel) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Device pairings", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Caller-id for inbound commands: package + optional cert. Empty cert is fail-open / unpinned.",
+                "Caller-id for inbound commands: package + optional cert. Empty cert is fail-open / unpinned. " +
+                    "Known remote.command EXTERNAL_NODE rows (not live-paired):",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            RemoteCommandTargetRegistry.ALL.forEach { target ->
+                val pin = if (target.enforcePin) "pin enforced" else "fail-open"
+                Text(
+                    "${target.displayName} · ${target.packageName} · ${target.status} · $pin · " +
+                        target.cataloguedOps.joinToString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             OutlinedTextField(value = sourceNodeRef, onValueChange = { sourceNodeRef = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Source node id") })
             OutlinedTextField(value = packageName, onValueChange = { packageName = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Package") })
             OutlinedTextField(value = certSha256, onValueChange = { certSha256 = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Cert SHA-256 (optional)") })

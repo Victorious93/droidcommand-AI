@@ -163,6 +163,8 @@ class FleetStatusTest {
         assertTrue(victorSms.member.summary.contains("Never DependencyGuard"))
         assertTrue(victorSms.member.summary.contains("com.victorious.sms.action.BRIDGE"))
         assertTrue(victorSms.member.summary.contains("fail-open"))
+        assertTrue(victorSms.member.summary.contains("sms.remote_command.forward"))
+        assertTrue(victorSms.member.summary.contains("[planned/pending-merge]"))
         assertFalse(victorSms.status.contains("ready", ignoreCase = true), victorSms.status)
 
         assertEquals(FleetInstallState.NOT_INSTALLED, victorSpoof.installed)
