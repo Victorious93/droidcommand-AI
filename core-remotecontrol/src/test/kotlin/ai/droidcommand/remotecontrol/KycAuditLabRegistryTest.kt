@@ -15,14 +15,6 @@ class KycAuditLabRegistryTest {
         inboundConfig(
             mappings = listOf(
                 mapping(
-                    id = "kyc-doc",
-                    displayName = "KYC document",
-                    smsCommandId = "kyc.document.read",
-                    action = RemoteAction.CUSTOM,
-                    destructive = false,
-                    targetNodeId = "kyc-auditlab",
-                ),
-                mapping(
                     id = "kyc-cmd",
                     displayName = "KYC remote",
                     smsCommandId = "ping-kyc",
@@ -52,10 +44,12 @@ class KycAuditLabRegistryTest {
         assertEquals(KycAuditLabRegistry.DEBUG_CERT_SHA256, kyc.documentedDebugCertSha256)
         assertEquals("com.identityshield.companion.action.BRIDGE", kyc.bridgeAction)
         assertNull(kyc.suggestedPairing("kyc-node").certSha256)
-        assertFalse(kyc.cataloguedOps.any { name ->
-            KycAuditLabRegistry.OPS.single { it.name == name }.remoteAllowed &&
-                KycAuditLabRegistry.isPiiOp(name)
-        })
+        assertFalse(
+            kyc.cataloguedOps.any { name ->
+                KycAuditLabRegistry.OPS.single { it.name == name }.remoteAllowed &&
+                    KycAuditLabRegistry.isPiiOp(name)
+            },
+        )
         assertFalse(
             KycAuditLabRegistry.OPS.single {
                 it.name == FleetRemoteEnvelope.OP_REMOTE_COMMAND
