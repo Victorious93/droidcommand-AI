@@ -126,7 +126,7 @@ object FleetCatalog {
         name = "Termux / VictorSuite",
         packageName = TERMUX_PACKAGE,
         kind = FleetKind.TERMUX,
-        summary = "TERMUX_IPC. com.termux.RUN_COMMAND + REMOTE_ENVELOPE_JSON (controller sender + response parser, PENDING — not device-tested; VictorSuite PR #48 a6f4e2a). RUN_COMMAND_PENDING_INTENT (ClientBackedTermuxExecutor) still used for shell. Gated on VictorSuite PR #15. Not a new bound service. On-device Kali/msfconsole round-trip is UNVERIFIED.",
+        summary = "TERMUX_IPC. Live default com.termux.RUN_COMMAND + REMOTE_ENVELOPE_JSON (controller sender + response parser). PENDING-REPACKAGE — pending package rename / not yet switched (VictorSuite PR #51 draft; PR #48 a6f4e2a). Flag DROIDCOMMAND_VICTORSUITE_REPACKAGE default off. RUN_COMMAND_PENDING_INTENT (ClientBackedTermuxExecutor) still used for shell. Gated on VictorSuite PR #15. Not a new bound service. On-device Kali/msfconsole round-trip is UNVERIFIED.",
     )
 
     val EDL_COMMANDER = FleetMember(

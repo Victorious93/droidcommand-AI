@@ -56,6 +56,7 @@ class FleetDashboardViewModel @Inject constructor(
                 highlighted = member.id == "rootforge",
                 opensPairing = member.id in FleetDashboardCatalog.PAIRING_FLOW_IDS,
                 pendingDeviceTest = member.id == "termux" || member.id == "victorsuite",
+                pendingRepackage = member.id == "termux" || member.id == "victorsuite",
             )
         }
     }

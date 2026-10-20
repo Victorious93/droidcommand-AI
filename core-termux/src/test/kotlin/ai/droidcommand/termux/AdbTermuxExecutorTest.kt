@@ -48,7 +48,11 @@ class AdbTermuxExecutorTest {
         return file.absolutePath
     }
 
-    private fun adbScript(deviceConnected: Boolean = true, termuxInstalled: Boolean = true): String = """
+    private fun adbScript(
+        deviceConnected: Boolean = true,
+        termuxInstalled: Boolean = true,
+        termuxPackage: String = "com.termux",
+    ): String = """
         #!/bin/sh
         if [ "${'$'}1" = "get-state" ]; then
           ${if (deviceConnected) "echo \"device\"; exit 0" else "exit 1"}
@@ -56,7 +60,7 @@ class AdbTermuxExecutorTest {
         if [ "${'$'}1" = "shell" ]; then
           shift
           if [ "${'$'}1" = "pm" ]; then
-            ${if (termuxInstalled) "echo \"package:com.termux\"; exit 0" else "exit 0"}
+            ${if (termuxInstalled) "echo \"package:$termuxPackage\"; exit 0" else "exit 0"}
           fi
           if [ "${'$'}1" = "am" ]; then
             echo "${'$'}*" > '${recorderFile.absolutePath}'
@@ -136,9 +140,11 @@ class AdbTermuxExecutorTest {
         adbScriptContent: String = adbScript(),
         rootExecutor: RootExecutor = FakeRootExecutor(),
         pollIntervalMillis: Long = 20,
+        runCommandTarget: RunCommandTarget = RunCommandTargets.TERMUX,
     ) = AdbTermuxExecutor(
         rootExecutor = rootExecutor,
         adbExecutable = writeScript("adb", adbScriptContent),
+        runCommandTarget = runCommandTarget,
         pollIntervalMillis = pollIntervalMillis,
         dispatchTimeoutMillis = 2_000,
     )
@@ -275,6 +281,25 @@ class AdbTermuxExecutorTest {
         assertTrue(wrapped.contains("cd '/data/data/com.termux/files/home/project'"))
         assertTrue(wrapped.contains("FOO='bar'"))
         assertTrue(wrapped.contains("'pkg' 'install' 'python'"))
+    }
+
+    @Test
+    fun `flag-on dispatch uses the pending suite package action component and extras prefix`() {
+        val root = FakeRootExecutor()
+        val target = RunCommandTargets.VICTORSUITE_REPACKAGE
+        executor(
+            adbScriptContent = adbScript(termuxPackage = target.packageName),
+            rootExecutor = root,
+            runCommandTarget = target,
+        ).execute(TermuxCommand("echo", listOf("hi")))
+        val am = assertNotNull(root.amCommand)
+        fun extra(name: String) = am.args[am.args.indexOf(name) + 1]
+        assertEquals("com.victorious.suite/com.termux.app.RunCommandService", extra("-n"))
+        assertEquals("com.victorious.suite.RUN_COMMAND", extra("-a"))
+        assertEquals(target.bashPath, extra("com.victorious.suite.RUN_COMMAND_PATH"))
+        assertEquals("true", extra("com.victorious.suite.RUN_COMMAND_BACKGROUND"))
+        assertFalse(am.args.contains("com.termux.RUN_COMMAND"))
+        assertFalse(am.args.contains("com.termux.RUN_COMMAND_PATH"))
     }
 
     @Test

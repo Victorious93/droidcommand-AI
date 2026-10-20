@@ -231,33 +231,44 @@ object KnownFleet {
             "termux RUN_COMMAND",
             "shared command schema (2026-10-19: VictorSuiteCapabilitiesProbe, read-only)",
             "TERMUX_IPC remote envelope v1 (BRIDGE_PROTOCOL 1.1): extra " +
-                "ai.droidcommand.REMOTE_ENVELOPE_JSON on com.termux.RUN_COMMAND; " +
+                "ai.droidcommand.REMOTE_ENVELOPE_JSON on com.termux.RUN_COMMAND " +
+                "(live default); pending com.victorious.suite.RUN_COMMAND behind " +
+                "DROIDCOMMAND_VICTORSUITE_REPACKAGE (default off); " +
                 "response ai.droidcommand.REMOTE_RESPONSE_JSON via PendingIntent; " +
                 "ops capabilities.get, remote.command, macro.step, macro.run, " +
                 "node.status.get, config.export, config.import; " +
-                "PENDING — not device-tested (VictorSuite PR #48 a6f4e2a)",
+                "PENDING-REPACKAGE — pending package rename / not yet switched " +
+                "(VictorSuite PR #48 a6f4e2a; PR #51 draft)",
         ),
         usesAidl = false,
         usesDependencyGuard = false,
         riskTier = RiskTier.REVERSIBLE,
         nextStep = "Third: keep RUN_COMMAND / plugin IPC. Not a new bound service. " +
             "Controller-side TERMUX_IPC sender + response parser is on disk " +
-            "(PENDING — not device-tested). Node side: VictorSuite PR #48 a6f4e2a. " +
+            "(PENDING-REPACKAGE — pending package rename / not yet switched). " +
+            "Live default stays com.termux. Flip DROIDCOMMAND_VICTORSUITE_REPACKAGE " +
+            "only after FO go-signal + VictorSuite PR #51 merge + bootstrap rebuild. " +
+            "Node side: VictorSuite PR #48 a6f4e2a; PR #51 is draft pending Don. " +
             "Gated on VictorSuite com.termux package/signing cleanup (their PR #15). " +
             "Owns on-device Termux/proot/X11/plugins. " +
             "2026-10-19: victorsuite_capabilities (core-termux) is a first read-only probe over this " +
             "same RUN_COMMAND path. External control OFF by default. Destructive and " +
             "config.import apply always confirmation_required and are not executed.",
         refusalMessage = "VictorSuite is reached as Termux (com.termux RUN_COMMAND / plugin IPC). " +
-            "TERMUX_IPC remote envelope is PENDING — not device-tested. " +
+            "TERMUX_IPC remote envelope is PENDING-REPACKAGE — pending package rename / " +
+            "not yet switched. Live default stays com.termux. " +
             "run_termux_command is the existing tool; this catalog does not add a bound service.",
         notes = "Gated on Victorious93/VictorSuite PR #15 (package/signing). " +
             "Controller-side TERMUX_IPC transport added 2026-10-20s against VictorSuite PR #48 " +
-            "a6f4e2a (REMOTE_ENVELOPE_JSON / REMOTE_RESPONSE_JSON). PENDING — not device-tested. " +
+            "a6f4e2a (REMOTE_ENVELOPE_JSON / REMOTE_RESPONSE_JSON). " +
+            "PENDING-REPACKAGE: VictorSuite PR #51 (draft, pending Don) will rename " +
+            "applicationId to com.victorious.suite. Live default remains com.termux until " +
+            "FO go-signal + bootstrap rebuild; flag DROIDCOMMAND_VICTORSUITE_REPACKAGE " +
+            "(default off). Do not invent a fingerprint. " +
             "Repo was not publicly resolvable on GitHub as of 2026-10-14. " +
-            "Shares Termux's applicationId; only one of Termux or VictorSuite can be installed. " +
+            "Shares Termux's applicationId today; only one of Termux or VictorSuite can be installed. " +
             "Controller-side DEBUG + VictorSuite-own RELEASE certs are catalogued (enforceable). " +
-            "VictorSuite RELEASE is not the shared fleet key. Do not invent a fingerprint.",
+            "VictorSuite RELEASE is not the shared fleet key.",
         androidPackages = listOf("com.termux"),
         expectedSigningCertSha256 = listOf(
             KnownNodeSigningCatalog.VICTORSUITE_DEBUG_SHA256,

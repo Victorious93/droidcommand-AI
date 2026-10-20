@@ -49,12 +49,13 @@ data class KnownRemoteTarget(
 }
 
 object RemoteCommandTargetRegistry {
-    val ALL: List<KnownRemoteTarget> = listOf(
-        VictorSmsRegistry.TARGET,
-        VictorSpoofRegistry.TARGET,
-        KycAuditLabRegistry.TARGET,
-        VictorSuiteRegistry.TARGET,
-    )
+    val ALL: List<KnownRemoteTarget>
+        get() = listOf(
+            VictorSmsRegistry.TARGET,
+            VictorSpoofRegistry.TARGET,
+            KycAuditLabRegistry.TARGET,
+            VictorSuiteRegistry.TARGET,
+        )
 
     fun byId(id: String): KnownRemoteTarget? = ALL.find { it.id == id }
 

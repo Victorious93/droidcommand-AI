@@ -6,6 +6,8 @@ import ai.droidcommand.security.FleetHonestyStatus
 import ai.droidcommand.security.FleetIntegrationClass
 import ai.droidcommand.security.KnownFleet
 import ai.droidcommand.security.KnownNodeSigningCatalog
+import ai.droidcommand.termux.RunCommandTargets
+import ai.droidcommand.termux.VictorSuiteRepackageFlag
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -234,7 +236,7 @@ class TermuxIpcTransportTest {
     }
 
     @Test
-    fun `catalogue is TERMUX_IPC com termux PENDING with the supported ops`() {
+    fun `catalogue is TERMUX_IPC com termux PENDING-REPACKAGE with the supported ops`() {
         val suite = KnownFleet.VICTORSUITE
         assertEquals(FleetIntegrationClass.TERMUX_IPC, suite.integrationClass)
         assertEquals("com.termux", suite.packageOrBinary)
@@ -256,8 +258,9 @@ class TermuxIpcTransportTest {
         assertEquals(VictorSuiteRegistry.TARGET, RemoteCommandTargetRegistry.byId("victorsuite"))
         assertEquals(VictorSuiteRegistry.TARGET, RemoteCommandTargetRegistry.byPackage("com.termux"))
         assertEquals(FleetIntegrationClass.TERMUX_IPC, VictorSuiteRegistry.TARGET.integrationClass)
-        assertEquals("PENDING", VictorSuiteRegistry.TARGET.status)
+        assertEquals("PENDING-REPACKAGE", VictorSuiteRegistry.TARGET.status)
         assertEquals("com.termux.RUN_COMMAND", VictorSuiteRegistry.TARGET.bridgeAction)
+        assertEquals("com.termux", VictorSuiteRegistry.TARGET.packageName)
         assertEquals(VictorSuiteRegistry.OPS, VictorSuiteRegistry.TARGET.cataloguedOps)
         assertTrue(VictorSuiteRegistry.TARGET.remoteCommandDefaultOff)
         assertFalse(VictorSuiteRegistry.TARGET.enforcePin)
@@ -271,14 +274,117 @@ class TermuxIpcTransportTest {
         )
         val row = FleetDashboardCatalog.fromKnown(suite)
         assertTrue(row.pendingDeviceTest)
+        assertTrue(row.pendingRepackage)
         val dashboard = FleetDashboardRows.build(
             members = listOf(row),
             pairings = emptyList(),
             snapshots = emptyList(),
             nowMs = now,
         ).single()
-        assertEquals(FleetDashboardRows.STATUS_PENDING, dashboard.statusLabel)
-        assertEquals("PENDING", dashboard.statusLabel)
+        assertEquals(FleetDashboardRows.STATUS_PENDING_REPACKAGE, dashboard.statusLabel)
+        assertEquals("PENDING-REPACKAGE", dashboard.statusLabel)
+    }
+
+    @Test
+    fun `flag-on resolves the pending suite package action component permission and prefix`() {
+        val envelope = envelope(
+            requestId = "req-suite-1",
+            targetNodeRef = "com.victorious.suite",
+            actionRef = FleetRemoteEnvelope.OP_CAPABILITIES_GET,
+            timestampMs = now,
+        )
+        val request = TermuxIpcTransport(
+            nowMs = { now },
+            externalControlEnabled = true,
+            useVictorSuiteRepackage = true,
+        ).buildRequest(envelope)
+        val suite = RunCommandTargets.VICTORSUITE_REPACKAGE
+        assertEquals(suite.action, request.action)
+        assertEquals("com.victorious.suite.RUN_COMMAND", request.action)
+        assertEquals("com.victorious.suite", request.packageName)
+        assertEquals("com.victorious.suite/com.termux.app.RunCommandService", request.component)
+        assertEquals("com.victorious.suite.permission.RUN_COMMAND", request.permission)
+        assertEquals("com.victorious.suite.", request.extrasPrefix)
+        assertEquals("ai.droidcommand.REMOTE_ENVELOPE_JSON", request.extras.keys.single())
+        assertEquals("ai.droidcommand.REMOTE_RESPONSE_JSON", TermuxIpcRemoteBinding.RESPONSE_EXTRA)
+        assertEquals(FleetRemoteEnvelope.TERMUX_JSON_EXTRA, request.extras.keys.single())
+        assertTrue(request.envelopeJson.contains("\"targetNodeRef\":\"com.victorious.suite\""), request.envelopeJson)
+        val flagged = VictorSuiteRegistry.target(useVictorSuiteRepackage = true)
+        assertEquals("com.victorious.suite", flagged.packageName)
+        assertEquals("com.victorious.suite.RUN_COMMAND", flagged.bridgeAction)
+        assertEquals("PENDING-REPACKAGE", flagged.status)
+        assertFalse(VictorSuiteRepackageFlag.ENABLED_BY_DEFAULT)
+    }
+
+    @Test
+    fun `envelope extras stay ai droidcommand either way`() {
+        val live = TermuxIpcTransport(nowMs = { now }, externalControlEnabled = true)
+            .buildRequest(envelope(targetNodeRef = "com.termux", actionRef = FleetRemoteEnvelope.OP_NODE_STATUS_GET, timestampMs = now))
+        val flagged = TermuxIpcTransport(
+            nowMs = { now },
+            externalControlEnabled = true,
+            useVictorSuiteRepackage = true,
+        ).buildRequest(
+            envelope(
+                targetNodeRef = "com.victorious.suite",
+                actionRef = FleetRemoteEnvelope.OP_NODE_STATUS_GET,
+                timestampMs = now,
+            ),
+        )
+        assertEquals(setOf("ai.droidcommand.REMOTE_ENVELOPE_JSON"), live.extras.keys)
+        assertEquals(setOf("ai.droidcommand.REMOTE_ENVELOPE_JSON"), flagged.extras.keys)
+        assertEquals(FleetRemoteEnvelope.TERMUX_JSON_EXTRA, live.extras.keys.single())
+        assertEquals(FleetRemoteEnvelope.TERMUX_RESPONSE_EXTRA, "ai.droidcommand.REMOTE_RESPONSE_JSON")
+        assertEquals("com.termux.RUN_COMMAND", live.action)
+        assertEquals("com.victorious.suite.RUN_COMMAND", flagged.action)
+        assertEquals("com.termux.", live.extrasPrefix)
+        assertEquals("com.victorious.suite.", flagged.extrasPrefix)
+    }
+
+    @Test
+    fun `flag-on still confirmation-gates destructive and config import apply`() {
+        var sent = 0
+        val transport = TermuxIpcTransport(
+            nowMs = { now },
+            externalControlEnabled = true,
+            useVictorSuiteRepackage = true,
+            sender = TermuxIpcSender { request ->
+                sent += 1
+                TermuxIpcResult.Ready(request)
+            },
+        )
+        val destructive = assertIs<TermuxIpcResult.Rejected>(
+            transport.submit(
+                envelope(
+                    targetNodeRef = "com.victorious.suite",
+                    actionRef = "shell.exec",
+                    timestampMs = now,
+                ),
+                FleetRemoteEnvelope.OP_REMOTE_COMMAND,
+            ),
+        )
+        assertEquals(RemoteErrorCategory.CONFIRMATION_REQUIRED, destructive.category)
+        val importApply = assertIs<TermuxIpcResult.Rejected>(
+            transport.submit(
+                envelope(
+                    targetNodeRef = "com.victorious.suite",
+                    actionRef = FleetRemoteEnvelope.OP_CONFIG_IMPORT,
+                    timestampMs = now,
+                    dryRun = false,
+                ),
+            ),
+        )
+        assertEquals(RemoteErrorCategory.CONFIRMATION_REQUIRED, importApply.category)
+        val status = transport.prepare(
+            envelope(
+                targetNodeRef = "com.victorious.suite",
+                actionRef = FleetRemoteEnvelope.OP_NODE_STATUS_GET,
+                timestampMs = now,
+                destructive = true,
+            ),
+        )
+        assertIs<TermuxIpcResult.Ready>(status)
+        assertEquals(0, sent)
     }
 
     private fun assertNotEqualsLive(status: FleetHonestyStatus) {
