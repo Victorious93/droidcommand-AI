@@ -22,6 +22,7 @@ class FleetStatusTest {
         assertEquals("com.victorious.browser", FleetCatalog.BROWSER_PACKAGE)
         assertEquals("com.victorious.sms", FleetCatalog.VICTORSMS_PACKAGE)
         assertEquals("com.victorious.spoof", FleetCatalog.VICTORSPOOF_PACKAGE)
+        assertEquals("com.victorious.flash.android", FleetCatalog.FLASH_PACKAGE)
         assertEquals("com.identityshield.companion", FleetCatalog.KYC_PACKAGE)
         assertEquals(FleetCatalog.ROOTFORGE_PACKAGE, FleetCatalog.ROOTFORGE.packageName)
         assertEquals(ExternalNodeCatalog.ROOTFORGE.primaryPackage, FleetCatalog.ROOTFORGE_PACKAGE)
@@ -31,6 +32,7 @@ class FleetStatusTest {
         assertEquals(ExternalNodeCatalog.BROWSER.primaryPackage, FleetCatalog.BROWSER_PACKAGE)
         assertEquals(ExternalNodeCatalog.VICTOR_SMS.primaryPackage, FleetCatalog.VICTORSMS_PACKAGE)
         assertEquals(ExternalNodeCatalog.VICTOR_SPOOF.primaryPackage, FleetCatalog.VICTORSPOOF_PACKAGE)
+        assertEquals(ExternalNodeCatalog.VICTORIOUS_FLASH.primaryPackage, FleetCatalog.FLASH_PACKAGE)
         assertEquals(ExternalNodeCatalog.KYC_AUDITLAB.primaryPackage, FleetCatalog.KYC_PACKAGE)
         assertEquals(FleetCatalog.KYC_PACKAGE, FleetCatalog.KYC_AUDITLAB.packageName)
         assertEquals(FleetCatalog.FILEMANAGER_PACKAGE, FleetCatalog.FILE_MANAGER.packageName)
@@ -39,6 +41,7 @@ class FleetStatusTest {
         assertEquals(FleetCatalog.BROWSER_PACKAGE, FleetCatalog.BROWSER.packageName)
         assertEquals(FleetCatalog.VICTORSMS_PACKAGE, FleetCatalog.VICTOR_SMS.packageName)
         assertEquals(FleetCatalog.VICTORSPOOF_PACKAGE, FleetCatalog.VICTOR_SPOOF.packageName)
+        assertEquals(FleetCatalog.FLASH_PACKAGE, FleetCatalog.VICTORIOUS_FLASH.packageName)
         assertEquals(
             listOf(FleetCatalog.ROOTFORGE_DEBUG_PACKAGE),
             FleetCatalog.ROOTFORGE.extraPackages,
@@ -61,6 +64,7 @@ class FleetStatusTest {
                 FleetCatalog.BROWSER,
                 FleetCatalog.VICTOR_SMS,
                 FleetCatalog.VICTOR_SPOOF,
+                FleetCatalog.VICTORIOUS_FLASH,
                 FleetCatalog.KYC_AUDITLAB,
             ).flatMap { it.androidPackages }.toSet(),
         )
@@ -78,6 +82,7 @@ class FleetStatusTest {
                 "browser",
                 "victorsms",
                 "victorspoof",
+                "victorious-flash",
             ),
             FleetCatalog.all.map { it.id },
         )
@@ -101,6 +106,7 @@ class FleetStatusTest {
         val browser = rows.single { it.member.id == "browser" }
         val victorSms = rows.single { it.member.id == "victorsms" }
         val victorSpoof = rows.single { it.member.id == "victorspoof" }
+        val flash = rows.single { it.member.id == "victorious-flash" }
 
         assertEquals(FleetInstallState.INSTALLED, hacker.installed)
         assertTrue(hacker.status.contains("disconnected"))
@@ -183,6 +189,15 @@ class FleetStatusTest {
         assertTrue(victorSpoof.member.summary.contains("fail-open"))
         assertFalse(victorSpoof.status.contains("ready", ignoreCase = true), victorSpoof.status)
 
+        assertEquals(FleetInstallState.NOT_INSTALLED, flash.installed)
+        assertTrue(flash.status.contains("not paired"))
+        assertTrue(flash.status.contains("Not LIVE"))
+        assertTrue(flash.member.summary.contains("Never DependencyGuard"))
+        assertTrue(flash.member.summary.contains("com.victorious.flash.android.FLEET_BRIDGE"))
+        assertTrue(flash.member.summary.contains("gadget.expose is DESTRUCTIVE"))
+        assertTrue(flash.member.summary.contains("enforced"))
+        assertFalse(flash.status.contains("ready", ignoreCase = true), flash.status)
+
         rows.forEach { row ->
             assertFalse(row.status.contains("ready", ignoreCase = true), row.status)
         }
@@ -214,5 +229,12 @@ class FleetStatusTest {
         assertTrue(installedBrowser.status.contains("Pair the observed signing-cert"))
         assertTrue(installedBrowser.status.contains("Not LIVE"))
         assertFalse(installedBrowser.status.contains("ready", ignoreCase = true), installedBrowser.status)
+
+        val installedFlash = FleetStatus.resolve(FleetCatalog.all) { it == FleetCatalog.FLASH_PACKAGE }
+            .single { it.member.id == "victorious-flash" }
+        assertEquals(FleetInstallState.INSTALLED, installedFlash.installed)
+        assertTrue(installedFlash.status.contains("Pair the observed signing-cert"))
+        assertTrue(installedFlash.status.contains("Not LIVE"))
+        assertFalse(installedFlash.status.contains("ready", ignoreCase = true), installedFlash.status)
     }
 }

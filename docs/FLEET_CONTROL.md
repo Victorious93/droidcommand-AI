@@ -24,13 +24,16 @@ HackerAI (`ai.hackerai.companion`) is already a bound companion and is
 7. **Victorious Keyboard** — catalog only; direction (hub queries keyboard vs keyboard slash-commands) is open
 8. **Victorious Mesh** — catalog only; EXTERNAL_NODE with its own signing keys (debug==release package)
 9. **Victorious Browser** — catalog only; EXTERNAL_NODE with its own signing keys (release CI-only, not the shared fleet key)
+10. **VictorSMS** — EXTERNAL_NODE, SMS remote-command source; debug cert documented unenforced
+11. **VictorSpoof** — EXTERNAL_NODE, novelty/prank caller-ID; certs TBD / unpinned
+12. **Victorious Flash** — EXTERNAL_NODE, Messenger `FLEET_BRIDGE`; debug cert **enforced**; `gadget.expose` destructive always confirmation_required + on-phone ERASE
 
 ## Integration classes (do not mix)
 
 | Class | Security rules | Who |
 |---|---|---|
 | **BOUND_COMPANION** | AIDL + `protectionLevel="signature"` (same signing key) + companion `DependencyGuard`. Prefer one command-envelope service for new companions. `Initiator.REMOTE`. | Pentest-Swarm-AI, EDL-Commander (HackerAI, already mapped) |
-| **EXTERNAL_NODE** | Independent product. **Never** `DependencyGuard`, **never** a shared signing key, never "install DCA first". Live APK path on *their* main is bound **Messenger** + shared JSON (`protocol_major` 1). RootForge: `action ai.rootforge.os.action.BRIDGE`. File Manager: `action ai.victorious.filemanager.action.BRIDGE` (**PLANNED** as a product slot; generic client exists, off until paired). Keyboard: planned `action com.victorious.keyboard.action.BRIDGE` (**PLANNED**; never forwards typed text/keystrokes). Mesh: planned `action com.victorious.mesh.action.BRIDGE` (**PLANNED**; debug==release package `com.victorious.mesh`; Mesh keeps its own release key; generic client exists, off until paired). Browser: planned `action com.victorious.browser.action.BRIDGE` (**PLANNED**; package `com.victorious.browser`; caller identity = `Message.sendingUid`, not `Binder.getCallingUid`; Browser keeps its own release key, CI-only). KYC companion: planned `action com.identityshield.companion.action.BRIDGE` (**[provisional/pending-stable-cert]**; `remote.command` OFF-by-default; all PII ops `remoteAllowed:false`; fail-open cert). Desktop/Docker = localhost headless API + bearer (planned, RootForge). SSH = CLI/ISO **fallback only** (RootForge). Removing DCA must not disable the node. | RootForge OS, Victorious File Manager, Victorious Keyboard, Victorious Mesh, Victorious Browser, KYC-AuditLab companion APK (remote.command surface; KnownFleet class stays HOST_PROCESS_TOOL for the localhost simulator) |
+| **EXTERNAL_NODE** | Independent product. **Never** `DependencyGuard`, **never** a shared signing key, never "install DCA first". Live APK path on *their* main is bound **Messenger** + shared JSON (`protocol_major` 1). RootForge: `action ai.rootforge.os.action.BRIDGE`. File Manager: `action ai.victorious.filemanager.action.BRIDGE` (**PLANNED** as a product slot; generic client exists, off until paired). Keyboard: planned `action com.victorious.keyboard.action.BRIDGE` (**PLANNED**; never forwards typed text/keystrokes). Mesh: planned `action com.victorious.mesh.action.BRIDGE` (**PLANNED**; debug==release package `com.victorious.mesh`; Mesh keeps its own release key; generic client exists, off until paired). Browser: planned `action com.victorious.browser.action.BRIDGE` (**PLANNED**; package `com.victorious.browser`; caller identity = `Message.sendingUid`, not `Binder.getCallingUid`; Browser keeps its own release key, CI-only). KYC companion: planned `action com.identityshield.companion.action.BRIDGE` (**[provisional/pending-stable-cert]**; `remote.command` OFF-by-default; all PII ops `remoteAllowed:false`; fail-open cert). Desktop/Docker = localhost headless API + bearer (planned, RootForge). SSH = CLI/ISO **fallback only** (RootForge). Removing DCA must not disable the node. | RootForge OS, Victorious File Manager, Victorious Keyboard, Victorious Mesh, Victorious Browser, VictorSMS, VictorSpoof, Victorious Flash, KYC-AuditLab companion APK (remote.command surface; KnownFleet class stays HOST_PROCESS_TOOL for the localhost simulator) |
 | **TERMUX_IPC** | `com.termux.RUN_COMMAND` + plugin IPC + shared command schema. **Not** a new bound service. | VictorSuite |
 | **HOST_PROCESS_TOOL** | Localhost process behind a `Tool` + `SecureToolExecutor`. **Never** AIDL or DependencyGuard. | KYC-AuditLab only |
 
@@ -197,10 +200,11 @@ Kali/pentest authorization are unchanged.
 
 ### Expected certs
 
-The catalogue is **partial**. Do **not** invent fingerprints. Do **not**
-catalogue victorious-flash (debug cert is non-deterministic until they
-land a fixed keystore). Fail-closed should be enabled only once remaining
-members and verified release pins are catalogued.
+The catalogue is **partial**. Do **not** invent fingerprints. Victorious
+Flash debug is catalogued and **enforced** (flash PR #18 merged; debug
+cert is stable). Flash RELEASE is TBD — do not invent. Fail-closed should
+be enabled only once remaining members and verified release pins are
+catalogued.
 
 **Enforceable** (in `expectedSigningCertSha256` / `expectedCerts`; mismatch
 and missing-observed refuse):
@@ -211,6 +215,7 @@ and missing-observed refuse):
 | Victorious Mesh (8th wiring-order member, PLANNED catalog) | DEBUG | `com.victorious.mesh` | `F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4` |
 | Victorious Mesh (8th wiring-order member, PLANNED catalog) | RELEASE (own key, **not** the shared fleet key) | `com.victorious.mesh` | `76:E9:15:83:31:40:DA:96:69:D3:CC:5D:54:F6:66:A9:01:51:51:FC:F6:4C:59:B6:3D:DA:6E:D2:8F:83:A4:0D` |
 | Victorious Browser (9th wiring-order member, PLANNED catalog) | DEBUG | `com.victorious.browser` | `2D:5D:9E:8B:53:8E:78:51:3D:B5:41:F4:DF:FD:67:BE:27:FF:EC:3F:37:EB:1A:D4:8D:77:83:AE:59:27:C3:E1` |
+| Victorious Flash (12th wiring-order member, PLANNED catalog) | DEBUG | `com.victorious.flash.android` | `2C:52:0F:7A:A4:BE:72:6D:EB:F9:18:3D:04:3D:56:C5:58:E5:67:F7:77:BD:10:BE:3C:98:86:38:1C:6A:F6:ED` |
 | Pentest-Swarm-AI | DEBUG | `ai.pentestswarm.companion` | `5E:3A:B1:23:1F:7E:DA:18:78:B8:FF:D8:9E:AC:B1:F7:2E:EB:66:AF:3D:BA:2E:01:33:51:24:68:42:23:30:C7` |
 | EDL-Commander | DEBUG | `ai.edlcommander.companion` | `E5:60:B6:92:BD:E6:51:9E:B7:CB:B5:2C:E4:DC:91:5A:19:E4:41:A0:1A:5D:03:68:82:71:AC:99:78:8A:58:C8` |
 | HackerAI-Commander | DEBUG | `ai.hackerai.companion` | `AF:1C:8F:C5:44:9F:58:4A:46:C8:96:CC:C9:7F:35:B0:7B:35:7E:96:EE:66:5F:3A:BF:CB:0D:28:4D:F5:23:55` |
@@ -229,6 +234,7 @@ and missing-observed refuse):
 | Pentest-Swarm-AI | RELEASE | [planned/unverified] |
 | EDL-Commander | RELEASE | [planned/unverified] |
 | Victorious Browser | RELEASE | [planned/unverified] — **own** key (NOT shared fleet `9E:A7`), CI-only, cert TBD — do not invent |
+| Victorious Flash | RELEASE | TBD — do not invent |
 
 **Caveated** (documented, **not** enforced — packages stay fail-open):
 
@@ -248,7 +254,7 @@ and missing-observed refuse):
 | File Manager RELEASE | No release key yet |
 | VictorSMS RELEASE | Cert TBD — do not invent |
 | KYC-AuditLab companion RELEASE | Cert TBD — do not invent. Active debug pin stays the provisional 6F:46:… fail-open value until KYC PR #29 merges, then swap to 22:4F:…. |
-| victorious-flash | Debug cert is non-deterministic until they land a fixed keystore — **do not catalogue** |
+| Victorious Flash RELEASE | Cert TBD — do not invent. Debug pin is enforced (flash PR #18 merged). |
 | BakerPi | Out of scope |
 
 ### Default for `[Unknown]`: ALLOW (documented)
@@ -485,3 +491,31 @@ backup contract. **[CONTRACT] FROZEN** in `docs/specs/UNIFIED_BACKUP.md`.
   merge-by-id, **never** auto-enable `remote.command`.
 - The #233 controller-local JSON is the `ai.droidcommand.app` entry.
   No live bind. Kali/pentest/YOLO pentest gates untouched.
+
+## 2026-10-20m — Victorious Flash is the 12th member (debug cert ENFORCED)
+
+Victorious Flash (`com.victorious.flash.android`,
+`Victorious93/victorious-flash`) **is** `KnownFleet.VICTORIOUS_FLASH`
+(`wiringOrder` 12, EXTERNAL_NODE, PLANNED). Never DependencyGuard, never
+a shared signing key, never AIDL, never `KnownCompanions`.
+
+- Messenger: exported service, action
+  `com.victorious.flash.android.FLEET_BRIDGE`, Message what=1 JSON
+  envelope + `replyTo`, reply what=2.
+- Node-id prefix `^vfa-[0-9a-f]{32}$` (`targetNodeRef` = phone id).
+- Ops: `status.get` / `capabilities.get` (read);
+  `netboot.serve.start` / `netboot.serve.stop` (action);
+  `otg.write{deviceName}`; `gadget.expose` (**DESTRUCTIVE**, always
+  `confirmation_required` plus on-phone ERASE confirmation). Isolated
+  like other destructive gating. This catalog stub does not bind and
+  never exposes a gadget.
+- DEBUG signing cert SHA-256 **enforced** (flash PR #18 merged to main;
+  CI green `7a4c32c`):
+  `2C:52:0F:7A:A4:BE:72:6D:EB:F9:18:3D:04:3D:56:C5:58:E5:67:F7:77:BD:10:BE:3C:98:86:38:1C:6A:F6:ED`
+  (`KnownNodeSigningCatalog.VICTORIOUS_FLASH_DEBUG_SHA256` on
+  `expectedSigningCertSha256`). Release cert TBD — do not invent.
+- Distinct from the Linux SSH `core-flash` node (`vf-` prefix,
+  `docs/FLASH_INTEGRATION.md`).
+- Catalog stub `victorious_flash_status` always fails
+  (`REQUIRES_EXTERNAL_SERVICE`). Tools → Fleet probes
+  `com.victorious.flash.android` only.

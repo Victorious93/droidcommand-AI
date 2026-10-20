@@ -165,9 +165,10 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  *
  * `pentest_swarm_status` / `edl_commander_status` / `kyc_auditlab_status` /
  * `filemanager_status` / `keyboard_status` / `mesh_status` / `browser_status` /
- * `victorsms_status` / `victorspoof_status` (`KnownFleet.plannedStubs`) are catalog stubs. Pentest and EDL are planned
+ * `victorsms_status` / `victorspoof_status` / `victorious_flash_status`
+ * (`KnownFleet.plannedStubs`) are catalog stubs. Pentest and EDL are planned
  * bound companions; KYC is a host-process simulator; File Manager, Keyboard,
- * Mesh, Browser, VictorSMS, and VictorSpoof are planned
+ * Mesh, Browser, VictorSMS, VictorSpoof, and Victorious Flash are planned
  * EXTERNAL_NODE members. All always fail without binding or spawning.
  * See `docs/FLEET_CONTROL.md`.
  *
@@ -277,7 +278,7 @@ internal fun printUsage() {
 
         Usage:
           list-tools                     List every registered tool and its spec
-          list-fleet                     List the eleven room-fleet members and their honest status
+          list-fleet                     List the twelve room-fleet members and their honest status
           pilot <tool> [key=value ...]   Run a single Pilot Mode tool invocation
           forge <objective text...>      Run a Forge Mode objective via an LLM planner
                                           [--finalization-steps <n>]
@@ -345,15 +346,15 @@ internal fun printUsage() {
         (both set tries Brave first, falling back to SerpAPI on failure); with neither
         set it fails without making any network call. Still requires approval either way.
 
-        list-fleet prints the eleven room-fleet members from core-security.KnownFleet.
+        list-fleet prints the twelve room-fleet members from core-security.KnownFleet.
         None is LIVE. Wiring order: Pentest (when repo exists) → RootForge Messenger
         → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager
         (when their identity/default-off PR lands) → Keyboard (catalog only;
         direction of hub-query vs keyboard slash-commands is open) → Mesh
         (catalog only; own signing keys) → Browser (catalog only; own signing keys)
-        → VictorSMS (EXTERNAL_NODE, SMS remote-command source, debug cert documented [planned/pending-merge] unenforced) → VictorSpoof (EXTERNAL_NODE, isolated from destructive, certs TBD).
+        → VictorSMS (EXTERNAL_NODE, SMS remote-command source, debug cert documented [planned/pending-merge] unenforced) → VictorSpoof (EXTERNAL_NODE, isolated from destructive, certs TBD) → Flash (EXTERNAL_NODE, Messenger FLEET_BRIDGE; gadget.expose destructive always confirmation_required + on-phone ERASE; debug cert enforced; release TBD).
         pentest_swarm_status / edl_commander_status / kyc_auditlab_status /
-        filemanager_status / keyboard_status / mesh_status / browser_status / victorsms_status / victorspoof_status are planned stubs
+        filemanager_status / keyboard_status / mesh_status / browser_status / victorsms_status / victorspoof_status / victorious_flash_status are planned stubs
         and always fail.
         See docs/FLEET_CONTROL.md.
 

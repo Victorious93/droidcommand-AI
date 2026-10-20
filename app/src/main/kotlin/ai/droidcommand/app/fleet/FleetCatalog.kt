@@ -5,7 +5,7 @@ import ai.droidcommand.security.EdlCompanionIds
 /**
  * Package-probe roster for Tools → Fleet. This is the UI half of
  * `core-security.KnownFleet` plus HackerAI (already a bound companion,
- * not one of the nine room-fleet items).
+ * not one of the twelve room-fleet items).
  *
  * Lives in `:app` so the default JVM build does not have to compile the
  * AIDL module. Companion rows stay a PackageManager probe. EXTERNAL_NODE
@@ -71,6 +71,9 @@ object FleetCatalog {
 
     /** EXTERNAL_NODE. Novelty/prank caller-ID. Isolated from destructive. Certs TBD (fail-open). */
     const val VICTORSPOOF_PACKAGE = "com.victorious.spoof"
+
+    /** EXTERNAL_NODE. Probe only — do not bind Messenger. Debug cert enforced (flash PR #18). */
+    const val FLASH_PACKAGE = "com.victorious.flash.android"
 
     /**
      * KYC companion EXTERNAL_NODE for remote.command. Probe-only.
@@ -220,6 +223,21 @@ object FleetCatalog {
             "Never DependencyGuard, never a shared signing key.",
     )
 
+    val VICTORIOUS_FLASH = FleetMember(
+        id = "victorious-flash",
+        name = "Victorious Flash",
+        packageName = FLASH_PACKAGE,
+        kind = FleetKind.EXTERNAL_NODE,
+        summary = "EXTERNAL_NODE, PLANNED. Messenger action " +
+            "com.victorious.flash.android.FLEET_BRIDGE (exported service; Message what=1 " +
+            "json envelope + replyTo, reply what=2). Node-id prefix ^vfa-[0-9a-f]{32}$. " +
+            "Read ops status.get / capabilities.get. gadget.expose is DESTRUCTIVE " +
+            "(always confirmation_required + on-phone ERASE confirmation). Debug cert " +
+            "enforced (KnownNodeSigningCatalog.VICTORIOUS_FLASH_DEBUG_SHA256). Release " +
+            "cert TBD. Never DependencyGuard, never a shared signing key. Distinct from " +
+            "the Linux SSH core-flash node (vf-).",
+    )
+
     val all: List<FleetMember> = listOf(
         HACKERAI,
         PENTEST_SWARM,
@@ -233,6 +251,7 @@ object FleetCatalog {
         BROWSER,
         VICTOR_SMS,
         VICTOR_SPOOF,
+        VICTORIOUS_FLASH,
     )
 
     /**

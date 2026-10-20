@@ -126,6 +126,22 @@ object ExternalNodeCatalog {
             "Signing certs TBD — catalogue fail-open/unpinned. TODO: pin debug+release SHA-256.",
     )
 
+    val VICTORIOUS_FLASH = ExternalNodeSpec(
+        id = "victorious-flash",
+        displayName = "Victorious Flash",
+        nodeId = "victorious-flash",
+        packages = listOf("com.victorious.flash.android"),
+        capabilitiesOperation = "capabilities.get",
+        statusOperation = "status.get",
+        notes = "EXTERNAL_NODE. Confirmed action com.victorious.flash.android.FLEET_BRIDGE " +
+            "(exported service; Message what=1 json envelope + replyTo, reply what=2). " +
+            "Node-id prefix ^vfa-[0-9a-f]{32}$. Read ops status.get / capabilities.get. " +
+            "Action ops netboot.serve.start / netboot.serve.stop / otg.write{deviceName}. " +
+            "gadget.expose is DESTRUCTIVE (always confirmation_required + on-phone ERASE). " +
+            "Debug cert enforced. Release cert TBD. Never DependencyGuard. Distinct from " +
+            "the Linux SSH core-flash node (vf- prefix).",
+    )
+
     val KYC_AUDITLAB = ExternalNodeSpec(
         id = "kyc-auditlab",
         displayName = "KYC-AuditLab",
@@ -151,6 +167,7 @@ object ExternalNodeCatalog {
         BROWSER,
         VICTOR_SMS,
         VICTOR_SPOOF,
+        VICTORIOUS_FLASH,
         KYC_AUDITLAB,
     )
 

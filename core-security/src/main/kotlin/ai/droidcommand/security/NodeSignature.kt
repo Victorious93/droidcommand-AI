@@ -47,7 +47,7 @@ class SigningCertSha256 private constructor(val canonical: String) {
  * Fail-closed ([REFUSE]) is the stronger posture, but the documented
  * **default is [ALLOW]** so existing flows for members whose cert is
  * still `[Unknown]` (File Manager, Keyboard `.bench`, KYC,
- * victorious-flash, …) keep working. Flip to [REFUSE] via
+ * …) keep working. Flip to [REFUSE] via
  * [fromEnvironment] (`DROIDCOMMAND_NODE_CERT_MISSING_EXPECTED=refuse`)
  * only once the catalogue is complete — it is still partial.
  *
@@ -127,8 +127,9 @@ enum class NodeSignatureRefusal {
  * This catalogue is **partial**. Fail-closed
  * ([MissingExpectedCertPolicy.REFUSE]) should be enabled only once
  * remaining members and verified release pins are catalogued.
- * Do not invent fingerprints. Do not catalogue victorious-flash
- * (debug cert is non-deterministic until they land a fixed keystore).
+ * Do not invent fingerprints. Victorious Flash debug is catalogued
+ * and enforced (flash PR #18 merged; debug cert is stable). Release
+ * cert TBD — do not invent.
  */
 object KnownNodeSigningCatalog {
     /** DroidCommand AI debug keystore (`docs/SIGNING.md`). Enforceable. */
@@ -178,6 +179,15 @@ object KnownNodeSigningCatalog {
      */
     const val VICTORIOUS_BROWSER_DEBUG_SHA256 =
         "2D:5D:9E:8B:53:8E:78:51:3D:B5:41:F4:DF:FD:67:BE:27:FF:EC:3F:37:EB:1A:D4:8D:77:83:AE:59:27:C3:E1"
+
+    /**
+     * Victorious Flash debug (`com.victorious.flash.android`). Enforceable.
+     * Source: flash PR #18 merged to main; CI green `7a4c32c`. Debug cert
+     * is stable and must be pinned, not fail-open. RELEASE is TBD — do
+     * not invent a fingerprint.
+     */
+    const val VICTORIOUS_FLASH_DEBUG_SHA256 =
+        "2C:52:0F:7A:A4:BE:72:6D:EB:F9:18:3D:04:3D:56:C5:58:E5:67:F7:77:BD:10:BE:3C:98:86:38:1C:6A:F6:ED"
 
     /** VictorSuite / Termux (`com.termux`) committed debug signing cert. Enforceable. */
     const val VICTORSUITE_DEBUG_SHA256 =
@@ -312,6 +322,24 @@ object KnownNodeSigningCatalog {
     )
 
     /**
+     * Victorious Flash debug identity. [KnownFleet.VICTORIOUS_FLASH],
+     * EXTERNAL_NODE, wiring order 12, PLANNED. Debug pin is enforced
+     * (flash PR #18 merged). RELEASE is TBD — not listed in
+     * [expectedCerts]. Distinct from the Linux SSH `core-flash` node.
+     */
+    val VICTORIOUS_FLASH_DEBUG = NodeSigningIdentity(
+        packageName = "com.victorious.flash.android",
+        expectedCerts = listOf(SigningCertSha256.parseOrThrow(VICTORIOUS_FLASH_DEBUG_SHA256)),
+        memberId = "victorious-flash",
+        integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
+        notes = "Victorious Flash debug. Enforceable (flash PR #18 merged; debug cert " +
+            "stable). RELEASE is TBD — do not invent. KnownFleet.VICTORIOUS_FLASH " +
+            "(EXTERNAL_NODE, wiring order 12, PLANNED). gadget.expose is DESTRUCTIVE " +
+            "(always confirmation_required + on-phone ERASE). Never DependencyGuard, " +
+            "never a shared signing key. Distinct from the Linux SSH core-flash node (vf-).",
+    )
+
+    /**
      * HackerAI-Commander (`ai.hackerai.companion`). Debug is
      * committed; RELEASE [SHARED_FLEET_RELEASE_SHA256] is FIRSTHAND
      * VERIFIED (v0.1.0 APK signer in CI). This is the **only** member
@@ -347,6 +375,7 @@ object KnownNodeSigningCatalog {
         DROIDCOMMAND_AI_DEBUG,
         VICTORIOUS_MESH_DEBUG,
         VICTORIOUS_BROWSER_DEBUG,
+        VICTORIOUS_FLASH_DEBUG,
         HACKERAI,
         KEYBOARD_BENCH,
     )
