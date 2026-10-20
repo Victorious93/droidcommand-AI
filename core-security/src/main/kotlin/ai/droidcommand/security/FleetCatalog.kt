@@ -794,7 +794,7 @@ object KnownFleet {
         notes = "EXTERNAL_NODE like RootForge / File Manager / Keyboard / Mesh / Browser / VictorSMS / " +
             "VictorSpoof / Flash. Never DependencyGuard, never shared signing key, never " +
             "KnownCompanions, never BIND_* signature permission, never AIDL. Package " +
-            "com.victorious.launch. Status-tray consumer AND bridge node. config.export/import " +
+            "com.victorious.launch. status-tray consumer AND bridge node. config.export/import " +
             "supported. Envelope v1.1 dispatcher; ACTION OPS OFF BY DEFAULT (external control " +
             "default OFF). MANUAL + in-app Help. Caller identity = Message.sendingUid. " +
             "Node-id prefix ^victorlaunch-[0-9a-f]{32}$. [planned/pending-merge]. Debug SHA-256 " +
