@@ -265,5 +265,10 @@ class RemoteControlViewModel @Inject constructor(
                 "${result.result.steps.size} steps, ok=${result.result.ok}"
         is RemoteDispatchResult.StatusTray ->
             "node.status.get: ${result.snapshots.size} snapshots"
+        is RemoteDispatchResult.ConfigBackup ->
+            "config.export: ${result.bundle.entries.size} entries wrapping=${result.bundle.wrapping.wire}"
+        is RemoteDispatchResult.ConfigImport ->
+            "config.import dry-run: packages=${result.report.packages.joinToString()} " +
+                "added=${result.report.addedIds.size} skipped=${result.report.skippedIds.size}"
     }
 }

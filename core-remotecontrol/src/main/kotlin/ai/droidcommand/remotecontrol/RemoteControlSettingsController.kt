@@ -86,8 +86,47 @@ class RemoteControlSettingsController(
         val target = backupStore
             ?: throw IllegalStateException("local backup is not configured")
         val backup = target.import()
-        store.save(backup.config)
+        store.save(backup.config.copy(externalControlEnabled = false))
         backup.statusTray.forEach { statusTray.consume(it) }
         return backup
+    }
+
+    fun exportFleetBundle(
+        sourceNodeRef: String = FleetRemoteEnvelope.TARGET_CONTROLLER,
+        aead: FleetBackupAead? = null,
+    ): UnifiedFleetBackup {
+        val local = backupStore?.export(store.load(), statusTray.publish())
+            ?: UnifiedLocalBackup(
+                exportedAtMs = System.currentTimeMillis(),
+                config = store.load(),
+                statusTray = statusTray.publish(),
+            )
+        return if (aead == null) {
+            UnifiedFleetBackupCodec.controllerClearEntry(local, sourceNodeRef)
+        } else {
+            UnifiedFleetBackupCodec.controllerEncryptedEntry(local, sourceNodeRef, aead)
+        }
+    }
+
+    fun importFleetBundle(
+        bundle: UnifiedFleetBackup,
+        policy: BackupConflictPolicy = BackupConflictPolicy.SKIP,
+        dryRun: Boolean = false,
+        aead: FleetBackupAead? = null,
+    ): BackupImportReport {
+        val report = UnifiedFleetBackupImporter().import(
+            bundle = bundle,
+            live = store.load(),
+            aead = aead,
+            policy = policy,
+            dryRun = dryRun,
+        )
+        if (!dryRun) {
+            val config = report.config
+                ?: throw IllegalStateException("import produced no config")
+            store.save(config)
+            report.statusTray.forEach { statusTray.consume(it) }
+        }
+        return report
     }
 }

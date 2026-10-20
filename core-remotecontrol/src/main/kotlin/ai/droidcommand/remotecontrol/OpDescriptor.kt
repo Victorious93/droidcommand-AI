@@ -92,6 +92,18 @@ object ControllerCapabilityCatalog {
             remoteAllowed = true,
             requiresConfirm = false,
         ),
+        OpDescriptor(
+            name = FleetRemoteEnvelope.OP_CONFIG_EXPORT,
+            kind = OpKind.ACTION,
+            remoteAllowed = false,
+            requiresConfirm = false,
+        ),
+        OpDescriptor(
+            name = FleetRemoteEnvelope.OP_CONFIG_IMPORT,
+            kind = OpKind.ACTION,
+            remoteAllowed = false,
+            requiresConfirm = true,
+        ),
     )
 
     fun advertisement(): CapabilityAdvertisement = CapabilityAdvertisement(ops = OPS)

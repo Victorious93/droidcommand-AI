@@ -161,6 +161,8 @@ Every fleet APK advertises:
 - `macro.step` `{ op, params }`
 - `macro.run` `{ steps: [{ op, params, onError, timeoutMs }], dryRun }`
 - `node.status.get` — frozen STATUS-TRAY snapshot (`docs/specs/STATUS_TRAY.md`)
+- `config.export` / `config.import` — frozen SETTINGS/BACKUP bundle
+  (`docs/specs/UNIFIED_BACKUP.md`). Off the remote surface by default.
 
 The node runner dispatches **only** to its own advertised ops, sequentially.
 `onError: abort` (atomic) stops on first error and reports **partial**
@@ -197,9 +199,11 @@ in-memory aggregate. No live bind.
 
 Settings → Remote Control → Local backup exports a **versioned JSON** of
 this controller's **macros, mappings, and device pairings** (plus
-targets and last status-tray rows) to a file on this device. API keys
-and VictorSMS secrets are **not** included. The unified cross-app
-backup schema is still pending the Fleet Orchestrator.
+targets and last status-tray rows) to a file on this device. That JSON
+is one entry in the frozen cross-app bundle
+(`docs/specs/UNIFIED_BACKUP.md`). API keys, signing keys, passwords,
+and VictorSMS secrets are **not** included. Restore never turns
+external control / `remote.command` back on by itself. No live bind.
 
 ---
 

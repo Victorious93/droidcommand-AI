@@ -19,6 +19,7 @@ class RemoteCommandDispatcher(
     private val replayGuard: ReplayGuard = ReplayGuard(),
     private val statusTray: RemoteStatusTray? = null,
     private val advertisedOps: List<OpDescriptor> = ControllerCapabilityCatalog.OPS,
+    private val fleetBackupAead: FleetBackupAead? = null,
 ) {
     private val nodeMacroRunner: NodeMacroRunner
         get() = NodeMacroRunner(
@@ -44,13 +45,19 @@ class RemoteCommandDispatcher(
                 TargetNodeRefValidator.rejectReason(category, envelope.targetNodeRef),
             )
         }
-        consumeTray(envelope, source)
         val op = operation.ifBlank { FleetRemoteEnvelope.OP_REMOTE_COMMAND }
+        if (op != FleetRemoteEnvelope.OP_CONFIG_EXPORT && op != FleetRemoteEnvelope.OP_CONFIG_IMPORT) {
+            consumeTray(envelope, source)
+        }
         return when (op) {
             FleetRemoteEnvelope.OP_CAPABILITIES_GET ->
                 RemoteDispatchResult.Capabilities(ControllerCapabilityCatalog.advertisement())
             FleetRemoteEnvelope.OP_NODE_STATUS_GET ->
                 resolveStatusGet(envelope, source)
+            FleetRemoteEnvelope.OP_CONFIG_EXPORT ->
+                resolveConfigExport(envelope)
+            FleetRemoteEnvelope.OP_CONFIG_IMPORT ->
+                resolveConfigImport(envelope)
             FleetRemoteEnvelope.OP_MACRO_RUN ->
                 resolveMacroRun(envelope)
             FleetRemoteEnvelope.OP_MACRO_STEP ->
@@ -63,6 +70,58 @@ class RemoteCommandDispatcher(
                 RemoteErrorCategory.UNSUPPORTED_OP,
                 "unsupported op '$op'",
             )
+        }
+    }
+
+    private fun resolveConfigExport(envelope: FleetRemoteEnvelope): RemoteDispatchResult {
+        val descriptor = advertisedOps.find { it.name == FleetRemoteEnvelope.OP_CONFIG_EXPORT }
+            ?: return TrustPipeline.reject(RemoteErrorCategory.CAPABILITY_OFF, "config.export is not advertised")
+        if (!descriptor.remoteAllowed) {
+            return TrustPipeline.reject(RemoteErrorCategory.CAPABILITY_OFF, "config.export is not remote-allowed")
+        }
+        val local = UnifiedLocalBackup(
+            exportedAtMs = envelope.timestampMs,
+            config = store.load(),
+            statusTray = statusTray?.publish().orEmpty(),
+        )
+        val aead = fleetBackupAead
+        val wantClear = envelope.args["clearPayload"] == "true" || aead == null
+        val bundle = if (wantClear) {
+            UnifiedFleetBackupCodec.controllerClearEntry(local, envelope.targetNodeRef)
+        } else {
+            UnifiedFleetBackupCodec.controllerEncryptedEntry(local, envelope.targetNodeRef, aead)
+        }
+        return RemoteDispatchResult.ConfigBackup(bundle, dryRun = false)
+    }
+
+    private fun resolveConfigImport(envelope: FleetRemoteEnvelope): RemoteDispatchResult {
+        val descriptor = advertisedOps.find { it.name == FleetRemoteEnvelope.OP_CONFIG_IMPORT }
+            ?: return TrustPipeline.reject(RemoteErrorCategory.CAPABILITY_OFF, "config.import is not advertised")
+        if (!descriptor.remoteAllowed) {
+            return TrustPipeline.reject(RemoteErrorCategory.CAPABILITY_OFF, "config.import is not remote-allowed")
+        }
+        val dryRun = envelope.dryRun == true || envelope.args["dryRun"] == "true"
+        if (descriptor.requiresConfirm && !dryRun) {
+            return TrustPipeline.reject(RemoteErrorCategory.CONFIRMATION_REQUIRED, "config.import requires on-device confirm")
+        }
+        val raw = envelope.args["bundle"]
+            ?: return TrustPipeline.reject(RemoteErrorCategory.INVALID_PARAMETERS, "config.import needs args.bundle")
+        val policy = BackupConflictPolicy.fromWire(envelope.args["conflictPolicy"] ?: BackupConflictPolicy.SKIP.wire)
+            ?: return TrustPipeline.reject(RemoteErrorCategory.INVALID_PARAMETERS, "unknown conflictPolicy")
+        return try {
+            val bundle = UnifiedFleetBackupCodec.decode(raw)
+            val report = UnifiedFleetBackupImporter().import(
+                bundle = bundle,
+                live = store.load(),
+                aead = fleetBackupAead,
+                policy = policy,
+                dryRun = true,
+            )
+            RemoteDispatchResult.ConfigImport(report.copy(dryRun = true, applied = false, config = null))
+        } catch (e: BackupImportException) {
+            TrustPipeline.reject(e.category, e.message ?: e.category.wire)
+        } catch (e: IllegalArgumentException) {
+            TrustPipeline.reject(RemoteErrorCategory.INVALID_PARAMETERS, e.message ?: "invalid bundle")
         }
     }
 
@@ -120,6 +179,10 @@ class RemoteCommandDispatcher(
                 FleetRemoteEnvelope.OP_CAPABILITIES_GET
             } else if (envelope.actionRef == FleetRemoteEnvelope.OP_NODE_STATUS_GET) {
                 FleetRemoteEnvelope.OP_NODE_STATUS_GET
+            } else if (envelope.actionRef == FleetRemoteEnvelope.OP_CONFIG_EXPORT) {
+                FleetRemoteEnvelope.OP_CONFIG_EXPORT
+            } else if (envelope.actionRef == FleetRemoteEnvelope.OP_CONFIG_IMPORT) {
+                FleetRemoteEnvelope.OP_CONFIG_IMPORT
             } else if (envelope.steps != null) {
                 FleetRemoteEnvelope.OP_MACRO_RUN
             } else if (isSmsForward(envelope)) {
@@ -519,4 +582,6 @@ sealed class RemoteDispatchResult {
     }
     data class MacroRun(val result: NodeMacroRunResult) : RemoteDispatchResult()
     data class StatusTray(val snapshots: List<NodeStatusSnapshot>) : RemoteDispatchResult()
+    data class ConfigBackup(val bundle: UnifiedFleetBackup, val dryRun: Boolean) : RemoteDispatchResult()
+    data class ConfigImport(val report: BackupImportReport) : RemoteDispatchResult()
 }
