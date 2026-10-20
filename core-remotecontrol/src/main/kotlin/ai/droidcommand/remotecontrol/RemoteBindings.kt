@@ -1,5 +1,6 @@
 package ai.droidcommand.remotecontrol
 
+import ai.droidcommand.rootforge.BridgeResponse
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -95,12 +96,25 @@ object BoundCompanionRemoteBinding {
     }
 }
 
+/**
+ * TERMUX_IPC extras: request [EXTRA] on `com.termux.RUN_COMMAND`,
+ * response [RESPONSE_EXTRA] via the result PendingIntent. Live
+ * broadcast is [UnwiredTermuxIpcSender] by default — encode / decode /
+ * parse only unless a test injects a sender.
+ */
 object TermuxIpcRemoteBinding {
     const val EXTRA = FleetRemoteEnvelope.TERMUX_JSON_EXTRA
+    const val RESPONSE_EXTRA = FleetRemoteEnvelope.TERMUX_RESPONSE_EXTRA
+    const val ACTION = FleetRemoteEnvelope.TERMUX_RUN_COMMAND_ACTION
+    const val PACKAGE = FleetRemoteEnvelope.TERMUX_PACKAGE
 
     fun encodeBlob(envelope: FleetRemoteEnvelope): String =
         RemoteCommandEnvelopeCodec.encodeTermuxBlob(envelope)
 
     fun decodeBlob(raw: String): FleetRemoteEnvelope =
         RemoteCommandEnvelopeCodec.decodeTermuxBlob(raw)
+
+    /** VictorSuite returns the frozen [BridgeResponse] JSON. */
+    fun parseResponse(raw: String): BridgeResponse =
+        RemoteCommandEnvelopeCodec.decodeTermuxResponse(raw)
 }

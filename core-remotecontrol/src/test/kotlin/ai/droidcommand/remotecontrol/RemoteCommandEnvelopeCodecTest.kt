@@ -127,5 +127,8 @@ class RemoteCommandEnvelopeCodecTest {
         assertFalse(termuxJson.contains("\"auth\""), termuxJson)
         assertFalse(termuxJson.contains("\"issuedAt\""), termuxJson)
         assertEquals(TermuxIpcRemoteBinding.EXTRA, FleetRemoteEnvelope.TERMUX_JSON_EXTRA)
+        assertEquals(TermuxIpcRemoteBinding.RESPONSE_EXTRA, FleetRemoteEnvelope.TERMUX_RESPONSE_EXTRA)
+        assertEquals("com.termux.RUN_COMMAND", TermuxIpcRemoteBinding.ACTION)
+        assertEquals("com.termux", TermuxIpcRemoteBinding.PACKAGE)
     }
 }

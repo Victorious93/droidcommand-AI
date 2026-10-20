@@ -128,6 +128,11 @@ data class FleetRemoteEnvelope(
         const val MAX_ARGS = 16
 
         const val TERMUX_JSON_EXTRA = "ai.droidcommand.REMOTE_ENVELOPE_JSON"
+        const val TERMUX_RESPONSE_EXTRA = "ai.droidcommand.REMOTE_RESPONSE_JSON"
+        const val TERMUX_RUN_COMMAND_ACTION = "com.termux.RUN_COMMAND"
+        const val TERMUX_PACKAGE = "com.termux"
+        const val VICTORSUITE_NODE_ID_PREFIX = "victorsuite-"
+        val VICTORSUITE_NODE_ID = Regex("^victorsuite-[0-9a-f]{32}$")
 
         fun isValidNonce(value: String): Boolean {
             if (value.matches(NONCE_128_BIT)) return true

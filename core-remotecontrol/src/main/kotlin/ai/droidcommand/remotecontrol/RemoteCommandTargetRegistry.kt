@@ -53,6 +53,7 @@ object RemoteCommandTargetRegistry {
         VictorSmsRegistry.TARGET,
         VictorSpoofRegistry.TARGET,
         KycAuditLabRegistry.TARGET,
+        VictorSuiteRegistry.TARGET,
     )
 
     fun byId(id: String): KnownRemoteTarget? = ALL.find { it.id == id }

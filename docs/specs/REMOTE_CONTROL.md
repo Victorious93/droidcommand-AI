@@ -473,7 +473,7 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 | Top-level envelope codec (`nonce` / `timestampMs` / `ttlMs` / `destructive`) | implemented, unit-tested |
 | EXTERNAL_NODE BridgeRequest binding | implemented, unit-tested |
 | BOUND_COMPANION logical field map (`BoundCompanionCommand`) | implemented, unit-tested (Kotlin record). **EDL** = `CommandEnvelope`/`ResultEnvelope` parcelables; **HackerAI / Pentest-Swarm** = JSON-string domain AIDL. Live `.aidl` not rewritten — copy EDL when EDL PR #10 merges. |
-| TERMUX_IPC JSON-blob extra | implemented, unit-tested |
+| TERMUX_IPC JSON-blob extra + controller sender/parser | implemented, unit-tested (sender unwired; PENDING / not device-tested) |
 | ReplayGuard seen-nonce cache keyed by `(sourceNodeRef, nonce)` | implemented, unit-tested (replay / ttl / future-skew only) |
 | Trust pipeline (pairing → external-control OFF → replay → policy) | implemented, unit-tested |
 | `RemoteErrorCategory` | implemented, unit-tested |
@@ -517,8 +517,11 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
    `CommandEnvelope`/`ResultEnvelope` for them. The `.aidl` copies in
    `core-companion` are **not** changed in this skeleton (TBD: copy when
    EDL #10 merges). Logical field names stay the frozen top-level set.
-4. Termux extra key name on-device (`ai.droidcommand.REMOTE_ENVELOPE_JSON`
-   is the controller proposal).
+4. Termux extra key name on-device — **ratified** as
+   `ai.droidcommand.REMOTE_ENVELOPE_JSON` (request) and
+   `ai.droidcommand.REMOTE_RESPONSE_JSON` (PendingIntent result). VictorSuite
+   PR #48 (`a6f4e2a`) implements the node side. Controller sender + parser
+   is on disk, PENDING / not device-tested.
 5. SMS body grammar on VictorSMS; who initiates Messenger bind.
 6. RustDesk plugin identity.
 7. Macro schedule expression language.
@@ -654,13 +657,26 @@ OFF by default.
 ## Appendix C — TERMUX_IPC (`RUN_COMMAND` JSON blob)
 
 Same logical fields. Encoding: **one JSON-blob extra** on the existing
-`com.termux.RUN_COMMAND` intent. Extra key (controller proposal):
+`com.termux.RUN_COMMAND` intent. Request extra:
 `ai.droidcommand.REMOTE_ENVELOPE_JSON`. The blob is the frozen camelCase
 object **including** `requestId` and the same top-level
 `nonce` / `timestampMs` / `ttlMs` / `destructive` (there is no
-BridgeRequest wrapper and no nested `auth`).
+BridgeRequest wrapper and no nested `auth`). Response extra (via the
+caller's `com.termux.RUN_COMMAND_PENDING_INTENT`):
+`ai.droidcommand.REMOTE_RESPONSE_JSON`, frozen [BridgeResponse] shape
+(`protocol_major` 1, `request_id`, `ok`, `result` / `error.category`).
 
 Identity: `com.termux.permission.RUN_COMMAND` + VictorSuite
 allow-external-apps allow-list. Not a new bound service.
 
-Live dispatch is a stub (`TermuxIpcRemoteBinding` encodes/decodes only).
+Supported ops: `capabilities.get`, `remote.command`, `macro.step`,
+`macro.run`, `node.status.get`, `config.export`, `config.import`.
+BRIDGE_PROTOCOL major=1 minor=1; envelope v1. External control OFF by
+default. Destructive ops and `config.import` apply always return
+`confirmation_required` and do not execute (no on-device confirm yet).
+`node.status.get` is never confirmation-gated.
+
+Controller-side `TermuxIpcTransport` builds the extras and parses the
+response. The default sender is unwired — **no live `RUN_COMMAND`
+broadcast, no privileged execution.** Node side: VictorSuite PR #48
+(`a6f4e2a`). PENDING / not device-tested.

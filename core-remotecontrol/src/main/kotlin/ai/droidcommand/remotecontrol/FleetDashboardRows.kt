@@ -19,6 +19,8 @@ data class FleetDashboardMember(
     val nodeIdHints: List<String> = emptyList(),
     val highlighted: Boolean = false,
     val opensPairing: Boolean = false,
+    /** Controller transport is on disk but has never run on a device. */
+    val pendingDeviceTest: Boolean = false,
 ) {
     init {
         require(id.isNotBlank()) { "id is required" }
@@ -80,6 +82,7 @@ object FleetDashboardRows {
 
     const val STATUS_UNKNOWN = "Unknown"
     const val STATUS_NOT_PAIRED = "Not paired"
+    const val STATUS_PENDING = "PENDING"
     const val STATUS_AWAITING = "Awaiting status"
     const val STATUS_REACHABLE = "Reachable"
     const val STATUS_TROUBLE = "Having trouble"
@@ -105,7 +108,7 @@ object FleetDashboardRows {
             member = member,
             paired = paired,
             tone = tone,
-            statusLabel = statusLabel(paired, snapshot),
+            statusLabel = statusLabel(paired, snapshot, member.pendingDeviceTest),
             seenLabel = seenLabel(snapshot, nowMs),
             snapshot = snapshot,
         )
@@ -122,7 +125,12 @@ object FleetDashboardRows {
         }
     }
 
-    fun statusLabel(paired: Boolean, snapshot: NodeStatusSnapshot?): String = when {
+    fun statusLabel(
+        paired: Boolean,
+        snapshot: NodeStatusSnapshot?,
+        pendingDeviceTest: Boolean = false,
+    ): String = when {
+        pendingDeviceTest && snapshot == null -> STATUS_PENDING
         !paired -> STATUS_NOT_PAIRED
         snapshot == null -> STATUS_AWAITING
         else -> when (toneOf(true, snapshot)) {
@@ -211,6 +219,7 @@ object FleetDashboardCatalog {
         nodeIdHints = nodeIdHints(member.id),
         highlighted = member.id == "rootforge",
         opensPairing = member.id in PAIRING_FLOW_IDS,
+        pendingDeviceTest = member.id == "victorsuite" || member.id == "termux",
     )
 
     fun roleFor(id: String): String = when (id) {

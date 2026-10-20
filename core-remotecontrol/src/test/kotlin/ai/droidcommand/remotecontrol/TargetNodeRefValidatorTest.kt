@@ -38,6 +38,10 @@ class TargetNodeRefValidatorTest {
             RemoteErrorCategory.INVALID_PARAMETERS,
             TargetNodeRefValidator.classify("victorsms-" + "zz".repeat(16), config),
         )
+        assertEquals(
+            RemoteErrorCategory.INVALID_PARAMETERS,
+            TargetNodeRefValidator.classify("victorsuite-not-32-hex", config),
+        )
         assertTrue(TargetNodeRefValidator.isMalformed("target/node"))
     }
 
@@ -67,7 +71,16 @@ class TargetNodeRefValidatorTest {
             RemoteErrorCategory.NOT_PAIRED,
             TargetNodeRefValidator.classify(VictorSmsRegistry.ID, config),
         )
+        assertEquals(
+            RemoteErrorCategory.NOT_PAIRED,
+            TargetNodeRefValidator.classify(VictorSuiteRegistry.ID, config),
+        )
+        assertEquals(
+            RemoteErrorCategory.NOT_PAIRED,
+            TargetNodeRefValidator.classify("com.termux", config),
+        )
         assertTrue(TargetNodeRefValidator.isKnown(VictorSpoofRegistry.ID, config))
+        assertTrue(TargetNodeRefValidator.isKnown(VictorSuiteRegistry.ID, config))
         assertFalse(TargetNodeRefValidator.isPaired(VictorSpoofRegistry.ID, config))
     }
 
