@@ -77,7 +77,7 @@ class KycAuditLabRegistryTest {
     fun `PII ops are never remote-allowed even with a mapping`() {
         val rejected = assertIs<RemoteDispatchResult.Rejected>(
             dispatcher.dispatch(
-                envelope(actionRef = "kyc.document.read", issuedAt = now),
+                envelope(actionRef = "kyc.document.read", timestampMs = now),
                 source(),
             ),
         )
@@ -99,7 +99,7 @@ class KycAuditLabRegistryTest {
                 envelope(
                     actionRef = FleetRemoteEnvelope.OP_REMOTE_COMMAND,
                     targetNodeRef = "kyc-auditlab",
-                    issuedAt = now,
+                    timestampMs = now,
                 ),
                 source(),
             ),
@@ -119,7 +119,7 @@ class KycAuditLabRegistryTest {
     fun `a mapping whose target is KYC is refused unless it is a read op`() {
         val rejected = assertIs<RemoteDispatchResult.Rejected>(
             dispatcher.dispatch(
-                envelope(actionRef = "ping-kyc", issuedAt = now),
+                envelope(actionRef = "ping-kyc", timestampMs = now),
                 source(),
             ),
         )
@@ -130,7 +130,7 @@ class KycAuditLabRegistryTest {
     fun `kyc status read op is a non-destructive catalog entry`() {
         val ready = assertIs<RemoteDispatchResult.Ready>(
             dispatcher.dispatch(
-                envelope(actionRef = KycAuditLabRegistry.STATUS_OP, issuedAt = now),
+                envelope(actionRef = KycAuditLabRegistry.STATUS_OP, timestampMs = now),
                 source(),
             ),
         )

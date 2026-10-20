@@ -432,3 +432,19 @@ merged yet. The registry **keeps** the provisional `6F:46:77:…:2D:4D`
 entry as the **active fail-open pin** and **records** `22:4F:C1:…:44:1D`
 as `pendingPermanentDebugCertSha256`. **Do not enforce either.** Swap
 the active pin once KYC #29 merges. PII ops stay `remoteAllowed:false`.
+
+## 2026-10-20g — Frozen top-level envelope (nested `auth` superseded)
+
+Fleet Orchestrator **froze** the remote envelope as **top-level** fields.
+This **overrides** the 2026-10-20c nested-`auth` sketch. Spec:
+`docs/specs/REMOTE_CONTROL.md`.
+
+- Top-level `nonce`, `timestampMs` (not `issuedAt`), `ttlMs`,
+  `destructive`. No nested `auth` object.
+- Replay is `(sourceNodeRef, nonce)`, retained ≥ 10 min.
+- One contract, three bindings: EXTERNAL_NODE JSON `parameters`,
+  BOUND_COMPANION AIDL parcel fields, TERMUX_IPC JSON-blob — same
+  top-level names.
+- VictorSMS `trigger{}` stays informational. Source identity =
+  package+cert (`sendingUid`).
+- `destructive` is advisory. Kali/pentest/YOLO pentest gates untouched.

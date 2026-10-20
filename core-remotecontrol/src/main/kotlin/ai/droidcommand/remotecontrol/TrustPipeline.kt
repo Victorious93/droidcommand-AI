@@ -21,7 +21,7 @@ object TrustPipeline {
         if (!config.externalControlEnabled) {
             return reject(RemoteErrorCategory.EXTERNAL_CONTROL_DISABLED)
         }
-        return when (val replay = replayGuard.check(envelope.auth)) {
+        return when (val replay = replayGuard.check(envelope, source)) {
             is ReplayDecision.Reject -> reject(replay.category)
             ReplayDecision.Accept -> null
         }

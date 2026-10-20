@@ -3,8 +3,8 @@ package ai.droidcommand.remotecontrol
 import kotlinx.serialization.Serializable
 
 /**
- * Ratified fleet-wide remote envelope. Anti-replay fields live under a
- * nested [auth] object — not at the top level of `parameters`.
+ * Frozen fleet-wide remote envelope. Anti-replay fields are **top-level**
+ * (`nonce`, `timestampMs`, `ttlMs`) — not nested under `auth`.
  *
  * [requestId] is the existing BridgeRequest `request_id` on EXTERNAL_NODE
  * (not a second identifier). [destructive] is **advisory only**: receivers
@@ -21,7 +21,9 @@ data class FleetRemoteEnvelope(
     val targetNodeRef: String,
     val actionRef: String,
     val args: Map<String, String> = emptyMap(),
-    val auth: EnvelopeAuth,
+    val nonce: String,
+    val timestampMs: Long,
+    val ttlMs: Long = DEFAULT_TTL_MS,
     val destructive: Boolean = false,
     val trigger: TriggerInfo? = null,
     val op: String? = null,
@@ -32,15 +34,16 @@ data class FleetRemoteEnvelope(
     val steps: List<MacroRunStepWire>? = null,
     val dryRun: Boolean? = null,
 ) {
-    val nonce: String get() = auth.nonce
-    val issuedAt: Long get() = auth.issuedAt
-    val timestampMs: Long get() = auth.issuedAt
-    val ttlMs: Long get() = auth.ttlMs
-
     init {
         require(requestId.isNotBlank()) { "requestId is required" }
         require(targetNodeRef.isNotBlank()) { "targetNodeRef is required" }
         require(actionRef.isNotBlank()) { "actionRef is required" }
+        require(isValidNonce(nonce)) {
+            "nonce must be 128-bit hex (32 chars) or base64"
+        }
+        require(ttlMs in 1..MAX_TTL_MS) {
+            "ttlMs must be 1..$MAX_TTL_MS (default $DEFAULT_TTL_MS)"
+        }
         require(args.size <= MAX_ARGS) { "args exceeds $MAX_ARGS entries" }
         require(params.size <= MAX_ARGS) { "params exceeds $MAX_ARGS entries" }
         onError?.let {
@@ -59,7 +62,9 @@ data class FleetRemoteEnvelope(
         targetNodeRef = targetNodeRef,
         actionRef = actionRef,
         args = args,
-        auth = auth,
+        nonce = nonce,
+        timestampMs = timestampMs,
+        ttlMs = ttlMs,
         destructive = destructive,
         trigger = trigger,
         op = op,
@@ -145,23 +150,6 @@ data class FleetRemoteEnvelope(
     }
 }
 
-/** Nested anti-replay fields. RATIFIED: `auth` object, not top-level. */
-@Serializable
-data class EnvelopeAuth(
-    val nonce: String,
-    val issuedAt: Long,
-    val ttlMs: Long = FleetRemoteEnvelope.DEFAULT_TTL_MS,
-) {
-    init {
-        require(FleetRemoteEnvelope.isValidNonce(nonce)) {
-            "nonce must be 128-bit hex (32 chars) or base64"
-        }
-        require(ttlMs in 1..FleetRemoteEnvelope.MAX_TTL_MS) {
-            "ttlMs must be 1..${FleetRemoteEnvelope.MAX_TTL_MS} (default ${FleetRemoteEnvelope.DEFAULT_TTL_MS})"
-        }
-    }
-}
-
 /** Informational VictorSMS extras. Never used for authorization. */
 @Serializable
 data class TriggerInfo(
@@ -195,7 +183,8 @@ data class MacroRunStepWire(
 }
 
 /**
- * Frozen fields that live in BridgeRequest.parameters. [auth] is nested.
+ * Frozen fields that live in BridgeRequest.parameters. Anti-replay fields
+ * are top-level (`nonce` / `timestampMs` / `ttlMs`), not nested.
  * [FleetRemoteEnvelope.requestId] is BridgeRequest.request_id, not repeated here.
  */
 @Serializable
@@ -203,7 +192,9 @@ data class FleetRemoteParameters(
     val targetNodeRef: String,
     val actionRef: String,
     val args: Map<String, String> = emptyMap(),
-    val auth: EnvelopeAuth,
+    val nonce: String,
+    val timestampMs: Long,
+    val ttlMs: Long = FleetRemoteEnvelope.DEFAULT_TTL_MS,
     val destructive: Boolean = false,
     val trigger: TriggerInfo? = null,
     val op: String? = null,

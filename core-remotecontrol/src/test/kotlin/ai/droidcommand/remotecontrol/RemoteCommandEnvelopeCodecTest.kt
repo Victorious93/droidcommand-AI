@@ -9,31 +9,35 @@ import kotlin.test.assertTrue
 
 class RemoteCommandEnvelopeCodecTest {
     @Test
-    fun `auth is nested and requestId is the BridgeRequest id`() {
+    fun `anti-replay fields are top-level and requestId is the BridgeRequest id`() {
         val envelope = envelope(
             requestId = "bridge-id-1",
             actionRef = "lock-tablet",
-            issuedAt = 1_760_920_000_000L,
+            timestampMs = 1_760_920_000_000L,
         )
         val json = RemoteCommandEnvelopeCodec.encodeBridgeRequest(envelope)
         assertTrue(json.contains("\"request_id\":\"bridge-id-1\""), json)
         assertTrue(json.contains("\"operation\":\"remote.command\""), json)
         assertTrue(json.contains("\"targetNodeRef\""), json)
         assertTrue(json.contains("\"actionRef\""), json)
-        assertTrue(json.contains("\"auth\""), json)
-        assertTrue(json.contains("\"issuedAt\""), json)
         assertTrue(json.contains("\"nonce\""), json)
+        assertTrue(json.contains("\"timestampMs\""), json)
         assertTrue(json.contains("\"ttlMs\""), json)
+        assertFalse(json.contains("\"auth\""), json)
+        assertFalse(json.contains("\"issuedAt\""), json)
         val parameters = RemoteCommandEnvelopeCodec.encodeParameters(envelope)
         assertFalse(parameters.contains("requestId"), parameters)
-        assertTrue(parameters.contains("\"auth\""), parameters)
-        assertFalse(Regex(""""timestampMs"\s*:""").containsMatchIn(parameters), parameters)
+        assertFalse(parameters.contains("\"auth\""), parameters)
+        assertFalse(parameters.contains("\"issuedAt\""), parameters)
+        assertTrue(Regex(""""timestampMs"\s*:""").containsMatchIn(parameters), parameters)
         val (op, decoded) = RemoteCommandEnvelopeCodec.decodeBridgeRequest(json)
         assertEquals(FleetRemoteEnvelope.OP_REMOTE_COMMAND, op)
         assertEquals(envelope.requestId, decoded.requestId)
         assertEquals(envelope.actionRef, decoded.actionRef)
         assertEquals(envelope.nonce, decoded.nonce)
-        assertEquals(envelope.issuedAt, decoded.auth.issuedAt)
+        assertEquals(envelope.timestampMs, decoded.timestampMs)
+        assertEquals(envelope.ttlMs, decoded.ttlMs)
+        assertEquals(envelope.destructive, decoded.destructive)
     }
 
     @Test
@@ -43,6 +47,7 @@ class RemoteCommandEnvelopeCodecTest {
         assertEquals("a", decoded.actionRef)
         assertEquals("+15555550100", decoded.trigger?.sourceNumber)
         assertEquals(true, decoded.trigger?.matchedKeyword)
+        assertFalse(json.contains("\"auth\""), json)
     }
 
     @Test
@@ -75,20 +80,25 @@ class RemoteCommandEnvelopeCodecTest {
     }
 
     @Test
-    fun `three bindings round-trip the same fields including nested auth`() {
+    fun `three bindings round-trip the same top-level fields`() {
         val original = envelope(actionRef = "scan.run", requestId = "r1")
         val node = ExternalNodeRemoteBinding.decode(ExternalNodeRemoteBinding.encode(original)).second
         assertEquals(original.actionRef, node.actionRef)
         assertEquals(original.requestId, node.requestId)
-        assertEquals(original.auth.issuedAt, node.auth.issuedAt)
+        assertEquals(original.timestampMs, node.timestampMs)
+        assertEquals(original.nonce, node.nonce)
         val companion = BoundCompanionRemoteBinding.decode(BoundCompanionRemoteBinding.encode(original))
         assertEquals(original.actionRef, companion.actionRef)
         assertEquals(original.nonce, companion.nonce)
         assertEquals(original.requestId, companion.requestId)
-        assertEquals(original.issuedAt, companion.issuedAt)
-        val termux = TermuxIpcRemoteBinding.decodeBlob(TermuxIpcRemoteBinding.encodeBlob(original))
+        assertEquals(original.timestampMs, companion.timestampMs)
+        val termuxJson = TermuxIpcRemoteBinding.encodeBlob(original)
+        val termux = TermuxIpcRemoteBinding.decodeBlob(termuxJson)
         assertEquals(original.actionRef, termux.actionRef)
-        assertTrue(TermuxIpcRemoteBinding.encodeBlob(original).contains("\"auth\""))
+        assertEquals(original.timestampMs, termux.timestampMs)
+        assertTrue(termuxJson.contains("\"timestampMs\""))
+        assertFalse(termuxJson.contains("\"auth\""), termuxJson)
+        assertFalse(termuxJson.contains("\"issuedAt\""), termuxJson)
         assertEquals(TermuxIpcRemoteBinding.EXTRA, FleetRemoteEnvelope.TERMUX_JSON_EXTRA)
     }
 }

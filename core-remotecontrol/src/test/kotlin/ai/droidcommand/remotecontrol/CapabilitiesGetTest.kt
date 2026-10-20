@@ -15,7 +15,7 @@ class CapabilitiesGetTest {
         )
         val result = assertIs<RemoteDispatchResult.Capabilities>(
             dispatcher.dispatch(
-                envelope(actionRef = FleetRemoteEnvelope.OP_CAPABILITIES_GET, issuedAt = 8_000L),
+                envelope(actionRef = FleetRemoteEnvelope.OP_CAPABILITIES_GET, timestampMs = 8_000L),
                 source(),
                 FleetRemoteEnvelope.OP_CAPABILITIES_GET,
             ),

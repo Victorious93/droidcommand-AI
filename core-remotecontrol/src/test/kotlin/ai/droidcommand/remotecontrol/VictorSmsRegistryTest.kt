@@ -75,7 +75,7 @@ class VictorSmsRegistryTest {
             dispatcher.dispatchSms(
                 envelope(
                     actionRef = "wipe",
-                    issuedAt = now,
+                    timestampMs = now,
                     op = VictorSmsRegistry.FORWARD_OP,
                     destructive = false,
                     matchedKeyword = true,
@@ -98,7 +98,7 @@ class VictorSmsRegistryTest {
             dispatcher.dispatchSms(
                 envelope(
                     actionRef = VictorSmsRegistry.FORWARD_OP,
-                    issuedAt = now,
+                    timestampMs = now,
                     args = mapOf("commandId" to "ping"),
                     matchedKeyword = false,
                     sourceNumber = "spoofed",
@@ -117,7 +117,7 @@ class VictorSmsRegistryTest {
             dispatcher.dispatch(
                 envelope(
                     actionRef = VictorSmsRegistry.FORWARD_OP,
-                    issuedAt = now,
+                    timestampMs = now,
                     destructive = true,
                 ),
                 source(),

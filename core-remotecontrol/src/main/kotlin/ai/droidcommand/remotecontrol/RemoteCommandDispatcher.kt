@@ -66,7 +66,7 @@ class RemoteCommandDispatcher(
             healthy = envelope.args["healthy"]?.toBooleanStrictOrNull(),
             actionRef = envelope.actionRef,
             payload = envelope.args,
-            receivedAtMs = envelope.issuedAt,
+            receivedAtMs = envelope.timestampMs,
         )
         statusTray?.consume(snapshot)
     }
@@ -280,7 +280,7 @@ class RemoteCommandDispatcher(
                 integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
             )
         val command = envelope?.let {
-            mapping.toRemoteCommand(target, it.nonce, it.issuedAt, it.args)
+            mapping.toRemoteCommand(target, it.nonce, it.timestampMs, it.args)
         }
         return RemoteDispatchPlan(
             mapping = mapping,
@@ -340,7 +340,7 @@ class RemoteCommandDispatcher(
                 actionRef = spoof.actionRef,
                 args = it.args,
                 nonce = it.nonce,
-                timestampMs = it.issuedAt,
+                timestampMs = it.timestampMs,
                 requestId = it.requestId,
                 ttlMs = it.ttlMs,
             )
@@ -372,7 +372,7 @@ class RemoteCommandDispatcher(
                 actionRef = sms.actionRef,
                 args = it.args,
                 nonce = it.nonce,
-                timestampMs = it.issuedAt,
+                timestampMs = it.timestampMs,
                 requestId = it.requestId,
                 ttlMs = it.ttlMs,
             )
@@ -404,7 +404,7 @@ class RemoteCommandDispatcher(
                 actionRef = kyc.actionRef,
                 args = it.args,
                 nonce = it.nonce,
-                timestampMs = it.issuedAt,
+                timestampMs = it.timestampMs,
                 requestId = it.requestId,
                 ttlMs = it.ttlMs,
             )

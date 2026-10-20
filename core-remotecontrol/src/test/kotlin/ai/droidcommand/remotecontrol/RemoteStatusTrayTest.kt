@@ -56,7 +56,7 @@ class RemoteStatusTrayTest {
             ReplayGuard(nowMs = { 50_000L }),
             tray,
         )
-        dispatcher.dispatch(envelope(actionRef = "ping", issuedAt = 50_000L), source())
+        dispatcher.dispatch(envelope(actionRef = "ping", timestampMs = 50_000L), source())
         val rows = tray.publish()
         assertEquals(1, rows.size)
         assertEquals(TEST_SOURCE, rows.single().sourceNodeRef)

@@ -117,7 +117,7 @@ The controller then re-applies, in order:
 1. Caller-id = package + cert pairing of the source node
 2. External-control switch (**OFF by default**) on **both** node ops and
    the controller inbound surface
-3. Envelope / replay check (`auth` object)
+3. Envelope / replay check (top-level `nonce` / `timestampMs` / `ttlMs`)
 4. The controller's own policy gates (mapping exists, independent
    classification, ApprovalPrompt)
 
@@ -129,11 +129,11 @@ auto-sends** on behalf of a remote caller.
 Controller inbound action (named, not exported in this skeleton):
 `ai.droidcommand.app.action.BRIDGE`, op `remote.command`.
 
-### Ratified envelope
+### Frozen envelope (top-level v1)
 
-Anti-replay fields are nested under `auth` (not top-level):
+Anti-replay fields are **top-level** (not nested under `auth`):
 
-`auth.nonce` (128-bit unique), `auth.issuedAt` (epoch ms), `auth.ttlMs`.
+`nonce` (128-bit unique), `timestampMs` (epoch ms), `ttlMs`.
 
 Plus `requestId` (the existing BridgeRequest `request_id`),
 `targetNodeRef`, `actionRef`, `args`, advisory `destructive`.
@@ -141,8 +141,9 @@ Plus `requestId` (the existing BridgeRequest `request_id`),
 `trigger.sourceNumber` / `matchedKeyword` / `rawExtras` are
 informational only. A self-reported number cannot authorize anything.
 
-Replay: seen-nonce cache. Duplicate nonce → `replay_detected`. Past
-`issuedAt + ttlMs` or clock skew > 120s → `expired`.
+Replay: seen-nonce cache keyed by `(sourceNodeRef, nonce)`. Duplicate
+pair → `replay_detected`. Past `timestampMs + ttlMs` or clock skew >
+120s → `expired`.
 
 ### Generic command surface
 

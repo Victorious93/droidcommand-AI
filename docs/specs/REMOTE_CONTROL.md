@@ -1,23 +1,24 @@
-# Remote Control — fleet envelope (RATIFIED)
+# Remote Control — fleet envelope (FROZEN v1)
 
 Status: **SKELETON**. Spec + JVM data model + Settings UI only.
 
-**Protocol status:** RATIFIED by the Fleet Orchestrator (this document).
-Earlier top-level-field / `[CONTRACT TBD]` envelope sketches are
+**Protocol status:** FROZEN by the Fleet Orchestrator (this document).
+**Top-level fields won.** A nested `auth` object was considered and is
 **superseded**. Major stays `BRIDGE_PROTOCOL_MAJOR = 1`. Minor is
 `BRIDGE_PROTOCOL_MINOR = 1`, advertised in `capabilities.get`. Do **not**
 add a required `protocol_minor` field on `BridgeRequest` (that would break
 existing nodes).
 
-**Phase boundary (this PR):** ratified envelope codec (nested `auth`
-object), three controller-side transport bindings, nonce-only ReplayGuard,
-generic command surface (`capabilities.get` / `macro.run` / `macro.step` +
-op descriptors), inbound controller bridge action, trust pipeline, error
-categories, mapping/macros model, Settings skeleton, approval-gated tool
-names. **No live privileged execution.** No real wipe, power-off, lock,
-flash, bootloader, RustDesk, Messenger bind, AIDL command, or Termux
-privileged action. Seams return "not implemented" after
-`SecureToolExecutor` → `ApprovalPrompt`. A remote trigger **never**
+**Phase boundary (this PR):** frozen top-level envelope codec (`nonce` /
+`timestampMs` / `ttlMs` / `destructive` at the top of `parameters`), three
+controller-side transport bindings, ReplayGuard keyed by
+`(sourceNodeRef, nonce)`, generic command surface (`capabilities.get` /
+`macro.run` / `macro.step` + op descriptors), inbound controller bridge
+action, trust pipeline, error categories, mapping/macros model, Settings
+skeleton, approval-gated tool names. **No live privileged execution.** No
+real wipe, power-off, lock, flash, bootloader, RustDesk, Messenger bind,
+AIDL command, or Termux privileged action. Seams return "not implemented"
+after `SecureToolExecutor` → `ApprovalPrompt`. A remote trigger **never**
 auto-approves and **never** auto-sends on behalf of a remote caller.
 
 Honesty: **ON DISK / UNVERIFIED**.
@@ -34,8 +35,8 @@ an **untrusted request**.
 | In this PR | Not in this PR |
 |---|---|
 | Spec, JVM model, unit tests, Settings skeleton | Live privileged execution |
-| Nested `auth { nonce, issuedAt, ttlMs }` codec | Live Messenger / AIDL / RUN_COMMAND send |
-| ReplayGuard seen-nonce cache | VictorSMS / VictorSpoof / KYC companion cert pins (unpinned / fail-open) |
+| Top-level envelope codec (`nonce` / `timestampMs` / `ttlMs` / `destructive`) | Live Messenger / AIDL / RUN_COMMAND send |
+| ReplayGuard seen-nonce cache keyed by `(sourceNodeRef, nonce)` | VictorSMS / VictorSpoof / KYC companion cert pins (unpinned / fail-open) |
 | Advisory `destructive` ignored for gating | Changing Kali / pentest / YOLO pentest gates |
 | Generic `capabilities.get` + `OpDescriptor` | Live node capability bind |
 | Node `macro.run` / `macro.step` runner (sequential, partial, no rollback) | Live macro execution / scheduler |
@@ -64,7 +65,8 @@ The dispatcher re-applies, **in this order**:
    Termux `RUN_COMMAND` permission + allow-list). Never a payload field.
 2. **External-control switch** — **OFF by default**. Enforced on **both**
    node ops and the controller's inbound surface.
-3. **Envelope / replay check** (`auth` object + seen-nonce cache).
+3. **Envelope / replay check** (top-level `nonce` / `timestampMs` /
+   `ttlMs` + seen-nonce cache keyed by `(sourceNodeRef, nonce)`).
 4. **The controller's own policy gates** (mapping/macro exists, independent
    `actionRef` classification, `SecureToolExecutor` → `ApprovalPrompt`).
 
@@ -124,26 +126,24 @@ controller→node only):
 Per-op descriptor: `{ name, kind: read|action|destructive, remoteAllowed:
 Boolean, requiresConfirm: Boolean }`.
 
-### Nested `auth` object (RATIFIED — not top-level)
+### Frozen top-level fields (v1)
 
-Anti-replay fields live **under `auth`**, not at the top level of
-`parameters`:
-
-| Field | Type | Notes |
-|---|---|---|
-| `auth.nonce` | string | 128-bit unique (hex 32 chars, or equivalent base64). |
-| `auth.issuedAt` | number | Epoch ms (`Long`). |
-| `auth.ttlMs` | number | Default `120000`. Max `300000`. |
-
-Other top-level fields:
+**ALL of these are TOP-LEVEL** (not nested under `auth`). Wire/model
+field name for issued-at is **`timestampMs`**, not `issuedAt`.
 
 | Field | Type | Notes |
 |---|---|---|
-| `requestId` | string | **The existing BridgeRequest `request_id`.** Reuse it. Do **not** add a second id. Correlates the response. |
+| `requestId` | string | **The existing BridgeRequest `request_id`.** Reuse it. Do **not** add a second id. Correlates the response. Not repeated inside `parameters`. |
 | `targetNodeRef` | string | Destination node id or the literal `controller` for inbound. |
 | `actionRef` | string | Op to run on the target (e.g. `scan.run`, or a controller mapping id). |
 | `args` | object | Default `{}`. |
+| `nonce` | string | 128-bit unique (hex 32 chars, or equivalent base64). |
+| `timestampMs` | number | Epoch ms (`Long`). Wire/model name is `timestampMs`, **not** `issuedAt`. |
+| `ttlMs` | number | Default `120000`. Max `300000`. |
 | `destructive` | bool | **ADVISORY ONLY.** Never used to authorize. |
+
+`macro.step` / `macro.run` keep their existing step fields; they use the
+same top-level anti-replay fields (do **not** nest them).
 
 `macro.step` (generic node surface):
 
@@ -207,11 +207,9 @@ Outer BridgeRequest (`request_id` is `requestId`):
     "targetNodeRef": "controller",
     "actionRef": "lock-tablet",
     "args": {},
-    "auth": {
-      "nonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "issuedAt": 1760920000000,
-      "ttlMs": 120000
-    },
+    "nonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "timestampMs": 1760920000000,
+    "ttlMs": 120000,
     "destructive": false,
     "trigger": {
       "sourceNumber": "+15555550100",
@@ -223,7 +221,10 @@ Outer BridgeRequest (`request_id` is `requestId`):
 ```
 
 `requestId` is **not** duplicated inside `parameters`. `nonce` /
-`issuedAt` / `ttlMs` are **not** top-level parameter fields.
+`timestampMs` / `ttlMs` / `destructive` **are** top-level parameter
+fields. VictorSMS `sourceNumber` / `matchedKeyword` / `rawExtras` stay
+in informational `trigger:{}` — **never** part of auth. Source identity
+= package+cert (`sendingUid`).
 
 ### SMS flow
 
@@ -234,7 +235,7 @@ sequenceDiagram
     participant DCA as DroidCommand AI
     Phone->>VS: SMS body
     Note over VS: whitelist AND code word<br/>external-control ON + consent<br/>(delivery only — NOT authorization)
-    VS->>DCA: BridgeRequest remote.command<br/>(nested auth + trigger{})
+    VS->>DCA: BridgeRequest remote.command<br/>(top-level nonce/timestampMs/ttlMs + trigger{})
     Note over DCA: UNTRUSTED REQUEST
     Note over DCA: (1) package+cert pairing
     Note over DCA: (2) controller external-control OFF-default
@@ -265,17 +266,17 @@ never auto-approve destructive work.
 
 ## 2. Replay
 
-Controller keeps a **seen-nonce cache** for the TTL window (retention ≥
-10 minutes, ≥ max `ttlMs`). Duplicate nonce → `replay_detected`
-regardless of source.
+Controller keeps a **seen-nonce cache keyed by `(sourceNodeRef, nonce)`**
+for the TTL window (retention ≥ 10 minutes, ≥ max `ttlMs`). The same
+nonce from a different source is a distinct key.
 
 Reject:
 
 | Condition | Code |
 |---|---|
-| nonce already seen | `replay_detected` |
-| `now > issuedAt + ttlMs` | `expired` |
-| `\|now - issuedAt\| > 120000` | `expired` (clock skew) |
+| seen `(sourceNodeRef, nonce)` | `replay_detected` |
+| `now > timestampMs + ttlMs` | `expired` |
+| `\|now - timestampMs\| > 120000` | `expired` (clock skew) |
 
 In-memory in this skeleton (lost on process death). Not a MAC.
 
@@ -414,11 +415,11 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 
 | Piece | This slice |
 |---|---|
-| Nested `auth` envelope codec | implemented, unit-tested |
+| Top-level envelope codec (`nonce` / `timestampMs` / `ttlMs` / `destructive`) | implemented, unit-tested |
 | EXTERNAL_NODE BridgeRequest binding | implemented, unit-tested |
 | BOUND_COMPANION CommandEnvelope field map | implemented, unit-tested (Kotlin record; live AIDL not bumped — parcel fields stay `nonce`/`timestampMs`/`ttlMs`) |
 | TERMUX_IPC JSON-blob extra | implemented, unit-tested |
-| ReplayGuard seen-nonce cache | implemented, unit-tested (replay / ttl / skew) |
+| ReplayGuard seen-nonce cache keyed by `(sourceNodeRef, nonce)` | implemented, unit-tested (replay / ttl / skew) |
 | Trust pipeline (pairing → external-control OFF → replay → policy) | implemented, unit-tested |
 | `RemoteErrorCategory` | implemented, unit-tested |
 | `OpDescriptor` + `capabilities.get` | implemented, unit-tested |
@@ -454,11 +455,12 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
    fail-open. **TODO: swap the active pin once #29 merges; do not enforce
    either until then.**
 3. Live AIDL parcel bump on `CommandEnvelope` / `ResultEnvelope` copies
-   (EDL + companions) to carry `nonce` / `issuedAt` (`timestampMs`) /
-   `ttlMs` / `destructive` on the wire. Controller-side mapping is modeled;
-   the `.aidl` files are **not** changed in this skeleton (EDL contract is
-   copied verbatim until FO + EDL bump together). Nested `auth` is the
-   JSON encoding; AIDL stays flat parcel fields.
+   (EDL + companions) to carry `nonce` / `timestampMs` / `ttlMs` /
+   `destructive` on the wire. Controller-side mapping is already 1:1 onto
+   those parcel fields. The `.aidl` files are **not** changed in this
+   skeleton (EDL contract is copied verbatim until FO + EDL bump
+   together). JSON, AIDL model, and Termux blob all use the **same
+   top-level** field names.
 4. Termux extra key name on-device (`ai.droidcommand.REMOTE_ENVELOPE_JSON`
    is the controller proposal).
 5. SMS body grammar on VictorSMS; who initiates Messenger bind.
@@ -487,8 +489,9 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 - Body: existing `BridgeRequest` / `BridgeResponse`, `protocol_major` 1.
 - `requestId` **is** `BridgeRequest.request_id`. Not repeated in
   `parameters`.
-- Frozen fields live in `parameters` (camelCase). Anti-replay fields are
-  nested under `auth`.
+- Frozen fields live in `parameters` (camelCase), **top-level**:
+  `targetNodeRef`, `actionRef`, `args`, `nonce`, `timestampMs`, `ttlMs`,
+  `destructive`. `trigger{}` is informational.
 - Identity: `Message.sendingUid` + observed package/cert. Never
   `Binder.getCallingUid()`.
 - VictorSMS package `com.victorious.sms` (debug==release). Node-id
@@ -516,9 +519,9 @@ Same logical fields. Encoding: existing `CommandEnvelope` /
 | `requestId` | `requestId` |
 | `actionRef` | `command` |
 | `args` | `argsJson` |
-| `auth.nonce` | parcel field `nonce` (modeled; AIDL bump later) |
-| `auth.issuedAt` | parcel field `timestampMs` |
-| `auth.ttlMs` | parcel field `ttlMs` |
+| `nonce` | parcel field `nonce` (modeled; AIDL bump later) |
+| `timestampMs` | parcel field `timestampMs` |
+| `ttlMs` | parcel field `ttlMs` |
 | `destructive` | parcel field `destructive` (advisory) |
 | `targetNodeRef` | companion node id (hub-side; not a second name) |
 
@@ -536,8 +539,9 @@ This slice ships a Kotlin mapper (`BoundCompanionRemoteBinding`). It does
 Same logical fields. Encoding: **one JSON-blob extra** on the existing
 `com.termux.RUN_COMMAND` intent. Extra key (controller proposal):
 `ai.droidcommand.REMOTE_ENVELOPE_JSON`. The blob is the frozen camelCase
-object **including** `requestId` and nested `auth` (there is no
-BridgeRequest wrapper).
+object **including** `requestId` and the same top-level
+`nonce` / `timestampMs` / `ttlMs` / `destructive` (there is no
+BridgeRequest wrapper and no nested `auth`).
 
 Identity: `com.termux.permission.RUN_COMMAND` + VictorSuite
 allow-external-apps allow-list. Not a new bound service.

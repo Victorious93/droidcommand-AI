@@ -204,7 +204,7 @@ JVM-only core modules now:
   authorized" and per-step ACTIVE/EXPLOIT prompts). Command stdout/stderr is
   never logged. Missing or not-running Shizuku degrades to unprivileged use;
   it does not crash or bypass confirmation. Not run against live Shizuku/Sui.
-- **Remote Control skeleton (2026-10-20, protocol RATIFIED 2026-10-20c).**
+- **Remote Control skeleton (2026-10-20, frozen top-level envelope 2026-10-20g).**
   SMS (VictorSMS) and voice triggers share one mapping pipeline. VictorSMS
   is a `remote.command` EXTERNAL_NODE target ([planned/pending-merge])
   whose inbound op is `sms.remote_command.forward`. KYC-AuditLab companion
@@ -217,9 +217,9 @@ JVM-only core modules now:
   command is an **untrusted request**: VictorSMS whitelist + code word is
   delivery, not authorization. DCA owns only the commandId→action mapping.
   Debug cert is documented, not enforced (fail-open). The controller re-applies pairing →
-  external-control (OFF default) → nested `auth` replay → policy.
-  Envelope anti-replay fields are `auth { nonce, issuedAt, ttlMs }` (not
-  top-level). Source identity is package+cert (`sendingUid`);
+  external-control (OFF default) → top-level envelope replay → policy.
+  Envelope anti-replay fields are top-level `nonce` / `timestampMs` /
+  `ttlMs` (a nested `auth` object is superseded). Source identity is package+cert (`sendingUid`);
   `trigger.sourceNumber` / `matchedKeyword` / a forged `destructive:false`
   cannot authorize. Replay is a seen-nonce cache (`replay_detected` /
   `expired`). Tool names contain `remote`, so they are never-auto-approve

@@ -19,7 +19,7 @@ object RemoteControlManual {
         (1) caller-id = package+cert pairing of the source node;
         (2) external-control switch, OFF by default, on both node ops and
         the controller inbound surface;
-        (3) envelope/replay check (nested auth object);
+        (3) envelope/replay check (top-level nonce/timestampMs/ttlMs);
         (4) the controller's own policy gates.
         Destructive ops always stay behind device-admin/root/Shizuku and
         explicit approval. A remote trigger never auto-approves and never
@@ -39,11 +39,12 @@ object RemoteControlManual {
         • Schedule: stored expression only; live scheduler is a stub.
         • Manual: Run on a mapping or macro (still asks first).
 
-        Ratified envelope
-        Anti-replay fields are nested under auth (not top-level):
-        auth.nonce, auth.issuedAt, auth.ttlMs.
+        Frozen envelope (top-level v1)
+        Anti-replay fields are top-level (not nested under auth):
+        nonce, timestampMs, ttlMs.
         Plus requestId (BridgeRequest request_id), targetNodeRef, actionRef,
-        args, destructive (advisory only). Authorization is package+cert
+        args, destructive (advisory only). Replay is keyed by
+        (sourceNodeRef, nonce). Authorization is package+cert
         (sendingUid), never a payload field. trigger extras are
         informational only.
 

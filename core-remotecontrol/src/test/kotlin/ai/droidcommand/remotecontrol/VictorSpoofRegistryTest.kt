@@ -28,7 +28,7 @@ class VictorSpoofRegistryTest {
             dispatcher.dispatch(
                 envelope(
                     actionRef = "spoof.profile.apply",
-                    issuedAt = now,
+                    timestampMs = now,
                     destructive = true,
                 ),
                 source(),

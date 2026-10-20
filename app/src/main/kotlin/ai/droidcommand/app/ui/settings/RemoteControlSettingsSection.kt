@@ -46,8 +46,8 @@ fun RemoteControlSettingsSection(viewModel: RemoteControlViewModel = hiltViewMod
             Text("Fleet remote commands and macros", style = MaterialTheme.typography.titleMedium)
             Text(
                 "Inbound commands are untrusted requests. A VictorSMS whitelist + code word only " +
-                    "delivers the request — this controller is the sole authorizer. Nested auth " +
-                    "{ nonce, issuedAt, ttlMs }. External-control is OFF by default on this inbound " +
+                    "delivers the request — this controller is the sole authorizer. Frozen envelope " +
+                    "fields nonce, timestampMs, ttlMs are top-level. External-control is OFF by default on this inbound " +
                     "surface. Destructive actions always prompt — YOLO cannot skip them, even if the " +
                     "envelope says destructive=false. Live wipe, power-off, lock, and RustDesk are not " +
                     "implemented; Run still opens the approval dialog, then a stub failure.",
