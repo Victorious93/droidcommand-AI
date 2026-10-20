@@ -239,7 +239,7 @@ class ExternalAndTermuxTransportTest {
         val registry = RootForgeNodeRegistry(listOf(node)) { RootForgeClient(it, UnwiredMessengerTransport()) }
         val r = ExternalNodeTransport(registry) { true }.probe(rootforge)
         assertEquals(FleetReachability.OFFLINE, r.reachability)
-        assertTrue(r.detail.contains("not wired"))
+        assertTrue(r.detail.contains("UnwiredMessengerTransport leftover") || r.detail.contains("not MessengerFleetTransport"))
     }
 
     @Test

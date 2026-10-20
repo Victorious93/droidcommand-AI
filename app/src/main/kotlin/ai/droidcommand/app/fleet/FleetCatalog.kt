@@ -117,7 +117,7 @@ object FleetCatalog {
         name = "RootForge OS",
         packageName = ROOTFORGE_PACKAGE,
         kind = FleetKind.ROOTFORGE,
-        summary = "EXTERNAL_NODE. Live APK path on their main is Messenger + shared JSON (ai.rootforge.os.action.BRIDGE, protocol_major 1). Pair package + observed signing cert on this screen to run read-only status/capabilities. SSH is CLI/ISO fallback only. Never DependencyGuard, never a shared signing key.",
+        summary = "First P1 candidate. Hub Messenger client is live (MessengerFleetTransport); hardware proof pending. EXTERNAL_NODE. Live APK path on their main is Messenger + shared JSON (ai.rootforge.os.action.BRIDGE, protocol_major 1). Pair package + observed signing cert on this screen to run read-only status/capabilities. SSH is CLI/ISO fallback only. Never DependencyGuard, never a shared signing key. File Manager stays PLANNED.",
         extraPackages = listOf(ROOTFORGE_DEBUG_PACKAGE),
     )
 

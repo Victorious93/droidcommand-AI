@@ -196,18 +196,19 @@ object KnownFleet {
         usesAidl = false,
         usesDependencyGuard = false,
         riskTier = RiskTier.READ_ONLY,
-        nextStep = "Pair a node (package + signing-cert SHA-256) to use the on-device Messenger client. " +
-            "2026-10-19: the client code itself is now wired (core-fleet-messenger.PairedNodeGateway via " +
-            "MessengerFleetTransport in :app's Fleet Orchestrator) — only pairing a real node remains. " +
+        nextStep = "First P1 candidate. Hub Messenger client is live (FleetModule → MessengerFleetTransport → " +
+            "PairedNodeGateway). Pair ai.rootforge.os / ai.rootforge.os.debug on Tools → Fleet, then Capabilities " +
+            "(rootforge.capabilities.get) and Status. Hardware proof pending — no device run is claimed. " +
             "`cli`'s rootforge_* tools remain SSH-only (device-free CLI has no Android bind path). " +
             "No DependencyGuard and no shared signing key. SSH stays CLI/ISO fallback. Owns target-phone " +
             "control (USB OTG, later LAN/Tailscale). Does not own Termux/proot or Sahara — RootForge UI " +
-            "may call the EDL companion later.",
+            "may call the EDL companion later. File Manager stays PLANNED; do not use it as the P1 proof.",
         refusalMessage = "RootForge is an independent node. Pair it (Messenger / localhost API / SSH fallback); " +
-            "this catalog does not claim a live session.",
-        notes = "Live APK path already exists on their main (Messenger + shared JSON). " +
+            "this catalog does not claim a live session. Hardware proof pending.",
+        notes = "First P1 candidate. Hub Messenger client is live (MessengerFleetTransport); hardware proof " +
+            "pending. Live APK path already exists on their main (Messenger + shared JSON). " +
             "core-rootforge's cli tools speak SSH only. On-device Messenger is core-fleet-messenger + :app " +
-            "(MessengerFleetTransport, 2026-10-19), off in practice until a node is paired. Never " +
+            "(MessengerFleetTransport, 2026-10-19), off in practice until a node is paired on a real phone. Never " +
             "DependencyGuard, never shared signing key. Controller-side DEBUG signing cert for " +
             "ai.rootforge.os.debug is catalogued (enforceable). No release key yet.",
         androidPackages = listOf("ai.rootforge.os.debug"),
