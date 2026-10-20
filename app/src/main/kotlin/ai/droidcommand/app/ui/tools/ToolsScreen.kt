@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.tools
 
 import ai.droidcommand.app.navigation.Routes
+import ai.droidcommand.app.shizuku.ShizukuStatusSection
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 
@@ -32,6 +34,37 @@ fun ToolsScreen(navController: NavHostController) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ScreenTitle("Tools")
+
+        ShizukuStatusSection()
+
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Fleet", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "DCA is the hub. Fleet home lists every catalogued node with saved pairing " +
+                        "and any status snapshot already in memory. Live status from the phone is not " +
+                        "wired yet. Companions stay install-probe only. External nodes " +
+                        "(RootForge first) can be paired on the pairing screen " +
+                        "(package + observed signing cert). Nothing is LIVE. " +
+                        "Fleet commands check reachability per node (read-only) and can send an approved " +
+                        "command to a bound companion.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = { navController.navigate(Routes.FLEET) },
+                    modifier = Modifier.fillMaxWidth().testTag("tools_open_fleet"),
+                ) { Text("Open fleet home") }
+                Button(
+                    onClick = { navController.navigate(Routes.FLEET_ORCHESTRATOR) },
+                    modifier = Modifier.fillMaxWidth().testTag("tools_open_fleet_orchestrator"),
+                ) { Text("Open Fleet Orchestrator") }
+                Button(
+                    onClick = { navController.navigate(Routes.HELP) },
+                    modifier = Modifier.fillMaxWidth().testTag("tools_open_help"),
+                ) { Text("Open Help") }
+            }
+        }
 
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -65,6 +98,21 @@ fun ToolsScreen(navController: NavHostController) {
                     onClick = { navController.navigate(Routes.CLIPBOARDS) },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Open clipboards") }
+            }
+        }
+
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Automation keys", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Saved shell commands and AI prompts. Each run asks for your approval first.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = { navController.navigate(Routes.AUTOMATION) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Open automation keys") }
             }
         }
 

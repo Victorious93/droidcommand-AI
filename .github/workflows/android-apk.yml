@@ -2,18 +2,57 @@ name: Build APK
 
 # Builds the :app debug APK and uploads it as a downloadable workflow artifact.
 # Kept separate from ci.yml because this is a heavy native build (Android SDK +
-# NDK r28c + CMake; llama.cpp and sherpa-onnx native libs for 4 ABIs). It does
-# NOT run on every pull_request — only on manual dispatch and on pushes to the
-# branch(es) listed below — so ordinary JVM PRs stay fast.
+# NDK r28c + CMake; llama.cpp for arm64-v8a/x86_64 plus sherpa-onnx's 4-ABI AAR).
+# It does NOT run on every pull_request — ordinary JVM and :app Kotlin PRs stay
+# on ci.yml / android-emulator.yml. Triggers:
+#   - workflow_dispatch (always)
+#   - push to main, except docs-only commits
+#   - PRs that touch this workflow, the native modules packaged into the APK,
+#     or the Gradle files that decide whether :app still assembles
 #
-# The produced APK is debug-signed and has NOT been launched on a device or
-# emulator; see docs/AUDIT_2026-09-05.md (app stays ON DISK / UNVERIFIED).
+# The produced APK is debug-signed. A separate workflow
+# (.github/workflows/android-emulator.yml) launches an x86_64-only build and
+# runs the instrumented smoke test; see the 2026-10-13 / 2026-10-14 audit
+# addenda. Push/PR builds are the 4-ABI artifact, not a launch proof.
+# workflow_dispatch can pass abi=arm64-v8a for a smaller phone APK
+# (artifact app-arm64-debug-apk) that drops x86 / x86_64 / armeabi-v7a.
 
 on:
   workflow_dispatch:
+    inputs:
+      abi:
+        description: "ABIs to package. all = current 4-ABI APK; arm64-v8a = phone-sized debug APK."
+        type: choice
+        options:
+          - all
+          - arm64-v8a
+        default: all
   push:
     branches:
-      - "ccr-0f7819d2-0rsmt0"
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/android-apk.yml"
+      - "app/**"
+      - "signing/**"
+      - "core-termux/**"
+      - "core-tools-metasploit/**"
+      - "core-pentest-swarm/**"
+      - "core-llm-local-android/**"
+      - "core-voice-neural-android/**"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - "gradle.properties"
+      - "gradle/**"
+
+concurrency:
+  group: apk-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -53,19 +92,49 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # ggml-vulkan's host tool (vulkan-shaders-gen) is configured with -GNinja and looks
+      # ninja up on PATH. The SDK CMake package ships it; the runner image may not.
+      - name: Put SDK CMake ninja on PATH
+        run: echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
+
+      # Retry only transient Maven Central / network errors — a compile error is
+      # not a 429. The previous wrapper retried PilotController.kt:65 six times
+      # on Actions 38503712187 / 38504189408 (~23 min each) after Mode 1/2
+      # landed on the stale feature branch.
       - name: Assemble debug APK (retry transient Maven Central 429s)
+        env:
+          ABI_FILTER: ${{ github.event.inputs.abi }}
         run: |
           set -o pipefail
+          extra=()
+          if [ "${ABI_FILTER}" = "arm64-v8a" ]; then
+            extra+=(-PabiFilter=arm64-v8a)
+          fi
           delay=15
           for attempt in 1 2 3 4 5 6; do
             echo "::group::assembleDebug attempt #${attempt}"
-            if ./gradlew :app:assembleDebug -PincludeAndroid=true --no-daemon; then
+            log="$(mktemp)"
+            if ./gradlew :app:assembleDebug -PincludeAndroid=true "${extra[@]}" --no-daemon \
+                 2>&1 | tee "$log"; then
               echo "::endgroup::"
               echo "BUILD OK on attempt #${attempt}"
+              rm -f "$log"
               exit 0
             fi
             echo "::endgroup::"
-            echo "attempt #${attempt} failed; sleeping ${delay}s before retry"
+            if ! grep -qE \
+              'Could not GET |Could not HEAD |Received status code 429|Connection reset|SocketTimeout|UnknownHostException|Connection timed out|503 Service Unavailable|502 Bad Gateway' \
+              "$log"; then
+              echo "Non-transient assemble failure; not retrying"
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            if [ "${attempt}" -eq 6 ]; then
+              echo "assembleDebug failed after all retries"
+              exit 1
+            fi
+            echo "attempt #${attempt} failed with a transient dependency error; sleeping ${delay}s before retry"
             sleep "${delay}"
             delay=$((delay * 2))
             if [ "${delay}" -gt 300 ]; then delay=300; fi
@@ -73,27 +142,51 @@ jobs:
           echo "assembleDebug failed after all retries"
           exit 1
 
+      - name: Select APK artifact name
+        if: success()
+        env:
+          ABI_FILTER: ${{ github.event.inputs.abi }}
+        run: |
+          if [ "${ABI_FILTER}" = "arm64-v8a" ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk \
+               app/build/outputs/apk/debug/app-arm64-debug.apk
+            echo "APK_FILE=app-arm64-debug.apk" >> "$GITHUB_ENV"
+            echo "APK_ARTIFACT=app-arm64-debug-apk" >> "$GITHUB_ENV"
+          else
+            echo "APK_FILE=app-debug.apk" >> "$GITHUB_ENV"
+            echo "APK_ARTIFACT=app-debug-apk" >> "$GITHUB_ENV"
+          fi
+
       - name: Show APK identity
         if: success()
         run: |
-          APK=app/build/outputs/apk/debug/app-debug.apk
+          APK=app/build/outputs/apk/debug/${APK_FILE}
           ls -la "$APK"
           BT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort | tail -1)
           "${BT}aapt2" dump badging "$APK" | grep -E "^package:|sdkVersion:|targetSdkVersion:|application-label:" || true
+          unzip -l "$APK" | grep -E 'lib/.*/.*\.so$' | awk '{print $4}' | sort || true
+
+      - name: Print debug APK signing certificate
+        if: success()
+        run: |
+          APK=app/build/outputs/apk/debug/${APK_FILE}
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort | tail -1)
+          "${BT}apksigner" verify --print-certs "$APK"
 
       - name: Record APK checksum
         if: success()
         working-directory: app/build/outputs/apk/debug
         run: |
-          sha256sum app-debug.apk | tee SHA256SUMS
+          sha256sum "$APK_FILE" | tee SHA256SUMS
 
       - name: Upload APK artifact
         if: success()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
-          name: app-debug-apk
+          name: ${{ env.APK_ARTIFACT }}
           path: |
-            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/${{ env.APK_FILE }}
             app/build/outputs/apk/debug/SHA256SUMS
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7

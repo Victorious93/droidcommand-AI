@@ -42,7 +42,7 @@ class ShellBackedMetasploitExecutor(
     override fun isAvailable(): Boolean = true
 
     override fun execute(command: MetasploitCommand, isCancelled: () -> Boolean): MetasploitExecutionResult {
-        val lines = buildResourceScript(command)
+        val lines = MetasploitResourceScript.lines(command)
 
         val shellCommand = ShellCommand(
             executable = msfconsolePath,
@@ -55,15 +55,5 @@ class ShellBackedMetasploitExecutor(
                 MetasploitExecutionResult.Success(result.exitCode, result.stdout, result.stderr, result.durationMillis)
             is ShellExecutionResult.Failure -> MetasploitExecutionResult.Failure(result.reason, result.cause)
         }
-    }
-
-    private fun buildResourceScript(command: MetasploitCommand): List<String> = buildList {
-        add("use ${command.modulePath}")
-        add("set RHOSTS ${command.target.host}")
-        command.target.port?.let { add("set RPORT $it") }
-        command.payload?.let { add("set PAYLOAD $it") }
-        command.options.forEach { (key, value) -> add("set $key $value") }
-        add("run -z")
-        add("exit -y")
     }
 }

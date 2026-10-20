@@ -1,24 +1,89 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Every LLM provider call and (future) web-search lookup goes over HTTPS
-         via core-remote's JdkHttpTransport; nothing else in this Phase 0 shell
-         needs a permission. -->
+    <!-- Every LLM provider call and web-search lookup goes over HTTPS via core-remote's
+         HttpUrlConnectionTransport (JdkHttpTransport needs java.net.http, which Android does not ship). -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Normal-protection permission: lets the embedding-model download ask whether the active network is
          metered, so it can confirm before using mobile data. It reveals nothing beyond that flag. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Background model downloads run as a WorkManager foreground service of type dataSync (the system requires the
+         type to be declared). POST_NOTIFICATIONS lets its progress notification show on Android 13+; the app does not
+         prompt for it yet, so until it is granted the download runs without a visible notification. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- VictorSuite / Termux RUN_COMMAND (dangerous). Required to start
+         com.termux.app.RunCommandService. Also requested at runtime from the
+         Metasploit screen; denial refuses the Kali/msfconsole dispatch. -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+
+    <!-- Shizuku/Sui API (runtime, requested via Shizuku.requestPermission, not the
+         platform permission dialog). Same permission for Shizuku and Sui. -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+
+    <!-- EDL-Commander defines this signature permission; the hub only holds it.
+         Same-signing grants it. Do not invent ai.droidcommand.permission.BIND_EDLCOMMANDER. -->
+    <uses-permission android:name="ai.edlcommander.companion.permission.BIND_COMPANION" />
+
     <!-- Phase 4 voice input. Requested at runtime only when the user taps the mic; denial degrades to a
          message, never a crash. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Android 11+ package visibility: SpeechRecognizer.isRecognitionAvailable() and TextToSpeech need to
-         see the device's recognition/TTS services. -->
+    <!-- RECORD_AUDIO makes the build tools add a *required* microphone feature, and Google Play then hides the app from
+         devices without one. Voice is optional here (typing always works), so say so. -->
+    <uses-feature
+        android:name="android.hardware.microphone"
+        android:required="false" />
+
+    <!-- Android 11+ package visibility. Without an entry here, a lookup of another app (PackageManager.getPackageInfo)
+         throws as if the app were not installed, and a speech or TTS service is invisible to the platform checks. -->
     <queries>
         <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+
+        <!-- Tools > Fleet reports whether each of these is installed (PackageFleetProbe). Keep this list in step with
+             FleetCatalog; ManifestPolicyTest fails when a catalog package is missing. Named packages only: the broad
+             QUERY_ALL_PACKAGES permission is deliberately not requested. -->
+        <package android:name="ai.hackerai.companion" />
+        <package android:name="ai.pentestswarm.companion" />
+        <package android:name="com.termux" />
+        <intent><action android:name="com.termux.RUN_COMMAND" /></intent>
+        <package android:name="ai.edlcommander.companion" />
+        <package android:name="ai.victorious.filemanager" />
+        <package android:name="com.victorious.keyboard" />
+        <!-- Controller-side node signature check (NodeSignatureGuard) plus Tools → Fleet
+             package probe. Mesh is KnownFleet.MESH; Browser is KnownFleet.BROWSER;
+             Flash is KnownFleet.VICTORIOUS_FLASH; Launch is KnownFleet.VICTOR_LAUNCH
+             (all PLANNED EXTERNAL_NODE). -->
+        <package android:name="com.victorious.mesh" />
+        <package android:name="com.victorious.browser" />
+        <package android:name="com.victorious.sms" />
+        <package android:name="com.victorious.spoof" />
+        <package android:name="com.victorious.flash.android" />
+        <package android:name="com.victorious.launch" />
+        <!-- KYC companion EXTERNAL_NODE for remote.command
+             ([provisional/pending-stable-cert], fail-open). Probe only. -->
+        <package android:name="com.identityshield.companion" />
+
+        <!-- Messenger transport (core-fleet-messenger): a paired EXTERNAL_NODE package is only visible to the
+             trust check if it is named here; an unnamed one reads as "not installed" and is refused. Debug /
+             bench variants are listed so a paired debug APK can be inspected; they are not probed by the
+             Fleet screen. RootForge's id is inferred from its documented action prefix
+             (ai.rootforge.os.action.BRIDGE) and has not been confirmed against a real install. -->
+        <package android:name="ai.victorious.filemanager.debug" />
+        <package android:name="com.victorious.keyboard.debug" />
+        <package android:name="com.victorious.keyboard.bench" />
+        <package android:name="ai.rootforge.os" />
+        <package android:name="ai.rootforge.os.debug" />
+
+        <!-- Shizuku manager + Sui. Without these, Android 11+ reports them as not installed. -->
+        <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="rikka.sui" />
     </queries>
 
     <!-- Phase 4 — Companion APK signature permissions.
@@ -34,22 +99,49 @@
         android:name="ai.droidcommand.permission.BIND_PENTESTSWARM"
         android:protectionLevel="signature" />
 
+    <!-- allowBackup is off and the extraction rules exclude everything: chats, the memory graph, notes, clipboards, the
+         audit log and imported models stay on this device (docs/SECURITY.md). dataExtractionRules is read on Android 12+,
+         fullBackupContent="false" on Android 9 to 11 (the minSdk is 28). The network security config refuses cleartext
+         HTTP and trusts only the system CA store. enableOnBackInvokedCallback opts in to predictive back. -->
     <application
         android:name=".DroidCommandApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:enableOnBackInvokedCallback="true"
+        android:fullBackupContent="false"
         android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:label="DroidCommand AI"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/Theme.DroidCommand"
+        tools:targetApi="33">
 
+        <!-- adjustResize: on Android 10 and older the keyboard height only reaches Compose's imePadding() when the
+             window resizes. MainActivity draws edge to edge, so each screen handles the system bar insets itself. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
+        <!-- Official Shizuku provider. exported + INTERACT_ACROSS_USERS_FULL is the
+             documented setup; only the system can hold that permission. -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     </application>
 </manifest>

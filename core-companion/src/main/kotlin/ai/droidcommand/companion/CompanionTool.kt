@@ -33,7 +33,6 @@ class CompanionTool(
     private val capabilityId: String,
     override val spec: ToolSpec,
 ) : Tool {
-
     override fun execute(input: Map<String, String>): ToolResult {
         // Route to the correct companion service by capability ID namespace.
         val service: ICompanionService? = when {
@@ -47,7 +46,7 @@ class CompanionTool(
         if (service == null) {
             return ToolResult.Failure(
                 "Companion service for capability '$capabilityId' is not connected. " +
-                    "Install and launch the companion APK, then retry."
+                    "Install and launch the companion APK, then retry.",
             )
         }
 
@@ -65,7 +64,6 @@ class CompanionTool(
 
 /** Factory helpers for the two known companion tools. */
 object CompanionToolFactory {
-
     fun hackerAiAgentTask(registry: CompanionRegistry): CompanionTool = CompanionTool(
         registry = registry,
         capabilityId = "ai.companion.hackerai.agent_task",

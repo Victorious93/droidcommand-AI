@@ -131,4 +131,31 @@ class LocalModelImporterTest {
             dir.deleteRecursively()
         }
     }
+
+    @Test
+    fun `discards the partial copies an interrupted import left behind, and nothing else`() {
+        val dir = newDir()
+        try {
+            File(dir, "import-123.part").writeText("half a model")
+            File(dir, "import-456.part").writeText("another one")
+            File(dir, "user-abc.gguf").writeText("a model that was kept")
+            File(dir, "registry.txt").writeText("records")
+            File(dir, "notes.part").writeText("not an import temp file")
+
+            assertEquals(2, LocalModelImporter(dir).discardAbandonedImports())
+            assertEquals(listOf("notes.part", "registry.txt", "user-abc.gguf"), entries(dir))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `discarding before the directory exists removes nothing and does not fail`() {
+        val parent = newDir()
+        try {
+            assertEquals(0, LocalModelImporter(File(parent, "not-created-yet")).discardAbandonedImports())
+        } finally {
+            parent.deleteRecursively()
+        }
+    }
 }

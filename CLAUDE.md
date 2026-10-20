@@ -1,5 +1,27 @@
 # DroidCommand AI — orientation for Claude sessions
 
+> **Docs refresh 2026-10-15 (`docs/update-claude-md`):** several claims below are stale.
+> Verified against `settings.gradle.kts` and `.github/workflows/` on this date:
+> - Always-on JVM modules in `settings.gradle.kts` now include (among others)
+>   `core-coding-session`, `core-billing`, `core-websearch`, `core-voice`, `core-rag`,
+>   `core-notes`, and (as of PR #207) `core-flash`. Counts that say "25 modules" are wrong.
+> - Opt-in Android modules (`-PincludeAndroid=true` or user `gradle.properties`):
+>   `:app`, `:core-conversations`, `:core-rag-android`, `:core-templates-android`,
+>   `:core-knowledge-android`, `:core-llm-local-android`, `:core-voice-android`,
+>   `:core-voice-neural-android`. `:core-companion` is still on disk but not in the
+>   `includeAndroid` block.
+> - `:app:assembleDebug` **has** been built in GitHub Actions (`android-apk.yml`) and
+>   launched on an API 28 x86_64 emulator (`android-emulator.yml`); README screenshots
+>   were filled from that emulator (PR #202). Claims that `:app` has "never been
+>   build-verified" or "never launched" are obsolete — check the audit addenda from
+>   2026-10-13 onward and the workflow run history instead.
+> - CI: `ci.yml` (JVM `./gradlew test --continue` + `ktlintCheck` on every push/PR to
+>   `main`); `android-apk.yml` (4-ABI debug APK, selective triggers); `android-emulator.yml`
+>   (API 28 smoke + screenshots, selective triggers). JDK 21.
+> Re-verify against `settings.gradle.kts` and the bottom of `docs/AUDIT_2026-09-05.md`
+> before trusting older module counts or "never run" statements further down this file.
+
+
 Read this first. It exists so a new session doesn't have to re-derive
 context that already lives elsewhere in this repo — don't re-audit the
 project or re-clone the reference repos unless the task genuinely requires
@@ -310,6 +332,50 @@ inflate any entry's status past what those addenda actually say:
   UI-only and unreachable from `RUN_COMMAND` — closing that gap needs new
   surface area in VictorSuite's own repo, out of scope here. See
   `docs/AUDIT_2026-09-05.md`'s addendum for the full record.
+
+The nine-member **room fleet** Don asked DCA to control (RootForge OS,
+VictorSuite, KYC-AuditLab, EDL-Commander, Pentest-Swarm-AI, Victorious
+File Manager, Victorious Keyboard, Victorious Mesh, Victorious Browser)
+is catalogued in
+`docs/FLEET_CONTROL.md` and `core-security.KnownFleet`. Wiring order:
+Pentest (when the base repo exists) → RootForge Messenger deepen →
+VictorSuite `RUN_COMMAND` → EDL companion APK → KYC last → File Manager
+(when their identity/default-off PR lands; after the RootForge Messenger
+client exists) → Keyboard (catalog only; direction of hub-query vs
+keyboard slash-commands is open) → Mesh (catalog only; own signing keys)
+→ Browser (catalog only; own signing keys).
+RootForge
+is an **EXTERNAL_NODE** — live APK path on their `main` is already Messenger +
+shared JSON (`docs/DROIDCOMMAND_INTEGRATION.md` in `rootforge-os`, action
+`ai.rootforge.os.action.BRIDGE`, `protocol_major` 1); SSH is CLI/ISO
+fallback only. Never DependencyGuard, never a shared signing key.
+Victorious File Manager is a second **EXTERNAL_NODE**, **PLANNED** —
+package `ai.victorious.filemanager`, action
+`ai.victorious.filemanager.action.BRIDGE` already on their `main`
+(`dca_required:false` stub ops); this repo does not bind it, and must
+never get DependencyGuard / a shared signing key / `KnownCompanions` /
+AIDL. Victorious Keyboard is a third **EXTERNAL_NODE**, **PLANNED** —
+package `com.victorious.keyboard` (debug `.debug`, benchmark `.bench`),
+planned action `com.victorious.keyboard.action.BRIDGE`; this repo does not
+bind it, must never get DependencyGuard / a shared signing key /
+`KnownCompanions` / AIDL / a `BIND_*` permission, and must never forward
+typed text or keystrokes. Victorious Mesh is a fourth **EXTERNAL_NODE**,
+**PLANNED** — package `com.victorious.mesh` (debug==release, no
+`applicationIdSuffix`), planned action `com.victorious.mesh.action.BRIDGE`;
+this repo does not bind it, must never get DependencyGuard / a shared
+signing key / `KnownCompanions` / AIDL / a `BIND_*` permission. Mesh keeps
+its own release key. Victorious Browser is a fifth **EXTERNAL_NODE**,
+**PLANNED** — package `com.victorious.browser`, planned action
+`com.victorious.browser.action.BRIDGE`; this repo does not bind it, must
+never get DependencyGuard / a shared signing key / `KnownCompanions` /
+AIDL / a `BIND_*` permission. Browser keeps its own release key (CI-only;
+not the shared fleet key). Caller identity is `Message.sendingUid`, not
+`Binder.getCallingUid`. EDL-Commander is a **bound companion** (AIDL +
+same-signing + DependencyGuard), PLANNED (`ai.edlcommander.companion`,
+`IEdlCompanion` copied, orchestrator does not auto-bind) — do not mark
+it host-tool-only. KYC-AuditLab is a host-process simulator (localhost only;
+the hub must not call `/scope` admin). None of the nine is LIVE. Do not
+invent a parallel control plane.
 
 ---
 
@@ -695,13 +761,12 @@ this project had specifically evaluated them.
 
 ---
 
-### Current module inventory (verified against `settings.gradle.kts`, 2026-09-29)
+### Current module inventory (originally verified 2026-09-29; **stale — see 2026-10-15 banner at top**)
 
-25 modules are wired into the build via `include(...)` in
-`settings.gradle.kts`. `app/` also exists on disk with real source but is
-deliberately **not** in `settings.gradle.kts` (gated on an Android SDK this
-environment does not have — see the excluded-module comment at the bottom of
-`settings.gradle.kts`).
+The table below is kept for historical orientation. Do not treat its module
+count or `:app` status as current. Re-read `settings.gradle.kts` and the
+2026-10-15 banner. Android modules are opt-in via `includeAndroid=true`
+(CI APK/emulator workflows pass `-PincludeAndroid=true`).
 
 | Module | Type | Status |
 |---|---|---|
@@ -754,23 +819,33 @@ into the future, per this file's own standing rule.
 ## RootForge OS (external node — NOT a companion)
 
 `core-rootforge` (2026-10-07) lets DCA optionally ask an independently installed RootForge
-OS machine questions (capabilities, attached adb/fastboot devices) over an SSH-carried JSON
-protocol. RootForge is an independent product: it is **exempt from the companion
-`DependencyGuard`** and from the AIDL/signature-permission model below — never add either to
-it. Read `docs/ROOTFORGE_INTEGRATION.md` before touching the module; the canonical protocol
-lives in the `rootforge-os` repo (`docs/DROIDCOMMAND_INTEGRATION.md`). Only passive reads
-exist; flashing, restore, builds, jobs and terminals are deliberately absent until RootForge
-repairs the gates listed there.
+OS machine questions (capabilities, attached adb/fastboot devices). RootForge is an
+independent product: it is **exempt from the companion `DependencyGuard`** and from
+the AIDL/signature-permission / shared-signing-key model — never add any of those
+to it. Live APK path on *their* `main` is already Messenger + shared JSON
+(`docs/DROIDCOMMAND_INTEGRATION.md` in `rootforge-os`, action
+`ai.rootforge.os.action.BRIDGE`, `protocol_major` 1). This repo still only
+speaks the SSH fallback. Read `docs/ROOTFORGE_INTEGRATION.md` and
+`docs/FLEET_CONTROL.md` before touching the module. Only passive reads exist
+here; flashing, restore, builds, jobs and terminals are deliberately absent
+until RootForge repairs the gates listed there.
 
 ## Companion APK Integration
 
-DCA integrates with two companion APKs via Android Bound Services:
+DCA integrates with companion APKs via Android Bound Services:
 
 - **HackerAI companion** (`hackeraiETC/android/`) — exposes HackerAI's agent
   orchestration, skill catalog, and finding validation via `IHackerAIService`
 - **Pentest-Swarm companion** (`Pentest-Swarm-AI/android/`) — exposes the Go
   pentestswarm binary's campaign/chain/playbook capabilities via
   `IPentestSwarmService`
+- **EDL-Commander companion** (`Victorious93/EDL-Commander`, PLANNED) —
+  Sahara/Firehose over AIDL + same-signing + DependencyGuard. Package
+  `ai.edlcommander.companion`. AIDL is `IEdlCompanion` under
+  `ai.edlcommander.companion.aidl`;
+  bind action `ai.edlcommander.companion.BIND`; hub `uses-permission`
+  `ai.edlcommander.companion.permission.BIND_COMPANION`. Do not invent
+  `IEDLCommanderService`. Not a host tool. Never device-verified.
 
 **For session orientation on the full integration protocol**, read
 `COMPANION_PROTOCOL.md` at the repo root before modifying AIDL contracts,
@@ -785,9 +860,16 @@ adding companion capabilities, or working on the modules below.
 | `core-companion` | `droidcommand-AI/core-companion/` | Android (excluded from build) | IMPLEMENTED (source only) |
 | HackerAI companion APK | `hackeraiETC/android/` | Android standalone | IMPLEMENTED (source only) |
 | Pentest-Swarm companion APK | `Pentest-Swarm-AI/android/` | Android standalone | IMPLEMENTED (source only) |
+| EDL-Commander companion APK | `Victorious93/EDL-Commander` | Android standalone | PLANNED (`applicationId` `ai.edlcommander.companion`; `IEdlCompanion` AIDL copied here; never device-bound) |
 
 **Critical rule — AIDL sync**: The AIDL files in each companion repo are
 copies of the canonical files in `core-companion/src/main/aidl/`. A diverged
 copy causes a `RemoteException: Binder interface mismatch` at runtime with no
 compile-time warning. Always update all three locations together. Details in
 `COMPANION_PROTOCOL.md` § "AIDL Contract Sync Rule".
+
+## Don's standing rules (apply to every change)
+- Work on a branch and open a PR. Never push to `main`.
+- Never merge a PR, and never ask to merge one, until every test/check on the PR passes.
+- Never commit secrets (API keys, tokens, keystore passwords, `.env` files, credentials).
+- Don't claim something works unless it was actually tested; say what was and wasn't run.

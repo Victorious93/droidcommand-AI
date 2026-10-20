@@ -31,8 +31,10 @@ sealed class MacroOutcome {
 }
 
 /**
- * Plays back a fixed [Macro] step by step through the same [ToolExecutor]
- * that Pilot Mode and [ObjectiveEngine] already use — reusing its dispatch,
+ * Plays back a fixed [Macro] step by step through the same [ToolRunner]
+ * that Pilot Mode and [ObjectiveEngine] already use — a plain [ToolExecutor],
+ * or core-security's `SecureToolExecutor`, which gates every step with policy
+ * and approval — reusing its dispatch,
  * mode/initiator scoping, and retry handling rather than duplicating any of
  * it. This is OD-002's pattern: a saved routine is an intentionally linear
  * executor sharing primitives with the full agent loop, not a second
@@ -54,7 +56,7 @@ sealed class MacroOutcome {
  * has one outcome shape to handle.
  */
 class MacroExecutor(
-    private val executor: ToolExecutor,
+    private val executor: ToolRunner,
     private val logger: Logger = NoOpLogger,
 ) {
     fun run(

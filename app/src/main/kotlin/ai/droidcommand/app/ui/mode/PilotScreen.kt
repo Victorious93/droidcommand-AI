@@ -1,8 +1,10 @@
 package ai.droidcommand.app.ui.mode
 
 import ai.droidcommand.agent.AgentMode
+import ai.droidcommand.app.mode.ToolBackendNotes
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.components.rememberDraft
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +25,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -36,8 +39,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun PilotScreen(viewModel: PilotViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
     val mode by viewModel.modeState.collectAsState()
-    var toolName by remember { mutableStateOf(state.tools.firstOrNull()?.name.orEmpty()) }
-    var args by remember { mutableStateOf("") }
+    var toolName by rememberSaveable { mutableStateOf(state.tools.firstOrNull()?.name.orEmpty()) }
+    var args by rememberDraft()
     var menuOpen by remember { mutableStateOf(false) }
     val selected = state.tools.firstOrNull { it.name == toolName }
 
@@ -76,6 +79,9 @@ fun PilotScreen(viewModel: PilotViewModel = hiltViewModel()) {
                     }
                     selected?.let {
                         Text(it.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        ToolBackendNotes.forName(it.name)?.let { note ->
+                            Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        }
                     }
                     OutlinedTextField(
                         value = args,

@@ -87,6 +87,10 @@ sealed class MemoryResult {
  * into [knowledgeGraph]. When both are set, [memoryWriter] wins. Extracted relationships are remapped to the
  * writer's final entity ids and stored on this path too (see [MemoryExtractionService]).
  *
+ * [autoRememberEveryTurns] (off at 0, the default) runs [rememberConversation] after every Nth successful cloud
+ * reply. Each run is one extra provider call, so keep N large. It uses the provider that just answered, so no new
+ * party sees the text. A failed run never fails the turn: it is reported in [ChatResult.Reply.notice].
+ *
  * [webSearch] (off when `null`, the default) backs the per-message `useWebSearch` flag on [send]. When the
  * flag is set, the user's message text is sent to that search provider and the top results are added to
  * that request's final user message, framed as untrusted third-party text — user turn, not system prompt,
@@ -125,7 +129,11 @@ class ChatSession(
     private val memoryBudgetTokens: Int = DEFAULT_MEMORY_BUDGET_TOKENS,
     private val memoryWriter: MemoryWriter? = null,
     private val memoryWriteScope: String = "",
+    private val autoRememberEveryTurns: Int = 0,
 ) {
+    // Successful cloud turns since the conversation was opened or last auto-remembered.
+    private var turnsSinceRemember = 0
+
     // Loaded on first use, not at construction: a Room-backed store throws on the main thread, and a
     // caller (an Android ViewModel) constructs this there. Every public method may touch storage.
     private var activeConversationId: String = conversationId
@@ -168,6 +176,7 @@ class ChatSession(
         lastSpec = null
         lastModel = null
         usedLocal = false
+        turnsSinceRemember = 0
     }
 
     /** [prompt] is sent as system text on later turns. Null or blank clears it. Not stored in the transcript. */
@@ -189,11 +198,24 @@ class ChatSession(
         if (key.isNullOrBlank()) return ChatResult.Failure("No API key for ${spec.label}. Add one in Settings.")
 
         val config = LlmConfig(provider = spec.id, model = model.trim().ifEmpty { spec.defaultModel }, authToken = { vault.getSecret(spec.secretId) })
-        return turn({ providerFor(spec, config) }, key, userText.trim(), useWebSearch, onDelta) {
+        val result = turn({ providerFor(spec, config) }, key, userText.trim(), useWebSearch, onDelta) {
             lastSpec = spec
             lastModel = config.model
             usedLocal = false
         }
+        return if (result is ChatResult.Reply) withAutoRemember(result) else result
+    }
+
+    private fun withAutoRemember(reply: ChatResult.Reply): ChatResult.Reply {
+        if (autoRememberEveryTurns <= 0 || (memoryWriter == null && knowledgeGraph == null)) return reply
+        if (++turnsSinceRemember < autoRememberEveryTurns) return reply
+        turnsSinceRemember = 0
+        val note = when (val r = rememberConversation()) {
+            is MemoryResult.Saved -> null
+            is MemoryResult.NothingToRemember -> null
+            is MemoryResult.Failure -> "Auto-remember failed: ${r.message}"
+        }
+        return if (note == null) reply else reply.copy(notice = listOfNotNull(reply.notice, note).joinToString(" "))
     }
 
     /**

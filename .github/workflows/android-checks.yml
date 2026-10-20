@@ -1,0 +1,115 @@
+name: Android Checks
+
+# Unit tests and ktlint for :app and the Android library modules.
+#
+# ci.yml runs without -PincludeAndroid, so it never sees any of them. android-apk.yml and android-emulator.yml only
+# assemble APKs. Until this workflow existed, :app's unit tests and its ktlint ran in no automated check, and style
+# violations had piled up in :app unseen (docs/AUDIT_2026-09-05.md, 2026-10-15 addendum).
+#
+# This task set needs only the pinned llama.cpp *fetch* (fetchLlamaCpp, a shallow git clone), not the native compile, so it
+# is fast. It does not run Android Lint (:app:lintDebug pulls in the whole CMake build, and most of its findings are
+# dependency-version notices) and it does not launch the app; android-emulator.yml does that.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+
+concurrency:
+  group: android-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Unit tests and ktlint (:app and Android modules)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # The legacy "tools" package install fails; pull exact packages below.
+          packages: ""
+
+      - name: Install SDK packages (compileSdk 36, NDK r28c, CMake 3.22.1)
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;28.2.13676358" \
+            "cmake;3.22.1"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Retry only transient Maven Central / network errors (the shared-IP 429s documented throughout the audit trail).
+      # A failing test or a ktlint violation is not one of those, so it fails the job on the first attempt.
+      - name: Run Android unit tests and ktlint (retry transient 429s)
+        run: |
+          set -o pipefail
+          delay=15
+          for attempt in 1 2 3 4 5 6; do
+            echo "::group::attempt #${attempt}"
+            log="$(mktemp)"
+            if ./gradlew \
+                 -PincludeAndroid=true \
+                 --no-daemon --continue \
+                 testDebugUnitTest ktlintCheck 2>&1 | tee "$log"; then
+              echo "::endgroup::"
+              echo "BUILD OK on attempt #${attempt}"
+              rm -f "$log"
+              exit 0
+            fi
+            echo "::endgroup::"
+            if ! grep -qE \
+              'Could not GET |Could not HEAD |Could not download |Received status code 429|Connection reset|SocketTimeout|UnknownHostException|Connection timed out|503 Service Unavailable|502 Bad Gateway' \
+              "$log"; then
+              echo "Non-transient failure; not retrying"
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+            if [ "${attempt}" -eq 6 ]; then
+              echo "failed after all retries"
+              exit 1
+            fi
+            echo "attempt #${attempt} failed with a transient dependency error; sleeping ${delay}s before retry"
+            sleep "${delay}"
+            delay=$((delay * 2))
+            if [ "${delay}" -gt 300 ]; then delay=300; fi
+          done
+          exit 1
+
+      - name: Upload test and ktlint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-check-reports
+          path: |
+            **/build/reports/tests/testDebugUnitTest
+            **/build/reports/ktlint
+          if-no-files-found: ignore
+          retention-days: 7

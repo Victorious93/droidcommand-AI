@@ -86,7 +86,7 @@ fun ClipboardScreen(viewModel: ClipboardViewModel = hiltViewModel()) {
                     }
                     state.privateClips.forEach { clip ->
                         ClipRow(clip.text) {
-                            OutlinedButton(onClick = { viewModel.copyToSystem(clip.text) }) { Text("Copy (exposes it)") }
+                            OutlinedButton(onClick = { viewModel.copyToSystem(clip.text, sensitive = true) }) { Text("Copy (exposes it)") }
                             OutlinedButton(onClick = { viewModel.deletePrivate(clip.id) }) { Text("Delete") }
                         }
                     }

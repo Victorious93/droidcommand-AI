@@ -51,12 +51,63 @@ class RegistryAndToolsTest {
     }
 
     @Test fun `tools are sensitive remote-control tools`() {
-        for (spec in listOf(RootForgeListDevicesTool(registry()).spec, RootForgeCapabilitiesTool(registry()).spec)) {
+        val specs = listOf(
+            RootForgeListDevicesTool(registry()).spec,
+            RootForgeCapabilitiesTool(registry()).spec,
+            RootForgeDeviceInfoTool(registry()).spec,
+            RootForgeAdbShellTool(registry()).spec,
+            RootForgeAdbRebootTool(registry()).spec,
+            RootForgeFastbootRebootTool(registry()).spec,
+        )
+        for (spec in specs) {
             assertEquals(SecurityLevel.SENSITIVE, spec.securityLevel)
             assertEquals(PermissionCategory.REMOTE_CONTROL, spec.permissionCategory)
             assertTrue(spec.requiresConfirmation)
             assertTrue(!spec.requiresRoot)
         }
+    }
+
+    @Test fun `adb shell tool requires the command input`() {
+        val out = RootForgeAdbShellTool(registry()).execute(mapOf("node" to NODE_A))
+        assertIs<ToolResult.Failure>(out)
+        assertTrue(calls.isEmpty())
+    }
+
+    @Test fun `fastboot reboot tool requires the target input`() {
+        val out = RootForgeFastbootRebootTool(registry()).execute(mapOf("node" to NODE_A))
+        assertIs<ToolResult.Failure>(out)
+        assertTrue(calls.isEmpty())
+    }
+
+    @Test fun `adb reboot tool defaults to a plain reboot when target is omitted`() {
+        val reg = RootForgeNodeRegistry(listOf(node())) { cfg ->
+            RootForgeClient(
+                cfg,
+                FakeTransport {
+                    calls += cfg.nodeId
+                    Result.success(okFrame("r", cfg.nodeId, """{"requested":""}"""))
+                },
+            ) { "r" }
+        }
+        val out = RootForgeAdbRebootTool(reg).execute(mapOf("node" to NODE_A))
+        assertIs<ToolResult.Success>(out)
+        assertEquals(listOf(NODE_A), calls)
+    }
+
+    @Test fun `device info reports when no target is connected`() {
+        val reg = RootForgeNodeRegistry(listOf(node())) { cfg ->
+            RootForgeClient(cfg, FakeTransport { Result.success(okFrame("r", cfg.nodeId, """{"info":{}}""")) }) { "r" }
+        }
+        val out = assertIs<ToolResult.Success>(RootForgeDeviceInfoTool(reg).execute(mapOf("node" to NODE_A)))
+        assertTrue("No target connected" in out.output)
+    }
+
+    @Test fun `adb shell tool reports a nonzero exit code as failure`() {
+        val reg = RootForgeNodeRegistry(listOf(node())) { cfg ->
+            RootForgeClient(cfg, FakeTransport { Result.success(okFrame("r", cfg.nodeId, """{"exit_code":1,"output":"nope","truncated":false}""")) }) { "r" }
+        }
+        val out = assertIs<ToolResult.Failure>(RootForgeAdbShellTool(reg).execute(mapOf("node" to NODE_A, "command" to "false")))
+        assertTrue("exited 1" in out.reason)
     }
 
     @Test fun `node failure surfaces as tool failure with category`() {

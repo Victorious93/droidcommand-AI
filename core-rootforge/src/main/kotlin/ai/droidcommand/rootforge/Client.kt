@@ -2,10 +2,16 @@ package ai.droidcommand.rootforge
 
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.util.UUID
 
-/** Why a call failed, kept distinct so callers never mistake a transport fault for a node refusal. */
-enum class FailureKind { TRANSPORT, MALFORMED_RESPONSE, PROTOCOL_MISMATCH, NODE_IDENTITY_MISMATCH, REMOTE_ERROR }
+/**
+ * Why a call failed, kept distinct so callers never mistake a transport fault for a node refusal.
+ * [UNTRUSTED_NODE] is the controller-side refusal raised before anything is sent: the target is not
+ * paired, not installed, or its installed signing certificate is not the paired one (Messenger transport).
+ */
+enum class FailureKind { TRANSPORT, MALFORMED_RESPONSE, PROTOCOL_MISMATCH, NODE_IDENTITY_MISMATCH, REMOTE_ERROR, UNTRUSTED_NODE }
 
 sealed class RootForgeResult<out T> {
     data class Success<T>(val value: T) : RootForgeResult<T>()
@@ -27,18 +33,60 @@ class RootForgeClient(
     fun capabilities(): RootForgeResult<JsonObject> = call("rootforge.capabilities.get")
 
     fun listDevices(): RootForgeResult<DeviceListResult> =
-        when (val r = call("rootforge.devices.list")) {
-            is RootForgeResult.Failure -> r
-            is RootForgeResult.Success -> runCatching { bridgeJson.decodeFromJsonElementCompat(r.value) }
-                .fold(
-                    { RootForgeResult.Success(it) },
-                    { RootForgeResult.Failure(FailureKind.MALFORMED_RESPONSE, "unexpected devices payload: ${it.message}") },
-                )
-        }
+        decoded("rootforge.devices.list", DeviceListResult.serializer()) { "unexpected devices payload: $it" }
 
-    private fun call(operation: String, timeoutMs: Int = 10_000): RootForgeResult<JsonObject> {
+    /** Read op: properties of the currently connected target (`{}` if none is attached). */
+    fun deviceInfo(): RootForgeResult<DeviceInfoResult> =
+        decoded("rootforge.device.info", DeviceInfoResult.serializer()) { "unexpected device.info payload: $it" }
+
+    /**
+     * Control op: runs [command] in an adb shell on the paired node's connected target.
+     * The node itself prompts its operator before running it ("Allow `rootforge.adb.shell`?") —
+     * this call does not bypass that; it only reaches the node.
+     */
+    fun adbShell(command: String): RootForgeResult<AdbShellResult> =
+        decoded(
+            "rootforge.adb.shell",
+            AdbShellResult.serializer(),
+            parameters = buildJsonObject { put("command", command) },
+        ) { "unexpected adb.shell payload: $it" }
+
+    /**
+     * Control op: reboots the connected target **to** [target] (`""`/`bootloader`/`recovery`/
+     * `sideload`/`fastboot`/`edl`) via adb — not a sideload-of-a-zip.
+     */
+    fun adbReboot(target: String = ""): RootForgeResult<RequestedResult> =
+        decoded(
+            "rootforge.adb.reboot",
+            RequestedResult.serializer(),
+            parameters = buildJsonObject { put("target", target) },
+        ) { "unexpected adb.reboot payload: $it" }
+
+    /** Control op: reboots the connected target (already in fastboot) to [target] (`system`/`bootloader`/`recovery`/`fastbootd`). */
+    fun fastbootReboot(target: String): RootForgeResult<RequestedResult> =
+        decoded(
+            "rootforge.fastboot.reboot",
+            RequestedResult.serializer(),
+            parameters = buildJsonObject { put("target", target) },
+        ) { "unexpected fastboot.reboot payload: $it" }
+
+    private fun <T> decoded(
+        operation: String,
+        serializer: kotlinx.serialization.KSerializer<T>,
+        parameters: JsonObject = JsonObject(emptyMap()),
+        malformedMessage: (String) -> String,
+    ): RootForgeResult<T> = when (val r = call(operation, parameters)) {
+        is RootForgeResult.Failure -> r
+        is RootForgeResult.Success -> runCatching { bridgeJson.decodeFromJsonElement(serializer, r.value) }
+            .fold(
+                { RootForgeResult.Success(it) },
+                { RootForgeResult.Failure(FailureKind.MALFORMED_RESPONSE, malformedMessage(it.message ?: it.toString())) },
+            )
+    }
+
+    private fun call(operation: String, parameters: JsonObject = JsonObject(emptyMap()), timeoutMs: Int = 10_000): RootForgeResult<JsonObject> {
         val requestId = newRequestId()
-        val request = BridgeRequest(requestId = requestId, targetNodeId = node.nodeId, operation = operation, timeoutMs = timeoutMs)
+        val request = BridgeRequest(requestId = requestId, targetNodeId = node.nodeId, operation = operation, parameters = parameters, timeoutMs = timeoutMs)
         val line = transport.exchange(bridgeJson.encodeToString(request), timeoutMs + 5_000L)
             .getOrElse { return RootForgeResult.Failure(FailureKind.TRANSPORT, it.message ?: "transport failure") }
         val response = runCatching { bridgeJson.decodeFromString<BridgeResponse>(line) }
@@ -60,6 +108,3 @@ class RootForgeClient(
             ?: RootForgeResult.Failure(FailureKind.MALFORMED_RESPONSE, "ok response without a result")
     }
 }
-
-private fun kotlinx.serialization.json.Json.decodeFromJsonElementCompat(obj: JsonObject): DeviceListResult =
-    decodeFromJsonElement(DeviceListResult.serializer(), obj)

@@ -19,10 +19,10 @@ import javax.xml.parsers.DocumentBuilderFactory
  * has no opinion on the security policy gating it, matching `core-build-local.LocalProcessBuildExecutor`'s
  * identical relationship to [ShellExecutor].
  *
- * **Deliberately implements only 11 of [DeviceController]'s 29 methods for real** —
+ * **Deliberately implements only 12 of [DeviceController]'s 29 methods for real** —
  * [getDeviceInfo]/[getBatteryStatus]/[getStorageInfo]/[listInstalledApps]/[getUiTree]/[takeScreenshot]/
- * [listNotifications]/[getNetworkState]/[readFile]/[listDirectory]/[listContacts] — every one read-only
- * and non-mutating. None of the other 18 (anything that taps, types, launches an app, sends an SMS, makes a call, or writes/deletes/
+ * [listNotifications]/[getNetworkState]/[readFile]/[listDirectory]/[listContacts]/[getClipboardText] —
+ * every one read-only and non-mutating. None of the other 17 (anything that taps, types, launches an app, sends an SMS, makes a call, or writes/deletes/
  * moves/copies a file) are implemented here: this device is a real personal phone, and actually
  * exercising a mutating action against it is not a call this class makes unilaterally. Every unimplemented
  * method fails with an explicit "not yet implemented" reason —
@@ -448,7 +448,33 @@ class AdbDeviceController(
     override fun moveFile(fromPath: String, toPath: String) = failure("move file")
     override fun copyFile(fromPath: String, toPath: String) = failure("copy file")
     override fun deleteFile(path: String) = failure("delete file")
-    override fun getClipboardText() = ClipboardReadResult.Failure(notImplemented("read clipboard"))
+
+    /**
+     * Reads the system clipboard's primary clip text via `adb shell dumpsys clipboard` (read-only;
+     * unlike the normal `ClipboardManager` app API, the clipboard service's own dump is not gated by
+     * "focused app" restrictions, so `shell` can read it the same way it can read any other `dumpsys`
+     * state). The dump's `mPrimaryClip:` line renders a `android.content.ClipData` via its own
+     * `toString()`, whose item rendering (`ClipData.Item.toShortString()` in AOSP) appends the clip's
+     * MIME type directly followed by the text in angle brackets — e.g.
+     * `mPrimaryClip: ClipData { text/plain<Hello, DroidCommand!> }` — not JSON, not quoted, and not a
+     * format this class has verified against a real device (no device was attached when this was
+     * written; see `docs/AUDIT_2026-09-05.md`). A `mPrimaryClip: null` line is a real, empty clipboard —
+     * reported as [ClipboardReadResult.Success] with an empty string, not a failure, matching every
+     * other read method's "report the real state, never fabricate" rule. A clip whose text itself
+     * contains a literal `>` would be mis-truncated by this parser; that is a known limitation, not a
+     * silently swallowed one.
+     */
+    override fun getClipboardText(): ClipboardReadResult {
+        val output = successfulOutput("shell", "dumpsys", "clipboard")
+            ?: return ClipboardReadResult.Failure("Cannot read the clipboard: 'adb shell dumpsys clipboard' failed")
+        val primaryClipLine = PRIMARY_CLIP_LINE_PATTERN.find(output)
+            ?: return ClipboardReadResult.Failure("Cannot read the clipboard: no 'mPrimaryClip:' line in dumpsys clipboard output")
+        if (primaryClipLine.groupValues[1].trim() == "null") return ClipboardReadResult.Success("")
+        val text = CLIP_TEXT_PATTERN.find(primaryClipLine.groupValues[1])?.groupValues?.get(1)
+            ?: return ClipboardReadResult.Failure("Cannot read the clipboard: could not parse clip text from dumpsys clipboard output")
+        return ClipboardReadResult.Success(text)
+    }
+
     override fun setClipboardText(text: String) = failure("set clipboard text")
     override fun sendSms(phoneNumber: String, message: String) = failure("send SMS")
     override fun makeCall(phoneNumber: String) = failure("make call")
@@ -471,6 +497,8 @@ class AdbDeviceController(
         val ID_PATTERN = Regex("""\bid=(-?\d+)""")
         val TAG_PATTERN = Regex("""\btag=(\S+)""")
         val IFACE_PATTERN = Regex("""\bdev\s+(\S+)""")
+        val PRIMARY_CLIP_LINE_PATTERN = Regex("""mPrimaryClip:\s*(.*)""")
+        val CLIP_TEXT_PATTERN = Regex("""<(.*)>""", RegexOption.DOT_MATCHES_ALL)
         val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
         const val SCREENSHOT_TIMEOUT_MILLIS = 15_000L
         const val MAX_SCREENSHOT_BYTES = 20_000_000L

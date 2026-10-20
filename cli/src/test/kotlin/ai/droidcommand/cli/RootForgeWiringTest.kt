@@ -22,9 +22,19 @@ class RootForgeWiringTest {
         assertTrue(rootForgeTools("/nonexistent/nodes.json") { warnings += it }.isEmpty())
     }
 
-    @Test fun `valid file registers the two passive tools`() {
+    @Test fun `valid file registers the non-destructive tools`() {
         val f = Files.createTempFile("nodes", ".json").also { Files.writeString(it, nodeJson) }
-        assertEquals(setOf("rootforge_capabilities", "rootforge_list_devices"), rootForgeTools(f.toString()).map { it.spec.name }.toSet())
+        assertEquals(
+            setOf(
+                "rootforge_capabilities",
+                "rootforge_list_devices",
+                "rootforge_device_info",
+                "rootforge_adb_shell",
+                "rootforge_adb_reboot",
+                "rootforge_fastboot_reboot",
+            ),
+            rootForgeTools(f.toString()).map { it.spec.name }.toSet(),
+        )
     }
 
     @Test fun `default session has no RootForge tools`() {

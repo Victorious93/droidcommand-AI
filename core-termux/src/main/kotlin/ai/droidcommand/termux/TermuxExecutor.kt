@@ -13,10 +13,12 @@ package ai.droidcommand.termux
  * a property of this interface — see its own doc comment). [isAvailable]
  * is meant to be called cheaply/passively, mirroring
  * [ai.droidcommand.root.RootExecutor.isRootAvailable]'s role feeding
- * `core-security.SecurityPolicy`. [NullTermuxExecutor] is the only
- * always-present implementation; [AdbTermuxExecutor] is real but requires
- * a real adb-connected device with Termux installed, which this
- * environment does not have.
+ * `core-security.SecurityPolicy`. [NullTermuxExecutor] is the
+ * always-present stub. On-device Android uses [ClientBackedTermuxExecutor]
+ * (VictorSuite `RUN_COMMAND_PENDING_INTENT`, no root). The PC-over-adb
+ * topology stays [AdbTermuxExecutor] (root scrape of redirected files).
+ * Neither on-device nor adb path has been runtime-verified against a live
+ * Kali/msfconsole in the sessions that wired them.
  */
 interface TermuxExecutor {
     fun isAvailable(): Boolean

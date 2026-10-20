@@ -2,8 +2,13 @@ package ai.droidcommand.app.navigation
 
 import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.clipboard.ClipboardScreen
-import ai.droidcommand.app.ui.coding.CodingScreen
+import ai.droidcommand.app.ui.automation.AutomationScreen
 import ai.droidcommand.app.ui.chat.ChatScreen
+import ai.droidcommand.app.ui.coding.CodingScreen
+import ai.droidcommand.app.ui.fleet.FleetDashboardScreen
+import ai.droidcommand.app.ui.fleet.FleetOrchestratorScreen
+import ai.droidcommand.app.ui.fleet.FleetScreen
+import ai.droidcommand.app.ui.help.HelpScreen
 import ai.droidcommand.app.ui.logs.LogsScreen
 import ai.droidcommand.app.ui.memory.MemoryScreen
 import ai.droidcommand.app.ui.mode.EngineModeViewModel
@@ -23,8 +28,15 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -49,6 +61,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -71,8 +84,13 @@ object Routes {
     const val SETTINGS = "settings"
     const val MEMORY = "memory"
     const val CLIPBOARDS = "tools/clipboards"
+    const val AUTOMATION = "tools/automation"
     const val CODING = "tools/coding"
     const val NOTES = "tools/notes"
+    const val FLEET = "tools/fleet"
+    const val FLEET_PAIRING = "tools/fleet/pairing"
+    const val FLEET_ORCHESTRATOR = "tools/fleet/orchestrator"
+    const val HELP = "help"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -115,7 +133,10 @@ fun DroidCommandNavHost(
         NavHost(
             navController = navController,
             startDestination = Routes.CHAT,
-            modifier = Modifier.padding(innerPadding),
+            // The window is edge to edge. consumeWindowInsets tells imePadding that the bottom bar already covers the lowest
+            // part of the screen, so it adds only the keyboard height that reaches above the bar; without it the bar's height
+            // would be counted twice. Every screen's text fields therefore stay above the keyboard.
+            modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding).imePadding(),
         ) {
             composable(Routes.CHAT) { ChatScreen() }
             composable(Routes.PILOT) { PilotScreen() }
@@ -124,11 +145,23 @@ fun DroidCommandNavHost(
             composable(Routes.TOOLS) { ToolsScreen(navController) }
             composable(Routes.METASPLOIT) { MetasploitScreen() }
             composable(Routes.SETOOLKIT) { SetToolScreen() }
-            composable(Routes.SETTINGS) { SettingsScreen() }
+            composable(Routes.SETTINGS) {
+                SettingsScreen(onOpenHelp = { navController.navigate(Routes.HELP) })
+            }
+            composable(Routes.HELP) { HelpScreen() }
             composable(Routes.MEMORY) { MemoryScreen() }
             composable(Routes.CLIPBOARDS) { ClipboardScreen() }
+            composable(Routes.AUTOMATION) { AutomationScreen() }
             composable(Routes.CODING) { CodingScreen() }
             composable(Routes.NOTES) { NotesScreen() }
+            composable(Routes.FLEET) {
+                FleetDashboardScreen(
+                    onOpenPairing = { navController.navigate(Routes.FLEET_PAIRING) },
+                    onOpenOrchestrator = { navController.navigate(Routes.FLEET_ORCHESTRATOR) },
+                )
+            }
+            composable(Routes.FLEET_PAIRING) { FleetScreen() }
+            composable(Routes.FLEET_ORCHESTRATOR) { FleetOrchestratorScreen() }
         }
     }
 }
@@ -146,10 +179,18 @@ private fun ModeSwitcher(
     switchError: String?,
     onSelect: (AgentMode) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(
+        // Not a Material top app bar, so it does not pad for the status bar by itself. Edge to edge, without this the
+        // buttons sit under the clock and the notification icons.
+        modifier = Modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ModeButton(pilotLabel, selected == AgentMode.PILOT, Modifier.weight(1f)) { onSelect(AgentMode.PILOT) }
-            ModeButton(forgeLabel, selected == AgentMode.FORGE, Modifier.weight(1f)) { onSelect(AgentMode.FORGE) }
+            ModeButton(pilotLabel, selected == AgentMode.PILOT, Modifier.weight(1f).testTag("mode_pilot")) { onSelect(AgentMode.PILOT) }
+            ModeButton(forgeLabel, selected == AgentMode.FORGE, Modifier.weight(1f).testTag("mode_forge")) { onSelect(AgentMode.FORGE) }
         }
         switchError?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -207,7 +248,14 @@ private fun DroidBottomBar(
                         restoreState = true
                     }
                 },
-                icon = { Icon(tab.icon, contentDescription = tab.label) },
+                icon = {
+                    Icon(
+                        tab.icon,
+                        // The label under the icon already names the tab. A description here made a screen reader say each name twice.
+                        contentDescription = null,
+                        modifier = Modifier.testTag("nav_${tab.route.substringBefore('/')}"),
+                    )
+                },
                 label = {
                     Text(
                         tab.label,

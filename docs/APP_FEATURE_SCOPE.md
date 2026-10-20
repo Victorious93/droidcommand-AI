@@ -1,7 +1,8 @@
 # App feature scope: keyboard, clipboards, automation, AI quick-ask, local GGUF
 
-**Status: SCOPING. No code changed.** Date: 2026-10-12. Written before implementation, following the
-scope-first practice of `docs/VOICE_PHASE_SCOPE.md` and `docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md`.
+**Status: S1–S3 built, see section 7. S4 not started.** Date: 2026-10-12. Written before implementation, following the
+scope-first practice of `docs/VOICE_PHASE_SCOPE.md` and `docs/KNOWLEDGE_GRAPH_PHASE_SCOPE.md`. Sections 1–6 record the
+scope as it was decided; they are not updated to match the code.
 
 Evidence labels: **[Certain]** checked directly in the repo or the APK; **[Likely]** strong inference, not
 tested; **[Guessing]** assumption.
@@ -107,3 +108,30 @@ Each slice ships code, JVM tests, a passing `:app:assembleDebug`, an append-only
 - Slash-command grammar for "Claude Code" and "ChatGPT".
 - Advanced settings beyond the S1 defaults.
 - Whether to match the reference look (needs D4).
+
+
+## 7. Implementation status (2026-10-12)
+
+| Slice | Status | Record |
+|---|---|---|
+| S1: configurable chat toolbar, Advanced settings, two clipboards | Built. JVM-tested. Debug APK builds. Not run on a device. | Audit addenda 2026-10-12a to 2026-10-12d |
+| S2: user-imported GGUF models in chat | Built. JVM-tested with fake backends. Debug APK builds. The native load and inference have not run on a device. | Audit addendum 2026-10-12e |
+| S3: automation keys, AI slash commands, approvals that show their input | Built. JVM-tested. Debug APK builds. Not run on a device. | Audit addendum 2026-10-12f |
+| S4: in-app keyboard (D1: in-app) | Not started | None |
+
+### Choices made under "You choose" for S3
+
+The owner asked for the next step to be chosen and built on 2026-10-12. These choices can be redirected:
+
+- **Shell keys.** They run only from automation keys. The allowlist starts empty and is edited on the Automation keys screen. Each run asks for approval, as D3 decided.
+- **Slash commands.** `/claude` (Anthropic), `/chatgpt` (OpenAI), `/gemini` (Google) and `/groq` (Groq). In chat, a command sends that one message to that provider. In an automation key, the same command is the AI action. Claude Code itself is not reachable from the app, so `/claude` uses the Anthropic API.
+- **Planners.** Neither the shell tool nor the AI tool is offered to the Pilot or Forge planners. Both have an empty `allowedModes`.
+- **Storage.** Keys live in their own registry file, not in `JsonFileMacroStore`, because a key needs a free-text label and that store's names are limited to `[A-Za-z0-9_-]+`. Each key still runs as a one-step macro through `MacroExecutor`.
+- **Approval dialog.** It now shows the tool name and each input value, for every tool. Before this, it showed only the policy reason.
+
+### Known limits of S3
+
+- A shell argument is split on spaces, as the existing shell tool splits it. There is no quoting.
+- An allowlist entry must equal the key's executable exactly.
+- An AI key makes one request with no system prompt. It does not use web search, documents or memory.
+- Nothing runs unattended. Each run waits for approval. Scheduling is not built.

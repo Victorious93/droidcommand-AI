@@ -25,6 +25,10 @@ plugins {
     id("com.google.dagger.hilt.android")
 }
 
+// Optional; only "arm64-v8a" changes packaging. Any other value (including unset)
+// is the existing 4-ABI debug APK.
+val abiFilter: String? = providers.gradleProperty("abiFilter").orNull
+
 repositories {
     google()
     mavenCentral()
@@ -44,10 +48,49 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0-phase0"
+        // Instrumented (on-device/emulator) tests. The default runner launches the real
+        // @HiltAndroidApp application, so MainActivityLaunchTest exercises the production
+        // DI graph — no HiltTestApplication needed.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Optional phone-sized debug APK: -PabiFilter=arm64-v8a. Unset keeps the
+        // current 4-ABI package (llama.cpp arm64+x86_64 plus sherpa-onnx's 4 ABIs).
+        if (abiFilter == "arm64-v8a") {
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
+        }
+    }
+
+    // Dedicated DroidCommand debug identity — not a fleet/shared keystore.
+    // Every CI and local debug APK gets the same signing fingerprint so updates
+    // install over previous debug builds. Release signing is unset here; release
+    // keys stay in CI secrets. See docs/SIGNING.md.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("signing/droidcommand-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
+    if (abiFilter == "arm64-v8a") {
+        packaging {
+            jniLibs {
+                // ndk.abiFilters does not always strip prebuilt AAR .so files
+                // (sherpa-onnx ships all 4 ABIs). Drop the unused ones at pack time.
+                excludes += listOf(
+                    "lib/x86/**",
+                    "lib/x86_64/**",
+                    "lib/armeabi-v7a/**",
+                )
+            }
+        }
     }
 
     buildFeatures {
         compose = true
+        aidl = true
     }
 
     compileOptions {
@@ -69,6 +112,7 @@ dependencies {
     implementation(project(":core-knowledge-android"))
     implementation(project(":core-llm"))
     implementation(project(":core-remote"))
+    implementation(project(":core-remotecontrol"))
     implementation(project(":core-coding-session"))
     implementation(project(":core-llm-factory"))
     implementation(project(":core-templates"))
@@ -80,6 +124,10 @@ dependencies {
     implementation(project(":core-shell"))
     implementation(project(":core-root"))
     implementation(project(":core-termux"))
+    implementation(project(":core-shizuku"))
+    // Current stable Shizuku/Sui API (same artifacts for both). MIT.
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
     implementation(project(":core-tools-metasploit"))
     implementation(project(":core-tools-setoolkit"))
 
@@ -90,6 +138,14 @@ dependencies {
     // those stubs to the live companion APKs at runtime.
     implementation(project(":core-hackerai"))
     implementation(project(":core-pentest-swarm"))
+    implementation(project(":core-companion"))
+    implementation(project(":core-rootforge"))
+    // core-rootforge's RootForgeResult<JsonObject> is part of its public API, so the compiler needs this on :app's classpath.
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+
+    // EXTERNAL_NODE Messenger transport: pure envelope/validation/trust logic (api-exposes core-rootforge's
+    // BridgeRequest/FailureKind). The Android Messenger plumbing is app/.../fleet/AndroidMessengerChannel.kt.
+    implementation(project(":core-fleet-messenger"))
 
     // compose-bom, navigation-compose, lifecycle-viewmodel-compose, core-ktx and
     // hilt-navigation-compose are each pinned one or two minors below Maven Central's latest
@@ -122,11 +178,44 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
+    // Background, resumable model downloads (localmodels/download). 2.10.5 is the newest 2.10.x; it builds against
+    // compileSdk 35, within this project's compileSdk 36. 2.11.x was not tried.
+    implementation("androidx.work:work-runtime-ktx:2.10.5")
+
     testImplementation(kotlin("test"))
+
+    // Instrumented launch smoke test (app/src/androidTest). These androidx.test
+    // versions are the current stable line and build against compileSdk 36 / AGP
+    // 8.13.2 — they do NOT pull the compileSdk-37/AGP-9 AAR metadata the main-source
+    // androidx pins above are held back to avoid. Re-check after an AGP 9 upgrade.
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    // Compose UI test + UiAutomator: PrimaryScreensScreenshotTest clicks the real
+    // bottom bar / mode switcher and dumps PNGs via UiDevice.takeScreenshot.
+    // ui-test-junit4 version is managed by the same Compose BOM as the app.
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.01.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
 }
 
 kotlin {
     jvmToolchain(21)
+}
+
+// :app:compileDebugAidl resolves debugCompileClasspath (flatDir sherpa-onnx AAR)
+// without going through :core-voice-neural-android:preBuild. Shizuku's
+// IPrivilegedShell.aidl created this task; CI then failed with
+// "Could not find :sherpa-onnx-1.13.8:" before fetchSherpaOnnx ran
+// (Actions 39336466435). Tie fetch to the tasks that resolve that classpath.
+tasks.named("preBuild") {
+    dependsOn(":core-voice-neural-android:fetchSherpaOnnx")
+}
+tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Aidl") }.configureEach {
+    dependsOn(":core-voice-neural-android:fetchSherpaOnnx")
+}
+tasks.matching { it.name.contains("AarMetadata") }.configureEach {
+    dependsOn(":core-voice-neural-android:fetchSherpaOnnx")
 }
 
 // Hilt bundles a kotlin-metadata-jvm that reads metadata only up to Kotlin 2.3; this module is

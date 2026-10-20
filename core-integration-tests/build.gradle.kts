@@ -16,6 +16,13 @@ dependencies {
     testImplementation(project(":core-security"))
     testImplementation(project(":core-shell"))
     testImplementation(project(":core-root"))
+    testImplementation(project(":core-termux"))
+    testImplementation(project(":core-shizuku"))
+    testImplementation(project(":core-tools-android"))
+    testImplementation(project(":core-tools-metasploit"))
+    testImplementation(project(":core-tools-setoolkit"))
+    testImplementation(project(":core-pentest-swarm"))
+    testImplementation(project(":core-remotecontrol"))
     testImplementation(kotlin("test"))
 }
 

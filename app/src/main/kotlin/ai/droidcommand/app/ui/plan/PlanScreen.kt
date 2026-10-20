@@ -8,6 +8,7 @@ import ai.droidcommand.agent.PlanStepStatus
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ui.components.rememberDraft
 import ai.droidcommand.app.ui.theme.AccentBlueBright
 import ai.droidcommand.app.ui.theme.AccentBlueContainer
 import ai.droidcommand.app.ui.theme.AccentCyan
@@ -54,6 +55,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,8 +81,11 @@ private val timeFormat = DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(Zon
 fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
     val mode by viewModel.modeState.collectAsState()
-    var objective by remember { mutableStateOf("") }
-    var selectedId by remember { mutableStateOf<String?>(null) }
+    var objective by rememberDraft()
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Read once per visit. The key check decrypts a Keystore record; doing it in the body ran it on every recomposition,
+    // which happens at each step of a running objective. A key saved in Settings is picked up when this screen is opened again.
+    val keyReady = remember { viewModel.keyReady() }
 
     val latest = state.runs.firstOrNull()
     val shown = state.runs.firstOrNull { it.id == selectedId } ?: latest
@@ -116,6 +121,13 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (!keyReady) {
+                        Text(
+                            "No API key for that provider. Add one in Settings — a run is refused until then, and no live model is called.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                     if (state.running) {
                         Button(
                             onClick = viewModel::stop,
@@ -129,7 +141,8 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
                                 viewModel.run(objective)
                                 objective = ""
                             },
-                            enabled = objective.isNotBlank(),
+                            // Without a key the run is refused, and the objective the user just typed would be cleared with it.
+                            enabled = objective.isNotBlank() && keyReady,
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text("Run objective") }
                     }
@@ -187,7 +200,8 @@ private fun EmptyPlanPlaceholder() {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("No plan yet", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Describe an objective above. The agent chooses tools one step at a time and each step is recorded here.",
+                "Describe an objective above. The agent chooses tools one step at a time and each step is recorded here. " +
+                    "This needs an API key for the Chat-screen provider. Root, Termux, Metasploit, and SET have no backend in this build, so the model will see those steps denied.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextSecondary,
             )

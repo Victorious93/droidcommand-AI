@@ -5,6 +5,7 @@ import ai.droidcommand.security.CapabilityId
 import ai.droidcommand.security.CapabilityMetadata
 import ai.droidcommand.security.CapabilityState
 import ai.droidcommand.security.RiskTier
+import ai.edlcommander.companion.aidl.IEdlCompanion
 
 /**
  * [CapabilityHealthChecker] for companion APK capabilities.
@@ -25,7 +26,6 @@ class CompanionCapabilityHealthChecker(
     private val registry: AndroidCompanionRegistry,
     private val descriptor: CompanionDescriptor,
 ) : CapabilityHealthChecker {
-
     override fun verify(id: CapabilityId, providerId: String): CapabilityMetadata {
         val state = determineState()
         return CapabilityMetadata(
@@ -38,7 +38,7 @@ class CompanionCapabilityHealthChecker(
             lastVerifiedAt = System.currentTimeMillis(),
             lastError = if (state == CapabilityState.ERROR) "companion unreachable" else null,
             description = "Companion APK capability: ${descriptor.id}",
-            riskTier = RiskTier.SENSITIVE,
+            riskTier = RiskTier.REVERSIBLE,
         )
     }
 
@@ -49,6 +49,7 @@ class CompanionCapabilityHealthChecker(
         val service = when (descriptor.packageName) {
             KnownCompanions.HACKERAI_PACKAGE -> registry.getHackerAiService()
             KnownCompanions.PENTESTSWARM_PACKAGE -> registry.getPentestSwarmService()
+            KnownCompanions.EDLCOMMANDER_PACKAGE -> registry.getEdlCompanionService()
             else -> null
         } ?: return CapabilityState.ERROR
 
@@ -56,6 +57,7 @@ class CompanionCapabilityHealthChecker(
             val pingResult = when (service) {
                 is IHackerAIService -> service.healthCheck() != null
                 is IPentestSwarmService -> service.isSwarmReady()
+                is IEdlCompanion -> service.getProtocolVersion() == IEdlCompanion.PROTOCOL_VERSION
                 else -> false
             }
             if (pingResult) CapabilityState.AVAILABLE else CapabilityState.ERROR

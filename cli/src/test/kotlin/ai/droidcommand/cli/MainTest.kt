@@ -40,10 +40,25 @@ class MainTest {
                 "run_shell_command",
                 "run_root_command",
                 "run_termux_command",
+                "run_shizuku_command",
+                "shizuku_read_device_state",
+                "shizuku_pm_grant",
+                "victorsuite_capabilities",
                 "build_project",
                 "run_metasploit_module",
                 "run_setoolkit_attack",
                 "web_search",
+                "pentest_swarm_status",
+                "edl_commander_status",
+                "kyc_auditlab_status",
+                "filemanager_status",
+                "keyboard_status",
+                "mesh_status",
+                "browser_status",
+                "victorsms_status",
+                "victorspoof_status",
+                "victorious_flash_status",
+                "victorlaunch_status",
             ),
             specs.map { it.name },
         )
@@ -70,6 +85,18 @@ class MainTest {
     @Test
     fun `pilot run_termux_command fails cleanly against NullTermuxExecutor, even when approved`() {
         val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("run_termux_command", "executable=echo"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot run_shizuku_command fails cleanly against NullPrivilegedShell, even when approved`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("run_shizuku_command", "executable=id"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot victorsuite_capabilities fails cleanly against NullTermuxExecutor, even when approved`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("victorsuite_capabilities"))
         assertEquals(1, exitCode)
     }
 
@@ -130,6 +157,48 @@ class MainTest {
     @Test
     fun `pilot with an invalid key=value pair fails cleanly`() {
         val exitCode = runPilot(buildSession(), listOf("echo", "not-a-pair"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot kyc_auditlab_status fails honestly and never claims the lab ran`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("kyc_auditlab_status"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot edl_commander_status fails honestly and never flashes`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("edl_commander_status"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot pentest_swarm_status fails honestly and never binds`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("pentest_swarm_status"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot filemanager_status fails honestly and never binds Messenger`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("filemanager_status"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot keyboard_status fails honestly and never binds Messenger`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("keyboard_status"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot mesh_status fails honestly and never binds Messenger`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("mesh_status"))
+        assertEquals(1, exitCode)
+    }
+
+    @Test
+    fun `pilot browser_status fails honestly and never binds Messenger`() {
+        val exitCode = runPilot(buildSession(ApprovalPrompt { true }), listOf("browser_status"))
         assertEquals(1, exitCode)
     }
 

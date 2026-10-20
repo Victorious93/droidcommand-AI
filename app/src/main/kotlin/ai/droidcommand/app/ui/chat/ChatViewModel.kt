@@ -14,6 +14,8 @@ import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prompts.PromptLibrary
 import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.config.EncryptedSecretsVault
+import ai.droidcommand.config.SecretState
+import ai.droidcommand.llm.factory.AiSlashCommands
 import ai.droidcommand.llm.factory.ChatResult
 import ai.droidcommand.llm.factory.ChatSession
 import ai.droidcommand.llm.factory.CloudProviderCatalog
@@ -23,12 +25,12 @@ import ai.droidcommand.llm.factory.SavedChat
 import ai.droidcommand.llm.factory.WebSearchCatalog
 import ai.droidcommand.llm.factory.newChatId
 import ai.droidcommand.llm.factory.savedChats
-import ai.droidcommand.templates.PromptTemplate
-import ai.droidcommand.templates.Skill
 import ai.droidcommand.llm.local.ModelInstallResult
 import ai.droidcommand.rag.AttachResult
 import ai.droidcommand.rag.DocumentInfo
 import ai.droidcommand.remote.HttpTransport
+import ai.droidcommand.templates.PromptTemplate
+import ai.droidcommand.templates.Skill
 import ai.droidcommand.voice.SpeakMode
 import ai.droidcommand.voice.VoiceController
 import ai.droidcommand.voice.VoiceState
@@ -72,6 +74,7 @@ data class ChatUiState(
     val sending: Boolean = false,
     val error: String? = null,
     val memoryEnabled: Boolean = false,
+    val autoRemember: Boolean = false,
     val memoryStatus: String? = null,
     /** Chat-toolbar toggle; off by default because turning it on sends the message text to the search provider. */
     val webSearchEnabled: Boolean = false,
@@ -115,6 +118,11 @@ data class ChatUiState(
     /** Skill whose system text is added to each later request. Not written into the saved transcript. */
     val skillId: String? = null,
     val promptError: String? = null,
+    /**
+     * True when the selected cloud provider has a vault entry. Local-model turns do not
+     * need this. Refreshed when Chat is shown again so a key saved in Settings is picked up.
+     */
+    val cloudKeyReady: Boolean = false,
 )
 
 /**
@@ -130,7 +138,7 @@ data class ChatUiState(
  */
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    vault: EncryptedSecretsVault,
+    private val vault: EncryptedSecretsVault,
     private val store: ConversationStore,
     transport: HttpTransport,
     graph: KnowledgeGraph,
@@ -143,6 +151,7 @@ class ChatViewModel @Inject constructor(
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
     private val memoryEnabled = prefs.getBoolean(KEY_MEMORY, false)
+    private val autoRemember = memoryEnabled && prefs.getBoolean(KEY_AUTO_REMEMBER, false)
     private val session = ChatSession(
         vault,
         store,
@@ -152,6 +161,7 @@ class ChatViewModel @Inject constructor(
         webSearch = WebSearchCatalog.clientFor(vault, transport),
         documents = documentRuntime.retriever,
         local = onDeviceModels.resources,
+        autoRememberEveryTurns = if (autoRemember) AUTO_REMEMBER_TURNS else 0,
     )
 
     private val tts = AndroidTextToSpeech(context)
@@ -181,7 +191,18 @@ class ChatViewModel @Inject constructor(
     private fun initialState(): ChatUiState {
         val provider = CloudProviderCatalog.byId(prefs.getString(KEY_PROVIDER, null).orEmpty()) ?: CloudProviderCatalog.all.first()
         val model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel
-        return ChatUiState(provider = provider, model = model, memoryEnabled = memoryEnabled, webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false), speakMode = speakModeFromPrefs(), micAvailable = voice.sttAvailable, toolbar = advanced.toolbarToggles(), activeLocalModelId = prefs.getString(KEY_LOCAL_MODEL, null))
+        return ChatUiState(
+            provider = provider,
+            model = model,
+            memoryEnabled = memoryEnabled,
+            autoRemember = prefs.getBoolean(KEY_AUTO_REMEMBER, false),
+            webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false),
+            speakMode = speakModeFromPrefs(),
+            micAvailable = voice.sttAvailable,
+            toolbar = advanced.toolbarToggles(),
+            activeLocalModelId = prefs.getString(KEY_LOCAL_MODEL, null),
+            cloudKeyReady = keyReady(provider),
+        )
     }
 
     init {
@@ -232,7 +253,15 @@ class ChatViewModel @Inject constructor(
             putString(KEY_PROVIDER, provider.id)
             remove(KEY_LOCAL_MODEL)
         }
-        mutableState.update { it.copy(provider = provider, model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel, activeLocalModelId = null, error = null) }
+        mutableState.update {
+            it.copy(
+                provider = provider,
+                model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel,
+                activeLocalModelId = null,
+                error = null,
+                cloudKeyReady = keyReady(provider),
+            )
+        }
     }
 
     /** Chooses an imported on-device model for the following turns. Switching away from another one frees its memory. */
@@ -306,36 +335,45 @@ class ChatViewModel @Inject constructor(
     fun send(text: String) {
         val current = mutableState.value
         if (current.sending || text.isBlank()) return
+        // A slash command sends this one message to the named cloud provider and overrides any on-device model.
+        val command = AiSlashCommands.parse(text)
+        if (command is AiSlashCommands.Parsed.MissingPrompt) {
+            // The input box was already cleared; give the command back so only the question has to be added.
+            mutableState.update { it.copy(error = "Type a question after /${command.command}.", pendingInput = text) }
+            return
+        }
+        val slash = command as? AiSlashCommands.Parsed.Command
+        val slashProvider = slash?.let { CloudProviderCatalog.byId(it.providerId) }
         mutableState.update { it.copy(sending = true, streaming = "", error = null, notice = null) }
         viewModelScope.launch(Dispatchers.IO) {
             session.setRequestPrompt(current.skills.firstOrNull { it.id == current.skillId }?.systemPrompt)
-            val localId = current.activeLocalModelId
+            val localId = if (slashProvider == null) current.activeLocalModelId else null
+            val outgoing = slash?.prompt ?: text
             // Web search sends the message text to a search provider, so it is not used for on-device replies.
             val localNotice = if (localId != null && current.webSearchEnabled) "Web search is not used for on-device replies." else null
             val result = if (localId != null) {
                 onDeviceModels.list() // registers the models before the first on-device turn
                 runCatching {
-                    session.sendLocal(localId, text, useWebSearch = false) { delta ->
+                    session.sendLocal(localId, outgoing, useWebSearch = false) { delta ->
                         mutableState.update { it.copy(streaming = it.streaming + delta) }
                     }
                 }.getOrElse { ChatResult.Failure(it.message ?: "The on-device model could not run this message.") }
             } else {
-                session.send(current.provider, current.model, text, useWebSearch = current.webSearchEnabled) { delta ->
+                val provider = slashProvider ?: current.provider
+                val model = if (slashProvider == null) {
+                    current.model
+                } else {
+                    prefs.getString(modelKey(slashProvider), null) ?: slashProvider.defaultModel
+                }
+                session.send(provider, model, outgoing, useWebSearch = current.webSearchEnabled) { delta ->
                     mutableState.update { it.copy(streaming = it.streaming + delta) }
                 }
             }
-            mutableState.update {
-                when (result) {
-                    is ChatResult.Reply -> it.copy(
-                        lines = it.lines + ChatLine(true, text.trim()) + ChatLine(false, result.text),
-                        streaming = "",
-                        sending = false,
-                        notice = result.notice ?: localNotice,
-                        savedChats = runCatching { savedChats(store) }.getOrDefault(it.savedChats),
-                    ).also { voice.onReply(result.text, it.speakMode) }
-                    is ChatResult.Failure -> it.copy(streaming = "", sending = false, error = result.message)
-                }
-            }
+            // Read the saved-chat list and speak the reply outside the update: the flow may run the lambda more than once
+            // (speaking re-enters this flow through the voice callback, which can force exactly such a retry and a second speak).
+            val refreshedChats = if (result is ChatResult.Reply) runCatching { savedChats(store) }.getOrNull() else null
+            mutableState.update { it.afterTurn(result, text, localNotice, refreshedChats) }
+            if (result is ChatResult.Reply) voice.onReply(result.text, mutableState.value.speakMode)
         }
     }
 
@@ -555,7 +593,9 @@ class ChatViewModel @Inject constructor(
 
     /** Re-reads the Advanced toolbar choice; called when Chat is shown, since Settings can change it. */
     fun reloadToolbar() {
-        mutableState.update { it.copy(toolbar = advanced.toolbarToggles()) }
+        mutableState.update {
+            it.copy(toolbar = advanced.toolbarToggles(), cloudKeyReady = keyReady(it.provider))
+        }
     }
 
     /** Takes effect on the very next message (unlike Memory, it is a per-request flag, not session wiring). */
@@ -568,6 +608,12 @@ class ChatViewModel @Inject constructor(
     fun setMemoryEnabled(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_MEMORY, enabled) }
         mutableState.update { it.copy(memoryEnabled = enabled) }
+    }
+
+    /** Persists the choice for the next time this screen is opened. Each run costs one extra request to the chat provider. */
+    fun setAutoRemember(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_AUTO_REMEMBER, enabled) }
+        mutableState.update { it.copy(autoRemember = enabled) }
     }
 
     /** K3: extracts and saves the current conversation to the knowledge graph, using the last-used provider. */
@@ -680,9 +726,14 @@ class ChatViewModel @Inject constructor(
 
     private fun modelKey(provider: CloudProviderSpec) = "model.${provider.id}"
 
+    private fun keyReady(provider: CloudProviderSpec): Boolean =
+        vault.inspect(provider.secretId) == SecretState.Present
+
     private companion object {
         const val KEY_PROVIDER = "provider"
         const val KEY_MEMORY = "memory_enabled"
+        const val KEY_AUTO_REMEMBER = "auto_remember_enabled"
+        const val AUTO_REMEMBER_TURNS = 6
         const val KEY_WEB_SEARCH = "web_search_enabled"
         const val KEY_SPEAK_MODE = "speak_mode"
         const val KEY_LOCAL_MODEL = "local_model_id"

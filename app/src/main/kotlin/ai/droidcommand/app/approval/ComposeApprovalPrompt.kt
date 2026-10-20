@@ -59,6 +59,19 @@ class ComposeApprovalPrompt @Inject constructor() : ApprovalPrompt {
 
     override fun requestApproval(reason: String): Boolean = requestApproval(reason, ApprovalHandle())
 
+    /**
+     * What `SecureToolExecutor` calls. The dialog names the tool and shows the exact input being approved, so the owner
+     * can read the command or prompt before answering. The values come from the caller and are shown as plain text.
+     */
+    override fun requestApproval(toolName: String, input: Map<String, String>, reason: String): Boolean =
+        requestApproval(describeRequest(toolName, input, reason), ApprovalHandle())
+
+    private fun describeRequest(toolName: String, input: Map<String, String>, reason: String): String = buildString {
+        append(reason)
+        append("\n\nTool: ").append(toolName)
+        input.forEach { (name, value) -> append("\n").append(name).append(": ").append(value) }
+    }
+
     /** Same gate, with a [handle] a caller can use to cancel this one request. */
     fun requestApproval(reason: String, handle: ApprovalHandle): Boolean = gate.withLock {
         val mine = CompletableFuture<Boolean>()

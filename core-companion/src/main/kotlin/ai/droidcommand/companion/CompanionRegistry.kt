@@ -1,10 +1,13 @@
 package ai.droidcommand.companion
 
+import ai.droidcommand.security.NodeSignatureDecision
+import ai.droidcommand.security.NodeSignatureGuard
+import ai.droidcommand.security.NodeSignatureVerifier
+import ai.edlcommander.companion.aidl.IEdlCompanion
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.content.pm.PackageManager
 import android.os.IBinder
 
 /**
@@ -19,7 +22,11 @@ interface CompanionRegistry {
     fun isConnected(packageName: String): Boolean
     fun getHackerAiService(): IHackerAIService?
     fun getPentestSwarmService(): IPentestSwarmService?
+    fun getEdlCompanionService(): IEdlCompanion?
     fun allConnectedPackages(): Set<String>
+
+    /** The raw bound binder for [packageName], or null when not connected. Lets a caller inspect its interface descriptor. */
+    fun getBinder(packageName: String): IBinder?
 }
 
 /**
@@ -27,15 +34,21 @@ interface CompanionRegistry {
  *
  * Binding is asynchronous: [bind] enqueues the OS bind request; the AIDL stub
  * becomes non-null in [onServiceConnected]. Callers should treat null returns
- * from [getHackerAiService]/[getPentestSwarmService] as transient — the registry
+ * from [getHackerAiService]/[getPentestSwarmService]/[getEdlCompanionService] as transient — the registry
  * will become populated once the OS delivers the connection.
  *
  * NOT RUNTIME VERIFIED in this environment (no Android SDK). Excluded from
  * settings.gradle.kts for the same reason as :app.
  */
-class AndroidCompanionRegistry(private val context: Context) : CompanionRegistry {
-
+class AndroidCompanionRegistry(
+    private val context: Context,
+    private val signatureGuard: NodeSignatureGuard = NodeSignatureGuard(
+        observer = AndroidSigningCertObserver(context),
+        verifier = NodeSignatureVerifier(),
+    ),
+) : CompanionRegistry {
     private val connections = mutableMapOf<String, BoundCompanion>()
+    private val signatureRefusals = mutableMapOf<String, NodeSignatureDecision.Refused>()
 
     private data class BoundCompanion(
         val packageName: String,
@@ -43,9 +56,29 @@ class AndroidCompanionRegistry(private val context: Context) : CompanionRegistry
         var binder: IBinder? = null,
     )
 
+    /**
+     * Last controller-side signature refusal for [packageName], if [bind]
+     * refused to proceed. Null when the package was allowed or never checked.
+     */
+    @Synchronized
+    fun lastSignatureRefusal(packageName: String): NodeSignatureDecision.Refused? =
+        signatureRefusals[packageName]
+
     @Synchronized
     override fun bind(descriptor: CompanionDescriptor) {
         if (connections.containsKey(descriptor.packageName)) return
+
+        // Controller-side node signature check. Adds a pin; does not replace
+        // DependencyGuard or protectionLevel="signature". Default
+        // MissingExpectedCertPolicy.ALLOW keeps HackerAI/Pentest flowing
+        // while their certs are still [Unknown].
+        when (val decision = signatureGuard.check(descriptor.packageName)) {
+            is NodeSignatureDecision.Refused -> {
+                signatureRefusals[descriptor.packageName] = decision
+                return
+            }
+            is NodeSignatureDecision.Allowed -> signatureRefusals.remove(descriptor.packageName)
+        }
 
         val intent = Intent().apply {
             setPackage(descriptor.packageName)
@@ -54,6 +87,8 @@ class AndroidCompanionRegistry(private val context: Context) : CompanionRegistry
                     "ai.hackerai.companion.IHackerAIService"
                 KnownCompanions.PENTESTSWARM_PACKAGE ->
                     "ai.pentestswarm.companion.IPentestSwarmService"
+                KnownCompanions.EDLCOMMANDER_PACKAGE ->
+                    KnownCompanions.EDLCOMMANDER_BIND_ACTION
                 else -> "ai.droidcommand.companion.ICompanionService"
             }
         }
@@ -95,6 +130,14 @@ class AndroidCompanionRegistry(private val context: Context) : CompanionRegistry
         connections[KnownCompanions.PENTESTSWARM_PACKAGE]?.binder?.let {
             IPentestSwarmService.Stub.asInterface(it)
         }
+
+    override fun getEdlCompanionService(): IEdlCompanion? =
+        connections[KnownCompanions.EDLCOMMANDER_PACKAGE]?.binder?.let {
+            IEdlCompanion.Stub.asInterface(it)
+        }
+
+    @Synchronized
+    override fun getBinder(packageName: String): IBinder? = connections[packageName]?.binder
 
     @Synchronized
     override fun allConnectedPackages(): Set<String> =

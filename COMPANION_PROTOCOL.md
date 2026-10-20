@@ -19,10 +19,14 @@ DroidCommand AI (ai.droidcommand.app)
         │       └── HackerAI companion APK (ai.hackerai.companion)
         │               └── IHackerAIService.Stub
         │
-        └── bindService() + ai.droidcommand.permission.BIND_PENTESTSWARM
-                └── Pentest-Swarm companion APK (ai.pentestswarm.companion)
-                        └── IPentestSwarmService.Stub
-                                └── SwarmProcess → pentestswarm binary (Go)
+        ├── bindService() + ai.droidcommand.permission.BIND_PENTESTSWARM
+        │       └── Pentest-Swarm companion APK (ai.pentestswarm.companion)
+        │               └── IPentestSwarmService.Stub
+        │                       └── SwarmProcess → pentestswarm binary (Go)
+        │
+        └── bindService() + uses-permission ai.edlcommander.companion.permission.BIND_COMPANION
+                └── EDL-Commander companion APK (ai.edlcommander.companion)
+                        └── IEdlCompanion.Stub  (action ai.edlcommander.companion.BIND)
 ```
 
 Both companions are **optional and independently installable**. If a companion
@@ -36,12 +40,293 @@ Everything in this document — AIDL binding, signature permissions, and the
 extend DCA and are meant to stop working without it.
 
 **RootForge OS is the opposite kind of integration and is exempt from all of it.**
-It is an independent product (own CLI, runtime, workspaces) that DCA may *optionally*
-control over an authenticated SSH-carried JSON protocol (`core-rootforge`; see
-`docs/ROOTFORGE_INTEGRATION.md`). Never add a `DependencyGuard`, an AIDL contract, a
-signature-permission bind, or an "install DCA first" check to RootForge. A RootForge
-node that DCA cannot reach, or that DCA has never paired with, loses nothing; removing
-DCA must not disable any RootForge feature.
+It is an independent product. Live APK path on *their* `main` is already a bound
+**Messenger** + shared JSON envelope (`action ai.rootforge.os.action.BRIDGE`,
+`protocol_major` 1; canonical doc `docs/DROIDCOMMAND_INTEGRATION.md` in
+`Victorious93/rootforge-os`). Desktop/Docker is a localhost headless API + bearer
+(planned). SSH is the CLI/ISO **fallback only** — that is what `core-rootforge`
+implements today. The on-device Messenger client is `core-fleet-messenger` +
+`:app` (`AndroidMessengerChannel`); it is **off until a node is paired** (package
++ signing-cert SHA-256). Do not treat SSH as the live APK path.
+
+Never add a `DependencyGuard`, a shared signing key, or an "install DCA first"
+check to RootForge. A node that DCA cannot reach loses nothing; removing DCA
+must not disable any RootForge feature. RootForge owns target-phone control
+(USB OTG, later LAN/Tailscale). It does **not** own Termux/proot (VictorSuite)
+or Sahara/Firehose (EDL companion).
+
+The room-fleet map lives in `docs/FLEET_CONTROL.md` and `core-security.KnownFleet`.
+Add a member to `KnownCompanions` only when it is a genuine dependent companion
+APK (HackerAI, Pentest-Swarm, EDL-Commander). File Manager, Keyboard, Mesh,
+and Browser are EXTERNAL_NODE like RootForge — never `KnownCompanions`.
+
+## Fleet slots that are not companions
+
+These use the **same security rules as their class**, not a copy of the AIDL
+block above. Forcing AIDL + `DependencyGuard` onto them would invert the
+architecture.
+
+### VictorSuite — Termux IPC (`com.termux`)
+
+VictorSuite is a Termux/ZeroTermux-derived Android Linux suite. It ships under
+Termux's own `applicationId` (`com.termux`) with the public `com.termux.RUN_COMMAND`
+contract. DCA already reaches that contract through `core-termux` /
+`AdbTermuxExecutor` (`run_termux_command`).
+
+- **Not** a bound companion. Do not add `IVictorSuiteService`, a signature
+  permission, or a `DependencyGuard`.
+- DCA cannot tell a VictorSuite install from genuine Termux by package name;
+  only one can be installed. `TerminalSelector` uses a `versionName` heuristic.
+- VictorSuite owns on-device Termux / proot / X11 / plugins. Not a new
+  bound service. Gated on their package/signing cleanup (PR #15).
+- Status: **PARTIAL**. App/CLI default to `NullTermuxExecutor` unless adb is
+  opted in. Never runtime-verified on a device in this environment.
+
+### KYC-AuditLab — host process tool (Python IdentityShield) + companion EXTERNAL_NODE
+
+A host-side identity **simulator** (localhost) **and** a companion APK
+`com.identityshield.companion` catalogued as a `remote.command`
+EXTERNAL_NODE. Catalog id `kyc-auditlab`; tool `kyc_auditlab_status`
+(`PlannedFleetTool`).
+
+- **Not** a bound companion. Never AIDL, never `DependencyGuard`, never
+  `KnownCompanions`.
+- Simulator only, localhost only. **No auth yet** — the hub must not call
+  `/scope` admin until they add auth.
+- Companion APK: planned action `com.identityshield.companion.action.BRIDGE`.
+  Status **[provisional/pending-stable-cert]**. Active fail-open debug
+  SHA-256
+  `6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D`
+  is from a per-machine default debug.keystore and is **not stable across
+  machines** — documented, **not enforced**. Pending permanent
+  `22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D`
+  (committed debug keystore, reproducible) is in **KYC PR #29** (unmerged)
+  — recorded, **not enforced**; swap the active pin once #29 merges. Do
+  not enforce either. `remote.command` OFF-by-default. All PII ops
+  `remoteAllowed:false`; the controller never remote-allows them either.
+- Do not log identity-document contents.
+- Status: **PLANNED**. Wiring order: last.
+
+### Victorious File Manager — EXTERNAL_NODE (Messenger)
+
+Victorious File Manager (`Victorious93/File-Manager`) is an independent
+product, the same class as RootForge. It is **not** a companion.
+
+- Package: `ai.victorious.filemanager` (debug: `ai.victorious.filemanager.debug`).
+- Service: `ai.victorious.filemanager.fleet.FileManagerBridgeService` (Messenger).
+- Action: `ai.victorious.filemanager.action.BRIDGE`, `protocol_major` 1.
+- Transport: Message what=1 Bundle key `request` (JSON); reply what=2 Bundle
+  key `response`. Envelope fields match RootForge (`protocol_major`,
+  `request_id`, `target_node_id` / `node_id`, `operation`, `timeout_ms`,
+  `parameters` / `ok`, `result`, `error {category, message}`).
+- Stub ops already on their `main`: `filemanager.capabilities.get` (read),
+  `filemanager.status` (read), `filemanager.list` (read, empty entries).
+  Every reply currently carries `live:false`, `mode:stub`, `dca_required:false`.
+- Their identity/default-off PR is still landing: external control default
+  OFF; caller identity = UID package + SHA-256 cert; allow only
+  `ai.droidcommand.app` and its `.debug` build; error categories
+  `external_control_disabled` and `unauthorized_caller`; `fleet_class` →
+  `external_node`.
+- **Never** `DependencyGuard`, **never** a shared signing key, **never**
+  `KnownCompanions`, **never** a `BIND_*` signature permission, **never**
+  AIDL. Removing DCA must not disable File Manager.
+- Catalog stub: `filemanager_status` (`PlannedFleetTool`). Always
+  `ToolResult.Failure` / `REQUIRES_EXTERNAL_SERVICE`. The stub still does
+  **not** bind; the generic EXTERNAL_NODE Messenger client
+  (`core-fleet-messenger` + `:app`) exists but is not started unless this
+  node is paired (package + signing-cert SHA-256). No File Manager is paired
+  by default.
+- Status: **PLANNED** (not LIVE). Wiring: when their identity/default-off PR
+  lands; pair the node to call the existing client.
+
+### Victorious Keyboard — EXTERNAL_NODE (Messenger)
+
+Victorious Keyboard (`Victorious93/Victorious-Keyboard`) is an independent
+product, the same class as RootForge and File Manager. It is **not** a
+companion.
+
+- Package: `com.victorious.keyboard` (debug: `com.victorious.keyboard.debug`;
+  benchmark: `com.victorious.keyboard.bench`).
+- Planned service: `com.victorious.keyboard.fleet.KeyboardBridgeService`
+  (Messenger).
+- Planned action: `com.victorious.keyboard.action.BRIDGE`, `protocol_major` 1,
+  `dca_required:false`, `fleet_class` `external_node`.
+- Transport: Message what=1 Bundle key `request` (JSON); reply what=2 Bundle
+  key `response`. Envelope fields match RootForge (`protocol_major`,
+  `request_id`, `target_node_id` / `node_id`, `operation`, `timeout_ms`,
+  `parameters` / `ok`, `result`, `error {category, message}`).
+- Planned ops: `keyboard.capabilities.get` (read), `keyboard.status` (read).
+  The bridge **never forwards typed text or keystrokes**.
+- Keyboard-side: external control default OFF; caller allowlist
+  `ai.droidcommand.app` and `ai.droidcommand.app.debug`; error categories
+  `external_control_disabled` and `unauthorized_caller`.
+- **Never** `DependencyGuard`, **never** a shared signing key, **never**
+  `KnownCompanions`, **never** a `BIND_*` signature permission, **never**
+  AIDL. Removing DCA must not disable Keyboard.
+- Catalog stub: `keyboard_status` (`PlannedFleetTool`). Always
+  `ToolResult.Failure` / `REQUIRES_EXTERNAL_SERVICE`. The stub still does
+  **not** bind; the generic EXTERNAL_NODE Messenger client exists but is
+  not started unless this node is paired. No Keyboard is paired by default.
+- Status: **PLANNED** (not LIVE). Wiring: catalog only until Don decides
+  direction (hub queries the keyboard vs the keyboard surfaces fleet
+  slash-commands). See `docs/FLEET_CONTROL.md`.
+
+### Victorious Mesh — EXTERNAL_NODE (Messenger)
+
+Victorious Mesh (`Victorious93/victorious-mesh`) is an independent
+product, the same class as RootForge, File Manager, and Keyboard. It is
+**not** a companion.
+
+- Package: `com.victorious.mesh` (debug==release; **no**
+  `applicationIdSuffix`).
+- Planned action: `com.victorious.mesh.action.BRIDGE`, `protocol_major` 1,
+  `dca_required:false`, `fleet_class` `external_node`.
+- Transport: Message what=1 Bundle key `request` (JSON); reply what=2 Bundle
+  key `response`. Envelope fields match RootForge (`protocol_major`,
+  `request_id`, `target_node_id` / `node_id`, `operation`, `timeout_ms`,
+  `parameters` / `ok`, `result`, `error {category, message}`).
+- Node-id prefix: `^mesh-[0-9a-f]{32}$`.
+- Planned ops: `mesh.capabilities.get`, `mesh.status`, `mesh.up`,
+  `mesh.down`, `mesh.ip.get`. LLM tools: `mesh_capabilities`,
+  `mesh_status`, `mesh_up`, `mesh_down`, `mesh_get_ip`.
+- Mesh-side: external control default OFF; caller allowlist
+  `ai.droidcommand.app` and `ai.droidcommand.app.debug`.
+- Mesh debug cert SHA-256:
+  `F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4`.
+  Mesh **own** RELEASE SHA-256:
+  `76:E9:15:83:31:40:DA:96:69:D3:CC:5D:54:F6:66:A9:01:51:51:FC:F6:4C:59:B6:3D:DA:6E:D2:8F:83:A4:0D`
+  (RSA 4096, alias `victoriousmeshrelease`, CI-secrets only — **not** the
+  shared fleet key).
+- **Never** `DependencyGuard`, **never** a shared signing key, **never**
+  `KnownCompanions`, **never** a `BIND_*` signature permission, **never**
+  AIDL. Removing DCA must not disable Mesh.
+- Catalog stub: `mesh_status` (`PlannedFleetTool`). Always
+  `ToolResult.Failure` / `REQUIRES_EXTERNAL_SERVICE`. This repo does **not**
+  implement a live Messenger client bind.
+- Status: **PLANNED** (not LIVE, not PARTIAL). Wiring: catalog only until
+  a Mesh Messenger client can follow the RootForge pattern.
+
+### Victorious Browser — EXTERNAL_NODE (Messenger)
+
+Victorious Browser is an independent product, the same class as RootForge,
+File Manager, and Keyboard. It is **not** a companion. Repo was not in the
+ratified facts (unpublished as of 2026-10-18).
+
+- Package: `com.victorious.browser`.
+- Planned action: `com.victorious.browser.action.BRIDGE`.
+- Transport: Message what=1 request; reply what=2 response. Envelope
+  fields match the shared EXTERNAL_NODE JSON (`protocol_major`,
+  `request_id`, `target_node_id` / `node_id`, `operation`, `timeout_ms`,
+  `parameters` / `ok`, `result`, `error {category, message}`).
+- Node-id prefix: `^browser-[0-9a-f]{32}$`.
+- Documented ops: `browser.capabilities.get`, `browser.open_url{url}`,
+  `browser.panel.list`, `browser.panel.open{panel_id}`,
+  `browser.recon.summary{limit?,since?}`, `browser.proxy.set{enabled}`
+  (fire-and-forget) + pollable `browser.proxy.status`.
+- Error categories: `invalid_parameters`, `not_paired`, `not_found`,
+  `proxy_error`, `internal`.
+- Browser-side: external control default OFF; caller identity =
+  `Message.sendingUid` (**not** `Binder.getCallingUid`).
+- Browser debug cert SHA-256 (committed, enforceable):
+  `2D:5D:9E:8B:53:8E:78:51:3D:B5:41:F4:DF:FD:67:BE:27:FF:EC:3F:37:EB:1A:D4:8D:77:83:AE:59:27:C3:E1`.
+  Browser keeps its **own** release key (CI-only; **not** the shared fleet
+  key). Release is **[planned/unverified]** — do not invent a fingerprint.
+- Controller-side DEBUG cert is catalogued
+  (`KnownNodeSigningCatalog.VICTORIOUS_BROWSER_DEBUG_SHA256`, enforceable).
+  Release stays **[planned/unverified]**.
+- **Never** `DependencyGuard`, **never** a shared signing key, **never**
+  `KnownCompanions`, **never** a `BIND_*` signature permission, **never**
+  AIDL. Removing DCA must not disable Browser.
+- Catalog stub: `browser_status` (`PlannedFleetTool`). Always
+  `ToolResult.Failure` / `REQUIRES_EXTERNAL_SERVICE`. This repo does **not**
+  implement a live Messenger client bind. No extra tool UI was added —
+  same probe-only Fleet screen as Keyboard.
+- Status: **PLANNED** (not LIVE, not PARTIAL). Wiring: catalog only until
+  a Browser Messenger client can follow the RootForge pattern.
+
+### EDL-Commander — bound companion (not a host tool)
+
+Don explicitly chose EDL-Commander as a **bound companion APK**, same model
+as Pentest-Swarm: AIDL + same-signing + `DependencyGuard`. Do not mark it
+host-tool-only.
+
+- Package: `ai.edlcommander.companion` (`KnownCompanions.EDLCOMMANDER`,
+  `EdlCompanionIds.PACKAGE`; EDL PR #8 renamed the applicationId).
+- Bind action: `ai.edlcommander.companion.BIND`.
+- Signature permission: `ai.edlcommander.companion.permission.BIND_COMPANION`
+  (defined by EDL; this hub declares `<uses-permission>` — it does **not**
+  invent `ai.droidcommand.permission.BIND_EDLCOMMANDER`).
+- AIDL: `IEdlCompanion` / `CommandEnvelope` / `ResultEnvelope` in
+  `core-companion/src/main/aidl/ai/edlcommander/companion/aidl/` (package
+  `ai.edlcommander.companion.aidl`), copied verbatim from EDL main. Do not
+  invent `IEDLCommanderService`.
+- Repo: `Victorious93/EDL-Commander`. USB 9008/Sahara + OnePlus 7T path is
+  **in progress there**. This repo has never bound a real EDL APK.
+- Catalog stub: `edl_commander_status` (always `ToolResult.Failure` /
+  `REQUIRES_EXTERNAL_SERVICE`). No flash/write/restore tool. The Fleet
+  orchestrator does not auto-bind EDL.
+- EDL owns Sahara/Firehose. RootForge is the target-phone UI front end and
+  may call this companion later.
+- DEBUG cert SHA-256 is unchanged: `E5:60:B6:92:…:58:C8`.
+- Status: **PLANNED** (AIDL on disk, never device-verified).
+
+### Adding a fleet slot
+
+1. Add a `FleetMemberDescriptor` to `KnownFleet` with the correct
+   `FleetIntegrationClass`. The constructor requires AIDL + `DependencyGuard`
+   for `BOUND_COMPANION` and forbids them otherwise. Fill
+   `androidPackages` and `expectedSigningCertSha256` when the fingerprint is
+   documented; leave the cert list empty (`[Unknown]`) rather than guessing.
+2. New dependent APK: follow "Adding a new companion capability" (AIDL sync +
+   `KnownCompanions`).
+3. Planned members get a `PlannedFleetTool` that fails honestly. Do not spawn
+   a guessed binary or bind a missing APK.
+4. Update `docs/FLEET_CONTROL.md` and append an audit addendum. Do not mark
+   the member LIVE.
+
+## EXTERNAL_NODE Messenger transport (implemented)
+
+Reusable client for **any** EXTERNAL_NODE that speaks the shared envelope over
+a bound Messenger (`RootForge-on-device`, Victorious File Manager, Victorious
+Keyboard, Victorious Mesh, …). It is **not** AIDL, **not** `DependencyGuard`,
+and does **not** assume a shared signing key.
+
+| Layer | Where | What |
+|---|---|---|
+| Envelope, validation, pairing, package+cert trust | `core-fleet-messenger` (pure JVM) | `BridgeRequest` / `BridgeResponse` (protocol major 1, `core-rootforge`), `NodeTrustVerifier`, `MessengerBridgeClient`, `PairedNodeGateway` |
+| Messenger plumbing | `:app` `AndroidMessengerChannel` | bind `<pkg>.action.BRIDGE`; send `Message.what=1` Bundle key `request`; await `what=2` key `response`; pin reply UID via `Message.sendingUid` |
+
+**Controller enforcement order** (nothing is bound or sent until this passes):
+
+1. **Caller/node identity.** The target package must be paired, installed, and
+   signed by **exactly** the paired certificate SHA-256 (`NodeTrustVerifier`).
+   Certs are never hardcoded; they come from the pairing document.
+2. **Enable switch.** Pairing is the controller-side switch (empty store by
+   default = nothing is contacted). The node's own external-control switch is
+   independent; if it is off, the reply is `ok:false` with
+   `external_control_disabled`.
+3. **Envelope validation**, same order as `RootForgeClient`: decode →
+   `protocol_major==1` → `node_id` matches the paired id → `request_id` matches
+   → `ok:false` (`REMOTE_ERROR` with `error.category`) → `ok:true` without a
+   result (`MALFORMED_RESPONSE`, except fire-and-forget `*.up`).
+
+**Messenger identity quirk:** both ends identify the other process via
+`Message.sendingUid`, **not** `Binder.getCallingUid()`. A Messenger Handler
+runs in the receiving process, so `getCallingUid()` would be that process.
+
+**Fire-and-forget:** `*.up` acks immediately (`ReplyExpectation.ACK`; empty
+result is success). Poll the matching `*.status` for the eventual outcome.
+Parameterless ops reject a non-empty `parameters` object with
+`invalid_parameters`; the client sends `{}` by default.
+
+**Default-off:** the pairing store starts empty. Installing File Manager /
+Keyboard / RootForge / Mesh does not enable live control. Tools → Fleet can
+pair a node (package + observed cert, explicit confirm) and then run
+read-only `*.capabilities.get` / `*.status` (and fire-and-forget `*.up` +
+poll where the catalog has an up op). `:app` still registers no tool against
+`PairedNodeGateway`. Catalog stubs (`filemanager_status`, `keyboard_status`)
+still always fail. Write/control names other than documented `*.up` are
+refused by `FleetMessengerController` without opening the channel.
 
 ## Security Model
 
@@ -85,6 +370,75 @@ is installed at every AIDL call. If DCA is absent:
 This is a defence-in-depth measure — the signature permission already prevents
 an attacker from binding, but `DependencyGuard` also prevents a compromised
 companion from operating if DCA is later removed.
+
+### Controller-side node signature verification
+
+The checks above are **node-side** (the companion/node verifies the controller)
+or **same-key** (`protectionLevel="signature"`). They do not, by themselves,
+stop the controller from binding or commanding a substituted APK that happens
+to occupy a catalogued package name.
+
+`core-security.NodeSignatureVerifier` is the **controller-side** pin: before
+DCA binds or commands a node, it resolves the target package's installed
+signing-certificate SHA-256 and compares it to the catalogued expected
+value(s).
+
+| Piece | Where | Android? |
+|---|---|---|
+| Comparison, catalog, typed allow/refuse | `core-security.NodeSignatureVerifier` / `NodeSignatureGuard` / `KnownNodeSigningCatalog` | No. JVM-tested. |
+| PackageManager `GET_SIGNING_CERTIFICATES` | `:app` `AndroidSigningCertObserver`; duplicate in `core-companion` (that module is still excluded from the default build) | Thin adapter only. Returns cert **bytes**; SHA-256 stays in `core-security`. |
+| Bind gate | `AndroidCompanionRegistry.bind` refuses to bind on `NodeSignatureDecision.Refused` | Yes. |
+
+**Catalog.** `FleetMemberDescriptor.expectedSigningCertSha256` holds zero or
+more fingerprints (debug + release is the intended shape). Empty means
+`[Unknown]` — **do not invent a fingerprint**. The catalogue is **partial**;
+fail-closed should be enabled only once it is complete. Victorious Flash
+debug is catalogued and enforced (flash PR #18 merged). VictorLaunch
+debug is catalogued and enforced (node PR #6 merged; previous
+`1B:06:A8:…` pin revoked). Flash and VictorLaunch RELEASE certs are
+TBD — do not invent.
+
+Enforceable today (mismatch / missing-observed refuse):
+
+- DroidCommand-AI debug `ai.droidcommand.app` `88:00:51:A6:…:C8:4D`
+- Victorious Mesh debug `com.victorious.mesh` `F4:C9:25:B8:…:B9:F4` (8th wiring-order member, PLANNED catalog)
+- Victorious Mesh **own** RELEASE `com.victorious.mesh` `76:E9:15:83:…:A4:0D` (not the shared fleet key; RSA 4096, alias `victoriousmeshrelease`, CI-secrets only)
+- Victorious Browser debug `com.victorious.browser` `2D:5D:9E:8B:…:C3:E1` (9th wiring-order member, PLANNED catalog)
+- Victorious Flash debug `com.victorious.flash.android` `2C:52:0F:7A:…:F6:ED` (12th wiring-order member, PLANNED catalog; flash PR #18 merged, enforced)
+- VictorLaunch debug `com.victorious.launch` `B9:9A:AF:E2:…:4A:69` (13th wiring-order member, PLANNED catalog; node PR #6 merged, enforced; previous `1B:06:A8:…` pin revoked)
+- Pentest-Swarm-AI debug `ai.pentestswarm.companion` `5E:3A:B1:23:…:30:C7`
+- EDL-Commander debug `ai.edlcommander.companion` `E5:60:B6:92:…:58:C8`
+- HackerAI-Commander debug `ai.hackerai.companion` `AF:1C:8F:C5:…:23:55`
+- HackerAI-Commander RELEASE `9E:A7:B3:14:…:2D:8D` — firsthand verified (v0.1.0 APK signer in CI). **Only** member whose shared-fleet release cert is enforced.
+- RootForge debug `ai.rootforge.os.debug` `77:7A:C7:00:…:64:6F` (no release key yet)
+- Victorious Keyboard debug `com.victorious.keyboard` / `.debug` `47:1E:AD:6B:…:AF:4F` (`.bench` uncatalogued)
+- VictorSuite / Termux debug `com.termux` `67:17:C5:5A:…:31:D3`
+- VictorSuite **own** RELEASE `com.termux` `8C:BF:09:AA:…:19:80` (not the shared fleet key)
+
+Planned / unverified (**not** enforced): DroidCommand-AI / Pentest / EDL
+release `9E:A7:…` (`SHARED_FLEET_RELEASE_SHA256`); Victorious Browser
+RELEASE (own key, NOT shared fleet, CI-only, cert TBD); Victorious Flash
+RELEASE (TBD — do not invent); VictorLaunch RELEASE (TBD — do not invent).
+
+Caveated / not enforced: File-Manager DEBUG `8C:1F:E3:C9:…:85:F2` is
+`[unstable/CI-secrets]` (CI injects from secrets, else generic Android
+debug key). Packages stay fail-open.
+
+Pending / out of scope: RootForge release, Keyboard release
+and `.bench`, File Manager release, KYC companion RELEASE (debug cert is
+`[provisional/pending-stable-cert]` unenforced), Victorious Flash
+RELEASE (debug pin is enforced), VictorLaunch RELEASE (debug pin is
+enforced), BakerPi.
+
+**Default for `[Unknown]` members: ALLOW.** Fail-closed
+(`MissingExpectedCertPolicy.REFUSE`) is available
+(`DROIDCOMMAND_NODE_CERT_MISSING_EXPECTED=refuse`) but must not be the
+default until the catalogue is complete. When expected certs **are**
+catalogued, mismatch and missing-observed always refuse — that path is
+not configurable.
+
+This **adds** a check. It does not replace DependencyGuard, signature
+permissions, Kali/pentest authorization, or any other existing gate.
 
 ### Initiator mapping
 
@@ -172,6 +526,21 @@ interface IPentestSwarmService {
 }
 ```
 
+### `IEdlCompanion.aidl` (package `ai.edlcommander.companion.aidl`)
+
+Copied verbatim from EDL-Commander. Envelope parcelables, not JSON strings.
+Bind with action `ai.edlcommander.companion.BIND`.
+
+```aidl
+package ai.edlcommander.companion.aidl;
+
+interface IEdlCompanion {
+    const int PROTOCOL_VERSION = 1;
+    int getProtocolVersion();
+    ResultEnvelope execute(in CommandEnvelope command);
+}
+```
+
 ### JSON transport rationale
 
 All methods pass and return JSON strings rather than typed Parcelables. This
@@ -255,6 +624,13 @@ The AIDL files in each companion repo are **copies** of the canonical files in
 - `core-companion/src/main/aidl/ai/droidcommand/companion/IHackerAIService.aidl`
 - `core-companion/src/main/aidl/ai/droidcommand/companion/IPentestSwarmService.aidl`
 - `core-companion/src/main/aidl/ai/droidcommand/companion/CompanionCapabilityParcel.aidl`
+- `core-companion/src/main/aidl/ai/edlcommander/companion/aidl/IEdlCompanion.aidl`
+- `core-companion/src/main/aidl/ai/edlcommander/companion/aidl/CommandEnvelope.aidl`
+- `core-companion/src/main/aidl/ai/edlcommander/companion/aidl/ResultEnvelope.aidl`
+
+EDL's AIDL package `ai.edlcommander.companion.aidl` is part of the wire
+contract. Copy that directory from `Victorious93/EDL-Commander` verbatim;
+do not re-home it under `ai.droidcommand.companion`.
 
 When modifying any AIDL file, update all three locations atomically:
 

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Chats, the memory graph, notes, clipboards, the audit log and imported models stay on this device: nothing is
+     copied by cloud backup or a device-to-device transfer. (android:allowBackup is false as well; Android 12+
+     reads this file for the transfer case.) Keystore-bound secrets could not be restored elsewhere anyway. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

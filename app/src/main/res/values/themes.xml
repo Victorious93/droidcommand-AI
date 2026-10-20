@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The Compose UI is dark-only (ui/theme/Theme.kt), so the platform window must be dark too. Under the previous
+         light platform theme the window was white until Compose drew its first frame (a white flash at cold start,
+         and a white Android 12+ splash screen). System bar colours are set by enableEdgeToEdge() in MainActivity. -->
+    <style name="Theme.DroidCommand" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+</resources>

@@ -23,9 +23,17 @@ if(ANDROID AND DCA_ENABLE_VULKAN)
     endif()
     set(DCA_DEPS_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/deps-prefix")
     # SPIRV-Headers is header-only; install it with the host CMake so find_package(CONFIG) works.
+    # AGP puts the NDK clang on CC/CXX for this process. A nested cmake inherits that and then
+    # tries to link with -lstdc++, which NDK r28 does not ship, so the host configure fails
+    # (ld.lld: unable to find library -lstdc++). Force the host gcc/g++ (not /usr/bin/c++, which
+    # may be clang and will not find gcc's libstdc++) and drop those vars.
     execute_process(
-        COMMAND ${CMAKE_COMMAND} -S "${DCA_SPIRV_HEADERS}" -B "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers-build"
+        COMMAND ${CMAKE_COMMAND} -E env
+                CC= CXX= CFLAGS= CXXFLAGS= LDFLAGS=
+                ${CMAKE_COMMAND} -S "${DCA_SPIRV_HEADERS}" -B "${CMAKE_CURRENT_BINARY_DIR}/spirv-headers-build"
                 -DCMAKE_INSTALL_PREFIX=${DCA_DEPS_PREFIX}
+                -DCMAKE_C_COMPILER=/usr/bin/gcc
+                -DCMAKE_CXX_COMPILER=/usr/bin/g++
         RESULT_VARIABLE dca_spirv_cfg OUTPUT_QUIET)
     if(NOT dca_spirv_cfg EQUAL 0)
         message(FATAL_ERROR "configuring SPIRV-Headers failed (${dca_spirv_cfg})")

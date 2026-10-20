@@ -5,6 +5,13 @@ import ai.droidcommand.agent.ToolSpec
 sealed class PolicyDecision {
     data object Allow : PolicyDecision()
     data class RequireApproval(val reason: String) : PolicyDecision()
+
+    /**
+     * A confirmation that would have been required was waived by [AutoApprovalPolicy] (declared
+     * READ_ONLY, or [YoloMode] except pentest authorization gates). Runs like [Allow] but is
+     * distinct so the executor can audit why no prompt was shown.
+     */
+    data class AutoApproved(val risk: ActionRisk, val reason: String) : PolicyDecision()
     data class Deny(val reason: String) : PolicyDecision()
 }
 
@@ -43,6 +50,10 @@ class SecurityPolicyEnforcer(private val policy: SecurityPolicy) {
         }
 
         if (spec.requiresConfirmation && spec.securityLevel !in policy.autoApprove) {
+            val relaxed = policy.autoApprovalPolicy?.evaluate(spec)
+            if (relaxed is AutoApprovalDecision.AutoApprove) {
+                return PolicyDecision.AutoApproved(relaxed.risk, relaxed.reason)
+            }
             return PolicyDecision.RequireApproval(
                 "Tool '${spec.name}' is ${spec.securityLevel} and requires explicit confirmation",
             )

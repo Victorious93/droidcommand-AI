@@ -4,8 +4,10 @@ import ai.droidcommand.security.AuditEvent
 import ai.droidcommand.security.AuditEventType
 import ai.droidcommand.security.AuditLog
 import ai.droidcommand.security.CapabilityId
+import ai.droidcommand.security.KeyProtectionLevel
 import java.nio.charset.StandardCharsets
 import java.security.GeneralSecurityException
+import java.security.ProviderException
 import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
@@ -75,6 +77,12 @@ interface SecretAeadCipher {
 
     @Throws(GeneralSecurityException::class)
     fun decrypt(iv: ByteArray, ciphertext: ByteArray, aad: ByteArray): ByteArray
+
+    /**
+     * Where the encrypting key lives right now. A report, not a guarantee (see [KeyProtectionLevel]);
+     * implementations that cannot tell leave this at [KeyProtectionLevel.UNKNOWN].
+     */
+    fun protectionLevel(): KeyProtectionLevel = KeyProtectionLevel.UNKNOWN
 }
 
 /**
@@ -84,7 +92,15 @@ interface SecretAeadCipher {
  * AndroidKeyStore rejects caller-supplied IVs on encrypt, and a fresh random IV per call is the
  * safe choice everywhere.
  */
-class JceAesGcmCipher(private val key: () -> SecretKey) : SecretAeadCipher {
+class JceAesGcmCipher(
+    private val key: () -> SecretKey,
+    private val protection: () -> KeyProtectionLevel,
+) : SecretAeadCipher {
+    /** Reports [KeyProtectionLevel.UNKNOWN]: a plain JCE key says nothing about where it lives. */
+    constructor(key: () -> SecretKey) : this(key, { KeyProtectionLevel.UNKNOWN })
+
+    override fun protectionLevel(): KeyProtectionLevel = protection()
+
     override fun encrypt(plaintext: ByteArray, aad: ByteArray): EncryptedSecret {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, key())
@@ -179,6 +195,8 @@ class EncryptedSecretsVault(
             cipher.encrypt("$owner\n$value".toByteArray(StandardCharsets.UTF_8), aad(secretId))
         } catch (e: GeneralSecurityException) {
             throw SecretStorageException("Could not encrypt secret:$secretId", e)
+        } catch (e: ProviderException) {
+            throw SecretStorageException("Keystore unavailable encrypting secret:$secretId", e)
         }
         val written = try {
             storage.write(storageKey(secretId), SecretEnvelope.encode(sealed))
@@ -215,6 +233,50 @@ class EncryptedSecretsVault(
         return ids.filter { id -> (load(id) as? Loaded.Found)?.decoded?.capabilityId == capabilityId.value }.sorted()
     }
 
+    /** Where the encrypting key lives. Depends on the device; see [KeyProtectionLevel]. Never touches a secret. */
+    fun protectionLevel(): KeyProtectionLevel = try {
+        cipher.protectionLevel()
+    } catch (_: GeneralSecurityException) {
+        KeyProtectionLevel.UNKNOWN
+    } catch (_: RuntimeException) {
+        KeyProtectionLevel.UNKNOWN
+    }
+
+    /**
+     * Runs [block] with the secret's UTF-8 bytes, then zeroes them, whether or not [block] throws. Returns
+     * `null` (without calling [block]) when the secret is absent or unrecoverable. Records the same audit
+     * event as [getSecret].
+     *
+     * Unlike [getSecret] this never builds a `String` for the value: the decrypted record is wiped as soon
+     * as the value bytes are split out, and those bytes are wiped when [block] returns. Do not let [block]
+     * copy the array into a `String`, log it, or keep a reference; doing so defeats the point. The vault is
+     * not locked while [block] runs, so [block] may be slow or call back into the vault.
+     */
+    fun <T> useSecret(secretId: String, block: (ByteArray) -> T): T? {
+        val value = synchronized(this) { readValueBytes(secretId) } ?: return null
+        try {
+            return block(value)
+        } finally {
+            value.fill(0)
+        }
+    }
+
+    private fun readValueBytes(secretId: String): ByteArray? {
+        val plaintext = (loadPlaintext(secretId) as? Plain.Found)?.bytes
+        val split = plaintext?.indexOf(OWNER_SEPARATOR) ?: -1
+        val value = if (plaintext != null && split >= 0) plaintext.copyOfRange(split + 1, plaintext.size) else null
+        val owner = if (plaintext != null && split >= 0) String(plaintext, 0, split, StandardCharsets.UTF_8).ifEmpty { null } else null
+        plaintext?.fill(0)
+        auditLog?.record(
+            AuditEvent(
+                AuditEventType.SECRET_ACCESSED,
+                "secret:$secretId",
+                "capability:${owner ?: "unscoped"} accessed secret:$secretId — ${if (value != null) "success" else "not available"}",
+            ),
+        )
+        return value
+    }
+
     /** Whether [secretId] is usable, absent, or needs re-entry — without exposing its value or writing an audit record. */
     @Synchronized
     fun inspect(secretId: String): SecretState = when (load(secretId)) {
@@ -234,24 +296,59 @@ class EncryptedSecretsVault(
         data object StorageUnavailable : Loaded
     }
 
-    private fun load(secretId: String): Loaded {
+    private fun load(secretId: String): Loaded = when (val plain = loadPlaintext(secretId)) {
+        is Plain.Found -> {
+            val bytes = plain.bytes
+            try {
+                val split = bytes.indexOf(OWNER_SEPARATOR)
+                if (split < 0) {
+                    Loaded.Unrecoverable
+                } else {
+                    Loaded.Found(
+                        Decoded(
+                            String(bytes, 0, split, StandardCharsets.UTF_8),
+                            String(bytes, split + 1, bytes.size - split - 1, StandardCharsets.UTF_8),
+                        ),
+                    )
+                }
+            } finally {
+                bytes.fill(0)
+            }
+        }
+        Plain.Missing -> Loaded.Missing
+        Plain.Unrecoverable -> Loaded.Unrecoverable
+        Plain.StorageUnavailable -> Loaded.StorageUnavailable
+    }
+
+    private sealed interface Plain {
+        class Found(val bytes: ByteArray) : Plain
+
+        data object Missing : Plain
+
+        data object Unrecoverable : Plain
+
+        data object StorageUnavailable : Plain
+    }
+
+    /** Decrypts the raw `capabilityId '\n' value` bytes. The caller owns the returned array and must wipe it. */
+    private fun loadPlaintext(secretId: String): Plain {
         val raw = try {
             storage.read(storageKey(secretId))
         } catch (_: RuntimeException) {
-            return Loaded.StorageUnavailable
-        } ?: return Loaded.Missing
-        val envelope = SecretEnvelope.decode(raw) ?: return Loaded.Unrecoverable
-        val plaintext = try {
-            cipher.decrypt(envelope.iv, envelope.ciphertext, aad(secretId))
+            return Plain.StorageUnavailable
+        } ?: return Plain.Missing
+        val envelope = SecretEnvelope.decode(raw) ?: return Plain.Unrecoverable
+        return try {
+            Plain.Found(cipher.decrypt(envelope.iv, envelope.ciphertext, aad(secretId)))
         } catch (_: GeneralSecurityException) {
-            return Loaded.Unrecoverable
+            Plain.Unrecoverable
         } catch (_: IllegalArgumentException) {
-            return Loaded.Unrecoverable
+            Plain.Unrecoverable
+        } catch (_: ProviderException) {
+            // AndroidKeyStore signals a broken or wiped keystore this way (it is not a GeneralSecurityException).
+            // Same outcome as a lost key: fail closed, ask for re-entry. Never let it escape as a crash.
+            Plain.Unrecoverable
         }
-        val text = plaintext.toString(StandardCharsets.UTF_8)
-        val split = text.indexOf('\n')
-        if (split < 0) return Loaded.Unrecoverable
-        return Loaded.Found(Decoded(text.substring(0, split), text.substring(split + 1)))
     }
 
     private fun validateId(secretId: String) {
@@ -264,6 +361,7 @@ class EncryptedSecretsVault(
     private fun aad(secretId: String) = "secret:$secretId".toByteArray(StandardCharsets.UTF_8)
 
     private companion object {
+        const val OWNER_SEPARATOR = '\n'.code.toByte()
         const val KEY_PREFIX = "secret."
         const val MAX_ID_LENGTH = 128
     }

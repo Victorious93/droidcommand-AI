@@ -5,6 +5,7 @@ import ai.droidcommand.agent.AgentState
 import ai.droidcommand.agent.AgentStateMachine
 import ai.droidcommand.agent.DroidCommandSession
 import ai.droidcommand.agent.PermissionCategory
+import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
@@ -31,6 +32,7 @@ import ai.droidcommand.remote.JdkHttpTransport
 import ai.droidcommand.root.NullRootExecutor
 import ai.droidcommand.root.RootTool
 import ai.droidcommand.security.ApprovalPrompt
+import ai.droidcommand.security.KnownFleet
 import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
@@ -38,7 +40,10 @@ import ai.droidcommand.setoolkit.SetTool
 import ai.droidcommand.shell.ProcessBuilderShellExecutor
 import ai.droidcommand.shell.ShellSecurityPolicy
 import ai.droidcommand.shell.ShellTool
+import ai.droidcommand.shizuku.NullPrivilegedShell
+import ai.droidcommand.shizuku.ShizukuTool
 import ai.droidcommand.termux.TermuxTool
+import ai.droidcommand.termux.VictorSuiteCapabilitiesTool
 import ai.droidcommand.websearch.WebSearchTool
 import java.nio.file.Path
 import kotlin.system.exitProcess
@@ -81,6 +86,10 @@ fun main(args: Array<String>) {
             printTools(session.registry)
             0
         }
+        "list-fleet" -> {
+            print(KnownFleet.formatListing())
+            0
+        }
         "pilot" -> runPilot(session, args.drop(1))
         "forge" -> runForge(session, args.drop(1))
         "regenerate-prompt" -> runRegeneratePrompt(args.drop(1))
@@ -120,6 +129,9 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * `DROIDCOMMAND_CLI_ADB`, off by default): then it reaches the adb-connected phone's Termux or
  * VictorSuite through `ai.droidcommand.termux.AdbTermuxExecutor` (`IMPLEMENTED — NOT RUNTIME
  * VERIFIED`), still behind the same approval gate ([termuxExecutorFor]);
+ * `run_shizuku_command` / `shizuku_read_device_state` / `shizuku_pm_grant` are registered against
+ * `NullPrivilegedShell` here (this CLI has no Shizuku binder) and still go through the same
+ * `SecureToolExecutor` confirmation gate — Kali/pentest authorization is unchanged;
  * `build_project` uses [LocalProcessBuildExecutor], the same real, allow-listed
  * [ProcessBuilderShellExecutor] [ShellTool] uses — a build command is, at the OS level, just another
  * shell command, so both tools share one allowlist rather than this CLI inventing a second, separate
@@ -151,6 +163,16 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * `SENSITIVE`/`PermissionCategory.NETWORK`, so it goes through the same approval
  * gate as every other tool here regardless of which client backs it.
  *
+ * `pentest_swarm_status` / `edl_commander_status` / `kyc_auditlab_status` /
+ * `filemanager_status` / `keyboard_status` / `mesh_status` / `browser_status` /
+ * `victorsms_status` / `victorspoof_status` / `victorious_flash_status` /
+ * `victorlaunch_status`
+ * (`KnownFleet.plannedStubs`) are catalog stubs. Pentest and EDL are planned
+ * bound companions; KYC is a host-process simulator; File Manager, Keyboard,
+ * Mesh, Browser, VictorSMS, VictorSpoof, Victorious Flash, and VictorLaunch are planned
+ * EXTERNAL_NODE members. All always fail without binding or spawning.
+ * See `docs/FLEET_CONTROL.md`.
+ *
  * No [ai.droidcommand.security.GrantStore]/[ai.droidcommand.security.AuditLog] is
  * wired: none of these seven tools declares a `grantCapability`, and this CLI is one command per process
  * invocation with no persistence across runs, so an in-memory audit log nobody ever reads back
@@ -160,6 +182,7 @@ internal fun buildSession(
     approvalPrompt: ApprovalPrompt = ConsoleApprovalPrompt,
     device: AdbDeviceConfig? = AdbDeviceConfig.fromEnvironment(),
     transport: HttpTransport = JdkHttpTransport(),
+    flashTools: List<Tool> = flashNodeTools(),
 ): CliSession {
     val rootForge = rootForgeTools()
     val registry = ToolRegistry().apply {
@@ -167,18 +190,22 @@ internal fun buildSession(
         register(ShellTool(ProcessBuilderShellExecutor(shellSecurityPolicy())))
         register(RootTool(NullRootExecutor()))
         register(TermuxTool(termuxExecutorFor(device)))
+        ShizukuTool.all(NullPrivilegedShell()).forEach { register(it) }
+        register(VictorSuiteCapabilitiesTool(termuxExecutorFor(device)))
         register(BuildTool(buildPipeline(), ::buildRequestFromInput))
         register(MetasploitTool(metasploitExecutorFor()))
         register(SetTool(setExecutorFor()))
         register(WebSearchTool(webSearchClientFor(transport)))
+        KnownFleet.plannedStubs().forEach { register(it) }
         rootForge.forEach { register(it) }
+        flashTools.forEach { register(it) }
     }
     val stateMachine = AgentStateMachine()
     val delegate = ToolExecutor(registry, stateMachine)
     // REMOTE_CONTROL is granted only when the operator explicitly configured RootForge nodes; the
     // tools are still SENSITIVE, so each call also goes through the approval prompt.
-    val granted = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK) +
-        (if (rootForge.isEmpty()) emptySet() else setOf(PermissionCategory.REMOTE_CONTROL))
+    val granted = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK, PermissionCategory.DEVICE_CONTROL) +
+        (if (rootForge.isEmpty() && flashTools.isEmpty()) emptySet() else setOf(PermissionCategory.REMOTE_CONTROL))
     val policy = SecurityPolicy(grantedCategories = granted)
     val secure = SecureToolExecutor(registry, delegate, stateMachine, SecurityPolicyEnforcer(policy), approvalPrompt)
     return CliSession(DroidCommandSession(registry, secure, stateMachine), registry)
@@ -252,6 +279,7 @@ internal fun printUsage() {
 
         Usage:
           list-tools                     List every registered tool and its spec
+          list-fleet                     List the thirteen room-fleet members and their honest status
           pilot <tool> [key=value ...]   Run a single Pilot Mode tool invocation
           forge <objective text...>      Run a Forge Mode objective via an LLM planner
                                           [--finalization-steps <n>]
@@ -318,6 +346,18 @@ internal fun printUsage() {
         DROIDCOMMAND_CLI_BRAVE_API_KEY and/or DROIDCOMMAND_CLI_SERPAPI_API_KEY is set
         (both set tries Brave first, falling back to SerpAPI on failure); with neither
         set it fails without making any network call. Still requires approval either way.
+
+        list-fleet prints the thirteen room-fleet members from core-security.KnownFleet.
+        None is LIVE. Wiring order: Pentest (when repo exists) → RootForge Messenger
+        → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager
+        (when their identity/default-off PR lands) → Keyboard (catalog only;
+        direction of hub-query vs keyboard slash-commands is open) → Mesh
+        (catalog only; own signing keys) → Browser (catalog only; own signing keys)
+        → VictorSMS (EXTERNAL_NODE, SMS remote-command source, debug cert documented [planned/pending-merge] unenforced) → VictorSpoof (EXTERNAL_NODE, isolated from destructive, certs TBD) → Flash (EXTERNAL_NODE, Messenger FLEET_BRIDGE; gadget.expose destructive always confirmation_required + on-phone ERASE; debug cert enforced; release TBD) → VictorLaunch (EXTERNAL_NODE, status-tray consumer + bridge node; config.export/import; envelope v1.1; ACTION OPS OFF BY DEFAULT; debug cert enforced; release TBD).
+        pentest_swarm_status / edl_commander_status / kyc_auditlab_status /
+        filemanager_status / keyboard_status / mesh_status / browser_status / victorsms_status / victorspoof_status / victorious_flash_status / victorlaunch_status are planned stubs
+        and always fail.
+        See docs/FLEET_CONTROL.md.
 
         Examples:
           pilot echo text=hello

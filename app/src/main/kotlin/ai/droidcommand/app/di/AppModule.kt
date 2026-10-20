@@ -9,30 +9,69 @@ import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.app.approval.ComposeApprovalPrompt
 import ai.droidcommand.app.approval.VoiceApprovalPrompt
+import ai.droidcommand.app.automation.AiPromptTool
+import ai.droidcommand.app.automation.AllowlistShellExecutor
+import ai.droidcommand.app.automation.AutomationShellTool
+import ai.droidcommand.app.fleet.AndroidMessengerChannel
+import ai.droidcommand.app.fleet.AndroidPackageIdentityResolver
+import ai.droidcommand.app.fleet.SharedPreferencesPairedNodeStore
 import ai.droidcommand.app.mode.AdvancedModeStore
 import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.security.createAndroidSecretsVault
+import ai.droidcommand.app.shizuku.AndroidShizukuHost
+import ai.droidcommand.app.shizuku.BoundPrivilegedShell
+import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.conversations.RoomConversationStore
+import ai.droidcommand.fleet.messenger.ExternalNodeTransport
+import ai.droidcommand.fleet.messenger.MessengerBridgeClient
+import ai.droidcommand.fleet.messenger.MessengerChannel
+import ai.droidcommand.fleet.messenger.MutablePairedNodeStore
+import ai.droidcommand.fleet.messenger.NodeTrustVerifier
+import ai.droidcommand.fleet.messenger.PackageIdentityResolver
+import ai.droidcommand.fleet.messenger.PairedNodeGateway
+import ai.droidcommand.fleet.messenger.PairedNodeStore
+import ai.droidcommand.hackerai.HackerAiTool
 import ai.droidcommand.knowledge.android.RoomKnowledgeGraph
+import ai.droidcommand.llm.factory.CloudPromptClient
+import ai.droidcommand.llm.factory.CloudProviderSpec
+import ai.droidcommand.metasploit.MetasploitExecutor
 import ai.droidcommand.metasploit.MetasploitTool
-import ai.droidcommand.metasploit.NullMetasploitExecutor
+import ai.droidcommand.metasploit.TermuxMetasploitExecutor
+import ai.droidcommand.pentestswarm.ApprovalPromptStepApprover
+import ai.droidcommand.pentestswarm.KaliAuthorizedScanTool
+import ai.droidcommand.pentestswarm.LocalKaliPlaybookRunner
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.remote.HttpUrlConnectionTransport
+import ai.droidcommand.remotecontrol.InMemoryRemoteStatusTray
+import ai.droidcommand.remotecontrol.JsonFileRemoteControlStore
+import ai.droidcommand.remotecontrol.RemoteActionExecutor
+import ai.droidcommand.remotecontrol.RemoteCommandDispatcher
+import ai.droidcommand.remotecontrol.RemoteControlSettingsController
+import ai.droidcommand.remotecontrol.RemoteControlStore
+import ai.droidcommand.remotecontrol.RemoteControlTool
+import ai.droidcommand.remotecontrol.RemoteStatusTray
+import ai.droidcommand.remotecontrol.ReplayGuard
+import ai.droidcommand.remotecontrol.StubRemoteActionExecutor
+import ai.droidcommand.remotecontrol.UnifiedLocalBackupStore
 import ai.droidcommand.root.NullRootExecutor
 import ai.droidcommand.root.RootTool
 import ai.droidcommand.security.ApprovalPrompt
+import ai.droidcommand.security.DefaultActionRisks
+import ai.droidcommand.security.FleetCommandTool
 import ai.droidcommand.security.JsonFileAuditLog
 import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
 import ai.droidcommand.setoolkit.NullSetExecutor
 import ai.droidcommand.setoolkit.SetTool
-import ai.droidcommand.shell.ProcessBuilderShellExecutor
-import ai.droidcommand.shell.ShellSecurityPolicy
-import ai.droidcommand.shell.ShellTool
-import ai.droidcommand.termux.NullTermuxExecutor
+import ai.droidcommand.shizuku.PrivilegedShell
+import ai.droidcommand.shizuku.ShizukuHost
+import ai.droidcommand.shizuku.ShizukuManager
+import ai.droidcommand.shizuku.ShizukuTool
+import ai.droidcommand.termux.ClientBackedTermuxExecutor
+import ai.droidcommand.termux.TermuxExecutor
 import ai.droidcommand.termux.TermuxTool
 import ai.droidcommand.voice.android.AndroidSpeechToText
 import ai.droidcommand.voice.android.AndroidTextToSpeech
@@ -52,39 +91,131 @@ import javax.inject.Singleton
  * so Compose screens can `hiltViewModel()` their way to a shared,
  * singleton [ToolRunner].
  *
- * [MetasploitTool]/[SetTool] are registered exactly like [RootTool]/
- * [TermuxTool]: `SecurityLevel.SENSITIVE`, always confirmed via
- * [ComposeApprovalPrompt], denied by default until an operator wires in a
- * real `ShellBackedMetasploitExecutor`/`ProcessBackedSetExecutor`.
- *
- * **Deliberately still Null-backed here, unlike `cli.buildSession`
- * (updated to an opt-in `DROIDCOMMAND_CLI_METASPLOIT`/`DROIDCOMMAND_CLI_SETOOLKIT`
- * env-var switch).** Settings states that no program is connected; it does
- * not offer a toggle that would pretend otherwise. `msfconsole`/`setoolkit`
- * are Ruby/Python tools a
- * bare Android app process cannot `exec` unless they are themselves
- * reachable inside that process's own filesystem/PATH (e.g. a rooted
- * device or a Termux-hosted install) — a materially different, and
- * currently unverified, precondition from `cli`'s "runs on a PC that may
- * have msfconsole installed" assumption. Wiring a real backend remains
- * future work; this module does not invent a connected one.
- * [ShellTool]'s [ShellSecurityPolicy] is empty (no allowed executables)
- * for the same fail-closed reason `cli`'s own default is empty — a real
- * deployment configures it explicitly, this module never invents a "safe
- * commands" allowlist on the operator's behalf.
+ * [MetasploitTool] on Android is bound to [TermuxMetasploitExecutor], which
+ * runs `msfconsole` inside VictorSuite Kali through [TermuxExecutor] /
+ * `com.termux.RUN_COMMAND` + `RUN_COMMAND_PENDING_INTENT`. That is **not**
+ * [ai.droidcommand.metasploit.ShellBackedMetasploitExecutor] (desktop
+ * ProcessBuilder) and **not** the Go pentest-swarm companion. SET stays
+ * [NullSetExecutor] (TermuxSetExecutor is a later task). A live msfconsole
+ * round-trip has not been run in the environment that wired this.
+ * The shell allowlist starts empty (no executable is allowed) for the same
+ * fail-closed reason `cli`'s own default is empty. The owner allows
+ * executables on the Automation keys screen; this module never invents a
+ * "safe commands" allowlist on the owner's behalf.
  */
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
+    private const val CHAT_PREFS = "chat_prefs"
+
+    /**
+     * Automation keys are the only callers of the shell and AI tools. Both have empty `allowedModes`, so the Pilot and Forge
+     * planners never see them. The shell allowlist is read on every run and starts empty, so nothing runs until the owner
+     * allows an executable on the Automation keys screen.
+     */
     @Provides
     @Singleton
-    fun provideToolRegistry(): ToolRegistry = ToolRegistry().apply {
-        register(ShellTool(ProcessBuilderShellExecutor(ShellSecurityPolicy())))
+    fun provideTermuxExecutor(@ApplicationContext context: Context): TermuxExecutor =
+        ClientBackedTermuxExecutor(
+            client = AndroidPendingIntentRunCommandClient(context),
+            probeAvailable = {
+                AndroidPendingIntentRunCommandClient.isVictorSuiteInstalled(context) &&
+                    AndroidPendingIntentRunCommandClient.hasRunCommandPermission(context)
+            },
+        )
+
+    @Provides
+    @Singleton
+    fun provideMetasploitExecutor(termux: TermuxExecutor): MetasploitExecutor = TermuxMetasploitExecutor(termux)
+
+    @Provides
+    @Singleton
+    fun provideKaliPlaybookRunner(
+        termux: TermuxExecutor,
+        metasploit: MetasploitExecutor,
+        approvalPrompt: ApprovalPrompt,
+    ): LocalKaliPlaybookRunner = LocalKaliPlaybookRunner(
+        termux = termux,
+        metasploit = metasploit,
+        stepApprover = ApprovalPromptStepApprover(approvalPrompt),
+    )
+
+    @Provides
+    @Singleton
+    fun provideToolRegistry(
+        @ApplicationContext context: Context,
+        vault: EncryptedSecretsVault,
+        transport: HttpTransport,
+        advanced: AdvancedPrefs,
+        termux: TermuxExecutor,
+        metasploit: MetasploitExecutor,
+        kaliPlaybookRunner: LocalKaliPlaybookRunner,
+        fleetCommandTool: FleetCommandTool,
+        privilegedShell: PrivilegedShell,
+        remoteControlStore: RemoteControlStore,
+        remoteActionExecutor: RemoteActionExecutor,
+    ): ToolRegistry = ToolRegistry().apply {
+        register(AutomationShellTool(AllowlistShellExecutor { advanced.shellAllowlist() }))
+        register(AiPromptTool(CloudPromptClient(vault, transport)) { spec -> chatModelFor(context, spec) })
         register(RootTool(NullRootExecutor()))
-        register(TermuxTool(NullTermuxExecutor()))
-        register(MetasploitTool(NullMetasploitExecutor()))
+        register(TermuxTool(termux))
+        ShizukuTool.all(privilegedShell).forEach { register(it) }
+        register(MetasploitTool(metasploit))
+        register(KaliAuthorizedScanTool(kaliPlaybookRunner))
         register(SetTool(NullSetExecutor()))
+        // Always-fail stub: AIDL bind is not started in this module. Registering it keeps the
+        // name visible to anything that asks the registry; Pilot as DEVICE_OWNER still hides
+        // it because the tool is scoped to Initiator.REMOTE.
+        register(HackerAiTool())
+        // Fleet Orchestrator action commands. SENSITIVE and always confirmed; hidden from the Pilot and Forge planners.
+        register(fleetCommandTool)
+        // Remote Control skeleton. Names contain `remote`; destructive variants never YOLO-waive.
+        // execute() is a stub — no live wipe / power-off / lock / RustDesk.
+        RemoteControlTool.all(remoteActionExecutor, remoteControlStore).forEach { register(it) }
     }
+
+    @Provides
+    @Singleton
+    fun provideRemoteControlStore(@ApplicationContext context: Context): RemoteControlStore =
+        JsonFileRemoteControlStore(context.filesDir.toPath().resolve("remote-control").resolve("config.json"))
+
+    @Provides
+    @Singleton
+    fun provideReplayGuard(): ReplayGuard = ReplayGuard()
+
+    @Provides
+    @Singleton
+    fun provideRemoteStatusTray(): RemoteStatusTray = InMemoryRemoteStatusTray()
+
+    @Provides
+    @Singleton
+    fun provideUnifiedLocalBackupStore(@ApplicationContext context: Context): UnifiedLocalBackupStore =
+        UnifiedLocalBackupStore(context.filesDir.toPath().resolve("remote-control").resolve("backup.json"))
+
+    @Provides
+    @Singleton
+    fun provideRemoteActionExecutor(): RemoteActionExecutor = StubRemoteActionExecutor()
+
+    @Provides
+    @Singleton
+    fun provideRemoteCommandDispatcher(
+        store: RemoteControlStore,
+        replayGuard: ReplayGuard,
+        statusTray: RemoteStatusTray,
+    ): RemoteCommandDispatcher = RemoteCommandDispatcher(store, replayGuard, statusTray)
+
+    @Provides
+    @Singleton
+    fun provideRemoteControlSettingsController(
+        store: RemoteControlStore,
+        dispatcher: RemoteCommandDispatcher,
+        statusTray: RemoteStatusTray,
+        backupStore: UnifiedLocalBackupStore,
+    ): RemoteControlSettingsController = RemoteControlSettingsController(store, dispatcher, statusTray, backupStore)
+
+    /** The model chat uses for [spec], read from the same preference chat writes. Falls back to the provider's suggestion. */
+    private fun chatModelFor(context: Context, spec: CloudProviderSpec): String =
+        context.getSharedPreferences(CHAT_PREFS, Context.MODE_PRIVATE).getString("model.${spec.id}", null) ?: spec.defaultModel
 
     /** Phase 1: Keystore-backed secrets (API keys). UNBUILT — see security/AndroidSecretsVault.kt. */
     @Provides
@@ -111,8 +242,18 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideSecurityPolicy(): SecurityPolicy =
-        SecurityPolicy(grantedCategories = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK))
+    fun provideSecurityPolicy(): SecurityPolicy = SecurityPolicy(
+        grantedCategories = setOf(
+            PermissionCategory.TERMINAL,
+            PermissionCategory.NETWORK,
+            PermissionCategory.DEVICE_CONTROL,
+            PermissionCategory.REMOTE_CONTROL,
+        ),
+        // READ_ONLY catalog only. YOLO stays off ([YoloMode.ENABLED_DEFAULT]); turning it on
+        // auto-approves shell/root/fleet/Shizuku/non-destructive remote but never Kali/pentest
+        // authorization and never destructive remote actions (WIPE/POWER_OFF/LOCK). See [YoloMode.WARNING].
+        autoApprovalPolicy = DefaultActionRisks.policy(),
+    )
 
     /**
      * The gate every approval-requiring tool goes through. Voice approvals are off by default, in which case
@@ -151,6 +292,60 @@ object AppModule {
     @Singleton
     fun provideAuditLog(@ApplicationContext context: Context): JsonFileAuditLog =
         JsonFileAuditLog(context.filesDir.toPath().resolve("audit").resolve("audit.jsonl"))
+
+    /**
+     * EXTERNAL_NODE Messenger transport (`core-fleet-messenger`). The pairing store starts empty.
+     * Tools → Fleet can pair a node (package + observed cert) and then run read-only
+     * `*.capabilities.get` / `*.status` (and fire-and-forget `*.up` + poll). No tool is registered
+     * against the gateway, so Pilot/Forge/Kali/pentest paths are unchanged. Write/control ops other
+     * than documented `*.up` are refused by [ai.droidcommand.fleet.messenger.FleetMessengerController].
+     * No AIDL, no DependencyGuard, no shared signing key. Not run on a device yet.
+     */
+    @Provides
+    @Singleton
+    fun provideMutablePairedNodeStore(@ApplicationContext context: Context): MutablePairedNodeStore =
+        SharedPreferencesPairedNodeStore(context)
+
+    @Provides
+    @Singleton
+    fun providePairedNodeStore(store: MutablePairedNodeStore): PairedNodeStore = store
+
+    @Provides
+    @Singleton
+    fun providePackageIdentityResolver(@ApplicationContext context: Context): PackageIdentityResolver = AndroidPackageIdentityResolver(context)
+
+    @Provides
+    @Singleton
+    fun provideMessengerChannel(@ApplicationContext context: Context): MessengerChannel = AndroidMessengerChannel(context)
+
+    @Provides
+    @Singleton
+    fun provideExternalNodeTransport(resolver: PackageIdentityResolver, channel: MessengerChannel): ExternalNodeTransport =
+        MessengerBridgeClient(NodeTrustVerifier(resolver), channel)
+
+    @Provides
+    @Singleton
+    fun providePairedNodeGateway(store: PairedNodeStore, transport: ExternalNodeTransport): PairedNodeGateway =
+        PairedNodeGateway(store, transport)
+
+    @Provides
+    @Singleton
+    fun provideShizukuHost(@ApplicationContext context: Context): ShizukuHost = AndroidShizukuHost(context)
+
+    @Provides
+    @Singleton
+    fun provideShizukuManager(host: ShizukuHost): ShizukuManager = ShizukuManager(host)
+
+    /**
+     * Binds the Shizuku UserService lazily on the first *approved* privileged op.
+     * Unprivileged until then; missing/not-running Shizuku never crashes the app.
+     */
+    @Provides
+    @Singleton
+    fun providePrivilegedShell(
+        @ApplicationContext context: Context,
+        manager: ShizukuManager,
+    ): PrivilegedShell = BoundPrivilegedShell(context, manager)
 
     @Provides
     @Singleton

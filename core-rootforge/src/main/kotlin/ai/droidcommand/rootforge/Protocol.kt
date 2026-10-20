@@ -16,6 +16,12 @@ import kotlinx.serialization.json.JsonObject
  */
 const val BRIDGE_PROTOCOL_MAJOR = 1
 
+/**
+ * Advertised in `capabilities.get`. Not a required field on [BridgeRequest]
+ * — adding one would break existing nodes that only send `protocol_major`.
+ */
+const val BRIDGE_PROTOCOL_MINOR = 1
+
 internal val bridgeJson = Json {
     ignoreUnknownKeys = true // tolerate additive minor changes in responses
     encodeDefaults = true
@@ -55,3 +61,19 @@ data class RemoteDevice(
 
 @Serializable
 data class DeviceListResult(val devices: List<RemoteDevice>)
+
+/** `rootforge.device.info` result: free-form key/value properties of the connected target. */
+@Serializable
+data class DeviceInfoResult(val info: Map<String, String> = emptyMap())
+
+/** `rootforge.adb.shell` result. */
+@Serializable
+data class AdbShellResult(
+    @SerialName("exit_code") val exitCode: Int,
+    val output: String,
+    val truncated: Boolean = false,
+)
+
+/** Shared shape for the reboot operations (`rootforge.adb.reboot`, `rootforge.fastboot.reboot`), which only ack the request. */
+@Serializable
+data class RequestedResult(val requested: String)

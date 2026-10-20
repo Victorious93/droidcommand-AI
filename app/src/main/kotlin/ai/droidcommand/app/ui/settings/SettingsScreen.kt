@@ -4,6 +4,7 @@ import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.mode.ModeLabels
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prefs.CodingTunnelChoice
+import ai.droidcommand.app.shizuku.ShizukuStatusSection
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
@@ -44,7 +45,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
  * Keystore-backed vault; this screen never displays a stored key, only its [KeyStatus].
  */
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(
+    viewModel: SettingsViewModel = hiltViewModel(),
+    onOpenHelp: () -> Unit = {},
+) {
     val status by viewModel.status.collectAsState()
     val searchStatus by viewModel.searchStatus.collectAsState()
     Column(
@@ -55,6 +59,14 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         SectionLabel("Mode names")
         ModeNamesSection(viewModel)
         SectionLabel("API keys (stored encrypted on this device)")
+        DroidCard {
+            Text(
+                "Chat and Forge use the provider last chosen on the Chat screen. " +
+                    "Without a key for that provider — and without an on-device model — those screens refuse the request. A key is never shown again after you save it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         CloudProviderCatalog.all.forEach { provider ->
             ApiKeyRow(
                 label = provider.label,
@@ -73,10 +85,23 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             )
         }
         VoiceSettingsSection()
+        SectionLabel("Help")
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Remote Control envelope, triggers, destructive gating, local backup, and VictorSpoof isolation.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = onOpenHelp, modifier = Modifier.fillMaxWidth()) { Text("Open Help") }
+            }
+        }
+        RemoteControlSettingsSection()
+        ShizukuStatusSection()
         SectionLabel("Device tools")
         DroidCard {
             Text(
-                "Root, Termux, Metasploit, and the Social-Engineer Toolkit are on the Tools screens. Each run still asks before it executes. No program is connected for any of them in this build, so a run is refused.",
+                "Root, Termux, Shizuku, Metasploit, and the Social-Engineer Toolkit are on the Tools screens. Each run still asks before it executes. Shizuku is optional: without it the rest of the app still works.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

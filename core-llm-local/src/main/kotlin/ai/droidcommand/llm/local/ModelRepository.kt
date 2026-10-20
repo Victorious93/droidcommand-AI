@@ -36,6 +36,9 @@ sealed class ModelCheck {
     data class Verified(val path: String) : ModelCheck()
     data class Missing(val path: String) : ModelCheck()
     data class Mismatch(val path: String, val actual: String) : ModelCheck()
+
+    /** The file is present but is not the described model for a reason other than its digest: wrong size, not GGUF, unreadable. */
+    data class Rejected(val path: String, val failure: IntegrityFailure, val detail: String) : ModelCheck()
 }
 
 sealed class ModelInstallResult {
@@ -55,9 +58,13 @@ sealed class ModelInstallResult {
  * does not match is never reported [ModelCheck.Verified] (Phase 2: "every
  * downloaded model SHA-256-checked before load"). [install] downloads through
  * a [ModelDownloader] into a `.part` file and moves it into place only after
- * its size and SHA-256 match the registered metadata.
+ * its size and SHA-256 match the registered metadata, and (with [requireGguf]) its GGUF header is valid.
+ *
+ * [requireGguf] is off by default only so tests can use stand-in bytes; every production repository that holds
+ * llama.cpp model files turns it on.
  */
-class ModelRepository(private val modelsDir: File) {
+class ModelRepository(private val modelsDir: File, requireGguf: Boolean = false) {
+    private val integrity = ModelArtifactIntegrity(requireGguf = requireGguf)
     private val models = LinkedHashMap<String, ModelMetadata>()
 
     fun register(metadata: ModelMetadata) {
@@ -73,8 +80,14 @@ class ModelRepository(private val modelsDir: File) {
         val meta = models[id] ?: throw NoSuchElementException("Unknown model '$id'")
         val file = File(modelsDir, meta.fileName)
         if (!file.isFile) return ModelCheck.Missing(file.path)
-        val actual = file.inputStream().use(::sha256Hex)
-        return if (actual == meta.sha256) ModelCheck.Verified(file.path) else ModelCheck.Mismatch(file.path, actual)
+        return when (val result = integrity.verify(file, meta.sizeBytes, meta.sha256)) {
+            IntegrityResult.Valid -> ModelCheck.Verified(file.path)
+            is IntegrityResult.Invalid -> when (result.failure) {
+                IntegrityFailure.HASH_MISMATCH -> ModelCheck.Mismatch(file.path, result.actualSha256.orEmpty())
+                IntegrityFailure.MISSING_FILE -> ModelCheck.Missing(file.path)
+                else -> ModelCheck.Rejected(file.path, result.failure, result.detail)
+            }
+        }
     }
 
     /**
@@ -115,11 +128,10 @@ class ModelRepository(private val modelsDir: File) {
                 }, cancelled)
             }
             keepPart = false // from here the file is complete and judged: a bad one is discarded
-            if (needed != null && part.length() != needed) {
-                return ModelInstallResult.Failed("Downloaded ${part.length()} bytes, expected $needed; file discarded")
+            when (val result = integrity.verify(part, needed, meta.sha256)) {
+                IntegrityResult.Valid -> Unit
+                is IntegrityResult.Invalid -> return ModelInstallResult.Failed("${result.detail}; file discarded")
             }
-            val actual = part.inputStream().use(::sha256Hex)
-            if (actual != meta.sha256) return ModelInstallResult.Failed("SHA-256 mismatch (got $actual); file discarded")
             Files.move(part.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
             return ModelInstallResult.Installed(target.path)
         } catch (e: IOException) {

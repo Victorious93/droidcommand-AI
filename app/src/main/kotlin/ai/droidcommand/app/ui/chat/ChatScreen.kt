@@ -2,6 +2,7 @@ package ai.droidcommand.app.ui.chat
 
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.components.rememberDraft
 import ai.droidcommand.app.ui.theme.AccentBlue
 import ai.droidcommand.app.ui.theme.AccentBlueBright
 import ai.droidcommand.app.ui.theme.AccentCyan
@@ -61,6 +62,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,9 +86,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @Composable
 fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
-    var input by remember { mutableStateOf("") }
-    var optionsOpen by remember { mutableStateOf(false) }
-    var libraryOpen by remember { mutableStateOf(false) }
+    // Saved across rotation, folding and theme changes: with plain remember a half-typed message vanished while the
+    // ViewModel (and the conversation) survived.
+    var input by rememberDraft()
+    var optionsOpen by rememberSaveable { mutableStateOf(false) }
+    var libraryOpen by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val rows = state.lines + if (state.streaming.isNotEmpty()) listOf(ChatLine(false, state.streaming)) else emptyList()
 
@@ -151,7 +155,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (rows.isEmpty()) {
                 Text(
-                    "Ask anything. Library holds saved chats, templates, and skills. Turn on Memory in the options above to let it recall past chats.",
+                    emptyChatCopy(state),
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.align(Alignment.Center).padding(32.dp),
@@ -166,6 +170,14 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             }
         }
 
+        if (state.activeLocalModelId == null && !state.cloudKeyReady) {
+            Text(
+                "No API key for ${state.provider.label}. Add one in Settings, or import an on-device model. Send is refused until then.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
+        }
         state.error?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
@@ -237,6 +249,15 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
 private fun subtitleFor(state: ChatUiState): String {
     if (state.activeLocalModelId == null) return "${state.provider.label} · ${state.model}"
     return "On device · " + (state.localModels.firstOrNull { it.id == state.activeLocalModelId }?.label ?: "model")
+}
+
+private fun emptyChatCopy(state: ChatUiState): String {
+    val base = "Ask anything. Library holds saved chats, templates, and skills. Turn on Memory in the options above to let it recall past chats."
+    return if (state.activeLocalModelId == null && !state.cloudKeyReady) {
+        "$base This provider has no API key yet — Chat will refuse a send until you add one in Settings or pick an on-device model."
+    } else {
+        base
+    }
 }
 
 @Composable
@@ -334,6 +355,10 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
                 Text("Memory (applies next time you open Chat)", style = MaterialTheme.typography.bodySmall)
             }
             if (state.memoryEnabled) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Switch(checked = state.autoRemember, onCheckedChange = viewModel::setAutoRemember)
+                    Text("Auto-remember every 6 replies (one extra request each; applies next time you open Chat)", style = MaterialTheme.typography.bodySmall)
+                }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = viewModel::rememberChat, enabled = !state.sending) { Text("Remember this chat") }
                     state.memoryStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }

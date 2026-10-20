@@ -108,6 +108,12 @@ JVM-only core modules now:
   authority/MIME/flags before every operation — never convert an
   arbitrary URI into a raw filesystem path.
 - Temporary exports live in app-private cache, deleted after use.
+- **`:app` backup — IMPLEMENTED 2026-10-15.** `android:allowBackup="false"`, `android:fullBackupContent="false"`
+  (Android 9–11) and `res/xml/data_extraction_rules.xml` (Android 12+) exclude every domain from cloud backup
+  and device-to-device transfer, so chats, the memory graph, notes, clipboards, the audit log and imported
+  models are never copied off the device by the platform. The cost: moving to a new phone starts empty until
+  an export feature exists (Keystore-bound secrets could not be restored anyway). `ManifestPolicyTest` pins
+  all three. Before this, the merged manifest of the debug APK carried `allowBackup=true` with no rules.
 
 ### Networking
 - HTTPS by default; Network Security Configuration disabling cleartext
@@ -121,6 +127,16 @@ JVM-only core modules now:
   endpoint access.
 - Retry only safe/idempotent failures, bounded, with backoff; never retry
   auth or confirmation failures.
+- **`:app` network security config — IMPLEMENTED 2026-10-15.** `res/xml/network_security_config.xml` sets
+  `cleartextTrafficPermitted="false"` and trusts only the system certificate store; `ManifestPolicyTest` fails
+  if either changes or a `domain-config` exception is added without review. Not covered: certificate pinning
+  and mutual TLS (only `JdkHttpTransport` has them, and it cannot run on Android), response-size limits
+  (`HttpUrlConnectionTransport` reads a whole body into memory), and cancellation of an in-flight request
+  when a screen is left (it ends at the read timeout).
+- **Package visibility — IMPLEMENTED 2026-10-15.** The app asks Android about named packages
+  (`<queries><package …>`), never `QUERY_ALL_PACKAGES`. `ManifestPolicyTest` keeps the list in step with
+  `FleetCatalog` plus the Shizuku/Sui manager packages (`moe.shizuku.privileged.api`, `rikka.sui`)
+  and fails if the broad permission appears.
 
 ### Secrets
 - Provider credentials in Android Keystore-backed encrypted storage
@@ -130,6 +146,29 @@ JVM-only core modules now:
   the JVM-side interface (CAP-013); the Keystore-backed implementation is
   the Android-specific piece still to build.
 - Never in prompts, tool arguments, logs, or error messages.
+- **Update 2026-10-15 (the paragraph above is older):** the Keystore-backed vault exists
+  (`app/security/AndroidSecretsVault.kt`, AES-256-GCM key in the AndroidKeyStore, wired in `AppModule`) and
+  its read path (`inspect`) ran on an API 28 emulator. Saving and decrypting a real key has still never run on
+  a device. Typed API keys are deliberately kept out of saved instance state (`SettingsScreen.ApiKeyRow`);
+  the new `rememberDraft` helper is for non-secret text only. Private clips copied to the system clipboard are
+  now flagged `EXTRA_IS_SENSITIVE` (Android 13+ hides them from the on-screen preview); that does not stop another
+  app in the foreground from reading the clipboard.
+
+- **Update 2026-10-18 — key protection level and secret access.** The vault's key is created in the
+  AndroidKeyStore, trying StrongBox first and falling through to the platform default (a trusted
+  execution environment where the device has one, otherwise a software-backed keystore key).
+  `EncryptedSecretsVault.protectionLevel()` reports which one the existing key actually is
+  (`KeyProtectionLevel`: `STRONGBOX`, `TRUSTED_ENVIRONMENT`, `SOFTWARE`, `UNKNOWN`).
+  **Hardware-backed strength depends on the device**: emulators and some phones end up `SOFTWARE`, and
+  `UNKNOWN` must be read as "not shown to be hardware-backed". Fallback behaviour, stated plainly: there
+  is no fallback to a key in app memory, app files or plaintext. If the keystore is unusable, `putSecret`
+  throws `SecretStorageException` and `getSecret` returns `null` / `inspect` says `Unrecoverable`, so the
+  user re-enters the key. An existing key is never regenerated to upgrade its level (that would orphan the
+  stored records). `useSecret(id) { bytes -> }` gives the value as a byte array that is zeroed afterwards
+  and never becomes a `String` inside the vault; callers that copy it into a `String` lose that benefit,
+  and `getSecret` still returns an ordinary `String`. A Keystore `ProviderException` (broken or wiped
+  keystore) is now treated like a lost key instead of escaping as a crash. Release-signing keys are out of
+  scope and stay in CI secrets. Not run on a device; the `KeyInfo` read is unverified on real hardware.
 
 ### Logging
 - Structured events (request id, tool name, outcome, duration, coarse
@@ -155,6 +194,45 @@ JVM-only core modules now:
   gate is unchanged. Known limits: no speaker verification; the voice path
   adds a 120 s timeout the screen-only path does not have; not exercised
   with a real microphone.
+- **Shizuku / Sui (CAP-018 first slice, 2026-10-19e).** Privileged ADB-shell
+  ops (`run_shizuku_command`, `shizuku_read_device_state`, `shizuku_pm_grant`)
+  never auto-run. They are `SENSITIVE` / `DEVICE_CONTROL`, always go through
+  `SecureToolExecutor` → `ApprovalPrompt`, and their names contain `shizuku`
+  so `ActionRiskClassifier` hard-gates them. YOLO may waive Shizuku the same
+  way it may waive shell/root/Termux; it still cannot skip Kali / Metasploit /
+  SET / Pentest-Swarm authorization (the phrase "I confirm these targets are
+  authorized" and per-step ACTIVE/EXPLOIT prompts). Command stdout/stderr is
+  never logged. Missing or not-running Shizuku degrades to unprivileged use;
+  it does not crash or bypass confirmation. Not run against live Shizuku/Sui.
+- **Remote Control skeleton (2026-10-20, frozen top-level envelope 2026-10-20g).**
+  SMS (VictorSMS) and voice triggers share one mapping pipeline. VictorSMS
+  is a `remote.command` EXTERNAL_NODE target ([planned/pending-merge])
+  whose inbound op is `sms.remote_command.forward`. KYC-AuditLab companion
+  (`com.identityshield.companion`) is a `remote.command` EXTERNAL_NODE
+  target ([provisional/pending-stable-cert]): active debug cert documented
+  from a per-machine default debug.keystore and **not enforced**
+  (fail-open); pending permanent `22:4F:…` from KYC PR #29 (unmerged)
+  recorded, not enforced; `remote.command` OFF-by-default; all PII ops
+  `remoteAllowed:false` and never remote-allowed from the controller. An inbound
+  command is an **untrusted request**: VictorSMS whitelist + code word is
+  delivery, not authorization. DCA owns only the commandId→action mapping.
+  Debug cert is documented, not enforced (fail-open). The controller re-applies pairing →
+  external-control (OFF default) → top-level envelope replay → policy.
+  Envelope anti-replay fields are top-level `nonce` / `timestampMs` /
+  `ttlMs` (a nested `auth` object is superseded). Source identity is package+cert (`sendingUid`);
+  `trigger.sourceNumber` / `matchedKeyword` / a forged `destructive:false`
+  cannot authorize. Replay is a seen-nonce cache (`replay_detected` /
+  `expired`). Tool names contain `remote`, so they are never-auto-approve
+  like shell/shizuku/root. YOLO may waive **non-destructive** remote
+  commands (including VictorSpoof registry entries) the same way it waives
+  shell; it must **not** waive WIPE / POWER_OFF / LOCK / flash / bootloader
+  (`remote_wipe` / `remote_power_off` / `remote_lock` /
+  `remote_destructive`) and must not waive Kali/pentest ACTIVE/EXPLOIT
+  gates or the phrase "I confirm these targets are authorized" (those
+  pentest tokens are unchanged). A remote trigger never auto-approves and
+  never auto-sends. Live wipe, power-off, lock, and RustDesk are not
+  implemented — the executor is a stub after `ApprovalPrompt`. Spec:
+  `docs/specs/REMOTE_CONTROL.md`.
 
 ## Design note: per-tool `validate()` vs. externalized policy
 
@@ -191,3 +269,8 @@ document.
       covered** by `ExecutionTarget`'s typed contract; no sandboxed
       subprocess implementation exists yet beyond `core-shell`'s
       fixed-executable model.
+- [x] `:app` backup exclusion, cleartext refusal and package-visibility policy
+      pinned by a JVM test — **covered 2026-10-15** (`ManifestPolicyTest`).
+- [x] `:app` unit tests and ktlint run in CI — **covered 2026-10-15**
+      (`.github/workflows/android-checks.yml`; before that no workflow ran them).
+      Android Lint is not gated: it needs the native build for every module.
