@@ -126,6 +126,20 @@ object ExternalNodeCatalog {
             "Signing certs TBD — catalogue fail-open/unpinned. TODO: pin debug+release SHA-256.",
     )
 
+    val KYC_AUDITLAB = ExternalNodeSpec(
+        id = "kyc-auditlab",
+        displayName = "KYC-AuditLab",
+        nodeId = "kyc-auditlab",
+        packages = listOf("com.identityshield.companion"),
+        capabilitiesOperation = "kyc.capabilities.get",
+        statusOperation = "kyc.status",
+        notes = "EXTERNAL_NODE companion APK. Planned action com.identityshield.companion.action.BRIDGE. " +
+            "remote.command OFF-by-default. All PII ops remoteAllowed:false; controller never " +
+            "remote-allows them. Isolated from wipe/power-off/lock/flash/bootloader. Never " +
+            "DependencyGuard, never AIDL. Debug SHA-256 is per-machine default debug.keystore — " +
+            "[provisional/pending-stable-cert] unenforced / fail-open. Hub must not call /scope admin.",
+    )
+
     val all: List<ExternalNodeSpec> = listOf(
         ROOTFORGE,
         FILE_MANAGER,
@@ -134,6 +148,7 @@ object ExternalNodeCatalog {
         BROWSER,
         VICTOR_SMS,
         VICTOR_SPOOF,
+        KYC_AUDITLAB,
     )
 
     fun byId(id: String): ExternalNodeSpec? = all.find { it.id == id }

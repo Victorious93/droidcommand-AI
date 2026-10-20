@@ -82,15 +82,24 @@ contract. DCA already reaches that contract through `core-termux` /
 - Status: **PARTIAL**. App/CLI default to `NullTermuxExecutor` unless adb is
   opted in. Never runtime-verified on a device in this environment.
 
-### KYC-AuditLab — host process tool (Python IdentityShield)
+### KYC-AuditLab — host process tool (Python IdentityShield) + companion EXTERNAL_NODE
 
-A host-side identity **simulator**, not an APK. Catalog id `kyc-auditlab`;
-tool `kyc_auditlab_status` (`PlannedFleetTool`).
+A host-side identity **simulator** (localhost) **and** a companion APK
+`com.identityshield.companion` catalogued as a `remote.command`
+EXTERNAL_NODE. Catalog id `kyc-auditlab`; tool `kyc_auditlab_status`
+(`PlannedFleetTool`).
 
-- **Not** a companion. Never AIDL, never `DependencyGuard`, never
+- **Not** a bound companion. Never AIDL, never `DependencyGuard`, never
   `KnownCompanions`.
 - Simulator only, localhost only. **No auth yet** — the hub must not call
   `/scope` admin until they add auth.
+- Companion APK: planned action `com.identityshield.companion.action.BRIDGE`.
+  Status **[provisional/pending-stable-cert]**. Debug SHA-256
+  `6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D`
+  is from a per-machine default debug.keystore and is **not stable across
+  machines** — documented, **not enforced** (fail-open). `remote.command`
+  OFF-by-default. All PII ops `remoteAllowed:false`; the controller never
+  remote-allows them either.
 - Do not log identity-document contents.
 - Status: **PLANNED**. Wiring order: last.
 
@@ -406,7 +415,8 @@ Caveated / not enforced: File-Manager DEBUG `8C:1F:E3:C9:…:85:F2` is
 debug key). Packages stay fail-open.
 
 Pending / out of scope: RootForge release, Keyboard release
-and `.bench`, File Manager release, KYC (no APK), victorious-flash,
+and `.bench`, File Manager release, KYC companion RELEASE (debug cert is
+`[provisional/pending-stable-cert]` unenforced), victorious-flash,
 BakerPi.
 
 **Default for `[Unknown]` members: ALLOW.** Fail-closed

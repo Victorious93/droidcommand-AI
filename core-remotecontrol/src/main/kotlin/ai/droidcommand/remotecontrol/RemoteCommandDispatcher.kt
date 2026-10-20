@@ -170,9 +170,23 @@ class RemoteCommandDispatcher(
         trigger: TriggerKind,
         envelope: FleetRemoteEnvelope,
     ): RemoteDispatchResult {
+        if (KycAuditLabRegistry.forbidsRemote(actionRef, envelope.targetNodeRef)) {
+            val reason = if (KycAuditLabRegistry.isPiiOp(actionRef)) {
+                "KYC PII ops are never remote-allowed"
+            } else {
+                "KYC remote.command is OFF by default; PII ops are never remote-allowed"
+            }
+            return TrustPipeline.reject(RemoteErrorCategory.CAPABILITY_OFF, reason)
+        }
         val config = store.load()
         val mapping = config.mappings.find { it.smsCommandId == actionRef || it.id == actionRef }
         if (mapping != null) {
+            if (kycMappingForbidden(mapping)) {
+                return TrustPipeline.reject(
+                    RemoteErrorCategory.CAPABILITY_OFF,
+                    "KYC remote.command is OFF by default; PII ops are never remote-allowed",
+                )
+            }
             return RemoteDispatchResult.Ready(plan(mapping, trigger, envelope))
         }
         val macro = config.macros.find {
@@ -186,12 +200,24 @@ class RemoteCommandDispatcher(
         if (spoof != null) {
             return RemoteDispatchResult.Ready(planSpoof(spoof, trigger, envelope))
         }
+        val kyc = KycAuditLabRegistry.entry(actionRef)
+        if (kyc != null) {
+            return RemoteDispatchResult.Ready(planKyc(kyc, trigger, envelope))
+        }
         val sms = VictorSmsRegistry.entry(actionRef)
             ?: return TrustPipeline.reject(
                 RemoteErrorCategory.NOT_FOUND,
                 "no mapping for actionRef '$actionRef'",
             )
         return RemoteDispatchResult.Ready(planSms(sms, trigger, envelope))
+    }
+
+    private fun kycMappingForbidden(mapping: RemoteCommandMapping): Boolean {
+        val mappedRef = mapping.smsCommandId ?: mapping.id
+        if (KycAuditLabRegistry.forbidsRemote(mappedRef, mapping.targetNodeId)) return true
+        if (KycAuditLabRegistry.isPiiOp(mappedRef)) return true
+        return KycAuditLabRegistry.isKycNode(mapping.targetNodeId) &&
+            !KycAuditLabRegistry.isReadOp(mappedRef)
     }
 
     /**
@@ -261,6 +287,7 @@ class RemoteCommandDispatcher(
             macro = null,
             spoof = null,
             sms = null,
+            kyc = null,
             command = command,
             trigger = trigger,
             envelope = envelope,
@@ -280,6 +307,7 @@ class RemoteCommandDispatcher(
         macro = macro,
         spoof = null,
         sms = null,
+        kyc = null,
         command = null,
         trigger = trigger,
         envelope = envelope,
@@ -302,6 +330,7 @@ class RemoteCommandDispatcher(
         macro = null,
         spoof = spoof,
         sms = null,
+        kyc = null,
         command = envelope?.let {
             RemoteCommand(
                 target = NodeRef(
@@ -333,6 +362,7 @@ class RemoteCommandDispatcher(
         macro = null,
         spoof = null,
         sms = sms,
+        kyc = null,
         command = envelope?.let {
             RemoteCommand(
                 target = NodeRef(
@@ -340,6 +370,38 @@ class RemoteCommandDispatcher(
                     integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
                 ),
                 actionRef = sms.actionRef,
+                args = it.args,
+                nonce = it.nonce,
+                timestampMs = it.issuedAt,
+                requestId = it.requestId,
+                ttlMs = it.ttlMs,
+            )
+        },
+        trigger = trigger,
+        envelope = envelope,
+        toolName = RemoteControlToolNames.COMMAND,
+        destructive = false,
+        privilege = RequiredPrivilege.UNSPECIFIED,
+        advisoryDestructive = envelope?.destructive,
+    )
+
+    private fun planKyc(
+        kyc: KycAuditLabEntry,
+        trigger: TriggerKind,
+        envelope: FleetRemoteEnvelope?,
+    ): RemoteDispatchPlan = RemoteDispatchPlan(
+        mapping = null,
+        macro = null,
+        spoof = null,
+        sms = null,
+        kyc = kyc,
+        command = envelope?.let {
+            RemoteCommand(
+                target = NodeRef(
+                    nodeId = it.targetNodeRef,
+                    integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
+                ),
+                actionRef = kyc.actionRef,
                 args = it.args,
                 nonce = it.nonce,
                 timestampMs = it.issuedAt,
@@ -370,10 +432,11 @@ data class RemoteDispatchPlan(
     val advisoryDestructive: Boolean? = null,
     val spoof: VictorSpoofEntry? = null,
     val sms: VictorSmsEntry? = null,
+    val kyc: KycAuditLabEntry? = null,
 ) {
     init {
-        require(mapping != null || macro != null || spoof != null || sms != null) {
-            "plan needs a mapping, a macro, a VictorSpoof entry, or a VictorSMS entry"
+        require(mapping != null || macro != null || spoof != null || sms != null || kyc != null) {
+            "plan needs a mapping, a macro, a VictorSpoof entry, a VictorSMS entry, or a KYC entry"
         }
     }
 
@@ -396,6 +459,7 @@ data class RemoteDispatchPlan(
         envelope?.args?.forEach { (key, value) -> input["extra.$key"] = value }
         spoof?.let { input["spoofActionRef"] = it.actionRef }
         sms?.let { input["smsActionRef"] = it.actionRef }
+        kyc?.let { input["kycActionRef"] = it.actionRef }
         return input
     }
 }

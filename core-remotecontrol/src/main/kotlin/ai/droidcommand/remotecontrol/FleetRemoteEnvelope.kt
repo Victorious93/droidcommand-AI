@@ -106,6 +106,9 @@ data class FleetRemoteEnvelope(
         const val VICTOR_SPOOF_PACKAGE = "com.victorious.spoof"
         const val VICTOR_SPOOF_BRIDGE_ACTION = "com.victorious.spoof.action.BRIDGE"
 
+        const val KYC_PACKAGE = "com.identityshield.companion"
+        const val KYC_BRIDGE_ACTION = "com.identityshield.companion.action.BRIDGE"
+
         val NONCE_128_BIT = Regex("^[0-9a-fA-F]{32}$")
         const val MAX_ARGS = 16
 

@@ -4,7 +4,6 @@ import ai.droidcommand.fleet.messenger.ExternalNodeCatalog
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FleetStatusTest {
@@ -23,6 +22,7 @@ class FleetStatusTest {
         assertEquals("com.victorious.browser", FleetCatalog.BROWSER_PACKAGE)
         assertEquals("com.victorious.sms", FleetCatalog.VICTORSMS_PACKAGE)
         assertEquals("com.victorious.spoof", FleetCatalog.VICTORSPOOF_PACKAGE)
+        assertEquals("com.identityshield.companion", FleetCatalog.KYC_PACKAGE)
         assertEquals(FleetCatalog.ROOTFORGE_PACKAGE, FleetCatalog.ROOTFORGE.packageName)
         assertEquals(ExternalNodeCatalog.ROOTFORGE.primaryPackage, FleetCatalog.ROOTFORGE_PACKAGE)
         assertEquals(ExternalNodeCatalog.FILE_MANAGER.primaryPackage, FleetCatalog.FILEMANAGER_PACKAGE)
@@ -31,7 +31,8 @@ class FleetStatusTest {
         assertEquals(ExternalNodeCatalog.BROWSER.primaryPackage, FleetCatalog.BROWSER_PACKAGE)
         assertEquals(ExternalNodeCatalog.VICTOR_SMS.primaryPackage, FleetCatalog.VICTORSMS_PACKAGE)
         assertEquals(ExternalNodeCatalog.VICTOR_SPOOF.primaryPackage, FleetCatalog.VICTORSPOOF_PACKAGE)
-        assertNull(FleetCatalog.KYC_AUDITLAB.packageName)
+        assertEquals(ExternalNodeCatalog.KYC_AUDITLAB.primaryPackage, FleetCatalog.KYC_PACKAGE)
+        assertEquals(FleetCatalog.KYC_PACKAGE, FleetCatalog.KYC_AUDITLAB.packageName)
         assertEquals(FleetCatalog.FILEMANAGER_PACKAGE, FleetCatalog.FILE_MANAGER.packageName)
         assertEquals(FleetCatalog.KEYBOARD_PACKAGE, FleetCatalog.KEYBOARD.packageName)
         assertEquals(FleetCatalog.MESH_PACKAGE, FleetCatalog.MESH.packageName)
@@ -60,6 +61,7 @@ class FleetStatusTest {
                 FleetCatalog.BROWSER,
                 FleetCatalog.VICTOR_SMS,
                 FleetCatalog.VICTOR_SPOOF,
+                FleetCatalog.KYC_AUDITLAB,
             ).flatMap { it.androidPackages }.toSet(),
         )
         assertEquals(
@@ -125,8 +127,12 @@ class FleetStatusTest {
         assertTrue(edl.member.summary.contains("BOUND_COMPANION"))
         assertTrue(edl.member.summary.contains("ai.edlcommander.companion.permission.BIND_COMPANION"))
 
-        assertEquals(FleetInstallState.NOT_APPLICABLE, kyc.installed)
+        assertEquals(FleetInstallState.NOT_INSTALLED, kyc.installed)
         assertTrue(kyc.status.contains("/scope admin"))
+        assertTrue(kyc.status.contains("[provisional/pending-stable-cert]"))
+        assertTrue(kyc.member.summary.contains("remoteAllowed:false"))
+        assertTrue(kyc.member.summary.contains("fail-open"))
+        assertTrue(kyc.member.summary.contains("com.identityshield.companion"))
 
         assertEquals(FleetInstallState.NOT_INSTALLED, fileManager.installed)
         assertTrue(fileManager.status.contains("not paired"))

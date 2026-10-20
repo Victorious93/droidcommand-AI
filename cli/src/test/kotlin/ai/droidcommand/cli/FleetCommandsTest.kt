@@ -49,7 +49,7 @@ class FleetCommandsTest {
         assertTrue(text.contains("victorsms"))
         assertTrue(text.contains("com.victorious.spoof.action.BRIDGE"))
         assertTrue(text.contains("victorspoof"))
-        assertTrue(text.contains("RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof Messenger is not that"))
+        assertTrue(text.contains("RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof/KYC companion Messenger is not that"))
         assertTrue(text.contains("signingCertSha256: [Unknown]"))
         assertTrue(text.contains("com.victorious.mesh"))
         assertTrue(text.contains("com.victorious.browser"))

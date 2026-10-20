@@ -75,8 +75,10 @@ data class FleetMemberDescriptor(
     val notes: String,
     /**
      * Android applicationIds this member may be bound or commanded as.
-     * Empty when there is no APK (KYC) or no single package in this repo
-     * (RootForge). Debug / release / benchmark ids are listed separately.
+     * Empty when there is no APK or no single package in this repo.
+     * KYC-AuditLab lists the companion APK `com.identityshield.companion`
+     * (fail-open; pin unenforced). Debug / release / benchmark ids are
+     * listed separately.
      */
     val androidPackages: List<String> = emptyList(),
     /**
@@ -127,6 +129,9 @@ data class FleetMemberDescriptor(
  * documented [planned/pending-merge] unenforced; release TBD / fail-open)
  * → VictorSpoof (EXTERNAL_NODE, novelty/prank caller-ID; isolated from
  * privileged/destructive paths; certs TBD / unpinned).
+ * KYC-AuditLab's KnownFleet row stays HOST_PROCESS_TOOL (localhost
+ * simulator). Its companion APK is a separate `remote.command`
+ * EXTERNAL_NODE ([provisional/pending-stable-cert], fail-open).
  *
  * HackerAI is already a bound companion in `KnownCompanions`; not one of these eleven.
  */
@@ -279,7 +284,7 @@ object KnownFleet {
         id = "kyc-auditlab",
         displayName = "KYC-AuditLab",
         repo = null,
-        packageOrBinary = "identityshield simulator (localhost only); no Android package",
+        packageOrBinary = "identityshield simulator (localhost) + companion APK com.identityshield.companion",
         integrationClass = FleetIntegrationClass.HOST_PROCESS_TOOL,
         status = FleetHonestyStatus.PLANNED,
         capabilityId = CapabilityId("fleet.kyc-auditlab.host"),
@@ -287,17 +292,39 @@ object KnownFleet {
         existingToolNames = listOf("kyc_auditlab_status"),
         catalogStubName = "kyc_auditlab_status",
         wiringOrder = 5,
-        transports = listOf("localhost simulator (no auth yet)"),
+        transports = listOf(
+            "localhost simulator (no auth yet; hub must not call /scope admin)",
+            "messenger+json envelope (companion EXTERNAL_NODE: action " +
+                "com.identityshield.companion.action.BRIDGE; remote.command OFF-by-default; " +
+                "all PII ops remoteAllowed:false)",
+        ),
         usesAidl = false,
         usesDependencyGuard = false,
         riskTier = RiskTier.READ_ONLY,
-        nextStep = "Last. Simulator only, localhost only. Do not call /scope admin until KYC adds auth. " +
-            "Never AIDL. Do not log identity-document contents.",
+        nextStep = "Last among the original five. Simulator only, localhost only. Do not call /scope admin " +
+            "until KYC adds auth. Companion APK com.identityshield.companion is a remote.command " +
+            "EXTERNAL_NODE [provisional/pending-stable-cert]: debug cert documented but unenforced " +
+            "(per-machine default debug.keystore, not stable). remote.command OFF-by-default; " +
+            "PII ops never remote-allowed from the controller either. Never AIDL. " +
+            "Do not log identity-document contents.",
         refusalMessage = "KYC-AuditLab is PLANNED. Simulator only, localhost only, no auth yet. " +
-            "The hub must not call /scope admin. This tool does not run the lab.",
-        notes = "Host tool. No public repo as of 2026-10-14. /scope admin is off-limits until they add auth. " +
-            "No Android package, so no signing-cert pin.",
-        androidPackages = emptyList(),
+            "The hub must not call /scope admin. Companion APK com.identityshield.companion is an " +
+            "EXTERNAL_NODE remote.command target [provisional/pending-stable-cert] — fail-open, " +
+            "debug SHA-256 " +
+            "6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D " +
+            "documented not enforced (per-machine debug.keystore). remote.command OFF-by-default; " +
+            "all PII ops remoteAllowed:false. This tool does not run the lab.",
+        notes = "Host-process simulator PLUS companion EXTERNAL_NODE for remote.command. " +
+            "Never DependencyGuard, never shared signing key, never KnownCompanions, never BIND_* " +
+            "signature permission, never AIDL. Package com.identityshield.companion. " +
+            "[provisional/pending-stable-cert]. Debug SHA-256 " +
+            "6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D " +
+            "is per-machine default debug.keystore — documented, not enforced " +
+            "(expectedSigningCertSha256 empty / fail-open). remote.command OFF-by-default. " +
+            "All PII ops remoteAllowed:false; controller never remote-allows them. " +
+            "/scope admin is off-limits. Isolated from wipe/power-off/lock/flash/bootloader. " +
+            "TODO: replace with a stable pin; do not invent one.",
+        androidPackages = listOf("com.identityshield.companion"),
         expectedSigningCertSha256 = emptyList(),
     )
 
@@ -659,8 +686,8 @@ object KnownFleet {
 
     fun formatListing(): String = buildString {
         appendLine("DroidCommand AI room fleet — 11 members. None is LIVE.")
-        appendLine("Wiring order: Pentest (when repo exists) → RootForge Messenger → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager (when their identity/default-off PR lands) → Keyboard (catalog only; direction open) → Mesh (catalog only; own signing keys) → Browser (catalog only; own signing keys) → VictorSMS (EXTERNAL_NODE, SMS remote-command source; debug cert documented [planned/pending-merge] unenforced; release TBD) → VictorSpoof (EXTERNAL_NODE, novelty/prank caller-ID; isolated from destructive; certs TBD).")
-        appendLine("AIDL + DependencyGuard apply only to BOUND_COMPANION (Pentest, EDL). RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof Messenger is not that.")
+        appendLine("Wiring order: Pentest (when repo exists) → RootForge Messenger → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager (when their identity/default-off PR lands) → Keyboard (catalog only; direction open) → Mesh (catalog only; own signing keys) → Browser (catalog only; own signing keys) → VictorSMS (EXTERNAL_NODE, SMS remote-command source; debug cert documented [planned/pending-merge] unenforced; release TBD) → VictorSpoof (EXTERNAL_NODE, novelty/prank caller-ID; isolated from destructive; certs TBD). KYC companion APK is a remote.command EXTERNAL_NODE [provisional/pending-stable-cert] (fail-open; remote.command OFF-by-default; all PII ops remoteAllowed:false).")
+        appendLine("AIDL + DependencyGuard apply only to BOUND_COMPANION (Pentest, EDL). RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof/KYC companion Messenger is not that.")
         appendLine()
         for (member in ALL) {
             val repo = member.repo ?: "(repo unpublished / not found on public GitHub as of 2026-10-14)"
@@ -680,7 +707,7 @@ object KnownFleet {
         appendLine("Catalogue is partial — fail-closed should be enabled only once remaining members and verified release pins are catalogued.")
         appendLine("Enforceable: DCA debug; Mesh debug+own release (com.victorious.mesh); Browser debug (com.victorious.browser); Pentest debug; EDL debug; HackerAI debug+verified release 9E:A7; RootForge debug (ai.rootforge.os.debug); Keyboard debug (not .bench); VictorSuite debug + own release.")
         appendLine("HackerAI is the only member whose shared-fleet RELEASE 9E:A7:… is firsthand verified and enforced. DCA/Pentest/EDL release stays [planned/unverified]. Browser RELEASE is own-key [planned/unverified] (CI-only, cert TBD).")
-        appendLine("File-Manager DEBUG is [unstable/CI-secrets] — documented, not enforced. VictorSMS DEBUG is [planned/pending-merge] — documented, not enforced. Release cert TBD. victorious-flash / BakerPi / KYC are not catalogued.")
+        appendLine("File-Manager DEBUG is [unstable/CI-secrets] — documented, not enforced. VictorSMS DEBUG is [planned/pending-merge] — documented, not enforced. KYC-AuditLab companion DEBUG is [provisional/pending-stable-cert] — documented, not enforced (per-machine debug.keystore). Release cert TBD. victorious-flash / BakerPi are not catalogued.")
     }
 }
 

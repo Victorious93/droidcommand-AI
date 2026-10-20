@@ -63,6 +63,9 @@
         <package android:name="com.victorious.browser" />
         <package android:name="com.victorious.sms" />
         <package android:name="com.victorious.spoof" />
+        <!-- KYC companion EXTERNAL_NODE for remote.command
+             ([provisional/pending-stable-cert], fail-open). Probe only. -->
+        <package android:name="com.identityshield.companion" />
 
         <!-- Messenger transport (core-fleet-messenger): a paired EXTERNAL_NODE package is only visible to the
              trust check if it is named here; an unnamed one reads as "not installed" and is refused. Debug /

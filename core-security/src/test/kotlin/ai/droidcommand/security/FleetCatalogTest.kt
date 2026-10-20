@@ -186,6 +186,8 @@ class FleetCatalogTest {
         assertTrue(edl.reason.contains("does not bind, flash"))
         val kyc = tools.first { it.spec.name == "kyc_auditlab_status" }.execute(emptyMap()) as ToolResult.Failure
         assertTrue(kyc.reason.contains("/scope admin"))
+        assertTrue(kyc.reason.contains("[provisional/pending-stable-cert]"))
+        assertTrue(kyc.reason.contains("remoteAllowed:false"))
         val pentest = tools.first { it.spec.name == "pentest_swarm_status" }.execute(emptyMap()) as ToolResult.Failure
         assertTrue(pentest.reason.contains("awaiting the base companion repo"))
         val fileManager = tools.first { it.spec.name == "filemanager_status" }.execute(emptyMap()) as ToolResult.Failure
@@ -242,6 +244,13 @@ class FleetCatalogTest {
         assertEquals("com.termux", KnownFleet.VICTORSUITE.packageOrBinary)
         assertTrue(KnownFleet.VICTORSUITE.notes.contains("PR #15"))
         assertNull(KnownFleet.KYC_AUDITLAB.repo)
+        assertTrue(KnownFleet.KYC_AUDITLAB.packageOrBinary.contains("com.identityshield.companion"))
+        assertTrue(KnownFleet.KYC_AUDITLAB.notes.contains("[provisional/pending-stable-cert]"))
+        assertTrue(KnownFleet.KYC_AUDITLAB.notes.contains("fail-open"))
+        assertTrue(KnownFleet.KYC_AUDITLAB.notes.contains("remoteAllowed:false"))
+        assertTrue(KnownFleet.KYC_AUDITLAB.notes.contains("per-machine default debug.keystore"))
+        assertEquals(listOf("com.identityshield.companion"), KnownFleet.KYC_AUDITLAB.androidPackages)
+        assertTrue(KnownFleet.KYC_AUDITLAB.expectedSigningCertSha256.isEmpty())
         assertEquals("Victorious93/EDL-Commander", KnownFleet.EDL_COMMANDER.repo)
         assertEquals("Victorious93/File-Manager", KnownFleet.FILE_MANAGER.repo)
         assertTrue(KnownFleet.FILE_MANAGER.packageOrBinary.contains("ai.victorious.filemanager"))
@@ -346,7 +355,7 @@ class FleetCatalogTest {
         }
         assertTrue(text.contains("None is LIVE"))
         assertTrue(text.contains("Pentest (when repo exists)"))
-        assertTrue(text.contains("RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof Messenger is not that"))
+        assertTrue(text.contains("RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof/KYC companion Messenger is not that"))
         assertTrue(text.contains("ai.victorious.filemanager.action.BRIDGE"))
         assertTrue(text.contains("com.victorious.keyboard.action.BRIDGE"))
         assertTrue(text.contains("com.victorious.mesh.action.BRIDGE"))
@@ -362,6 +371,9 @@ class FleetCatalogTest {
         assertTrue(text.contains("[unstable/CI-secrets]"))
         assertTrue(text.contains("[planned/unverified]"))
         assertTrue(text.contains("[planned/pending-merge]"))
+        assertTrue(text.contains("[provisional/pending-stable-cert]"))
+        assertTrue(text.contains("com.identityshield.companion.action.BRIDGE"))
+        assertTrue(text.contains("remoteAllowed:false"))
     }
 
     @Test
@@ -431,6 +443,10 @@ class FleetCatalogTest {
         )
         assertTrue(
             catalog.first { it.packageName == "com.victorious.spoof" }.expectedCerts.isEmpty(),
+        )
+        assertTrue(KnownFleet.KYC_AUDITLAB.expectedSigningCertSha256.isEmpty())
+        assertTrue(
+            catalog.first { it.packageName == "com.identityshield.companion" }.expectedCerts.isEmpty(),
         )
     }
 }

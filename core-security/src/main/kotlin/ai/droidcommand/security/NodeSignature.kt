@@ -229,6 +229,20 @@ object KnownNodeSigningCatalog {
         "BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A"
 
     /**
+     * KYC-AuditLab companion debug SHA-256 (`com.identityshield.companion`).
+     *
+     * **[provisional/pending-stable-cert] — not enforced.** This
+     * fingerprint is from a **per-machine default debug.keystore** and
+     * is **not stable across machines**. A stable value will replace it
+     * later. Putting this in [NodeSigningIdentity.expectedCerts] would
+     * pin a machine-local key, so
+     * [KnownFleet.KYC_AUDITLAB.expectedSigningCertSha256] stays empty
+     * (fail-open). TODO: replace with a stable pin; do not invent one.
+     */
+    const val KYC_AUDITLAB_DEBUG_SHA256_UNENFORCED =
+        "6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D"
+
+    /**
      * DroidCommand AI hub debug identity (`ai.droidcommand.app`).
      * Shared fleet RELEASE [SHARED_FLEET_RELEASE_SHA256] is
      * [planned/unverified] for this package — not listed in

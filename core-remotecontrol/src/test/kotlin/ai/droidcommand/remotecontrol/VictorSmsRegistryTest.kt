@@ -34,7 +34,7 @@ class VictorSmsRegistryTest {
     @Test
     fun `target registry lists VictorSMS alongside VictorSpoof as EXTERNAL_NODE`() {
         assertEquals(
-            listOf("victorsms", "victorspoof"),
+            listOf("victorsms", "victorspoof", "kyc-auditlab"),
             RemoteCommandTargetRegistry.ALL.map { it.id },
         )
         val sms = VictorSmsRegistry.TARGET
@@ -50,6 +50,10 @@ class VictorSmsRegistryTest {
         assertEquals(VictorSpoofRegistry.TARGET, RemoteCommandTargetRegistry.byId("victorspoof"))
         assertTrue(VictorSpoofRegistry.TARGET.isolatedFromDestructive)
         assertFalse(VictorSpoofRegistry.TARGET.enforcePin)
+        assertEquals(KycAuditLabRegistry.TARGET, RemoteCommandTargetRegistry.byId("kyc-auditlab"))
+        assertFalse(KycAuditLabRegistry.TARGET.enforcePin)
+        assertTrue(KycAuditLabRegistry.TARGET.remoteCommandDefaultOff)
+        assertTrue(KycAuditLabRegistry.TARGET.piiOpsNeverRemoteAllowed)
     }
 
     @Test

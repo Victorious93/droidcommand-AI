@@ -78,6 +78,16 @@ object RemoteControlManual {
         caller-ID. Isolated from wipe/power-off/lock/flash/bootloader.
         Certs are not pinned yet (fail-open). TODO: pin later.
 
+        KYC-AuditLab companion
+        Package com.identityshield.companion, remote.command EXTERNAL_NODE
+        [provisional/pending-stable-cert]. The documented debug cert is
+        from a per-machine default debug.keystore and is NOT stable across
+        machines — documented, not enforced (fail-open). remote.command
+        is OFF by default. All PII ops are remoteAllowed:false; the
+        controller never remote-allows them either. Isolated from
+        wipe/power-off/lock/flash/bootloader. The localhost simulator
+        remains a host-process slot; the hub must not call /scope admin.
+
         Status tray
         Consumes and publishes last health rows per node (mesh / VPN /
         browser / SMS / node health), shared with VictorLaunch. Exact

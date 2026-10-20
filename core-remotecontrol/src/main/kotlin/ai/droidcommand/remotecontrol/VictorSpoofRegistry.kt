@@ -74,6 +74,7 @@ object ActionRefClassifier {
     ): Boolean {
         if (VictorSpoofRegistry.isRegistered(actionRef)) return false
         if (VictorSmsRegistry.isRegistered(actionRef)) return false
+        if (KycAuditLabRegistry.isRegistered(actionRef)) return false
         if (mapping != null) return mapping.effectiveDestructive
         if (macro != null) return macro.hasDestructiveStep
         val lowered = actionRef.lowercase()

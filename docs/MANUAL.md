@@ -202,6 +202,20 @@ pinned yet (fail-open). TODO: pin later.
 
 ---
 
+## KYC-AuditLab companion
+
+KYC-AuditLab's companion APK (`com.identityshield.companion`) is a
+`remote.command` EXTERNAL_NODE **[provisional/pending-stable-cert]**. The
+documented debug SHA-256 is from a **per-machine default debug.keystore**
+and is **not stable across machines** — documented, **not enforced**
+(fail-open). `remote.command` is **OFF by default**. All PII ops are
+`remoteAllowed:false`; the controller never remote-allows them either.
+Isolated from wipe / power-off / lock / flash / bootloader. The localhost
+IdentityShield simulator stays a host-process slot; the hub must not
+call `/scope` admin. TODO: replace with a stable pin; do not invent one.
+
+---
+
 ## Approval gates (summary)
 
 | Action | Gate |

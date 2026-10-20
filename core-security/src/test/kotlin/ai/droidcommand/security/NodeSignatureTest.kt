@@ -163,7 +163,7 @@ class NodeSignatureTest {
             ),
             KnownFleet.KEYBOARD.androidPackages,
         )
-        assertTrue(KnownFleet.KYC_AUDITLAB.androidPackages.isEmpty())
+        assertEquals(listOf("com.identityshield.companion"), KnownFleet.KYC_AUDITLAB.androidPackages)
         assertTrue(KnownFleet.FILE_MANAGER.expectedSigningCertSha256.isEmpty())
         assertEquals("[Unknown]", KnownFleet.FILE_MANAGER.signingCertLabel())
         assertEquals("[Unknown]", KnownFleet.KYC_AUDITLAB.signingCertLabel())
@@ -236,6 +236,32 @@ class NodeSignatureTest {
         assertEquals(
             "BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A",
             KnownNodeSigningCatalog.VICTOR_SMS_DEBUG_SHA256_UNENFORCED,
+        )
+    }
+
+    @Test
+    fun `KYC companion debug cert is documented but not enforced`() {
+        val documented = SigningCertSha256.parseOrThrow(
+            KnownNodeSigningCatalog.KYC_AUDITLAB_DEBUG_SHA256_UNENFORCED,
+        )
+        val identity = KnownNodeSigningCatalog.identityFor("com.identityshield.companion")
+        assertTrue(identity?.expectedCerts.isNullOrEmpty())
+        assertTrue(KnownFleet.KYC_AUDITLAB.expectedSigningCertSha256.isEmpty())
+        assertEquals("[Unknown]", KnownFleet.KYC_AUDITLAB.signingCertLabel())
+        assertIs<NodeSignatureDecision.Allowed>(
+            NodeSignatureVerifier().verify(
+                "com.identityshield.companion",
+                listOf(documented.canonical),
+            ),
+        )
+        assertTrue(
+            KnownNodeSigningCatalog.all().none { candidate ->
+                documented in candidate.expectedCerts
+            },
+        )
+        assertEquals(
+            "6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D",
+            KnownNodeSigningCatalog.KYC_AUDITLAB_DEBUG_SHA256_UNENFORCED,
         )
     }
 

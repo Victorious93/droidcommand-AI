@@ -63,6 +63,11 @@ class RemoteCommandEnvelopeCodecTest {
         assertEquals("com.victorious.sms.action.BRIDGE", FleetRemoteEnvelope.VICTOR_SMS_BRIDGE_ACTION)
         assertEquals("ai.droidcommand.app.action.BRIDGE", FleetRemoteEnvelope.CONTROLLER_BRIDGE_ACTION)
         assertEquals("com.victorious.spoof", FleetRemoteEnvelope.VICTOR_SPOOF_PACKAGE)
+        assertEquals("com.identityshield.companion", FleetRemoteEnvelope.KYC_PACKAGE)
+        assertEquals(
+            "com.identityshield.companion.action.BRIDGE",
+            FleetRemoteEnvelope.KYC_BRIDGE_ACTION,
+        )
         assertEquals(1, FleetRemoteEnvelope.PROTOCOL_MAJOR)
         assertEquals(1, FleetRemoteEnvelope.PROTOCOL_MINOR)
         assertEquals(1, BRIDGE_PROTOCOL_MINOR)

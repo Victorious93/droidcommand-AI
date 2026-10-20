@@ -23,6 +23,8 @@ data class KnownRemoteTarget(
     val status: String,
     val isolatedFromDestructive: Boolean,
     val cataloguedOps: Set<String>,
+    val remoteCommandDefaultOff: Boolean = false,
+    val piiOpsNeverRemoteAllowed: Boolean = false,
     val notes: String,
 ) {
     init {
@@ -49,6 +51,7 @@ object RemoteCommandTargetRegistry {
     val ALL: List<KnownRemoteTarget> = listOf(
         VictorSmsRegistry.TARGET,
         VictorSpoofRegistry.TARGET,
+        KycAuditLabRegistry.TARGET,
     )
 
     fun byId(id: String): KnownRemoteTarget? = ALL.find { it.id == id }

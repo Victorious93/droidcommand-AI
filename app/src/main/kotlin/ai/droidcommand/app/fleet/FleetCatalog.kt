@@ -72,6 +72,12 @@ object FleetCatalog {
     /** EXTERNAL_NODE. Novelty/prank caller-ID. Isolated from destructive. Certs TBD (fail-open). */
     const val VICTORSPOOF_PACKAGE = "com.victorious.spoof"
 
+    /**
+     * KYC companion EXTERNAL_NODE for remote.command. Probe-only.
+     * [provisional/pending-stable-cert] — fail-open.
+     */
+    const val KYC_PACKAGE = "com.identityshield.companion"
+
     /** Debug applicationId for RootForge OS. Catalogued for Messenger pairing / trust checks. */
     const val ROOTFORGE_DEBUG_PACKAGE = "ai.rootforge.os.debug"
 
@@ -131,9 +137,14 @@ object FleetCatalog {
     val KYC_AUDITLAB = FleetMember(
         id = "kyc-auditlab",
         name = "KYC-AuditLab",
-        packageName = null,
+        packageName = KYC_PACKAGE,
         kind = FleetKind.HOST_PROCESS,
-        summary = "HOST_PROCESS_TOOL, PLANNED. Simulator only, localhost only. Hub must not call /scope admin.",
+        summary = "HOST_PROCESS_TOOL simulator (localhost; hub must not call /scope admin) PLUS " +
+            "companion EXTERNAL_NODE com.identityshield.companion for remote.command. " +
+            "[provisional/pending-stable-cert]: debug cert is per-machine default debug.keystore, " +
+            "documented not enforced (fail-open). remote.command OFF-by-default. All PII ops " +
+            "remoteAllowed:false; controller never remote-allows them. Isolated from destructive " +
+            "paths. Never DependencyGuard, never AIDL. Not LIVE.",
     )
 
     val FILE_MANAGER = FleetMember(
@@ -281,6 +292,8 @@ object FleetStatus {
                 "No APK on this row. Pair package + cert to enable Messenger. Not LIVE."
         }
         FleetKind.HOST_PROCESS ->
-            "Not started. Simulator only, localhost only. The hub must not call /scope admin. Not LIVE."
+            "Not started. Simulator only, localhost only. The hub must not call /scope admin. " +
+                "Companion APK is a remote.command EXTERNAL_NODE [provisional/pending-stable-cert], " +
+                "fail-open; PII ops are never remote-allowed. Not LIVE."
     }
 }

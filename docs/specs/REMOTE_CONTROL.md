@@ -35,7 +35,7 @@ an **untrusted request**.
 |---|---|
 | Spec, JVM model, unit tests, Settings skeleton | Live privileged execution |
 | Nested `auth { nonce, issuedAt, ttlMs }` codec | Live Messenger / AIDL / RUN_COMMAND send |
-| ReplayGuard seen-nonce cache | VictorSMS / VictorSpoof cert pins (unpinned / fail-open) |
+| ReplayGuard seen-nonce cache | VictorSMS / VictorSpoof / KYC companion cert pins (unpinned / fail-open) |
 | Advisory `destructive` ignored for gating | Changing Kali / pentest / YOLO pentest gates |
 | Generic `capabilities.get` + `OpDescriptor` | Live node capability bind |
 | Node `macro.run` / `macro.step` runner (sequential, partial, no rollback) | Live macro execution / scheduler |
@@ -44,6 +44,7 @@ an **untrusted request**.
 | Status-tray consume+publish (generic model) | Shared VictorLaunch schema/transport |
 | Unified local JSON backup (macros + mappings + pairings, versioned) | Unified fleet backup schema |
 | VictorSpoof `KnownFleet` row (isolated from destructive) | VictorSpoof cert pins / live spoof |
+| KYC companion `remote.command` registry row (`[provisional/pending-stable-cert]`, fail-open; PII `remoteAllowed:false`) | Stable KYC companion cert pin / live KYC remote |
 | `docs/MANUAL.md` + in-app Help | — |
 
 ---
@@ -367,6 +368,25 @@ turn them into wipe/power-off/lock/flash/bootloader /
 `remote_destructive`. Certs TBD — fail-open/unpinned. **TODO: pin later.
 Do not invent fingerprints.**
 
+**KYC-AuditLab companion** (`com.identityshield.companion`,
+`KycAuditLabRegistry`) is a known `remote.command` EXTERNAL_NODE
+**target / pairing-table** row alongside VictorSMS and VictorSpoof.
+Status: **[provisional/pending-stable-cert]**. The documented debug
+SHA-256
+`6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D`
+is from a **per-machine default debug.keystore** and is **not stable
+across machines**. Keep the pin **fail-open** (`enforcePin = false`,
+`expectedSigningCertSha256` empty, suggested pairing leaves cert empty).
+**Do not enforce this fingerprint. Do not invent a replacement.** A
+stable value will replace it later. `remote.command` is **OFF by
+default**. Every PII op is advertised `remoteAllowed:false`; the
+controller never remote-allows PII ops either (`kyc.*` except
+`kyc.capabilities.get` / `kyc.status`). Isolated from
+wipe/power-off/lock/flash/bootloader the same way VictorSpoof is. The
+localhost IdentityShield simulator remains the KnownFleet
+`HOST_PROCESS_TOOL` row; the hub must not call `/scope` admin. Never
+DependencyGuard, never AIDL.
+
 **Status tray:** consume **and** publish shared fleet status-tray data
 (mesh / VPN / browser / SMS / node health). Generic
 `NodeStatusSnapshot` + `StatusTrayDomain`. Exact shared schema/transport
@@ -406,6 +426,7 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 | Unified local backup (macros+mappings+pairings) | implemented, unit-tested (**unified schema TBD**) |
 | VictorSMS KnownFleet + isolated registry / pairing row | implemented, unit-tested (**debug cert documented, pin NOT enforced**, [planned/pending-merge]) |
 | VictorSpoof KnownFleet + isolated registry | implemented, unit-tested (**certs TBD**) |
+| KYC companion isolated registry / pairing row | implemented, unit-tested (**debug cert documented, pin NOT enforced**, [provisional/pending-stable-cert]; `remote.command` OFF-by-default; PII `remoteAllowed:false`) |
 | Controller BRIDGE action constant | implemented (no exported receiver) |
 | Help / `docs/MANUAL.md` | on disk |
 | Live execute / bind / wipe / RustDesk | **stub** |
@@ -421,6 +442,11 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
    release later. Do not invent fingerprints.**
 2. **VictorSpoof signing certs (debug + release).** Catalogue fail-open /
    unpinned. **TODO pin both. Do not invent fingerprints.**
+2a. **KYC-AuditLab companion signing cert.** Debug SHA-256 is documented
+   (`6F:46:…:2D:4D`) but **not enforced** ([provisional/pending-stable-cert],
+   per-machine default debug.keystore, not stable across machines).
+   Catalogue stays fail-open. **TODO: replace with a stable pin; do not
+   invent one.**
 3. Live AIDL parcel bump on `CommandEnvelope` / `ResultEnvelope` copies
    (EDL + companions) to carry `nonce` / `issuedAt` (`timestampMs`) /
    `ttlMs` / `destructive` on the wire. Controller-side mapping is modeled;
@@ -447,7 +473,8 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 
 - Action: `<package>.action.BRIDGE` (VictorSMS:
   `com.victorious.sms.action.BRIDGE`; VictorSpoof:
-  `com.victorious.spoof.action.BRIDGE` planned; controller inbound:
+  `com.victorious.spoof.action.BRIDGE` planned; KYC companion:
+  `com.identityshield.companion.action.BRIDGE` planned; controller inbound:
   `ai.droidcommand.app.action.BRIDGE`).
 - `Message.what` 1 = request (Bundle key `request`), 2 = response
   (`response`).
@@ -464,6 +491,10 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
   fail-open). Release cert TBD.
 - VictorSpoof package `com.victorious.spoof`. Certs TBD (fail-open).
   Isolated from destructive paths.
+- KYC companion package `com.identityshield.companion`. Debug cert
+  documented, pin **not** enforced ([provisional/pending-stable-cert],
+  per-machine debug.keystore, fail-open). `remote.command` OFF-by-default.
+  All PII ops `remoteAllowed:false`. Isolated from destructive paths.
 
 ---
 
