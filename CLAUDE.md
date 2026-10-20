@@ -371,7 +371,8 @@ never get DependencyGuard / a shared signing key / `KnownCompanions` /
 AIDL / a `BIND_*` permission. Browser keeps its own release key (CI-only;
 not the shared fleet key). Caller identity is `Message.sendingUid`, not
 `Binder.getCallingUid`. EDL-Commander is a **bound companion** (AIDL +
-same-signing + DependencyGuard), PLANNED until the APK lands — do not mark
+same-signing + DependencyGuard), PLANNED (`ai.edlcommander.companion`,
+`IEdlCompanion` copied, orchestrator does not auto-bind) — do not mark
 it host-tool-only. KYC-AuditLab is a host-process simulator (localhost only;
 the hub must not call `/scope` admin). None of the nine is LIVE. Do not
 invent a parallel control plane.
@@ -839,8 +840,12 @@ DCA integrates with companion APKs via Android Bound Services:
   pentestswarm binary's campaign/chain/playbook capabilities via
   `IPentestSwarmService`
 - **EDL-Commander companion** (`Victorious93/EDL-Commander`, PLANNED) —
-  Sahara/Firehose over AIDL + same-signing + DependencyGuard when the APK
-  lands. Do not add `IEDLCommanderService` here until then. Not a host tool.
+  Sahara/Firehose over AIDL + same-signing + DependencyGuard. Package
+  `ai.edlcommander.companion`. AIDL is `IEdlCompanion` under
+  `ai.edlcommander.companion.aidl`;
+  bind action `ai.edlcommander.companion.BIND`; hub `uses-permission`
+  `ai.edlcommander.companion.permission.BIND_COMPANION`. Do not invent
+  `IEDLCommanderService`. Not a host tool. Never device-verified.
 
 **For session orientation on the full integration protocol**, read
 `COMPANION_PROTOCOL.md` at the repo root before modifying AIDL contracts,
@@ -855,7 +860,7 @@ adding companion capabilities, or working on the modules below.
 | `core-companion` | `droidcommand-AI/core-companion/` | Android (excluded from build) | IMPLEMENTED (source only) |
 | HackerAI companion APK | `hackeraiETC/android/` | Android standalone | IMPLEMENTED (source only) |
 | Pentest-Swarm companion APK | `Pentest-Swarm-AI/android/` | Android standalone | IMPLEMENTED (source only) |
-| EDL-Commander companion APK | `Victorious93/EDL-Commander` | Android standalone | PLANNED (APK has not landed; no AIDL in this repo) |
+| EDL-Commander companion APK | `Victorious93/EDL-Commander` | Android standalone | PLANNED (`applicationId` `ai.edlcommander.companion`; `IEdlCompanion` AIDL copied here; never device-bound) |
 
 **Critical rule — AIDL sync**: The AIDL files in each companion repo are
 copies of the canonical files in `core-companion/src/main/aidl/`. A diverged

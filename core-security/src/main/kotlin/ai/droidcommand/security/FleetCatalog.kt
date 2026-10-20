@@ -237,7 +237,7 @@ object KnownFleet {
         id = "edl-commander",
         displayName = "EDL-Commander",
         repo = "Victorious93/EDL-Commander",
-        packageOrBinary = "ai.edlcommander.companion (planned; APK has not landed)",
+        packageOrBinary = "${EdlCompanionIds.PACKAGE} (AIDL copied; never device-bound from this repo)",
         integrationClass = FleetIntegrationClass.BOUND_COMPANION,
         status = FleetHonestyStatus.PLANNED,
         capabilityId = CapabilityId("fleet.edl-commander.companion"),
@@ -245,22 +245,28 @@ object KnownFleet {
         existingToolNames = listOf("edl_commander_status"),
         catalogStubName = "edl_commander_status",
         wiringOrder = 4,
-        transports = listOf("aidl + same-signing (planned)", "USB 9008 / Sahara (in progress on their repo)"),
+        transports = listOf(
+            "aidl ${EdlCompanionIds.AIDL_INTERFACE} + action ${EdlCompanionIds.BIND_ACTION}",
+            "signature permission ${EdlCompanionIds.BIND_PERMISSION} (defined by EDL; hub uses-permission)",
+            "USB 9008 / Sahara (in progress on their repo)",
+        ),
         usesAidl = true,
         usesDependencyGuard = true,
         riskTier = RiskTier.READ_ONLY,
-        nextStep = "Fourth: wait for the companion APK, then IEDLCommanderService + BIND_EDLCOMMANDER " +
-            "same-signing + DependencyGuard (like Pentest). Scaffold + AIDL + USB 9008/Sahara + " +
-            "OnePlus 7T path is in progress on Victorious93/EDL-Commander. Do not add the AIDL file " +
-            "here until that APK lands. Owns Sahara/Firehose. RootForge UI may call this later; " +
-            "do not put flash in DCA or RootForge.",
-        refusalMessage = "EDL-Commander companion APK has not landed. PLANNED. " +
-            "Capability state is REQUIRES_EXTERNAL_SERVICE. This tool does not bind, flash, write, or restore.",
+        nextStep = "Fourth: bind ${EdlCompanionIds.PACKAGE} with action ${EdlCompanionIds.BIND_ACTION} " +
+            "and uses-permission ${EdlCompanionIds.BIND_PERMISSION} (IEdlCompanion, same-signing + " +
+            "DependencyGuard like Pentest). AIDL is copied under ${EdlCompanionIds.AIDL_PACKAGE}. " +
+            "The Fleet orchestrator still does not auto-bind — never device-verified. Owns " +
+            "Sahara/Firehose. RootForge UI may call this later; do not put flash in DCA or RootForge.",
+        refusalMessage = "EDL-Commander AIDL (IEdlCompanion) is copied; the companion has never been " +
+            "bound from this repo. PLANNED. Capability state is REQUIRES_EXTERNAL_SERVICE. " +
+            "This tool does not bind, flash, write, or restore.",
         notes = "Bound companion (AIDL + same-signing), like Pentest. Don explicitly chose this over host-tool-only. " +
-            "APK not landed; no AIDL in this repo yet. Controller-side DEBUG signing cert " +
-            "SHA-256 is catalogued (enforceable). Shared fleet RELEASE 9E:A7:… is " +
+            "applicationId on EDL main (PR #8) is ${EdlCompanionIds.PACKAGE}. " +
+            "Controller-side DEBUG signing cert SHA-256 is catalogued " +
+            "(enforceable, unchanged by the rename). Shared fleet RELEASE 9E:A7:… is " +
             "[planned/unverified] — not enforced (no verified release signingConfig yet).",
-        androidPackages = listOf("ai.edlcommander.companion"),
+        androidPackages = listOf(EdlCompanionIds.PACKAGE),
         expectedSigningCertSha256 = listOf(KnownNodeSigningCatalog.EDL_COMMANDER_DEBUG_SHA256),
     )
 

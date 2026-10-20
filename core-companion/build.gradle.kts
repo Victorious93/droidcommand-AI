@@ -1,6 +1,6 @@
 // Phase 4 (Companion APK Integration) — Android library module providing:
 //   - AIDL interface contracts for DCA ↔ companion APK IPC (ICompanionService,
-//     IHackerAIService, IPentestSwarmService + CompanionCapabilityParcel)
+//     IHackerAIService, IPentestSwarmService, IEdlCompanion + CompanionCapabilityParcel)
 //   - CompanionRegistry (AIDL ServiceConnection management)
 //   - CompanionCapabilityHealthChecker (implements core-security's CapabilityHealthChecker)
 //   - CompanionTool (wraps any AIDL capability as a core-agent Tool)

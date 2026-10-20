@@ -68,6 +68,19 @@ class ManifestPolicyTest {
     }
 
     @Test
+    fun `EDL companion bind permission is used not invented as BIND_EDLCOMMANDER`() {
+        val uses = manifest.children("uses-permission").map { it.androidAttr("name") }
+        val defined = manifest.children("permission").map { it.androidAttr("name") }
+        assertTrue(FleetCatalog.EDLCOMMANDER_BIND_PERMISSION in uses)
+        assertEquals("ai.edlcommander.companion.permission.BIND_COMPANION", FleetCatalog.EDLCOMMANDER_BIND_PERMISSION)
+        assertEquals("ai.edlcommander.companion.BIND", FleetCatalog.EDLCOMMANDER_BIND_ACTION)
+        assertEquals("ai.edlcommander.companion", FleetCatalog.EDLCOMMANDER_PACKAGE)
+        assertFalse("ai.droidcommand.permission.BIND_EDLCOMMANDER" in uses)
+        assertFalse("ai.droidcommand.permission.BIND_EDLCOMMANDER" in defined)
+        assertFalse(defined.any { it?.contains("edl", ignoreCase = true) == true })
+    }
+
+    @Test
     fun `Shizuku provider permission and queries are declared`() {
         val permissions = manifest.children("uses-permission").map { it.androidAttr("name") }
         assertTrue(ShizukuPackages.API_PERMISSION in permissions)

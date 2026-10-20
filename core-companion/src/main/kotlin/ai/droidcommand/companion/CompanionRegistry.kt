@@ -3,6 +3,7 @@ package ai.droidcommand.companion
 import ai.droidcommand.security.NodeSignatureDecision
 import ai.droidcommand.security.NodeSignatureGuard
 import ai.droidcommand.security.NodeSignatureVerifier
+import ai.edlcommander.companion.aidl.IEdlCompanion
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -21,6 +22,7 @@ interface CompanionRegistry {
     fun isConnected(packageName: String): Boolean
     fun getHackerAiService(): IHackerAIService?
     fun getPentestSwarmService(): IPentestSwarmService?
+    fun getEdlCompanionService(): IEdlCompanion?
     fun allConnectedPackages(): Set<String>
 
     /** The raw bound binder for [packageName], or null when not connected. Lets a caller inspect its interface descriptor. */
@@ -32,7 +34,7 @@ interface CompanionRegistry {
  *
  * Binding is asynchronous: [bind] enqueues the OS bind request; the AIDL stub
  * becomes non-null in [onServiceConnected]. Callers should treat null returns
- * from [getHackerAiService]/[getPentestSwarmService] as transient — the registry
+ * from [getHackerAiService]/[getPentestSwarmService]/[getEdlCompanionService] as transient — the registry
  * will become populated once the OS delivers the connection.
  *
  * NOT RUNTIME VERIFIED in this environment (no Android SDK). Excluded from
@@ -65,8 +67,6 @@ class AndroidCompanionRegistry(
     @Synchronized
     override fun bind(descriptor: CompanionDescriptor) {
         if (connections.containsKey(descriptor.packageName)) return
-        // Planned slot — APK/AIDL have not landed. Do not invent a bind action.
-        if (descriptor.packageName == KnownCompanions.EDLCOMMANDER_PACKAGE) return
 
         // Controller-side node signature check. Adds a pin; does not replace
         // DependencyGuard or protectionLevel="signature". Default
@@ -87,6 +87,8 @@ class AndroidCompanionRegistry(
                     "ai.hackerai.companion.IHackerAIService"
                 KnownCompanions.PENTESTSWARM_PACKAGE ->
                     "ai.pentestswarm.companion.IPentestSwarmService"
+                KnownCompanions.EDLCOMMANDER_PACKAGE ->
+                    KnownCompanions.EDLCOMMANDER_BIND_ACTION
                 else -> "ai.droidcommand.companion.ICompanionService"
             }
         }
@@ -127,6 +129,11 @@ class AndroidCompanionRegistry(
     override fun getPentestSwarmService(): IPentestSwarmService? =
         connections[KnownCompanions.PENTESTSWARM_PACKAGE]?.binder?.let {
             IPentestSwarmService.Stub.asInterface(it)
+        }
+
+    override fun getEdlCompanionService(): IEdlCompanion? =
+        connections[KnownCompanions.EDLCOMMANDER_PACKAGE]?.binder?.let {
+            IEdlCompanion.Stub.asInterface(it)
         }
 
     @Synchronized

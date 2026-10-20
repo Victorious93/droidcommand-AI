@@ -14,6 +14,8 @@ class FleetStatusTest {
         assertEquals("ai.pentestswarm.companion", FleetCatalog.PENTESTSWARM_PACKAGE)
         assertEquals("com.termux", FleetCatalog.TERMUX_PACKAGE)
         assertEquals("ai.edlcommander.companion", FleetCatalog.EDLCOMMANDER_PACKAGE)
+        assertEquals("ai.edlcommander.companion.BIND", FleetCatalog.EDLCOMMANDER_BIND_ACTION)
+        assertEquals("ai.edlcommander.companion.permission.BIND_COMPANION", FleetCatalog.EDLCOMMANDER_BIND_PERMISSION)
         assertEquals("ai.rootforge.os", FleetCatalog.ROOTFORGE_PACKAGE)
         assertEquals("ai.victorious.filemanager", FleetCatalog.FILEMANAGER_PACKAGE)
         assertEquals("com.victorious.keyboard", FleetCatalog.KEYBOARD_PACKAGE)
@@ -104,8 +106,12 @@ class FleetStatusTest {
         assertTrue(rootforge.member.summary.contains("Never DependencyGuard"))
 
         assertEquals(FleetInstallState.NOT_INSTALLED, edl.installed)
-        assertTrue(edl.status.contains("has not landed"))
+        assertTrue(edl.status.contains("IEdlCompanion"))
+        assertTrue(edl.status.contains("ai.edlcommander.companion.BIND"))
+        assertTrue(edl.status.contains("does not auto-bind"))
+        assertTrue(edl.status.contains("Not LIVE"))
         assertTrue(edl.member.summary.contains("BOUND_COMPANION"))
+        assertTrue(edl.member.summary.contains("ai.edlcommander.companion.permission.BIND_COMPANION"))
 
         assertEquals(FleetInstallState.NOT_APPLICABLE, kyc.installed)
         assertTrue(kyc.status.contains("/scope admin"))

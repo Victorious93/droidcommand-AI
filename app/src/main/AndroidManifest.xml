@@ -26,6 +26,10 @@
          platform permission dialog). Same permission for Shizuku and Sui. -->
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
 
+    <!-- EDL-Commander defines this signature permission; the hub only holds it.
+         Same-signing grants it. Do not invent ai.droidcommand.permission.BIND_EDLCOMMANDER. -->
+    <uses-permission android:name="ai.edlcommander.companion.permission.BIND_COMPANION" />
+
     <!-- Phase 4 voice input. Requested at runtime only when the user taps the mic; denial degrades to a
          message, never a crash. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
