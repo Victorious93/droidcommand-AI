@@ -263,5 +263,7 @@ class RemoteControlViewModel @Inject constructor(
         is RemoteDispatchResult.MacroRun ->
             "macro ${if (result.result.dryRun) "dry-run" else "run"}: " +
                 "${result.result.steps.size} steps, ok=${result.result.ok}"
+        is RemoteDispatchResult.StatusTray ->
+            "node.status.get: ${result.snapshots.size} snapshots"
     }
 }
