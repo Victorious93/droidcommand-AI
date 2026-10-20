@@ -8,10 +8,10 @@ Honesty: **LIVE** is reserved for runtime-verified control. Nothing here is LIVE
 
 Code: `core-security.KnownFleet`. Bound companions also appear in
 `core-companion.KnownCompanions`. RootForge, File Manager, Keyboard,
-Mesh, Browser, VictorSuite, and KYC must not be added there.
+Mesh, Browser, VictorSuite, VictorLaunch, and KYC must not be added there.
 
 HackerAI (`ai.hackerai.companion`) is already a bound companion and is
-**not** one of these nine.
+**not** one of these thirteen.
 
 ## Wiring order
 
@@ -27,13 +27,14 @@ HackerAI (`ai.hackerai.companion`) is already a bound companion and is
 10. **VictorSMS** — EXTERNAL_NODE, SMS remote-command source; debug cert documented unenforced
 11. **VictorSpoof** — EXTERNAL_NODE, novelty/prank caller-ID; certs TBD / unpinned
 12. **Victorious Flash** — EXTERNAL_NODE, Messenger `FLEET_BRIDGE`; debug cert **enforced**; `gadget.expose` destructive always confirmation_required + on-phone ERASE
+13. **VictorLaunch** — EXTERNAL_NODE, status-tray consumer + bridge node; `config.export`/`config.import`; envelope v1.1; ACTION OPS OFF BY DEFAULT; debug cert documented `[planned/pending-merge]` unenforced; release TBD
 
 ## Integration classes (do not mix)
 
 | Class | Security rules | Who |
 |---|---|---|
 | **BOUND_COMPANION** | AIDL + `protectionLevel="signature"` (same signing key) + companion `DependencyGuard`. Prefer one command-envelope service for new companions. `Initiator.REMOTE`. | Pentest-Swarm-AI, EDL-Commander (HackerAI, already mapped) |
-| **EXTERNAL_NODE** | Independent product. **Never** `DependencyGuard`, **never** a shared signing key, never "install DCA first". Live APK path on *their* main is bound **Messenger** + shared JSON (`protocol_major` 1). RootForge: `action ai.rootforge.os.action.BRIDGE`. File Manager: `action ai.victorious.filemanager.action.BRIDGE` (**PLANNED** as a product slot; generic client exists, off until paired). Keyboard: planned `action com.victorious.keyboard.action.BRIDGE` (**PLANNED**; never forwards typed text/keystrokes). Mesh: planned `action com.victorious.mesh.action.BRIDGE` (**PLANNED**; debug==release package `com.victorious.mesh`; Mesh keeps its own release key; generic client exists, off until paired). Browser: planned `action com.victorious.browser.action.BRIDGE` (**PLANNED**; package `com.victorious.browser`; caller identity = `Message.sendingUid`, not `Binder.getCallingUid`; Browser keeps its own release key, CI-only). KYC companion: planned `action com.identityshield.companion.action.BRIDGE` (**[provisional/pending-stable-cert]**; `remote.command` OFF-by-default; all PII ops `remoteAllowed:false`; fail-open cert). Desktop/Docker = localhost headless API + bearer (planned, RootForge). SSH = CLI/ISO **fallback only** (RootForge). Removing DCA must not disable the node. | RootForge OS, Victorious File Manager, Victorious Keyboard, Victorious Mesh, Victorious Browser, VictorSMS, VictorSpoof, Victorious Flash, KYC-AuditLab companion APK (remote.command surface; KnownFleet class stays HOST_PROCESS_TOOL for the localhost simulator) |
+| **EXTERNAL_NODE** | Independent product. **Never** `DependencyGuard`, **never** a shared signing key, never "install DCA first". Live APK path on *their* main is bound **Messenger** + shared JSON (`protocol_major` 1). RootForge: `action ai.rootforge.os.action.BRIDGE`. File Manager: `action ai.victorious.filemanager.action.BRIDGE` (**PLANNED** as a product slot; generic client exists, off until paired). Keyboard: planned `action com.victorious.keyboard.action.BRIDGE` (**PLANNED**; never forwards typed text/keystrokes). Mesh: planned `action com.victorious.mesh.action.BRIDGE` (**PLANNED**; debug==release package `com.victorious.mesh`; Mesh keeps its own release key; generic client exists, off until paired). Browser: planned `action com.victorious.browser.action.BRIDGE` (**PLANNED**; package `com.victorious.browser`; caller identity = `Message.sendingUid`, not `Binder.getCallingUid`; Browser keeps its own release key, CI-only). KYC companion: planned `action com.identityshield.companion.action.BRIDGE` (**[provisional/pending-stable-cert]**; `remote.command` OFF-by-default; all PII ops `remoteAllowed:false`; fail-open cert). Desktop/Docker = localhost headless API + bearer (planned, RootForge). SSH = CLI/ISO **fallback only** (RootForge). Removing DCA must not disable the node. | RootForge OS, Victorious File Manager, Victorious Keyboard, Victorious Mesh, Victorious Browser, VictorSMS, VictorSpoof, Victorious Flash, VictorLaunch, KYC-AuditLab companion APK (remote.command surface; KnownFleet class stays HOST_PROCESS_TOOL for the localhost simulator) |
 | **TERMUX_IPC** | `com.termux.RUN_COMMAND` + plugin IPC + shared command schema. **Not** a new bound service. | VictorSuite |
 | **HOST_PROCESS_TOOL** | Localhost process behind a `Tool` + `SecureToolExecutor`. **Never** AIDL or DependencyGuard. | KYC-AuditLab only |
 
@@ -242,6 +243,7 @@ and missing-observed refuse):
 |---|---|---|---|
 | Victorious File Manager | DEBUG | `8C:1F:E3:C9:E5:34:F2:71:05:C0:68:8F:45:28:D7:7E:47:11:AE:0A:79:DD:08:D1:E8:59:30:B9:E9:48:85:F2` | **[unstable/CI-secrets]**. Not committed; CI injects from secrets and falls back to the generic Android debug key without them. Enforcing it would refuse the fallback. No release key yet. |
 | VictorSMS | DEBUG | `BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A` (alias `androiddebugkey`) | **[planned/pending-merge]**. Scaffold PR still open/unmerged. Documented, not enforced — `expectedSigningCertSha256` stays empty (fail-open). Release cert TBD. |
+| VictorLaunch | DEBUG | `1B:06:A8:9E:7F:F5:BA:21:C9:A4:F8:F1:F0:4F:95:E5:62:78:A1:22:18:AD:37:33:28:CE:E7:83:1D:4F:BA:CA` | **[planned/pending-merge]**. Source PR #2 is private, CI billing-blocked, assembleDebug green locally, NOT merged. Documented, not enforced — `expectedSigningCertSha256` stays empty (fail-open). Release cert TBD. |
 | KYC-AuditLab companion | DEBUG (active fail-open) | `6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D` | **[provisional/pending-stable-cert]**. Per-machine default debug.keystore — **not stable across machines**. Documented, not enforced — `expectedSigningCertSha256` stays empty (fail-open). Keep as the active pin until KYC PR #29 merges. |
 | KYC-AuditLab companion | DEBUG (pending permanent) | `22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D` | Committed debug keystore, reproducible. Lives in **KYC PR #29** (unmerged). Documented, **not enforced**. Swap this in as the active pin once #29 merges. Do not enforce either until then. |
 
@@ -253,6 +255,7 @@ and missing-observed refuse):
 | Keyboard RELEASE and `.bench` | No release key; `.bench` not in the debug pin |
 | File Manager RELEASE | No release key yet |
 | VictorSMS RELEASE | Cert TBD — do not invent |
+| VictorLaunch RELEASE | Cert TBD — do not invent. Debug pin stays `[planned/pending-merge]` fail-open until PR #2 merges. |
 | KYC-AuditLab companion RELEASE | Cert TBD — do not invent. Active debug pin stays the provisional 6F:46:… fail-open value until KYC PR #29 merges, then swap to 22:4F:…. |
 | Victorious Flash RELEASE | Cert TBD — do not invent. Debug pin is enforced (flash PR #18 merged). |
 | BakerPi | Out of scope |
@@ -519,3 +522,29 @@ a shared signing key, never AIDL, never `KnownCompanions`.
 - Catalog stub `victorious_flash_status` always fails
   (`REQUIRES_EXTERNAL_SERVICE`). Tools → Fleet probes
   `com.victorious.flash.android` only.
+
+## 2026-10-20n — VictorLaunch is the 13th member (debug cert DOCUMENTED, fail-open)
+
+VictorLaunch (`com.victorious.launch`) **is** `KnownFleet.VICTOR_LAUNCH`
+(`wiringOrder` 13, EXTERNAL_NODE, PLANNED). Never DependencyGuard, never
+a shared signing key, never AIDL, never `KnownCompanions`.
+
+- **Both** a status-tray consumer **and** a Messenger bridge node.
+- Messenger: planned action `com.victorious.launch.action.BRIDGE`,
+  Message what=1 request / what=2 reply, `protocol_major` 1. Caller
+  identity = `Message.sendingUid` (not `Binder.getCallingUid`).
+- Node-id prefix `^victorlaunch-[0-9a-f]{32}$`.
+- Implements status-tray consumer, `config.export` / `config.import`,
+  envelope v1.1 dispatcher with **ACTION OPS OFF BY DEFAULT** (external
+  control default OFF), plus MANUAL + in-app Help.
+- DEBUG signing cert SHA-256 **documented, not enforced** (source
+  victorlaunch PR #2 is private, CI billing-blocked, assembleDebug green
+  locally, **NOT merged**):
+  `1B:06:A8:9E:7F:F5:BA:21:C9:A4:F8:F1:F0:4F:95:E5:62:78:A1:22:18:AD:37:33:28:CE:E7:83:1D:4F:BA:CA`
+  (`KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256_UNENFORCED`).
+  `expectedSigningCertSha256` stays empty (fail-open), same as VictorSMS.
+  Release cert TBD — do not invent. Do **not** enforce the pin until
+  PR #2 merges.
+- Catalog stub `victorlaunch_status` always fails
+  (`REQUIRES_EXTERNAL_SERVICE`). Tools → Fleet probes
+  `com.victorious.launch` only.

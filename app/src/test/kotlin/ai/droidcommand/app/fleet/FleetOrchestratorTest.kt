@@ -68,7 +68,7 @@ class FleetNodesTest {
     fun `the roster is exactly the catalogued members and nothing else`() {
         assertEquals(FleetCatalog.all.map { it.id }, FleetNodes.nodes().map { it.id })
         assertEquals(
-            listOf("hackerai", "pentestswarm", "rootforge", "termux", "edl-commander", "kyc-auditlab", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "victorious-flash"),
+            listOf("hackerai", "pentestswarm", "rootforge", "termux", "edl-commander", "kyc-auditlab", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "victorious-flash", "victorlaunch"),
             FleetNodes.nodes().map { it.id },
         )
     }
@@ -122,7 +122,7 @@ class FleetRowsTest {
         // EXTERNAL_NODE now has a real transport (messengerTransportWired=true), so its control mode is
         // INTERACTIVE — but nothing is paired in this test, so sending is still refused: not by "Commands are
         // disabled" (that's for a class with no transport at all) but because status has never been checked.
-        for (id in listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "victorious-flash")) {
+        for (id in listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "victorious-flash", "victorlaunch")) {
             assertEquals(FleetControlMode.INTERACTIVE, rows.getValue(id).control.mode, id)
             assertEquals("external node", rows.getValue(id).control.label, id)
             assertEquals("Node is not known to be reachable. Check status first.", rows.getValue(id).sendDisabledReason, id)
@@ -340,7 +340,7 @@ class FleetOrchestratorWiringTest {
 
     @Test
     fun `read-only nodes refuse without ever opening the dialog`() {
-        for (id in listOf("rootforge", "termux", "kyc-auditlab", "edl-commander", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "victorious-flash")) {
+        for (id in listOf("rootforge", "termux", "kyc-auditlab", "edl-commander", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "victorious-flash", "victorlaunch")) {
             orchestrator.checkStatus(id)
             val state = orchestrator.sendCommand(id, "x", "{}")
             assertEquals(FleetCommandStatus.REFUSED, state.lastCommand!!.status, id)

@@ -5,7 +5,7 @@ import ai.droidcommand.security.EdlCompanionIds
 /**
  * Package-probe roster for Tools → Fleet. This is the UI half of
  * `core-security.KnownFleet` plus HackerAI (already a bound companion,
- * not one of the twelve room-fleet items).
+ * not one of the thirteen room-fleet items).
  *
  * Lives in `:app` so the default JVM build does not have to compile the
  * AIDL module. Companion rows stay a PackageManager probe. EXTERNAL_NODE
@@ -74,6 +74,9 @@ object FleetCatalog {
 
     /** EXTERNAL_NODE. Probe only — do not bind Messenger. Debug cert enforced (flash PR #18). */
     const val FLASH_PACKAGE = "com.victorious.flash.android"
+
+    /** EXTERNAL_NODE. Probe only. Debug cert documented [planned/pending-merge], unenforced. */
+    const val VICTORLAUNCH_PACKAGE = "com.victorious.launch"
 
     /**
      * KYC companion EXTERNAL_NODE for remote.command. Probe-only.
@@ -238,6 +241,22 @@ object FleetCatalog {
             "the Linux SSH core-flash node (vf-).",
     )
 
+    val VICTOR_LAUNCH = FleetMember(
+        id = "victorlaunch",
+        name = "VictorLaunch",
+        packageName = VICTORLAUNCH_PACKAGE,
+        kind = FleetKind.EXTERNAL_NODE,
+        summary = "EXTERNAL_NODE, PLANNED [planned/pending-merge]. Status-tray consumer AND " +
+            "bridge node. Planned Messenger action com.victorious.launch.action.BRIDGE " +
+            "(Message what=1 request / what=2 reply, protocol_major 1). Node-id prefix " +
+            "^victorlaunch-[0-9a-f]{32}$. config.export/import supported. Envelope v1.1; " +
+            "ACTION OPS OFF BY DEFAULT (external control default OFF). MANUAL + in-app Help. " +
+            "Debug SHA-256 documented (KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256_UNENFORCED) " +
+            "but unenforced — catalogue fail-open/unpinned. Release cert TBD. Source " +
+            "victorlaunch PR #2 (private, CI billing-blocked, NOT merged). Never DependencyGuard, " +
+            "never a shared signing key.",
+    )
+
     val all: List<FleetMember> = listOf(
         HACKERAI,
         PENTEST_SWARM,
@@ -252,6 +271,7 @@ object FleetCatalog {
         VICTOR_SMS,
         VICTOR_SPOOF,
         VICTORIOUS_FLASH,
+        VICTOR_LAUNCH,
     )
 
     /**

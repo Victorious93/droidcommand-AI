@@ -419,7 +419,9 @@ RELEASE (TBD — do not invent).
 
 Caveated / not enforced: File-Manager DEBUG `8C:1F:E3:C9:…:85:F2` is
 `[unstable/CI-secrets]` (CI injects from secrets, else generic Android
-debug key). Packages stay fail-open.
+debug key). VictorLaunch DEBUG `1B:06:A8:9E:…:BA:CA` is
+`[planned/pending-merge]` (source PR #2 unmerged) — documented, not
+enforced; `expectedSigningCertSha256` stays empty. Packages stay fail-open.
 
 Pending / out of scope: RootForge release, Keyboard release
 and `.bench`, File Manager release, KYC companion RELEASE (debug cert is
