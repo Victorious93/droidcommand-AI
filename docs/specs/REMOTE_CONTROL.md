@@ -39,10 +39,11 @@ an **untrusted request**.
 | ReplayGuard seen-nonce cache keyed by `(sourceNodeRef, nonce)` | VictorSMS / VictorSpoof / KYC companion cert pins (unpinned / fail-open) |
 | Advisory `destructive` ignored for gating | Changing Kali / pentest / YOLO pentest gates |
 | Generic `capabilities.get` + `OpDescriptor` | Live node capability bind |
+| Frozen STATUS-TRAY schema (`node.status.get`) | Live status pull / VictorLaunch bind |
 | Node `macro.run` / `macro.step` runner (sequential, partial, no rollback) | Live macro execution / scheduler |
 | Trust pipeline (pairing → external-control OFF → replay → policy) | Exported controller BRIDGE receiver |
 | Error category enum | Auto-approve / auto-send for a remote caller |
-| Status-tray consume+publish (generic model) | Shared VictorLaunch schema/transport |
+| Status-tray consume+publish (generic model) | Live Messenger / AIDL / Termux bind |
 | Unified local JSON backup (macros + mappings + pairings, versioned) | Unified fleet backup schema |
 | VictorSpoof `KnownFleet` row (isolated from destructive) | VictorSpoof cert pins / live spoof |
 | KYC companion `remote.command` registry row (`[provisional/pending-stable-cert]`, fail-open; PII `remoteAllowed:false`) | Stable KYC companion cert pin / live KYC remote |
@@ -94,6 +95,7 @@ encodings (appendices A–C). **Do not invent per-class field names.**
 | `remote.command` | One action on `targetNodeRef`. Controller inbound op. |
 | `macro.step` | `{ op, params }` — one advertised op on **this** node. |
 | `macro.run` | `{ steps: [{ op, params, onError, timeoutMs }], dryRun }` on **this** node. |
+| `node.status.get` | Frozen STATUS-TRAY snapshot. Canonical spec: [`docs/specs/STATUS_TRAY.md`](STATUS_TRAY.md). |
 
 Outer framing is still BridgeRequest / BridgeResponse
 (`protocol_major` 1, `Message.what` 1 request / 2 response, action
@@ -429,10 +431,11 @@ localhost IdentityShield simulator remains the KnownFleet
 DependencyGuard, never AIDL.
 
 **Status tray:** consume **and** publish shared fleet status-tray data
-(mesh / VPN / browser / SMS / node health). Generic
-`NodeStatusSnapshot` + `StatusTrayDomain`. Exact shared schema/transport
-with VictorLaunch is **[CONTRACT TBD pending Fleet Orchestrator]**.
-In-memory in this skeleton. No live bind.
+(mesh / VPN / browser / SMS / node health). **[CONTRACT] FROZEN** in
+[`docs/specs/STATUS_TRAY.md`](STATUS_TRAY.md): op `node.status.get`,
+snapshot `{ nodeId, packageName, connectionClass, updatedAtMs, domains[{name,state,detail?}] }`.
+JVM types keep the #233 names (`NodeStatusSnapshot`, `StatusTrayDomain`)
+as aliases. In-memory aggregate only. No live bind.
 
 **Unified settings/backup:** seam + core model for export/import of
 macros + device pairings. Exact unified fleet schema is **[CONTRACT TBD
@@ -463,7 +466,7 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 | Independent destructive classification | implemented, unit-tested |
 | Controller Settings macros + dry-run | implemented, unit-tested |
 | Settings UI | Compose skeleton |
-| Status tray consume+publish | implemented, unit-tested (in-memory; **transport TBD**) |
+| Status tray consume+publish | implemented, unit-tested (in-memory aggregate; **[CONTRACT] FROZEN** in `STATUS_TRAY.md`; no live bind) |
 | Unified local backup (macros+mappings+pairings) | implemented, unit-tested (**unified schema TBD**) |
 | VictorSMS KnownFleet + isolated registry / pairing row | implemented, unit-tested (**debug cert documented, pin NOT enforced**, [planned/pending-merge]) |
 | VictorSpoof KnownFleet + isolated registry | implemented, unit-tested (**certs TBD**) |
@@ -502,9 +505,13 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 5. SMS body grammar on VictorSMS; who initiates Messenger bind.
 6. RustDesk plugin identity.
 7. Macro schedule expression language.
-8. **Shared status-tray schema/transport with VictorLaunch** (mesh / VPN /
-   browser / SMS / node health). Generic model exists; the shared contract
-   is pending Fleet Orchestrator.
+8. **Shared status-tray schema/transport with VictorLaunch** — **[CONTRACT]
+   FROZEN** in [`docs/specs/STATUS_TRAY.md`](STATUS_TRAY.md). Op
+   `node.status.get`; snapshot `{ nodeId, packageName, connectionClass,
+   updatedAtMs, domains[{name,state,detail?}] }`. Aligns with the #233
+   `NodeStatusSnapshot` / `StatusTrayDomain` skeleton. Remaining: live
+   Messenger / AIDL / Termux **bind** (encode/decode/aggregate are JVM-
+   tested; no network).
 9. **Unified fleet backup/restore schema** (cross-app). Local controller
    JSON (macros + mappings + pairings) exists; the unified contract is
    pending Fleet Orchestrator.

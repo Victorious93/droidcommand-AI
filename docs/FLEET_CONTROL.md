@@ -448,3 +448,24 @@ This **overrides** the 2026-10-20c nested-`auth` sketch. Spec:
 - VictorSMS `trigger{}` stays informational. Source identity =
   package+cert (`sendingUid`).
 - `destructive` is advisory. Kali/pentest/YOLO pentest gates untouched.
+
+## 2026-10-20h — Frozen STATUS-TRAY schema (`node.status.get`)
+
+Fleet Orchestrator assigned DCA ownership of the shared status-tray
+schema. **[CONTRACT] FROZEN** in `docs/specs/STATUS_TRAY.md`.
+
+- Every node implements `node.status.get` (`kind=read`,
+  `remoteAllowed=true` typically). Transport is the existing
+  BridgeRequest / BridgeResponse (`protocol_major` 1, minor 1 via
+  `capabilities.get`).
+- Snapshot: `{ nodeId, packageName, connectionClass, updatedAtMs,
+  domains[{name, state, detail?}] }`. Connection class is
+  `EXTERNAL_NODE` | `BOUND_COMPANION` | `TERMUX_IPC` |
+  `HOST_PROCESS_TOOL`. Domains start at mesh / VPN / browser / SMS /
+  node health; unknown names decode as `other`.
+- Aligns with the #233 `NodeStatusSnapshot` / `StatusTrayDomain`
+  skeleton (those names stay as JVM aliases).
+- Controller aggregates (merge domains per `nodeId`). VictorLaunch +
+  DCA UI consume. No live bind in this slice.
+- Privacy: no secrets, no PII dumps, no signing material.
+- Kali/pentest/YOLO pentest gates untouched.

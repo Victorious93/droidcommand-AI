@@ -49,6 +49,8 @@ class RemoteCommandDispatcher(
         return when (op) {
             FleetRemoteEnvelope.OP_CAPABILITIES_GET ->
                 RemoteDispatchResult.Capabilities(ControllerCapabilityCatalog.advertisement())
+            FleetRemoteEnvelope.OP_NODE_STATUS_GET ->
+                resolveStatusGet(envelope, source)
             FleetRemoteEnvelope.OP_MACRO_RUN ->
                 resolveMacroRun(envelope)
             FleetRemoteEnvelope.OP_MACRO_STEP ->
@@ -65,16 +67,45 @@ class RemoteCommandDispatcher(
     }
 
     private fun consumeTray(envelope: FleetRemoteEnvelope, source: SourceIdentity) {
-        val snapshot = NodeStatusSnapshot(
-            sourceNodeRef = source.sourceNodeRef,
-            domain = StatusTrayDomain.fromSource(source, envelope),
-            capability = envelope.actionRef,
-            healthy = envelope.args["healthy"]?.toBooleanStrictOrNull(),
-            actionRef = envelope.actionRef,
-            payload = envelope.args,
-            receivedAtMs = envelope.timestampMs,
-        )
-        statusTray?.consume(snapshot)
+        val isStatusOp = envelope.actionRef == FleetRemoteEnvelope.OP_NODE_STATUS_GET
+        val hasStatusPayload = envelope.args.keys.any { key ->
+            key == NodeStatusSnapshotCodec.ARG_SNAPSHOT ||
+                key == "domain" ||
+                key == "healthy" ||
+                key == "state" ||
+                key == "detail"
+        }
+        if (isStatusOp && !hasStatusPayload) return
+        statusTray?.consume(NodeStatusSnapshotCodec.fromInbound(source, envelope))
+    }
+
+    private fun resolveStatusGet(
+        envelope: FleetRemoteEnvelope,
+        source: SourceIdentity,
+    ): RemoteDispatchResult {
+        if (advertisedOps.none { it.name == FleetRemoteEnvelope.OP_NODE_STATUS_GET }) {
+            return TrustPipeline.reject(
+                RemoteErrorCategory.CAPABILITY_OFF,
+                "node.status.get is not advertised",
+            )
+        }
+        val tray = statusTray
+            ?: return TrustPipeline.reject(RemoteErrorCategory.NOT_FOUND, "status tray is empty")
+        val requested = envelope.args["nodeId"]?.takeIf { it.isNotBlank() }
+        val rows = tray.publish()
+        if (requested != null) {
+            val hit = rows.find { it.nodeId == requested }
+                ?: return TrustPipeline.reject(
+                    RemoteErrorCategory.NOT_FOUND,
+                    "no snapshot for nodeId '$requested'",
+                )
+            return RemoteDispatchResult.StatusTray(listOf(hit))
+        }
+        if (envelope.targetNodeRef == FleetRemoteEnvelope.TARGET_CONTROLLER) {
+            return RemoteDispatchResult.StatusTray(rows)
+        }
+        val self = rows.find { it.nodeId == source.sourceNodeRef }
+        return RemoteDispatchResult.StatusTray(if (self != null) listOf(self) else rows)
     }
 
     private fun decodeInbound(rawJson: String): Pair<String, FleetRemoteEnvelope>? {
@@ -87,6 +118,8 @@ class RemoteCommandDispatcher(
             val envelope = RemoteCommandEnvelopeCodec.decodeTermuxBlob(rawJson)
             val operation = if (envelope.actionRef == FleetRemoteEnvelope.OP_CAPABILITIES_GET) {
                 FleetRemoteEnvelope.OP_CAPABILITIES_GET
+            } else if (envelope.actionRef == FleetRemoteEnvelope.OP_NODE_STATUS_GET) {
+                FleetRemoteEnvelope.OP_NODE_STATUS_GET
             } else if (envelope.steps != null) {
                 FleetRemoteEnvelope.OP_MACRO_RUN
             } else if (isSmsForward(envelope)) {
@@ -485,4 +518,5 @@ sealed class RemoteDispatchResult {
         val opNames: List<String> get() = advertisement.ops.map { it.name }
     }
     data class MacroRun(val result: NodeMacroRunResult) : RemoteDispatchResult()
+    data class StatusTray(val snapshots: List<NodeStatusSnapshot>) : RemoteDispatchResult()
 }

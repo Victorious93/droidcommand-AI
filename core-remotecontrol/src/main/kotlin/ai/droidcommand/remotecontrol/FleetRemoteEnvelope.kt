@@ -82,6 +82,9 @@ data class FleetRemoteEnvelope(
         const val OP_MACRO_STEP = "macro.step"
         const val OP_MACRO_RUN = "macro.run"
 
+        /** Frozen STATUS-TRAY pull/push. See `docs/specs/STATUS_TRAY.md`. */
+        const val OP_NODE_STATUS_GET = "node.status.get"
+
         /** VictorSMS inbound SMS-trigger source op. Delivery, not authorization. */
         const val OP_SMS_REMOTE_COMMAND_FORWARD = "sms.remote_command.forward"
 

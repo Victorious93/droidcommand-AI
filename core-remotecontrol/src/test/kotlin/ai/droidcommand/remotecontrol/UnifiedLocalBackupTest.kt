@@ -26,7 +26,7 @@ class UnifiedLocalBackupTest {
             externalControlEnabled = true,
         )
         val tray = listOf(
-            NodeStatusSnapshot(
+            NodeStatusSnapshot.of(
                 sourceNodeRef = "node-1",
                 domain = StatusTrayDomain.BROWSER,
                 actionRef = "status",
