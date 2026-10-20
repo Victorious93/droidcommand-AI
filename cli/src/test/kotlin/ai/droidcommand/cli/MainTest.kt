@@ -55,6 +55,7 @@ class MainTest {
                 "keyboard_status",
                 "mesh_status",
                 "browser_status",
+                "victorsms_status",
             ),
             specs.map { it.name },
         )

@@ -164,8 +164,8 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * gate as every other tool here regardless of which client backs it.
  *
  * `pentest_swarm_status` / `edl_commander_status` / `kyc_auditlab_status` /
- * `filemanager_status` / `keyboard_status` / `mesh_status` / `browser_status`
- * (`KnownFleet.plannedStubs`) are catalog stubs. Pentest and EDL are planned
+ * `filemanager_status` / `keyboard_status` / `mesh_status` / `browser_status` /
+ * `victorsms_status` (`KnownFleet.plannedStubs`) are catalog stubs. Pentest and EDL are planned
  * bound companions; KYC is a host-process simulator; File Manager, Keyboard,
  * Mesh, and Browser are planned
  * EXTERNAL_NODE members. All always fail without binding or spawning.
@@ -352,7 +352,7 @@ internal fun printUsage() {
         direction of hub-query vs keyboard slash-commands is open) → Mesh
         (catalog only; own signing keys) → Browser (catalog only; own signing keys).
         pentest_swarm_status / edl_commander_status / kyc_auditlab_status /
-        filemanager_status / keyboard_status / mesh_status / browser_status are planned stubs
+        filemanager_status / keyboard_status / mesh_status / browser_status / victorsms_status are planned stubs
         and always fail.
         See docs/FLEET_CONTROL.md.
 

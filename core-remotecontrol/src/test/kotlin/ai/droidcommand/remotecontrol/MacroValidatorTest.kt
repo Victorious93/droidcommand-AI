@@ -47,7 +47,7 @@ class MacroValidatorTest {
             ),
             actionRef = "browser.open_url",
             args = mapOf("url" to "https://example.com"),
-            nonce = "n1",
+            nonce = TEST_NONCE,
             timestampMs = 1L,
         )
         assertEquals(RemoteCommand.OPERATION, "remote.command")

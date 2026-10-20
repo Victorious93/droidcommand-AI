@@ -309,7 +309,7 @@ class FleetMessengerControllerTest {
         val c = FleetMessengerController(store, resolver, gateway)
         val rows = c.snapshot()
         assertEquals(
-            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser"),
+            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms"),
             rows.map { it.spec.id },
         )
         assertTrue(rows.all { it.state == NodePairingState.NOT_INSTALLED })

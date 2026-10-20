@@ -197,8 +197,9 @@ class AutoApprovalPolicyTest {
         assertTrue(!YoloMode.isDestructiveRemoteAction("set_clipboard"))
         assertTrue("remote" in ActionRiskClassifier.NEVER_AUTO_APPROVE_NAME_TOKENS)
         assertTrue(YoloMode.WARNING.contains("WIPE"))
-        assertTrue(YoloMode.PENTEST_AUTHORIZATION_NAME_TOKENS == setOf(
-            "kali", "pentest", "swarm", "metasploit", "msf", "setoolkit", "exploit", "playbook",
-        ))
+        assertEquals(
+            setOf("kali", "pentest", "swarm", "metasploit", "msf", "setoolkit", "exploit", "playbook"),
+            YoloMode.PENTEST_AUTHORIZATION_NAME_TOKENS,
+        )
     }
 }

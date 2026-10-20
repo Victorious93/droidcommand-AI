@@ -1,7 +1,6 @@
 package ai.droidcommand.remotecontrol
 
 import ai.droidcommand.security.FleetIntegrationClass
-
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
