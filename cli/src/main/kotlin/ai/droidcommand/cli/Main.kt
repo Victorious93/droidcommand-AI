@@ -353,7 +353,7 @@ internal fun printUsage() {
         (when their identity/default-off PR lands) → Keyboard (catalog only;
         direction of hub-query vs keyboard slash-commands is open) → Mesh
         (catalog only; own signing keys) → Browser (catalog only; own signing keys)
-        → VictorSMS (EXTERNAL_NODE, SMS remote-command source, debug cert documented [planned/pending-merge] unenforced) → VictorSpoof (EXTERNAL_NODE, isolated from destructive, certs TBD) → Flash (EXTERNAL_NODE, Messenger FLEET_BRIDGE; gadget.expose destructive always confirmation_required + on-phone ERASE; debug cert enforced; release TBD) → VictorLaunch (EXTERNAL_NODE, status-tray consumer + bridge node; config.export/import; envelope v1.1; ACTION OPS OFF BY DEFAULT; debug cert documented [planned/pending-merge] unenforced; release TBD).
+        → VictorSMS (EXTERNAL_NODE, SMS remote-command source, debug cert documented [planned/pending-merge] unenforced) → VictorSpoof (EXTERNAL_NODE, isolated from destructive, certs TBD) → Flash (EXTERNAL_NODE, Messenger FLEET_BRIDGE; gadget.expose destructive always confirmation_required + on-phone ERASE; debug cert enforced; release TBD) → VictorLaunch (EXTERNAL_NODE, status-tray consumer + bridge node; config.export/import; envelope v1.1; ACTION OPS OFF BY DEFAULT; debug cert enforced; release TBD).
         pentest_swarm_status / edl_commander_status / kyc_auditlab_status /
         filemanager_status / keyboard_status / mesh_status / browser_status / victorsms_status / victorspoof_status / victorious_flash_status / victorlaunch_status are planned stubs
         and always fail.

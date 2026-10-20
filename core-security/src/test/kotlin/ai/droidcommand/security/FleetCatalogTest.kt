@@ -257,14 +257,14 @@ class FleetCatalogTest {
         val victorLaunch = tools.first { it.spec.name == "victorlaunch_status" }.execute(emptyMap()) as ToolResult.Failure
         assertTrue(victorLaunch.reason.contains("does not bind Messenger"))
         assertTrue(victorLaunch.reason.contains("com.victorious.launch.action.BRIDGE"))
-        assertTrue(victorLaunch.reason.contains("fail-open"))
-        assertTrue(victorLaunch.reason.contains("[planned/pending-merge]"))
+        assertTrue(victorLaunch.reason.contains("enforced"))
         assertTrue(victorLaunch.reason.contains("ACTION OPS OFF BY DEFAULT"))
         assertTrue(
             victorLaunch.reason.contains(
-                "1B:06:A8:9E:7F:F5:BA:21:C9:A4:F8:F1:F0:4F:95:E5:62:78:A1:22:18:AD:37:33:28:CE:E7:83:1D:4F:BA:CA",
+                "B9:9A:AF:E2:C1:41:8B:5D:64:AA:0D:4B:AC:61:FC:F7:A7:BA:81:44:35:E0:EF:89:E8:AA:55:BE:56:4E:4A:69",
             ),
         )
+        assertFalse(victorLaunch.reason.contains("1B:06:A8:9E:7F:F5:BA:21"))
     }
 
     @Test
@@ -426,24 +426,27 @@ class FleetCatalogTest {
         assertTrue(KnownFleet.VICTOR_LAUNCH.transports.any { it.contains("ACTION OPS OFF BY DEFAULT") })
         assertTrue(KnownFleet.VICTOR_LAUNCH.notes.contains("Never DependencyGuard"))
         assertTrue(KnownFleet.VICTOR_LAUNCH.notes.contains("never KnownCompanions"))
-        assertTrue(KnownFleet.VICTOR_LAUNCH.notes.contains("fail-open"))
-        assertTrue(KnownFleet.VICTOR_LAUNCH.notes.contains("[planned/pending-merge]"))
+        assertTrue(KnownFleet.VICTOR_LAUNCH.notes.contains("enforced"))
         assertTrue(KnownFleet.VICTOR_LAUNCH.notes.contains("status-tray consumer"))
         assertTrue(KnownFleet.VICTOR_LAUNCH.notes.contains("KnownNodeSigningCatalog"))
-        assertTrue(KnownFleet.VICTOR_LAUNCH.notes.contains("not enforced"))
         assertTrue(
             KnownFleet.VICTOR_LAUNCH.notes.contains(
-                "1B:06:A8:9E:7F:F5:BA:21:C9:A4:F8:F1:F0:4F:95:E5:62:78:A1:22:18:AD:37:33:28:CE:E7:83:1D:4F:BA:CA",
+                "B9:9A:AF:E2:C1:41:8B:5D:64:AA:0D:4B:AC:61:FC:F7:A7:BA:81:44:35:E0:EF:89:E8:AA:55:BE:56:4E:4A:69",
             ),
         )
         assertTrue(
             KnownFleet.VICTOR_LAUNCH.refusalMessage.contains(
-                "1B:06:A8:9E:7F:F5:BA:21:C9:A4:F8:F1:F0:4F:95:E5:62:78:A1:22:18:AD:37:33:28:CE:E7:83:1D:4F:BA:CA",
+                "B9:9A:AF:E2:C1:41:8B:5D:64:AA:0D:4B:AC:61:FC:F7:A7:BA:81:44:35:E0:EF:89:E8:AA:55:BE:56:4E:4A:69",
             ),
         )
+        assertFalse(KnownFleet.VICTOR_LAUNCH.notes.contains("1B:06:A8:9E:7F:F5:BA:21"))
+        assertFalse(KnownFleet.VICTOR_LAUNCH.refusalMessage.contains("1B:06:A8:9E:7F:F5:BA:21"))
         assertEquals(listOf("victorlaunch_status"), KnownFleet.VICTOR_LAUNCH.existingToolNames)
         assertEquals(listOf("com.victorious.launch"), KnownFleet.VICTOR_LAUNCH.androidPackages)
-        assertTrue(KnownFleet.VICTOR_LAUNCH.expectedSigningCertSha256.isEmpty())
+        assertEquals(
+            listOf(KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256),
+            KnownFleet.VICTOR_LAUNCH.expectedSigningCertSha256,
+        )
         assertEquals(RiskTier.READ_ONLY, KnownFleet.VICTOR_LAUNCH.riskTier)
         assertEquals(13, KnownFleet.VICTOR_LAUNCH.wiringOrder)
     }
@@ -552,7 +555,10 @@ class FleetCatalogTest {
             KnownFleet.VICTORIOUS_FLASH.expectedSigningCertSha256,
         )
         assertEquals(listOf("com.victorious.launch"), KnownFleet.VICTOR_LAUNCH.androidPackages)
-        assertTrue(KnownFleet.VICTOR_LAUNCH.expectedSigningCertSha256.isEmpty())
+        assertEquals(
+            listOf(KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256),
+            KnownFleet.VICTOR_LAUNCH.expectedSigningCertSha256,
+        )
         val catalog = KnownNodeSigningCatalog.all()
         val meshCerts = catalog.first { it.packageName == "com.victorious.mesh" }.expectedCerts.map { it.canonical }
         assertEquals(
@@ -580,8 +586,9 @@ class FleetCatalogTest {
         assertTrue(
             catalog.first { it.packageName == "com.victorious.spoof" }.expectedCerts.isEmpty(),
         )
-        assertTrue(
-            catalog.first { it.packageName == "com.victorious.launch" }.expectedCerts.isEmpty(),
+        assertEquals(
+            listOf(KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256),
+            catalog.first { it.packageName == "com.victorious.launch" }.expectedCerts.map { it.canonical },
         )
         assertTrue(KnownFleet.KYC_AUDITLAB.expectedSigningCertSha256.isEmpty())
         assertTrue(

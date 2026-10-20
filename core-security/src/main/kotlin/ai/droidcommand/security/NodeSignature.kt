@@ -128,8 +128,10 @@ enum class NodeSignatureRefusal {
  * ([MissingExpectedCertPolicy.REFUSE]) should be enabled only once
  * remaining members and verified release pins are catalogued.
  * Do not invent fingerprints. Victorious Flash debug is catalogued
- * and enforced (flash PR #18 merged; debug cert is stable). Release
- * cert TBD — do not invent.
+ * and enforced (flash PR #18 merged; debug cert is stable).
+ * VictorLaunch debug is catalogued and enforced (node PR #6 merged;
+ * rotated key lives in CI secrets only). Release certs TBD — do not
+ * invent.
  */
 object KnownNodeSigningCatalog {
     /** DroidCommand AI debug keystore (`docs/SIGNING.md`). Enforceable. */
@@ -239,18 +241,14 @@ object KnownNodeSigningCatalog {
         "BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A"
 
     /**
-     * VictorLaunch debug SHA-256 (`com.victorious.launch`).
-     *
-     * **[planned/pending-merge] — not enforced.** Source victorlaunch
-     * PR #2 is private, CI billing-blocked, assembleDebug green locally,
-     * NOT merged. Release cert TBD — do not invent.
-     * Putting this in [NodeSigningIdentity.expectedCerts] would pin a
-     * package whose APK is not yet on their main, so
-     * [KnownFleet.VICTOR_LAUNCH.expectedSigningCertSha256] stays empty
-     * (fail-open). TODO: enforce after merge; pin release later.
+     * VictorLaunch debug SHA-256 (`com.victorious.launch`). Enforceable.
+     * Source: victorlaunch PR #6 merged; debug key lives in CI secrets
+     * only — never committed. The previous fail-open pin
+     * `1B:06:A8:9E:…:BA:CA` is revoked and must not be accepted.
+     * RELEASE is TBD — do not invent a fingerprint.
      */
-    const val VICTOR_LAUNCH_DEBUG_SHA256_UNENFORCED =
-        "1B:06:A8:9E:7F:F5:BA:21:C9:A4:F8:F1:F0:4F:95:E5:62:78:A1:22:18:AD:37:33:28:CE:E7:83:1D:4F:BA:CA"
+    const val VICTOR_LAUNCH_DEBUG_SHA256 =
+        "B9:9A:AF:E2:C1:41:8B:5D:64:AA:0D:4B:AC:61:FC:F7:A7:BA:81:44:35:E0:EF:89:E8:AA:55:BE:56:4E:4A:69"
 
     /**
      * KYC-AuditLab companion **active** debug SHA-256
@@ -354,6 +352,25 @@ object KnownNodeSigningCatalog {
     )
 
     /**
+     * VictorLaunch debug identity. [KnownFleet.VICTOR_LAUNCH],
+     * EXTERNAL_NODE, wiring order 13, PLANNED. Debug pin is enforced
+     * (node PR #6 merged; rotated key in CI secrets only). The previous
+     * `1B:06:A8:…:BA:CA` pin is revoked. RELEASE is TBD — not listed
+     * in [expectedCerts].
+     */
+    val VICTOR_LAUNCH_DEBUG = NodeSigningIdentity(
+        packageName = "com.victorious.launch",
+        expectedCerts = listOf(SigningCertSha256.parseOrThrow(VICTOR_LAUNCH_DEBUG_SHA256)),
+        memberId = "victorlaunch",
+        integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
+        notes = "VictorLaunch debug. Enforceable (node PR #6 merged; rotated key in " +
+            "CI secrets only). Previous 1B:06:A8:…:BA:CA pin is revoked. RELEASE is TBD — " +
+            "do not invent. KnownFleet.VICTOR_LAUNCH (EXTERNAL_NODE, wiring order 13, " +
+            "PLANNED). Status-tray consumer AND bridge node. ACTION OPS OFF BY DEFAULT. " +
+            "Never DependencyGuard, never a shared signing key.",
+    )
+
+    /**
      * HackerAI-Commander (`ai.hackerai.companion`). Debug is
      * committed; RELEASE [SHARED_FLEET_RELEASE_SHA256] is FIRSTHAND
      * VERIFIED (v0.1.0 APK signer in CI). This is the **only** member
@@ -390,6 +407,7 @@ object KnownNodeSigningCatalog {
         VICTORIOUS_MESH_DEBUG,
         VICTORIOUS_BROWSER_DEBUG,
         VICTORIOUS_FLASH_DEBUG,
+        VICTOR_LAUNCH_DEBUG,
         HACKERAI,
         KEYBOARD_BENCH,
     )

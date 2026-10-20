@@ -83,9 +83,8 @@ object RemoteControlManual {
         Package com.victorious.launch, EXTERNAL_NODE, status-tray consumer
         and bridge node. Planned action com.victorious.launch.action.BRIDGE.
         Node-id prefix victorlaunch-<32 hex>. config.export/import.
-        Envelope v1.1; ACTION OPS OFF BY DEFAULT. Debug cert is
-        [planned/pending-merge] documented, not enforced (fail-open).
-        Release cert TBD. Source PR #2 is not merged.
+        Envelope v1.1; ACTION OPS OFF BY DEFAULT. Debug cert is enforced
+        (node PR #6 merged; rotated key in CI secrets only). Release cert TBD.
 
         Victorious Flash
         Package com.victorious.flash.android, EXTERNAL_NODE. Messenger

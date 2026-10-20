@@ -209,8 +209,7 @@ class FleetStatusTest {
         assertTrue(victorLaunch.status.contains("Not LIVE"))
         assertTrue(victorLaunch.member.summary.contains("Never DependencyGuard"))
         assertTrue(victorLaunch.member.summary.contains("com.victorious.launch.action.BRIDGE"))
-        assertTrue(victorLaunch.member.summary.contains("fail-open"))
-        assertTrue(victorLaunch.member.summary.contains("[planned/pending-merge]"))
+        assertTrue(victorLaunch.member.summary.contains("enforced"))
         assertTrue(victorLaunch.member.summary.contains("ACTION OPS OFF BY DEFAULT"))
         assertFalse(victorLaunch.status.contains("ready", ignoreCase = true), victorLaunch.status)
 
