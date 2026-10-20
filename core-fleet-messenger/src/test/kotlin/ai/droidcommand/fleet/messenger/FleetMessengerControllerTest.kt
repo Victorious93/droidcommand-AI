@@ -61,6 +61,7 @@ class FleetMessengerControllerTest {
         assertEquals("com.victorious.sms", ExternalNodeCatalog.VICTOR_SMS.primaryPackage)
         assertEquals("com.victorious.spoof", ExternalNodeCatalog.VICTOR_SPOOF.primaryPackage)
         assertEquals("com.victorious.flash.android", ExternalNodeCatalog.VICTORIOUS_FLASH.primaryPackage)
+        assertEquals("com.victorious.launch", ExternalNodeCatalog.VICTOR_LAUNCH.primaryPackage)
         assertEquals("com.identityshield.companion", ExternalNodeCatalog.KYC_AUDITLAB.primaryPackage)
         assertEquals("rootforge.capabilities.get", ExternalNodeCatalog.ROOTFORGE.capabilitiesOperation)
         assertEquals("filemanager.status", ExternalNodeCatalog.FILE_MANAGER.statusOperation)
@@ -75,6 +76,7 @@ class FleetMessengerControllerTest {
         assertNull(ExternalNodeCatalog.VICTOR_SMS.upOperation)
         assertNull(ExternalNodeCatalog.VICTOR_SPOOF.upOperation)
         assertNull(ExternalNodeCatalog.VICTORIOUS_FLASH.upOperation)
+        assertNull(ExternalNodeCatalog.VICTOR_LAUNCH.upOperation)
         assertNull(ExternalNodeCatalog.KYC_AUDITLAB.upOperation)
         assertEquals("sms.capabilities.get", ExternalNodeCatalog.VICTOR_SMS.capabilitiesOperation)
         assertEquals("sms.status", ExternalNodeCatalog.VICTOR_SMS.statusOperation)
@@ -95,6 +97,12 @@ class FleetMessengerControllerTest {
         assertTrue(ExternalNodeCatalog.VICTORIOUS_FLASH.notes.contains("FLEET_BRIDGE"))
         assertTrue(ExternalNodeCatalog.VICTORIOUS_FLASH.notes.contains("gadget.expose is DESTRUCTIVE"))
         assertTrue(ExternalNodeCatalog.VICTORIOUS_FLASH.notes.contains("enforced"))
+        assertEquals("capabilities.get", ExternalNodeCatalog.VICTOR_LAUNCH.capabilitiesOperation)
+        assertEquals("node.status.get", ExternalNodeCatalog.VICTOR_LAUNCH.statusOperation)
+        assertTrue(ExternalNodeCatalog.VICTOR_LAUNCH.notes.contains("com.victorious.launch.action.BRIDGE"))
+        assertTrue(ExternalNodeCatalog.VICTOR_LAUNCH.notes.contains("fail-open"))
+        assertTrue(ExternalNodeCatalog.VICTOR_LAUNCH.notes.contains("[planned/pending-merge]"))
+        assertTrue(ExternalNodeCatalog.VICTOR_LAUNCH.notes.contains("ACTION OPS OFF BY DEFAULT"))
         assertEquals("kyc.capabilities.get", ExternalNodeCatalog.KYC_AUDITLAB.capabilitiesOperation)
         assertEquals("kyc.status", ExternalNodeCatalog.KYC_AUDITLAB.statusOperation)
         assertTrue(ExternalNodeCatalog.KYC_AUDITLAB.notes.contains("remote.command OFF-by-default"))
@@ -108,7 +116,7 @@ class FleetMessengerControllerTest {
             ),
         )
         assertEquals(
-            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "victorious-flash", "kyc-auditlab"),
+            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "victorious-flash", "victorlaunch", "kyc-auditlab"),
             ExternalNodeCatalog.all.map { it.id },
         )
     }
@@ -339,7 +347,7 @@ class FleetMessengerControllerTest {
         val c = FleetMessengerController(store, resolver, gateway)
         val rows = c.snapshot()
         assertEquals(
-            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "victorious-flash", "kyc-auditlab"),
+            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "victorious-flash", "victorlaunch", "kyc-auditlab"),
             rows.map { it.spec.id },
         )
         assertTrue(rows.all { it.state == NodePairingState.NOT_INSTALLED })

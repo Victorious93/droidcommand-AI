@@ -58,6 +58,7 @@ class MainTest {
                 "victorsms_status",
                 "victorspoof_status",
                 "victorious_flash_status",
+                "victorlaunch_status",
             ),
             specs.map { it.name },
         )

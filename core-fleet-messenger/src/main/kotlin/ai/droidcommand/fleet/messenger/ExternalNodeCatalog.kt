@@ -142,6 +142,24 @@ object ExternalNodeCatalog {
             "the Linux SSH core-flash node (vf- prefix).",
     )
 
+    val VICTOR_LAUNCH = ExternalNodeSpec(
+        id = "victorlaunch",
+        displayName = "VictorLaunch",
+        nodeId = "victorlaunch",
+        packages = listOf("com.victorious.launch"),
+        capabilitiesOperation = "capabilities.get",
+        statusOperation = "node.status.get",
+        notes = "EXTERNAL_NODE. Planned action com.victorious.launch.action.BRIDGE, " +
+            "protocol_major 1, what=1 request / what=2 reply. Package com.victorious.launch. " +
+            "Node-id prefix ^victorlaunch-[0-9a-f]{32}$. Status-tray consumer AND bridge node. " +
+            "config.export/import supported. Envelope v1.1 dispatcher; ACTION OPS OFF BY DEFAULT " +
+            "(external control default OFF). MANUAL + in-app Help. Never DependencyGuard. " +
+            "Caller identity = Message.sendingUid. Debug SHA-256 documented but " +
+            "[planned/pending-merge] unenforced — catalogue fail-open/unpinned. Release cert TBD. " +
+            "Source victorlaunch PR #2 (private, CI billing-blocked, NOT merged). " +
+            "TODO: enforce debug pin after PR #2 merges.",
+    )
+
     val KYC_AUDITLAB = ExternalNodeSpec(
         id = "kyc-auditlab",
         displayName = "KYC-AuditLab",
@@ -168,6 +186,7 @@ object ExternalNodeCatalog {
         VICTOR_SMS,
         VICTOR_SPOOF,
         VICTORIOUS_FLASH,
+        VICTOR_LAUNCH,
         KYC_AUDITLAB,
     )
 

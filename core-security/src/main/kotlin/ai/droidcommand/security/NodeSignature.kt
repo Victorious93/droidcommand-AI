@@ -239,6 +239,20 @@ object KnownNodeSigningCatalog {
         "BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A"
 
     /**
+     * VictorLaunch debug SHA-256 (`com.victorious.launch`).
+     *
+     * **[planned/pending-merge] — not enforced.** Source victorlaunch
+     * PR #2 is private, CI billing-blocked, assembleDebug green locally,
+     * NOT merged. Release cert TBD — do not invent.
+     * Putting this in [NodeSigningIdentity.expectedCerts] would pin a
+     * package whose APK is not yet on their main, so
+     * [KnownFleet.VICTOR_LAUNCH.expectedSigningCertSha256] stays empty
+     * (fail-open). TODO: enforce after merge; pin release later.
+     */
+    const val VICTOR_LAUNCH_DEBUG_SHA256_UNENFORCED =
+        "1B:06:A8:9E:7F:F5:BA:21:C9:A4:F8:F1:F0:4F:95:E5:62:78:A1:22:18:AD:37:33:28:CE:E7:83:1D:4F:BA:CA"
+
+    /**
      * KYC-AuditLab companion **active** debug SHA-256
      * (`com.identityshield.companion`).
      *

@@ -167,7 +167,9 @@ class NodeSignatureTest {
         )
         assertEquals(listOf("com.identityshield.companion"), KnownFleet.KYC_AUDITLAB.androidPackages)
         assertEquals(listOf("com.victorious.flash.android"), KnownFleet.VICTORIOUS_FLASH.androidPackages)
+        assertEquals(listOf("com.victorious.launch"), KnownFleet.VICTOR_LAUNCH.androidPackages)
         assertTrue(KnownFleet.FILE_MANAGER.expectedSigningCertSha256.isEmpty())
+        assertEquals("[Unknown]", KnownFleet.VICTOR_LAUNCH.signingCertLabel())
         assertEquals("[Unknown]", KnownFleet.FILE_MANAGER.signingCertLabel())
         assertEquals("[Unknown]", KnownFleet.KYC_AUDITLAB.signingCertLabel())
         assertEquals(
@@ -243,6 +245,32 @@ class NodeSignatureTest {
         assertEquals(
             "BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A",
             KnownNodeSigningCatalog.VICTOR_SMS_DEBUG_SHA256_UNENFORCED,
+        )
+    }
+
+    @Test
+    fun `VictorLaunch debug cert is documented but not enforced`() {
+        val documented = SigningCertSha256.parseOrThrow(
+            KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256_UNENFORCED,
+        )
+        val identity = KnownNodeSigningCatalog.identityFor("com.victorious.launch")
+        assertTrue(identity?.expectedCerts.isNullOrEmpty())
+        assertTrue(KnownFleet.VICTOR_LAUNCH.expectedSigningCertSha256.isEmpty())
+        assertEquals("[Unknown]", KnownFleet.VICTOR_LAUNCH.signingCertLabel())
+        assertIs<NodeSignatureDecision.Allowed>(
+            NodeSignatureVerifier().verify(
+                "com.victorious.launch",
+                listOf(documented.canonical),
+            ),
+        )
+        assertTrue(
+            KnownNodeSigningCatalog.all().none { candidate ->
+                documented in candidate.expectedCerts
+            },
+        )
+        assertEquals(
+            "1B:06:A8:9E:7F:F5:BA:21:C9:A4:F8:F1:F0:4F:95:E5:62:78:A1:22:18:AD:37:33:28:CE:E7:83:1D:4F:BA:CA",
+            KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256_UNENFORCED,
         )
     }
 

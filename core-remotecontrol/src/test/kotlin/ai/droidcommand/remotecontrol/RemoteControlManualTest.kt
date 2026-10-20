@@ -24,6 +24,8 @@ class RemoteControlManualTest {
         assertTrue(body.contains("not authorization"))
         assertTrue(body.contains("VictorSpoof"))
         assertTrue(body.contains("Victorious Flash"))
+        assertTrue(body.contains("VictorLaunch"))
+        assertTrue(body.contains("com.victorious.launch"))
         assertTrue(body.contains("com.victorious.flash.android"))
         assertTrue(body.contains("FLEET_BRIDGE"))
         assertTrue(body.contains("gadget.expose"))
