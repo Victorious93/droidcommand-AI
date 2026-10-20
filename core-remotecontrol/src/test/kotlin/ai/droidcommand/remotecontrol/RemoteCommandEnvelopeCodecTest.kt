@@ -89,6 +89,8 @@ class RemoteCommandEnvelopeCodecTest {
         assertEquals("macro.run", FleetRemoteEnvelope.OP_MACRO_RUN)
         assertEquals("capabilities.get", FleetRemoteEnvelope.OP_CAPABILITIES_GET)
         assertEquals("node.status.get", FleetRemoteEnvelope.OP_NODE_STATUS_GET)
+        assertEquals("config.export", FleetRemoteEnvelope.OP_CONFIG_EXPORT)
+        assertEquals("config.import", FleetRemoteEnvelope.OP_CONFIG_IMPORT)
         assertEquals("com.victorious.sms", FleetRemoteEnvelope.VICTOR_SMS_PACKAGE)
         assertEquals("com.victorious.sms.action.BRIDGE", FleetRemoteEnvelope.VICTOR_SMS_BRIDGE_ACTION)
         assertEquals("ai.droidcommand.app.action.BRIDGE", FleetRemoteEnvelope.CONTROLLER_BRIDGE_ACTION)

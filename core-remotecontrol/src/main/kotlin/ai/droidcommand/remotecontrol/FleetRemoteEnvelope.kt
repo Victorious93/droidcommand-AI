@@ -85,6 +85,10 @@ data class FleetRemoteEnvelope(
         /** Frozen STATUS-TRAY pull/push. See `docs/specs/STATUS_TRAY.md`. */
         const val OP_NODE_STATUS_GET = "node.status.get"
 
+        /** Frozen SETTINGS/BACKUP ops. See `docs/specs/UNIFIED_BACKUP.md`. */
+        const val OP_CONFIG_EXPORT = "config.export"
+        const val OP_CONFIG_IMPORT = "config.import"
+
         /** VictorSMS inbound SMS-trigger source op. Delivery, not authorization. */
         const val OP_SMS_REMOTE_COMMAND_FORWARD = "sms.remote_command.forward"
 

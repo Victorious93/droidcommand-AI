@@ -10,9 +10,9 @@ import java.nio.file.StandardCopyOption
  * Versioned local JSON snapshot of the controller's own macros, mappings,
  * and device pairings (plus targets / last status-tray rows).
  *
- * Exact unified fleet backup schema is
- * **[CONTRACT TBD pending Fleet Orchestrator]**. This file is the
- * controller-local encoding, not that shared contract.
+ * Inner controller JSON. The frozen cross-app envelope lives in
+ * `docs/specs/UNIFIED_BACKUP.md` ([UnifiedFleetBackup]). This file is
+ * the `ai.droidcommand.app` entry payload.
  *
  * **Does not** include API keys, VictorSMS whitelist, code word, or any
  * secret. No cloud upload.
@@ -27,7 +27,7 @@ data class UnifiedLocalBackup(
     companion object {
         const val VERSION = 2
         const val SCHEMA_NOTE =
-            "[CONTRACT TBD pending Fleet Orchestrator] unified fleet backup schema; " +
+            "[CONTRACT] FROZEN docs/specs/UNIFIED_BACKUP.md; " +
                 "this file is the controller-local macros+mappings+pairings encoding"
     }
 }

@@ -105,8 +105,10 @@ object RemoteControlManual {
         Local backup
         Settings can export versioned JSON of this controller's macros,
         mappings, and device pairings (plus targets and status tray) to a
-        file on this device. API keys and VictorSMS secrets are not
-        included. Unified fleet backup schema is still pending.
+        file on this device. That JSON is one entry in the frozen
+        unified bundle (docs/specs/UNIFIED_BACKUP.md). API keys, signing
+        keys, passwords, and VictorSMS secrets are not included. Restore
+        never auto-enables remote.command.
 
         Controller inbound (named, not exported here)
         Action ai.droidcommand.app.action.BRIDGE, op remote.command.

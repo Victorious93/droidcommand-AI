@@ -44,7 +44,7 @@ an **untrusted request**.
 | Trust pipeline (pairing → external-control OFF → replay → policy) | Exported controller BRIDGE receiver |
 | Error category enum | Auto-approve / auto-send for a remote caller |
 | Status-tray consume+publish (generic model) | Live Messenger / AIDL / Termux bind |
-| Unified local JSON backup (macros + mappings + pairings, versioned) | Unified fleet backup schema |
+| Frozen SETTINGS/BACKUP bundle (`config.export` / `config.import`) | Live cloud upload / on-device Keystore wrap / live bind |
 | VictorSpoof `KnownFleet` row (isolated from destructive) | VictorSpoof cert pins / live spoof |
 | KYC companion `remote.command` registry row (`[provisional/pending-stable-cert]`, fail-open; PII `remoteAllowed:false`) | Stable KYC companion cert pin / live KYC remote |
 | `docs/MANUAL.md` + in-app Help | — |
@@ -96,6 +96,7 @@ encodings (appendices A–C). **Do not invent per-class field names.**
 | `macro.step` | `{ op, params }` — one advertised op on **this** node. |
 | `macro.run` | `{ steps: [{ op, params, onError, timeoutMs }], dryRun }` on **this** node. |
 | `node.status.get` | Frozen STATUS-TRAY snapshot. Canonical spec: [`docs/specs/STATUS_TRAY.md`](STATUS_TRAY.md). |
+| `config.export` / `config.import` | Frozen SETTINGS/BACKUP bundle. Canonical spec: [`docs/specs/UNIFIED_BACKUP.md`](UNIFIED_BACKUP.md). |
 
 Outer framing is still BridgeRequest / BridgeResponse
 (`protocol_major` 1, `Message.what` 1 request / 2 response, action
@@ -437,11 +438,16 @@ snapshot `{ nodeId, packageName, connectionClass, updatedAtMs, domains[{name,sta
 JVM types keep the #233 names (`NodeStatusSnapshot`, `StatusTrayDomain`)
 as aliases. In-memory aggregate only. No live bind.
 
-**Unified settings/backup:** seam + core model for export/import of
-macros + device pairings. Exact unified fleet schema is **[CONTRACT TBD
-pending Fleet Orchestrator]**. This skeleton ships a **versioned local
-JSON** export/import of the **controller's own** macros + mappings +
-pairings (no API keys, no VictorSMS secrets).
+**Unified settings/backup:** **[CONTRACT] FROZEN** in
+[`docs/specs/UNIFIED_BACKUP.md`](UNIFIED_BACKUP.md). Envelope
+`{ version, createdAtMs, sourceNodeRef, wrapping, entries[{packageName,
+schemaVersion, ciphertext\|clearPayload}] }`. Ops `config.export` /
+`config.import` (`kind=action`, `remoteAllowed=false` by default,
+`requiresConfirm=true` on import). AES-256-GCM; never signing keys / API
+tokens / VictorSMS secrets / plaintext passwords. Import dry-run +
+conflict policy (`skip` \| `overwrite` \| `merge-by-id`); **never**
+auto-enables `remote.command`. The #233 controller-local JSON is the
+`ai.droidcommand.app` entry. No live bind.
 
 **Help:** `docs/MANUAL.md` and in-app `HelpScreen` (`RemoteControlManual`).
 
@@ -467,7 +473,7 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 | Controller Settings macros + dry-run | implemented, unit-tested |
 | Settings UI | Compose skeleton |
 | Status tray consume+publish | implemented, unit-tested (in-memory aggregate; **[CONTRACT] FROZEN** in `STATUS_TRAY.md`; no live bind) |
-| Unified local backup (macros+mappings+pairings) | implemented, unit-tested (**unified schema TBD**) |
+| Unified local backup (macros+mappings+pairings) | implemented, unit-tested (inner JSON); **[CONTRACT] FROZEN** envelope in `UNIFIED_BACKUP.md` |
 | VictorSMS KnownFleet + isolated registry / pairing row | implemented, unit-tested (**debug cert documented, pin NOT enforced**, [planned/pending-merge]) |
 | VictorSpoof KnownFleet + isolated registry | implemented, unit-tested (**certs TBD**) |
 | KYC companion isolated registry / pairing row | implemented, unit-tested (**active 6F:46:… fail-open; pending permanent 22:4F:… from KYC PR #29 unmerged, neither enforced**; [provisional/pending-stable-cert]; `remote.command` OFF-by-default; PII `remoteAllowed:false`) |
@@ -512,9 +518,11 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
    `NodeStatusSnapshot` / `StatusTrayDomain` skeleton. Remaining: live
    Messenger / AIDL / Termux **bind** (encode/decode/aggregate are JVM-
    tested; no network).
-9. **Unified fleet backup/restore schema** (cross-app). Local controller
-   JSON (macros + mappings + pairings) exists; the unified contract is
-   pending Fleet Orchestrator.
+9. **Unified fleet backup/restore schema** — **[CONTRACT] FROZEN** in
+   [`docs/specs/UNIFIED_BACKUP.md`](UNIFIED_BACKUP.md). Envelope +
+   `config.export` / `config.import` + AES-GCM + conflict policy.
+   Remaining: on-device Android Keystore wrap and live bind (JVM crypto
+   / test double are unit-tested; no network).
 10. Exported controller `ai.droidcommand.app.action.BRIDGE` receiver (live
     inbound). Constant is named; the receiver is **not** shipped.
 

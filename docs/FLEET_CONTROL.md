@@ -469,3 +469,19 @@ schema. **[CONTRACT] FROZEN** in `docs/specs/STATUS_TRAY.md`.
   DCA UI consume. No live bind in this slice.
 - Privacy: no secrets, no PII dumps, no signing material.
 - Kali/pentest/YOLO pentest gates untouched.
+
+## 2026-10-20j — Frozen unified SETTINGS/BACKUP bundle
+
+Fleet Orchestrator assigned DCA ownership of the cross-app settings
+backup contract. **[CONTRACT] FROZEN** in `docs/specs/UNIFIED_BACKUP.md`.
+
+- Envelope: `{ version, createdAtMs, sourceNodeRef, wrapping,
+  entries[{packageName, schemaVersion, ciphertext or clearPayload}] }`.
+- Ops: `config.export` / `config.import` (`kind=action`,
+  `remoteAllowed=false` by default, `requiresConfirm=true` on import).
+- AES-256-GCM (`v1.<iv>.<ciphertext>`). Never signing keys, API tokens,
+  VictorSMS secrets, or plaintext passwords.
+- Import: dry-run validate, conflict policy skip | overwrite |
+  merge-by-id, **never** auto-enable `remote.command`.
+- The #233 controller-local JSON is the `ai.droidcommand.app` entry.
+  No live bind. Kali/pentest/YOLO pentest gates untouched.
