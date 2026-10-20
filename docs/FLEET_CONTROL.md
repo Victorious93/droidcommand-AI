@@ -44,7 +44,7 @@ HackerAI (`ai.hackerai.companion`) is already a bound companion and is
 |---|---|---|---|---|---|---|---|---|
 | 1 | **Pentest-Swarm-AI** | BOUND_COMPANION | `Victorious93/Pentest-Swarm-AI` (older fork exists; room says **awaiting base repo** for the envelope companion) | `ai.pentestswarm.companion` | **PLANNED** | Swarm campaigns via one command-envelope service (when ready) | This checkout still has `core-pentest-swarm` + `IPentestSwarmService` from an earlier slice. Catalog stub: `pentest_swarm_status`. Not LIVE. | Wait for the base repo, then one envelope AIDL + same-signing + DependencyGuard. |
 | 2 | **RootForge OS** | EXTERNAL_NODE | `Victorious93/rootforge-os` | Messenger action `ai.rootforge.os.action.BRIDGE` / localhost API / SSH fallback | **PARTIAL** (first P1 candidate; **hardware proof pending**) | Target-phone control (USB OTG, later LAN/Tailscale). Does **not** own Termux/proot or Sahara. | SSH fallback in `core-rootforge` (passive `rootforge_capabilities` / `rootforge_list_devices`). Hub Messenger client is live (`FleetModule` → `MessengerFleetTransport` → `PairedNodeGateway`), **off until paired**. No device run claimed. | Pair package + cert on Tools → Fleet, then Capabilities (`rootforge.capabilities.get`) and Status. No DependencyGuard, no shared signing key. SSH stays CLI fallback. **Hardware proof pending.** File Manager stays PLANNED. |
-| 3 | **VictorSuite** | TERMUX_IPC | `Victorious93/VictorSuite` (documented; **not publicly resolvable** 2026-10-14) | `com.termux` | **PARTIAL** | On-device Termux / proot / X11 / plugins | `core-termux` `run_termux_command`. CLI default `NullTermuxExecutor` unless `DROIDCOMMAND_CLI_ADB=1`. | Keep RUN_COMMAND / plugin IPC. **Not** a new bound service. Gated on VictorSuite **PR #15** (package/signing cleanup). |
+| 3 | **VictorSuite** | TERMUX_IPC | `Victorious93/VictorSuite` (PR #48 `a6f4e2a` merged) | `com.termux` | **PARTIAL** (TERMUX_IPC remote envelope **PENDING** — not device-tested) | On-device Termux / proot / X11 / plugins | `core-termux` `run_termux_command` plus controller-side `TermuxIpcTransport` (envelope extras + `BridgeResponse` parser). Default sender unwired. CLI default `NullTermuxExecutor` unless `DROIDCOMMAND_CLI_ADB=1`. | Keep RUN_COMMAND / plugin IPC. **Not** a new bound service. Node envelope: VictorSuite **PR #48**. Still gated on **PR #15** (package/signing cleanup). No live privileged execution. |
 | 4 | **EDL-Commander** | BOUND_COMPANION | `Victorious93/EDL-Commander` (scaffold + AIDL + USB 9008/Sahara + OnePlus 7T **in progress**) | `ai.edlcommander.companion` | **PLANNED** | Sahara / Firehose | Catalog stub `edl_commander_status`. Always fails. AIDL `IEdlCompanion` copied under `ai.edlcommander.companion.aidl`. Bind action `ai.edlcommander.companion.BIND`. Hub `uses-permission` `ai.edlcommander.companion.permission.BIND_COMPANION`. Orchestrator does not auto-bind. No flash tool. | Bind from the Fleet orchestrator once device-verified. Same-signing + DependencyGuard, like Pentest. RootForge UI may call this later. Do **not** mark host-tool-only. |
 | 5 | **KYC-AuditLab** | HOST_PROCESS_TOOL (simulator) + companion EXTERNAL_NODE (`remote.command`) | unpublished as of 2026-10-14 | IdentityShield simulator (localhost) + companion APK `com.identityshield.companion` | **PLANNED** | Simulator lab; companion is a remote.command target | Catalog stub `kyc_auditlab_status`. Always fails. Companion is in `RemoteCommandTargetRegistry` / `ExternalNodeCatalog` as `[provisional/pending-stable-cert]` (fail-open). | Last among the original five. Simulator only, localhost only. **Hub must not call `/scope` admin** until KYC adds auth. Do not log identity documents. Companion: `remote.command` OFF-by-default; all PII ops `remoteAllowed:false`; never remote-allow PII from the controller. Debug cert documented, not enforced (per-machine debug.keystore). |
 | 6 | **Victorious File Manager** | EXTERNAL_NODE | `Victorious93/File-Manager` (already on their `main`) | `ai.victorious.filemanager` (debug: `ai.victorious.filemanager.debug`); Messenger action `ai.victorious.filemanager.action.BRIDGE` | **PLANNED** | File listing / status over the shared JSON envelope (stub ops only on their side today) | Catalog stub `filemanager_status`. Always fails. Generic Messenger client exists (`core-fleet-messenger` + `:app`) but **is not started unless this node is paired**. Their main already has `FileManagerBridgeService` (Message what=1 Bundle key `request`; reply what=2 Bundle key `response`; `protocol_major` 1). Stub ops: `filemanager.capabilities.get`, `filemanager.status`, `filemanager.list` (empty entries). Every reply currently `live:false`, `mode:stub`, `dca_required:false`. | When their identity/default-off PR lands (external control default OFF; caller identity = UID package + SHA-256 cert; allow only `ai.droidcommand.app` and `.debug`; error categories `external_control_disabled` / `unauthorized_caller`; `fleet_class` → `external_node`), pair package + cert to call the existing client. Never DependencyGuard, never shared signing key, never `KnownCompanions`, never AIDL. |
@@ -563,3 +563,24 @@ committed). The cert fingerprint is stable, so the pin is now enforced.
 - **Enforced:** `B9:9A:AF:E2:C1:41:8B:5D:64:AA:0D:4B:AC:61:FC:F7:A7:BA:81:44:35:E0:EF:89:E8:AA:55:BE:56:4E:4A:69`
   (`KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256` on
   `expectedSigningCertSha256`). Release cert TBD — do not invent.
+
+## 2026-10-20s — Controller-side TERMUX_IPC transport (PENDING)
+
+Does **not** rewrite earlier VictorSuite rows. VictorSuite PR #48
+(`a6f4e2a`) merged the node-side envelope. This repo now has the
+matching controller-side sender + `BridgeResponse` parser
+(`TermuxIpcTransport` in `core-remotecontrol`).
+
+- Request extra `ai.droidcommand.REMOTE_ENVELOPE_JSON` on
+  `com.termux.RUN_COMMAND`. Response extra
+  `ai.droidcommand.REMOTE_RESPONSE_JSON` via the result PendingIntent.
+- Ops: `capabilities.get`, `remote.command`, `macro.step`, `macro.run`,
+  `node.status.get`, `config.export`, `config.import`. Envelope v1,
+  BRIDGE_PROTOCOL 1.1.
+- Default sender is unwired: **no live broadcast, no privileged
+  execution.** Destructive ops and `config.import` apply always
+  `confirmation_required`. `node.status.get` is never confirmation-gated.
+  External control stays OFF by default.
+- Catalogue: existing `KnownFleet.VICTORSUITE` (`TERMUX_IPC`,
+  `com.termux`) updated, not duplicated. Signing certs unchanged.
+  Fleet dashboard shows **PENDING** (not device-tested).

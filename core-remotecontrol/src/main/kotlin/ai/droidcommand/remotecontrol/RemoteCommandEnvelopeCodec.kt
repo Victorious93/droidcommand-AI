@@ -2,6 +2,7 @@ package ai.droidcommand.remotecontrol
 
 import ai.droidcommand.rootforge.BRIDGE_PROTOCOL_MAJOR
 import ai.droidcommand.rootforge.BridgeRequest
+import ai.droidcommand.rootforge.BridgeResponse
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -74,6 +75,18 @@ object RemoteCommandEnvelopeCodec {
         } catch (e: SerializationException) {
             throw IllegalArgumentException("Invalid Termux remote envelope: ${e.message}", e)
         }
+    }
+
+    fun decodeTermuxResponse(raw: String): BridgeResponse {
+        val response = try {
+            json.decodeFromString(BridgeResponse.serializer(), raw)
+        } catch (e: SerializationException) {
+            throw IllegalArgumentException("Invalid Termux remote response: ${e.message}", e)
+        }
+        if (response.protocolMajor != BRIDGE_PROTOCOL_MAJOR) {
+            throw IllegalArgumentException("unsupported protocol_major ${response.protocolMajor}")
+        }
+        return response
     }
 
     private fun decodeParameters(parameters: JsonObject, requestId: String): FleetRemoteEnvelope {

@@ -1,6 +1,10 @@
 package ai.droidcommand.app.fleet
 
 import ai.droidcommand.agent.ToolResult
+import ai.droidcommand.remotecontrol.FleetRemoteEnvelope
+import ai.droidcommand.remotecontrol.RemoteCommandEnvelopeCodec
+import ai.droidcommand.remotecontrol.TermuxIpcResult
+import ai.droidcommand.remotecontrol.TermuxIpcTransport
 import ai.droidcommand.rootforge.FailureKind
 import ai.droidcommand.rootforge.RootForgeNodeRegistry
 import ai.droidcommand.rootforge.RootForgeResult
@@ -164,10 +168,17 @@ class ExternalNodeTransport(
     }
 }
 
-/** TERMUX_IPC. Reads the existing [TermuxExecutor]; commands are not routed through the fleet screen. */
+/**
+ * TERMUX_IPC. Probe still reads the existing [TermuxExecutor]. Commands go
+ * through [TermuxIpcTransport] (envelope extras + response parser). The
+ * default sender is unwired: nothing is broadcast, destructive and
+ * `config.import` apply stay `confirmation_required`, and the row stays
+ * PENDING / not device-tested.
+ */
 class TermuxFleetTransport(
     private val executor: TermuxExecutor,
     private val isInstalled: (String) -> Boolean,
+    private val remote: TermuxIpcTransport = TermuxIpcTransport(),
 ) : FleetNodeTransport {
     override fun probe(node: FleetNode): FleetProbeResult {
         val pkg = node.packageName ?: return FleetProbeResult(FleetReachability.UNKNOWN, "No package to probe")
@@ -182,6 +193,39 @@ class TermuxFleetTransport(
         }
     }
 
-    override fun sendCommand(node: FleetNode, capabilityId: String, inputJson: String): ToolResult =
-        ToolResult.Failure("${node.displayName}: no runner yet")
+    override fun sendCommand(node: FleetNode, capabilityId: String, inputJson: String): ToolResult {
+        val envelope = parseEnvelope(capabilityId, inputJson)
+            ?: return ToolResult.Failure(
+                "${node.displayName}: TERMUX_IPC input is not a remote envelope JSON object",
+            )
+        return when (val result = remote.submit(envelope, capabilityId.ifBlank { TermuxIpcTransport.resolveOperation(envelope) })) {
+            is TermuxIpcResult.Rejected ->
+                ToolResult.Failure("${result.category.wire}: ${result.reason}")
+            is TermuxIpcResult.Ready ->
+                ToolResult.Failure("PENDING: TERMUX_IPC extras built, not device-tested")
+            is TermuxIpcResult.Accepted ->
+                if (result.response.ok) {
+                    ToolResult.Success(result.response.result?.toString() ?: "{}")
+                } else {
+                    val error = result.response.error
+                    ToolResult.Failure("${error?.category ?: "error"}: ${error?.message ?: "remote failed"}")
+                }
+        }
+    }
+
+    private fun parseEnvelope(capabilityId: String, inputJson: String): FleetRemoteEnvelope? {
+        try {
+            return RemoteCommandEnvelopeCodec.decodeTermuxBlob(inputJson)
+        } catch (_: IllegalArgumentException) {
+            // fall through
+        }
+        return try {
+            RemoteCommandEnvelopeCodec.decodeParameters(
+                inputJson,
+                requestId = capabilityId.ifBlank { "termux-ipc" },
+            )
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+    }
 }

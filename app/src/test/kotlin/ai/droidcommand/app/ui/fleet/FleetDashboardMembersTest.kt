@@ -15,6 +15,7 @@ class FleetDashboardMembersTest {
         assertEquals(members.single { it.highlighted }.id, "rootforge")
         assertEquals("Talks to a rooted phone and its gadgets", members.single { it.id == "rootforge" }.role)
         assertEquals("Linux tools on this phone", members.single { it.id == "termux" }.role)
+        assertTrue(members.single { it.id == "termux" }.pendingDeviceTest)
         assertTrue(members.single { it.id == "rootforge" }.opensPairing)
         assertTrue(members.none { it.id == "hackerai" && it.opensPairing })
     }
@@ -25,7 +26,14 @@ class FleetDashboardMembersTest {
         val rows = FleetDashboardRows.build(members, pairings = emptyList(), snapshots = emptyList(), nowMs = 1L)
         assertEquals(FleetCatalog.all.size, rows.size)
         assertTrue(rows.all { !it.paired })
-        assertTrue(rows.all { it.statusLabel == FleetDashboardRows.STATUS_NOT_PAIRED })
+        assertTrue(
+            rows.filter { !it.member.pendingDeviceTest }
+                .all { it.statusLabel == FleetDashboardRows.STATUS_NOT_PAIRED },
+        )
+        assertTrue(
+            rows.filter { it.member.pendingDeviceTest }
+                .all { it.statusLabel == FleetDashboardRows.STATUS_PENDING },
+        )
         assertTrue(rows.all { it.seenLabel == FleetDashboardRows.SEEN_NONE })
     }
 

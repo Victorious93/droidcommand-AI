@@ -7,6 +7,7 @@ import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.app.approval.ComposeApprovalPrompt
 import ai.droidcommand.app.di.AppModule
+import ai.droidcommand.remotecontrol.TermuxIpcTransport
 import ai.droidcommand.rootforge.RootForgeClient
 import ai.droidcommand.rootforge.RootForgeNodeConfig
 import ai.droidcommand.rootforge.RootForgeNodeRegistry
@@ -257,11 +258,22 @@ class ExternalAndTermuxTransportTest {
 
     @Test
     fun `Termux with the Null executor is no runner yet`() {
-        val t = TermuxFleetTransport(NullTermuxExecutor()) { true }
+        val t = TermuxFleetTransport(
+            NullTermuxExecutor(),
+            isInstalled = { true },
+            remote = TermuxIpcTransport(),
+        )
         val r = t.probe(termux)
         assertEquals(FleetReachability.UNKNOWN, r.reachability)
         assertTrue(r.detail.startsWith("No runner yet"))
-        assertEquals(FleetReachability.OFFLINE, TermuxFleetTransport(NullTermuxExecutor()) { false }.probe(termux).reachability)
+        assertEquals(
+            FleetReachability.OFFLINE,
+            TermuxFleetTransport(
+                NullTermuxExecutor(),
+                isInstalled = { false },
+                remote = TermuxIpcTransport(),
+            ).probe(termux).reachability,
+        )
         assertIs<ToolResult.Failure>(t.sendCommand(termux, "x", "{}"))
     }
 }
@@ -276,7 +288,11 @@ class FleetOrchestratorWiringTest {
         mapOf(
             FleetIntegrationClass.BOUND_COMPANION to BoundCompanionTransport(link),
             FleetIntegrationClass.EXTERNAL_NODE to ExternalNodeTransport(RootForgeNodeRegistry(emptyList())) { true },
-            FleetIntegrationClass.TERMUX_IPC to TermuxFleetTransport(NullTermuxExecutor()) { true },
+            FleetIntegrationClass.TERMUX_IPC to TermuxFleetTransport(
+                NullTermuxExecutor(),
+                isInstalled = { true },
+                remote = TermuxIpcTransport(),
+            ),
         ),
     )
     private val prompt = ComposeApprovalPrompt()

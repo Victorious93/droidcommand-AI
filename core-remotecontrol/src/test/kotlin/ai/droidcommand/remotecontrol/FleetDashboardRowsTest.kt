@@ -41,6 +41,21 @@ class FleetDashboardRowsTest {
         assertFalse(members.getValue("pentestswarm").opensPairing)
         assertFalse(members.getValue("edl-commander").opensPairing)
         assertFalse(members.getValue("victorsuite").opensPairing)
+        assertTrue(members.getValue("victorsuite").pendingDeviceTest)
+    }
+
+    @Test
+    fun `VictorSuite dashboard row is PENDING when not device-tested`() {
+        val member = FleetDashboardCatalog.fromKnown(KnownFleet.VICTORSUITE)
+        assertTrue(member.pendingDeviceTest)
+        val row = FleetDashboardRows.build(
+            members = listOf(member),
+            pairings = emptyList(),
+            snapshots = emptyList(),
+            nowMs = now,
+        ).single()
+        assertEquals(FleetDashboardRows.STATUS_PENDING, row.statusLabel)
+        assertEquals(FleetDashboardTone.UNKNOWN, row.tone)
     }
 
     @Test
