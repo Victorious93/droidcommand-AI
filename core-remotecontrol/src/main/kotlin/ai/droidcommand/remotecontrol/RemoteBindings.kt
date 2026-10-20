@@ -6,7 +6,9 @@ import kotlinx.serialization.json.Json
 
 /**
  * Controller-side encodings of the **same** [FleetRemoteEnvelope].
- * Field names do not change per class.
+ * Field names do not change per class. JSON uses nested [EnvelopeAuth];
+ * AIDL parcel fields stay flat (`nonce` / `timestampMs` / `ttlMs`) until
+ * the live `.aidl` copies are bumped together with EDL.
  */
 
 object ExternalNodeRemoteBinding {
@@ -45,7 +47,7 @@ object BoundCompanionRemoteBinding {
             envelope.args,
         ),
         nonce = envelope.nonce,
-        timestampMs = envelope.timestampMs,
+        timestampMs = envelope.issuedAt,
         ttlMs = envelope.ttlMs,
         destructive = envelope.destructive,
         targetNodeRef = envelope.targetNodeRef,
@@ -66,9 +68,11 @@ object BoundCompanionRemoteBinding {
             targetNodeRef = parcel.targetNodeRef,
             actionRef = parcel.command,
             args = args,
-            nonce = parcel.nonce,
-            timestampMs = parcel.timestampMs,
-            ttlMs = parcel.ttlMs,
+            auth = EnvelopeAuth(
+                nonce = parcel.nonce,
+                issuedAt = parcel.timestampMs,
+                ttlMs = parcel.ttlMs,
+            ),
             destructive = parcel.destructive,
             dryRun = parcel.dryRun,
         )

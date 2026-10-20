@@ -41,6 +41,20 @@ class RemoteControlSettingsControllerTest {
     }
 
     @Test
+    fun `pairings and external-control persist on the store`() {
+        assertEquals(false, controller.snapshot().externalControlEnabled)
+        controller.setExternalControlEnabled(true)
+        controller.putPairing(pairing())
+        val snap = controller.snapshot()
+        assertEquals(true, snap.externalControlEnabled)
+        assertEquals(TEST_SOURCE, snap.pairings.single().sourceNodeRef)
+        controller.removePairing(TEST_SOURCE)
+        controller.setExternalControlEnabled(false)
+        assertTrue(controller.snapshot().pairings.isEmpty())
+        assertEquals(false, controller.snapshot().externalControlEnabled)
+    }
+
+    @Test
     fun `preview voice uses current mappings`() {
         controller.putMapping(mapping(id = "voice-1", voicePhrase = "red balloon", smsCommandId = "rb"))
         assertIs<RemoteDispatchResult.Ready>(controller.previewVoice("Red balloon"))

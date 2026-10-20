@@ -3,6 +3,7 @@ package ai.droidcommand.app.ui.settings
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.agent.describe
 import ai.droidcommand.remotecontrol.DeliveryMode
+import ai.droidcommand.remotecontrol.DevicePairing
 import ai.droidcommand.remotecontrol.Macro
 import ai.droidcommand.remotecontrol.MacroStep
 import ai.droidcommand.remotecontrol.MacroTrigger
@@ -158,6 +159,31 @@ class RemoteControlViewModel @Inject constructor(
         refresh()
     }
 
+    fun setExternalControlEnabled(enabled: Boolean) {
+        controller.setExternalControlEnabled(enabled)
+        refresh()
+    }
+
+    fun savePairing(sourceNodeRef: String, packageName: String, certSha256: String) {
+        try {
+            controller.putPairing(
+                DevicePairing(
+                    sourceNodeRef = sourceNodeRef.trim(),
+                    packageName = packageName.trim(),
+                    certSha256 = certSha256.trim().ifBlank { null },
+                ),
+            )
+            refresh()
+        } catch (e: IllegalArgumentException) {
+            mutable.value = mutable.value.copy(error = e.message)
+        }
+    }
+
+    fun removePairing(sourceNodeRef: String) {
+        controller.removePairing(sourceNodeRef)
+        refresh()
+    }
+
     fun previewVoice(transcript: String) {
         mutable.value = mutable.value.copy(lastPreview = describe(controller.previewVoice(transcript)), error = null)
     }
@@ -200,7 +226,8 @@ class RemoteControlViewModel @Inject constructor(
             val backup = controller.exportBackup()
             mutable.value = mutable.value.copy(
                 lastPreview = "Local backup saved (${backup.config.mappings.size} mappings, " +
-                    "${backup.config.macros.size} macros). API keys are not included.",
+                    "${backup.config.macros.size} macros, ${backup.config.pairings.size} pairings). " +
+                    "API keys are not included.",
                 error = null,
             )
         } catch (e: IllegalStateException) {
@@ -230,8 +257,11 @@ class RemoteControlViewModel @Inject constructor(
             "Matched ${result.plan.mapping?.displayName ?: result.plan.macro?.displayName ?: result.plan.spoof?.actionRef} → " +
                 "${result.plan.toolName} " +
                 if (result.plan.destructive) "(destructive)" else "(non-destructive)"
-        is RemoteDispatchResult.Rejected -> "Rejected: ${result.reason}"
+        is RemoteDispatchResult.Rejected -> "Rejected: ${result.reason} (${result.category.wire})"
         is RemoteDispatchResult.Capabilities ->
-            "capabilities.get protocol ${result.protocolMajor}.${result.protocolMinor}: ${result.ops.joinToString()}"
+            "capabilities.get protocol ${result.protocolMajor}.${result.protocolMinor}: ${result.opNames.joinToString()}"
+        is RemoteDispatchResult.MacroRun ->
+            "macro ${if (result.result.dryRun) "dry-run" else "run"}: " +
+                "${result.result.steps.size} steps, ok=${result.result.ok}"
     }
 }

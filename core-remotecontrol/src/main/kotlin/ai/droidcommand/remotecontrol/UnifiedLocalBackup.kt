@@ -7,18 +7,28 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
 /**
- * One local JSON snapshot of Remote Control mappings / targets / macros and
- * the last status-tray rows. **Does not** include API keys, VictorSMS
- * whitelist, code word, or any secret. No cloud upload.
+ * Versioned local JSON snapshot of the controller's own macros, mappings,
+ * and device pairings (plus targets / last status-tray rows).
+ *
+ * Exact unified fleet backup schema is
+ * **[CONTRACT TBD pending Fleet Orchestrator]**. This file is the
+ * controller-local encoding, not that shared contract.
+ *
+ * **Does not** include API keys, VictorSMS whitelist, code word, or any
+ * secret. No cloud upload.
  */
 data class UnifiedLocalBackup(
     val version: Int = VERSION,
     val exportedAtMs: Long,
     val config: RemoteControlConfig,
     val statusTray: List<NodeStatusSnapshot> = emptyList(),
+    val schemaNote: String = SCHEMA_NOTE,
 ) {
     companion object {
-        const val VERSION = 1
+        const val VERSION = 2
+        const val SCHEMA_NOTE =
+            "[CONTRACT TBD pending Fleet Orchestrator] unified fleet backup schema; " +
+                "this file is the controller-local macros+mappings+pairings encoding"
     }
 }
 
@@ -59,10 +69,14 @@ class UnifiedLocalBackupStore(
         }
         val raw = String(Files.readAllBytes(file), Charsets.UTF_8)
         val dto = json.decodeFromString(UnifiedLocalBackupDto.serializer(), raw)
-        if (dto.version != UnifiedLocalBackup.VERSION) {
+        if (dto.version !in SUPPORTED_VERSIONS) {
             throw IllegalArgumentException("unsupported backup version ${dto.version}")
         }
         return dto.toModel()
+    }
+
+    companion object {
+        private val SUPPORTED_VERSIONS = setOf(1, UnifiedLocalBackup.VERSION)
     }
 }
 
@@ -70,6 +84,7 @@ class UnifiedLocalBackupStore(
 internal data class UnifiedLocalBackupDto(
     val version: Int = UnifiedLocalBackup.VERSION,
     val exportedAtMs: Long,
+    val schemaNote: String = UnifiedLocalBackup.SCHEMA_NOTE,
     val config: RemoteControlConfigDto = RemoteControlConfigDto(),
     val statusTray: List<NodeStatusSnapshotDto> = emptyList(),
 ) {
@@ -78,12 +93,14 @@ internal data class UnifiedLocalBackupDto(
         exportedAtMs = exportedAtMs,
         config = config.toModel(),
         statusTray = statusTray.map { it.toModel() },
+        schemaNote = schemaNote,
     )
 
     companion object {
         fun from(backup: UnifiedLocalBackup) = UnifiedLocalBackupDto(
             version = backup.version,
             exportedAtMs = backup.exportedAtMs,
+            schemaNote = backup.schemaNote,
             config = RemoteControlConfigDto.from(backup.config),
             statusTray = backup.statusTray.map { NodeStatusSnapshotDto.from(it) },
         )
@@ -93,12 +110,18 @@ internal data class UnifiedLocalBackupDto(
 @Serializable
 internal data class NodeStatusSnapshotDto(
     val sourceNodeRef: String,
+    val domain: String = StatusTrayDomain.NODE_HEALTH.name,
+    val capability: String = "status",
+    val healthy: Boolean? = null,
     val actionRef: String,
     val payload: Map<String, String> = emptyMap(),
     val receivedAtMs: Long,
 ) {
     fun toModel(): NodeStatusSnapshot = NodeStatusSnapshot(
         sourceNodeRef = sourceNodeRef,
+        domain = StatusTrayDomain.fromWire(domain),
+        capability = capability,
+        healthy = healthy,
         actionRef = actionRef,
         payload = payload,
         receivedAtMs = receivedAtMs,
@@ -107,6 +130,9 @@ internal data class NodeStatusSnapshotDto(
     companion object {
         fun from(snapshot: NodeStatusSnapshot) = NodeStatusSnapshotDto(
             sourceNodeRef = snapshot.sourceNodeRef,
+            domain = snapshot.domain.name,
+            capability = snapshot.capability,
+            healthy = snapshot.healthy,
             actionRef = snapshot.actionRef,
             payload = snapshot.payload,
             receivedAtMs = snapshot.receivedAtMs,

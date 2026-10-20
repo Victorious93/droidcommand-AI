@@ -2,6 +2,7 @@ package ai.droidcommand.app.ui.settings
 
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.remotecontrol.DevicePairing
 import ai.droidcommand.remotecontrol.Macro
 import ai.droidcommand.remotecontrol.MacroTriggerKind
 import ai.droidcommand.remotecontrol.RemoteAction
@@ -43,12 +44,12 @@ fun RemoteControlSettingsSection(viewModel: RemoteControlViewModel = hiltViewMod
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Fleet remote commands and macros", style = MaterialTheme.typography.titleMedium)
             Text(
-                "One frozen envelope (remote.command / macro.step / macro.run) across EXTERNAL_NODE, " +
-                    "BOUND_COMPANION, and TERMUX_IPC. Authorization is package+cert, never a payload " +
-                    "field. VictorSMS sender whitelist and code word are configured in VictorSMS " +
-                    "(external-control OFF by default). Destructive actions always prompt — YOLO cannot " +
-                    "skip them, even if the envelope says destructive=false. Live wipe, power-off, lock, " +
-                    "and RustDesk are not implemented; Run still opens the approval dialog, then a stub failure.",
+                "Inbound commands are untrusted requests. A VictorSMS whitelist + code word only " +
+                    "delivers the request — this controller is the sole authorizer. Nested auth " +
+                    "{ nonce, issuedAt, ttlMs }. External-control is OFF by default on this inbound " +
+                    "surface. Destructive actions always prompt — YOLO cannot skip them, even if the " +
+                    "envelope says destructive=false. Live wipe, power-off, lock, and RustDesk are not " +
+                    "implemented; Run still opens the approval dialog, then a stub failure.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -59,6 +60,30 @@ fun RemoteControlSettingsSection(viewModel: RemoteControlViewModel = hiltViewMod
             ui.lastRun?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
     }
+    SectionLabel("External control")
+    DroidCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "OFF by default. When off, inbound node commands and node macro ops are rejected as " +
+                    "external_control_disabled. Does not store VictorSMS whitelist or code word.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Allow inbound remote commands")
+                Switch(
+                    checked = ui.config.externalControlEnabled,
+                    onCheckedChange = { viewModel.setExternalControlEnabled(it) },
+                )
+            }
+        }
+    }
+    PairingEditor(viewModel)
+    ui.config.pairings.forEach { PairingRow(it, viewModel) }
     TargetEditor(viewModel)
     ui.config.targets.forEach { TargetRow(it, viewModel) }
     MappingEditor(viewModel)
@@ -88,7 +113,8 @@ fun RemoteControlSettingsSection(viewModel: RemoteControlViewModel = hiltViewMod
     DroidCard {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "Consumed node status, published for display. No live Messenger bind.",
+                "Consumed and published fleet health (mesh / VPN / browser / SMS / node health). " +
+                    "Shared with VictorLaunch. Exact schema/transport is still pending. No live bind.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -96,8 +122,9 @@ fun RemoteControlSettingsSection(viewModel: RemoteControlViewModel = hiltViewMod
                 Text("No snapshots yet.", style = MaterialTheme.typography.bodySmall)
             } else {
                 ui.statusTray.forEach { row ->
+                    val health = row.healthy?.let { if (it) "healthy" else "unhealthy" } ?: "unknown"
                     Text(
-                        "${row.sourceNodeRef} · ${row.actionRef}",
+                        "${row.sourceNodeRef} · ${row.domain} · ${row.capability} · $health",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -108,7 +135,9 @@ fun RemoteControlSettingsSection(viewModel: RemoteControlViewModel = hiltViewMod
     DroidCard {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "Exports mappings, targets, macros, and the status tray to a file on this device. API keys and VictorSMS secrets are not included.",
+                "Versioned local JSON of this controller's macros, mappings, and device pairings " +
+                    "(plus targets and status tray). Unified fleet schema is still pending. API keys " +
+                    "and VictorSMS secrets are not included.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -116,6 +145,47 @@ fun RemoteControlSettingsSection(viewModel: RemoteControlViewModel = hiltViewMod
                 Button(onClick = { viewModel.exportBackup() }) { Text("Export local backup") }
                 OutlinedButton(onClick = { viewModel.importBackup() }) { Text("Restore local backup") }
             }
+        }
+    }
+}
+
+@Composable
+private fun PairingEditor(viewModel: RemoteControlViewModel) {
+    var sourceNodeRef by remember { mutableStateOf("") }
+    var packageName by remember { mutableStateOf("") }
+    var certSha256 by remember { mutableStateOf("") }
+    DroidCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Device pairings", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Caller-id for inbound commands: package + optional cert. Empty cert is fail-open / unpinned.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(value = sourceNodeRef, onValueChange = { sourceNodeRef = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Source node id") })
+            OutlinedTextField(value = packageName, onValueChange = { packageName = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Package") })
+            OutlinedTextField(value = certSha256, onValueChange = { certSha256 = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Cert SHA-256 (optional)") })
+            Button(
+                onClick = { viewModel.savePairing(sourceNodeRef, packageName, certSha256) },
+                enabled = sourceNodeRef.isNotBlank() && packageName.isNotBlank(),
+            ) { Text("Save pairing") }
+        }
+    }
+}
+
+@Composable
+private fun PairingRow(pairing: DevicePairing, viewModel: RemoteControlViewModel) {
+    DroidCard {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Text(pairing.sourceNodeRef, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    pairing.packageName + (pairing.certSha256?.let { " · pinned" } ?: " · unpinned"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            OutlinedButton(onClick = { viewModel.removePairing(pairing.sourceNodeRef) }) { Text("Remove") }
         }
     }
 }

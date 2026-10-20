@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 class RemoteCommandDispatcherTest {
     private val now = 50_000L
     private val store = InMemoryRemoteControlStore(
-        RemoteControlConfig(
+        inboundConfig(
             mappings = listOf(
                 mapping(
                     id = "lock-it",
@@ -41,14 +41,50 @@ class RemoteCommandDispatcherTest {
     private val dispatcher = RemoteCommandDispatcher(store, ReplayGuard(nowMs = { now }))
 
     @Test
-    fun `inbound maps actionRef after replay pass without reading trigger`() {
+    fun `inbound maps actionRef after trust and replay without reading trigger`() {
         val ready = assertIs<RemoteDispatchResult.Ready>(
-            dispatcher.dispatch(envelope(actionRef = "lock-tablet", timestampMs = now), source()),
+            dispatcher.dispatch(envelope(actionRef = "lock-tablet", issuedAt = now), source()),
         )
         assertEquals("lock-it", ready.plan.mapping?.id)
         assertEquals(RemoteControlToolNames.LOCK, ready.plan.toolName)
         assertTrue(ready.plan.destructive)
         assertEquals(TriggerKind.SMS, ready.plan.trigger)
+    }
+
+    @Test
+    fun `unpaired inbound is not_paired before external-control`() {
+        val rejected = assertIs<RemoteDispatchResult.Rejected>(
+            dispatcher.dispatch(envelope(actionRef = "ping", issuedAt = now), source("unknown-node")),
+        )
+        assertEquals(RemoteErrorCategory.NOT_PAIRED, rejected.category)
+        assertEquals("not_paired", rejected.reason)
+    }
+
+    @Test
+    fun `paired inbound with external control off is external_control_disabled`() {
+        store.save(store.load().copy(externalControlEnabled = false))
+        val rejected = assertIs<RemoteDispatchResult.Rejected>(
+            dispatcher.dispatch(envelope(actionRef = "ping", issuedAt = now), source()),
+        )
+        assertEquals(RemoteErrorCategory.EXTERNAL_CONTROL_DISABLED, rejected.category)
+        store.save(store.load().copy(externalControlEnabled = true))
+    }
+
+    @Test
+    fun `cert mismatch on a paired node is unauthorized`() {
+        store.save(
+            store.load().copy(
+                pairings = listOf(pairing(certSha256 = "aa".repeat(32))),
+            ),
+        )
+        val rejected = assertIs<RemoteDispatchResult.Rejected>(
+            dispatcher.dispatch(
+                envelope(actionRef = "ping", issuedAt = now),
+                source().copy(certSha256 = "bb".repeat(32)),
+            ),
+        )
+        assertEquals(RemoteErrorCategory.UNAUTHORIZED, rejected.category)
+        store.save(store.load().copy(pairings = listOf(pairing())))
     }
 
     @Test
@@ -58,7 +94,7 @@ class RemoteCommandDispatcherTest {
                 envelope(
                     actionRef = "ping",
                     nonce = TEST_NONCE_B,
-                    timestampMs = now,
+                    issuedAt = now,
                     matchedKeyword = false,
                 ),
                 source(),
@@ -73,7 +109,7 @@ class RemoteCommandDispatcherTest {
             dispatcher.dispatch(
                 envelope(
                     actionRef = "wipe",
-                    timestampMs = now,
+                    issuedAt = now,
                     destructive = false,
                 ),
                 source(),
@@ -86,23 +122,25 @@ class RemoteCommandDispatcherTest {
     }
 
     @Test
-    fun `sms rejects an unknown actionRef`() {
+    fun `sms rejects an unknown actionRef as not_found`() {
         val rejected = assertIs<RemoteDispatchResult.Rejected>(
-            dispatcher.dispatch(envelope(actionRef = "nope", timestampMs = now), source()),
+            dispatcher.dispatch(envelope(actionRef = "nope", issuedAt = now), source()),
         )
+        assertEquals(RemoteErrorCategory.NOT_FOUND, rejected.category)
         assertTrue(rejected.reason.contains("no mapping"), rejected.reason)
     }
 
     @Test
     fun `sms rejects a reused nonce as replay_detected`() {
-        dispatcher.dispatch(envelope(nonce = TEST_NONCE, timestampMs = now), source())
+        dispatcher.dispatch(envelope(nonce = TEST_NONCE, issuedAt = now), source())
         val rejected = assertIs<RemoteDispatchResult.Rejected>(
             dispatcher.dispatch(
-                envelope(nonce = TEST_NONCE, actionRef = "ping", timestampMs = now),
+                envelope(nonce = TEST_NONCE, actionRef = "ping", issuedAt = now),
                 source(),
             ),
         )
         assertEquals("replay_detected", rejected.reason)
+        assertEquals(RemoteErrorCategory.REPLAY_DETECTED, rejected.category)
     }
 
     @Test
@@ -114,7 +152,7 @@ class RemoteCommandDispatcherTest {
         )
         val ready = assertIs<RemoteDispatchResult.Ready>(
             dispatcher.dispatch(
-                envelope(actionRef = "night-mode", nonce = TEST_NONCE_B, timestampMs = now),
+                envelope(actionRef = "night-mode", nonce = TEST_NONCE_B, issuedAt = now),
                 source(),
             ),
         )
@@ -151,6 +189,7 @@ class RemoteCommandDispatcherTest {
     @Test
     fun `voice rejects an unknown phrase`() {
         val rejected = assertIs<RemoteDispatchResult.Rejected>(dispatcher.dispatchVoice("dance"))
+        assertEquals(RemoteErrorCategory.NOT_FOUND, rejected.category)
         assertTrue(rejected.reason.contains("no mapping"), rejected.reason)
     }
 
@@ -158,12 +197,18 @@ class RemoteCommandDispatcherTest {
     fun `inbound validator uses the dispatcher and the unwired stub never maps`() {
         val inbound = ValidatingRemoteCommandInbound(dispatcher)
         val encoded = RemoteCommandEnvelopeCodec.encodeParameters(
-            envelope(actionRef = "ping", nonce = TEST_NONCE_B, timestampMs = now),
+            envelope(actionRef = "ping", nonce = TEST_NONCE_B, issuedAt = now),
+        )
+        store.save(
+            store.load().copy(
+                pairings = store.load().pairings + pairing(sourceNodeRef = "other-source"),
+            ),
         )
         assertIs<RemoteDispatchResult.Ready>(inbound.onEnvelope(encoded, source("other-source")))
         val unwired = UnwiredRemoteCommandInbound()
         val rejected = assertIs<RemoteDispatchResult.Rejected>(unwired.onEnvelope("{}", source()))
         assertTrue(rejected.reason.contains("not wired"), rejected.reason)
+        assertEquals(RemoteErrorCategory.CAPABILITY_OFF, rejected.category)
     }
 
     @Test
@@ -172,5 +217,31 @@ class RemoteCommandDispatcherTest {
         val result = assertIs<RemoteActionResult.NotImplemented>(StubRemoteActionExecutor().execute(ready.plan))
         assertTrue(result.reason.contains("not implemented"), result.reason)
         assertTrue(result.reason.contains("No wipe"), result.reason)
+    }
+
+    @Test
+    fun `generic macro run dryRun uses advertised ops only`() {
+        val result = assertIs<RemoteDispatchResult.MacroRun>(
+            dispatcher.dispatch(
+                envelope(
+                    actionRef = FleetRemoteEnvelope.OP_MACRO_RUN,
+                    nonce = TEST_NONCE_B,
+                    issuedAt = now,
+                    steps = listOf(
+                        MacroRunStepWire(op = FleetRemoteEnvelope.OP_CAPABILITIES_GET),
+                        MacroRunStepWire(op = "not.advertised"),
+                    ),
+                    dryRun = true,
+                ),
+                source(),
+                FleetRemoteEnvelope.OP_MACRO_RUN,
+            ),
+        )
+        assertTrue(result.result.dryRun)
+        assertTrue(result.result.atomicStopped)
+        assertEquals(2, result.result.steps.size)
+        assertTrue(result.result.steps[0].ok)
+        assertEquals(RemoteErrorCategory.UNSUPPORTED_OP, result.result.steps[1].category)
+        assertTrue(result.result.steps.none { it.executed })
     }
 }

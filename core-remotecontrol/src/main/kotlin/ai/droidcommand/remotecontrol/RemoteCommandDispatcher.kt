@@ -3,21 +3,32 @@ package ai.droidcommand.remotecontrol
 import ai.droidcommand.security.FleetIntegrationClass
 
 /**
- * Maps an inbound frozen envelope, a voice phrase, or a named macro onto a
+ * Maps an inbound ratified envelope, a voice phrase, or a named macro onto a
  * [RemoteDispatchPlan]. Does not execute anything.
  *
- * Authorization identity is [SourceIdentity] (package+cert / sendingUid).
- * [TriggerInfo] and [FleetRemoteEnvelope.destructive] are **not** used to
- * allow or deny. [actionRef] is classified independently.
+ * Inbound envelopes are **untrusted requests**. Authorization identity is
+ * [SourceIdentity] (package+cert / sendingUid). [TriggerInfo] and
+ * [FleetRemoteEnvelope.destructive] are **not** used to allow or deny.
+ * [actionRef] is classified independently.
+ *
+ * Trust order (inbound only): pairing → external-control (OFF default) →
+ * replay → policy. A remote trigger never auto-approves and never auto-sends.
  */
 class RemoteCommandDispatcher(
     private val store: RemoteControlStore,
     private val replayGuard: ReplayGuard = ReplayGuard(),
     private val statusTray: RemoteStatusTray? = null,
+    private val advertisedOps: List<OpDescriptor> = ControllerCapabilityCatalog.OPS,
 ) {
+    private val nodeMacroRunner: NodeMacroRunner
+        get() = NodeMacroRunner(
+            advertised = advertisedOps,
+            externalControlEnabled = store.load().externalControlEnabled,
+        )
+
     fun dispatch(rawJson: String, source: SourceIdentity): RemoteDispatchResult {
         val decoded = decodeInbound(rawJson)
-            ?: return RemoteDispatchResult.Rejected("invalid envelope")
+            ?: return TrustPipeline.reject(RemoteErrorCategory.INVALID_PARAMETERS, "invalid envelope")
         return dispatch(decoded.second, source, decoded.first)
     }
 
@@ -26,43 +37,36 @@ class RemoteCommandDispatcher(
         source: SourceIdentity,
         operation: String = FleetRemoteEnvelope.OP_REMOTE_COMMAND,
     ): RemoteDispatchResult {
-        when (val replay = replayGuard.check(envelope, source)) {
-            is ReplayDecision.Reject -> return RemoteDispatchResult.Rejected(replay.code)
-            ReplayDecision.Accept -> Unit
-        }
-        statusTray?.let { tray ->
-            if (tray is InMemoryRemoteStatusTray) {
-                tray.consumeEnvelope(envelope, source)
-            } else {
-                tray.consume(
-                    NodeStatusSnapshot(
-                        sourceNodeRef = source.sourceNodeRef,
-                        actionRef = envelope.actionRef,
-                        payload = envelope.args,
-                        receivedAtMs = envelope.timestampMs,
-                    ),
-                )
-            }
-        }
+        TrustPipeline.evaluate(source, store.load(), envelope, replayGuard)?.let { return it }
+        consumeTray(envelope, source)
         val op = operation.ifBlank { FleetRemoteEnvelope.OP_REMOTE_COMMAND }
         return when (op) {
             FleetRemoteEnvelope.OP_CAPABILITIES_GET ->
-                RemoteDispatchResult.Capabilities(
-                    protocolMajor = FleetRemoteEnvelope.PROTOCOL_MAJOR,
-                    protocolMinor = FleetRemoteEnvelope.PROTOCOL_MINOR,
-                    ops = listOf(
-                        FleetRemoteEnvelope.OP_CAPABILITIES_GET,
-                        FleetRemoteEnvelope.OP_REMOTE_COMMAND,
-                        FleetRemoteEnvelope.OP_MACRO_STEP,
-                        FleetRemoteEnvelope.OP_MACRO_RUN,
-                    ),
-                )
+                RemoteDispatchResult.Capabilities(ControllerCapabilityCatalog.advertisement())
             FleetRemoteEnvelope.OP_MACRO_RUN ->
                 resolveMacroRun(envelope)
             FleetRemoteEnvelope.OP_MACRO_STEP ->
                 resolveMacroStep(envelope)
-            else -> resolveAction(envelope.actionRef, TriggerKind.SMS, envelope)
+            FleetRemoteEnvelope.OP_REMOTE_COMMAND ->
+                resolveAction(envelope.actionRef, TriggerKind.SMS, envelope)
+            else -> TrustPipeline.reject(
+                RemoteErrorCategory.UNSUPPORTED_OP,
+                "unsupported op '$op'",
+            )
         }
+    }
+
+    private fun consumeTray(envelope: FleetRemoteEnvelope, source: SourceIdentity) {
+        val snapshot = NodeStatusSnapshot(
+            sourceNodeRef = source.sourceNodeRef,
+            domain = StatusTrayDomain.fromSource(source, envelope),
+            capability = envelope.actionRef,
+            healthy = envelope.args["healthy"]?.toBooleanStrictOrNull(),
+            actionRef = envelope.actionRef,
+            payload = envelope.args,
+            receivedAtMs = envelope.issuedAt,
+        )
+        statusTray?.consume(snapshot)
     }
 
     private fun decodeInbound(rawJson: String): Pair<String, FleetRemoteEnvelope>? {
@@ -75,8 +79,10 @@ class RemoteCommandDispatcher(
             val envelope = RemoteCommandEnvelopeCodec.decodeTermuxBlob(rawJson)
             val operation = if (envelope.actionRef == FleetRemoteEnvelope.OP_CAPABILITIES_GET) {
                 FleetRemoteEnvelope.OP_CAPABILITIES_GET
-            } else if (envelope.macroId != null && envelope.steps != null) {
+            } else if (envelope.steps != null) {
                 FleetRemoteEnvelope.OP_MACRO_RUN
+            } else if (envelope.op != null) {
+                FleetRemoteEnvelope.OP_MACRO_STEP
             } else if (envelope.macroId != null && envelope.stepIndex != null) {
                 FleetRemoteEnvelope.OP_MACRO_STEP
             } else {
@@ -104,32 +110,37 @@ class RemoteCommandDispatcher(
         val mappingMatch = VoicePhraseMatcher.match(transcript, config.mappings)
         val macroMatch = VoicePhraseMatcher.matchMacro(transcript, config.macros)
         if (mappingMatch is VoiceMatch.Ambiguous) {
-            return RemoteDispatchResult.Rejected(
+            return TrustPipeline.reject(
+                RemoteErrorCategory.INVALID_PARAMETERS,
                 "ambiguous voice phrase: ${mappingMatch.mappingIds.joinToString()}",
             )
         }
         if (macroMatch is MacroVoiceMatch.Ambiguous) {
-            return RemoteDispatchResult.Rejected(
+            return TrustPipeline.reject(
+                RemoteErrorCategory.INVALID_PARAMETERS,
                 "ambiguous voice phrase: ${macroMatch.macroIds.joinToString()}",
             )
         }
         val mappingHit = mappingMatch is VoiceMatch.Hit
         val macroHit = macroMatch is MacroVoiceMatch.Hit
         if (mappingHit && macroHit) {
-            return RemoteDispatchResult.Rejected("ambiguous voice phrase: mapping and macro both match")
+            return TrustPipeline.reject(
+                RemoteErrorCategory.INVALID_PARAMETERS,
+                "ambiguous voice phrase: mapping and macro both match",
+            )
         }
         return when {
             mappingMatch is VoiceMatch.Hit ->
                 RemoteDispatchResult.Ready(plan(mappingMatch.mapping, TriggerKind.VOICE, envelope = null))
             macroMatch is MacroVoiceMatch.Hit ->
                 RemoteDispatchResult.Ready(planMacro(macroMatch.macro, TriggerKind.VOICE, envelope = null))
-            else -> RemoteDispatchResult.Rejected("no mapping for that phrase")
+            else -> TrustPipeline.reject(RemoteErrorCategory.NOT_FOUND, "no mapping for that phrase")
         }
     }
 
     fun dispatchMacro(macroId: String): RemoteDispatchResult {
         val macro = store.load().macros.find { it.id == macroId }
-            ?: return RemoteDispatchResult.Rejected("unknown macro '$macroId'")
+            ?: return TrustPipeline.reject(RemoteErrorCategory.NOT_FOUND, "unknown macro '$macroId'")
         return RemoteDispatchResult.Ready(planMacro(macro, TriggerKind.MANUAL, envelope = null))
     }
 
@@ -157,46 +168,44 @@ class RemoteCommandDispatcher(
             return RemoteDispatchResult.Ready(planMacro(macro, trigger, envelope))
         }
         val spoof = VictorSpoofRegistry.entry(actionRef)
-            ?: return RemoteDispatchResult.Rejected("no mapping for actionRef '$actionRef'")
+            ?: return TrustPipeline.reject(
+                RemoteErrorCategory.NOT_FOUND,
+                "no mapping for actionRef '$actionRef'",
+            )
         return RemoteDispatchResult.Ready(planSpoof(spoof, trigger, envelope))
     }
 
     private fun resolveMacroRun(envelope: FleetRemoteEnvelope): RemoteDispatchResult {
+        val wireSteps = envelope.steps
+        if (!wireSteps.isNullOrEmpty()) {
+            val result = nodeMacroRunner.run(wireSteps, dryRun = envelope.dryRun == true)
+            return RemoteDispatchResult.MacroRun(result)
+        }
         val macroId = envelope.macroId ?: envelope.actionRef
         val stored = store.load().macros.find { it.id == macroId }
-        if (stored != null) {
-            return RemoteDispatchResult.Ready(planMacro(stored, TriggerKind.SMS, envelope))
-        }
-        if (envelope.dryRun == true && envelope.steps != null) {
-            val synthesized = Macro(
-                id = macroId,
-                displayName = macroId,
-                steps = envelope.steps.mapIndexed { index, wire ->
-                    MacroStep(
-                        id = "step-${index + 1}",
-                        target = NodeRef(
-                            nodeId = wire.targetNodeRef,
-                            integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
-                        ),
-                        actionRef = wire.actionRef,
-                        args = wire.args,
-                        destructive = wire.destructive,
-                    )
-                },
-                trigger = MacroTrigger(kind = MacroTriggerKind.MANUAL),
-            )
-            return RemoteDispatchResult.Ready(planMacro(synthesized, TriggerKind.SMS, envelope))
-        }
-        return RemoteDispatchResult.Rejected("unknown macro '$macroId'")
+            ?: return TrustPipeline.reject(RemoteErrorCategory.NOT_FOUND, "unknown macro '$macroId'")
+        return RemoteDispatchResult.Ready(planMacro(stored, TriggerKind.SMS, envelope))
     }
 
     private fun resolveMacroStep(envelope: FleetRemoteEnvelope): RemoteDispatchResult {
-        val macroId = envelope.macroId ?: return RemoteDispatchResult.Rejected("macro.step needs macroId")
+        if (envelope.op != null || advertisedOps.any { it.name == envelope.stepOp() }) {
+            val result = nodeMacroRunner.runStep(
+                op = envelope.stepOp(),
+                params = envelope.stepParams(),
+                dryRun = envelope.dryRun == true,
+            )
+            return RemoteDispatchResult.MacroRun(result)
+        }
+        val macroId = envelope.macroId
+            ?: return TrustPipeline.reject(RemoteErrorCategory.INVALID_PARAMETERS, "macro.step needs op or macroId")
         val macro = store.load().macros.find { it.id == macroId }
-            ?: return RemoteDispatchResult.Rejected("unknown macro '$macroId'")
+            ?: return TrustPipeline.reject(RemoteErrorCategory.NOT_FOUND, "unknown macro '$macroId'")
         val index = envelope.stepIndex ?: 0
         if (index !in macro.steps.indices) {
-            return RemoteDispatchResult.Rejected("macro.step index $index out of range")
+            return TrustPipeline.reject(
+                RemoteErrorCategory.INVALID_PARAMETERS,
+                "macro.step index $index out of range",
+            )
         }
         return RemoteDispatchResult.Ready(planMacro(macro, TriggerKind.SMS, envelope))
     }
@@ -212,7 +221,7 @@ class RemoteCommandDispatcher(
                 integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
             )
         val command = envelope?.let {
-            mapping.toRemoteCommand(target, it.nonce, it.timestampMs, it.args)
+            mapping.toRemoteCommand(target, it.nonce, it.issuedAt, it.args)
         }
         return RemoteDispatchPlan(
             mapping = mapping,
@@ -266,7 +275,7 @@ class RemoteCommandDispatcher(
                 actionRef = spoof.actionRef,
                 args = it.args,
                 nonce = it.nonce,
-                timestampMs = it.timestampMs,
+                timestampMs = it.issuedAt,
                 requestId = it.requestId,
                 ttlMs = it.ttlMs,
             )
@@ -324,10 +333,17 @@ data class RemoteDispatchPlan(
 
 sealed class RemoteDispatchResult {
     data class Ready(val plan: RemoteDispatchPlan) : RemoteDispatchResult()
-    data class Rejected(val reason: String) : RemoteDispatchResult()
-    data class Capabilities(
-        val protocolMajor: Int,
-        val protocolMinor: Int,
-        val ops: List<String>,
+    data class Rejected(
+        val reason: String,
+        val category: RemoteErrorCategory,
     ) : RemoteDispatchResult()
+    data class Capabilities(
+        val advertisement: CapabilityAdvertisement,
+    ) : RemoteDispatchResult() {
+        val protocolMajor: Int get() = advertisement.protocolMajor
+        val protocolMinor: Int get() = advertisement.protocolMinor
+        val ops: List<OpDescriptor> get() = advertisement.ops
+        val opNames: List<String> get() = advertisement.ops.map { it.name }
+    }
+    data class MacroRun(val result: NodeMacroRunResult) : RemoteDispatchResult()
 }

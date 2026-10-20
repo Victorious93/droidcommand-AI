@@ -62,6 +62,7 @@
         <package android:name="com.victorious.mesh" />
         <package android:name="com.victorious.browser" />
         <package android:name="com.victorious.sms" />
+        <package android:name="com.victorious.spoof" />
 
         <!-- Messenger transport (core-fleet-messenger): a paired EXTERNAL_NODE package is only visible to the
              trust check if it is named here; an unnamed one reads as "not installed" and is refused. Debug /

@@ -52,7 +52,8 @@ class ValidatingRemoteCommandInbound(
 class UnwiredRemoteCommandInbound : RemoteCommandInbound {
     override fun onEnvelope(rawJson: String, source: SourceIdentity): RemoteDispatchResult =
         RemoteDispatchResult.Rejected(
-            "Fleet remote inbound is not wired. " +
+            reason = "Fleet remote inbound is not wired. " +
                 "Live send for ${FleetRemoteEnvelope.OP_REMOTE_COMMAND} is a TODO.",
+            category = RemoteErrorCategory.CAPABILITY_OFF,
         )
 }

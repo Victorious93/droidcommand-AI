@@ -59,6 +59,7 @@ class FleetMessengerControllerTest {
         assertEquals("com.victorious.mesh", ExternalNodeCatalog.MESH.primaryPackage)
         assertEquals("com.victorious.browser", ExternalNodeCatalog.BROWSER.primaryPackage)
         assertEquals("com.victorious.sms", ExternalNodeCatalog.VICTOR_SMS.primaryPackage)
+        assertEquals("com.victorious.spoof", ExternalNodeCatalog.VICTOR_SPOOF.primaryPackage)
         assertEquals("rootforge.capabilities.get", ExternalNodeCatalog.ROOTFORGE.capabilitiesOperation)
         assertEquals("filemanager.status", ExternalNodeCatalog.FILE_MANAGER.statusOperation)
         assertEquals("keyboard.capabilities.get", ExternalNodeCatalog.KEYBOARD.capabilitiesOperation)
@@ -70,6 +71,7 @@ class FleetMessengerControllerTest {
         assertNull(ExternalNodeCatalog.FILE_MANAGER.upOperation)
         assertNull(ExternalNodeCatalog.BROWSER.upOperation)
         assertNull(ExternalNodeCatalog.VICTOR_SMS.upOperation)
+        assertNull(ExternalNodeCatalog.VICTOR_SPOOF.upOperation)
         assertEquals("sms.capabilities.get", ExternalNodeCatalog.VICTOR_SMS.capabilitiesOperation)
         assertEquals("sms.status", ExternalNodeCatalog.VICTOR_SMS.statusOperation)
         assertTrue(ExternalNodeCatalog.KEYBOARD.notes.contains("Never forwards typed text"))
@@ -77,8 +79,12 @@ class FleetMessengerControllerTest {
         assertTrue(ExternalNodeCatalog.BROWSER.notes.contains("own release key"))
         assertTrue(ExternalNodeCatalog.VICTOR_SMS.notes.contains("remote.command"))
         assertTrue(ExternalNodeCatalog.VICTOR_SMS.notes.contains("fail-open"))
+        assertEquals("spoof.capabilities.get", ExternalNodeCatalog.VICTOR_SPOOF.capabilitiesOperation)
+        assertEquals("spoof.status", ExternalNodeCatalog.VICTOR_SPOOF.statusOperation)
+        assertTrue(ExternalNodeCatalog.VICTOR_SPOOF.notes.contains("Isolated from"))
+        assertTrue(ExternalNodeCatalog.VICTOR_SPOOF.notes.contains("fail-open"))
         assertEquals(
-            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms"),
+            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof"),
             ExternalNodeCatalog.all.map { it.id },
         )
     }

@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 
 class VictorSpoofRegistryTest {
     private val now = 40_000L
-    private val store = InMemoryRemoteControlStore()
+    private val store = InMemoryRemoteControlStore(inboundConfig())
     private val dispatcher = RemoteCommandDispatcher(store, ReplayGuard(nowMs = { now }))
 
     @Test
@@ -17,6 +17,9 @@ class VictorSpoofRegistryTest {
             assertFalse(ActionRefClassifier.isDestructive(actionRef, stepFlag = true), actionRef)
         }
         assertTrue(ActionRefClassifier.isDestructive("wipe", stepFlag = false))
+        assertTrue(ActionRefClassifier.isDestructive("flash", stepFlag = false))
+        assertTrue(ActionRefClassifier.isDestructive("unlock_bootloader", stepFlag = false))
+        assertEquals("com.victorious.spoof", VictorSpoofRegistry.PACKAGE)
     }
 
     @Test
@@ -25,7 +28,7 @@ class VictorSpoofRegistryTest {
             dispatcher.dispatch(
                 envelope(
                     actionRef = "spoof.profile.apply",
-                    timestampMs = now,
+                    issuedAt = now,
                     destructive = true,
                 ),
                 source(),

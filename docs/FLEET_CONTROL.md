@@ -354,3 +354,33 @@ key, never AIDL.
 
 Status tray consume+publish and unified local backup are controller-side
 skeletons. Live privileged execution is still absent.
+
+## 2026-10-20c — Ratified nested-auth protocol + VictorSpoof is the 11th member
+
+Fleet Orchestrator **ratified** the remote protocol. This **overrides**
+the 2026-10-20b top-level-field freeze. Spec:
+`docs/specs/REMOTE_CONTROL.md`.
+
+- Nested `auth { nonce, issuedAt, ttlMs }` (not top-level).
+- `BRIDGE_PROTOCOL_MINOR = 1` advertised in `capabilities.get`.
+- Generic node surface: `OpDescriptor`, `macro.run` / `macro.step`
+  (sequential, partial, no rollback; dryRun validates without executing).
+- Controller inbound action `ai.droidcommand.app.action.BRIDGE` (constant
+  only; no exported receiver in this skeleton).
+- Trust: inbound is an untrusted request. VictorSMS whitelist + code word
+  is delivery, not authorization. Order: pairing → external-control OFF →
+  replay → policy. Remote never auto-approves / auto-sends.
+- Error categories extended with unauthorized / replay_detected / expired /
+  external_control_disabled / confirmation_required / unsupported_op /
+  capability_off.
+
+**VictorSpoof** (`com.victorious.spoof`) **is** `KnownFleet.VICTOR_SPOOF`
+(`wiringOrder` 11, empty certs / fail-open). Isolated from
+wipe/power-off/lock/flash/bootloader. Never DependencyGuard, never a
+shared signing key, never AIDL.
+
+Status tray (mesh/VPN/browser/SMS/health) consume+publish and versioned
+local backup of macros+mappings+pairings are controller-side skeletons.
+Shared tray transport and unified fleet backup schema remain
+[CONTRACT TBD pending Fleet Orchestrator]. Live privileged execution is
+still absent.

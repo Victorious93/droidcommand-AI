@@ -48,6 +48,23 @@ class RemoteControlSettingsController(
         store.save(config.copy(macros = config.macros.filterNot { it.id == id }))
     }
 
+    fun putPairing(pairing: DevicePairing) {
+        val config = store.load()
+        store.save(
+            config.copy(pairings = config.pairings.filterNot { it.sourceNodeRef == pairing.sourceNodeRef } + pairing),
+        )
+    }
+
+    fun removePairing(sourceNodeRef: String) {
+        val config = store.load()
+        store.save(config.copy(pairings = config.pairings.filterNot { it.sourceNodeRef == sourceNodeRef }))
+    }
+
+    fun setExternalControlEnabled(enabled: Boolean) {
+        val config = store.load()
+        store.save(config.copy(externalControlEnabled = enabled))
+    }
+
     fun previewVoice(transcript: String): RemoteDispatchResult = dispatcher.dispatchVoice(transcript)
 
     fun previewSms(rawJson: String, source: SourceIdentity): RemoteDispatchResult =

@@ -1,19 +1,31 @@
-# Remote Control — fleet envelope
+# Remote Control — fleet envelope (RATIFIED)
 
 Status: **SKELETON**. Spec + JVM data model + Settings UI only.
 
-**Phase boundary (this PR):** frozen fleet envelope codec, three
-controller-side transport bindings, replay guard, mapping/macros model,
-Settings skeleton, approval-gated tool names. **No live privileged
-execution.** No real wipe, power-off, lock, RustDesk, Messenger bind,
-AIDL command, or Termux privileged action. Seams return "not implemented"
-after `SecureToolExecutor` → `ApprovalPrompt`.
+**Protocol status:** RATIFIED by the Fleet Orchestrator (this document).
+Earlier top-level-field / `[CONTRACT TBD]` envelope sketches are
+**superseded**. Major stays `BRIDGE_PROTOCOL_MAJOR = 1`. Minor is
+`BRIDGE_PROTOCOL_MINOR = 1`, advertised in `capabilities.get`. Do **not**
+add a required `protocol_minor` field on `BridgeRequest` (that would break
+existing nodes).
+
+**Phase boundary (this PR):** ratified envelope codec (nested `auth`
+object), three controller-side transport bindings, nonce-only ReplayGuard,
+generic command surface (`capabilities.get` / `macro.run` / `macro.step` +
+op descriptors), inbound controller bridge action, trust pipeline, error
+categories, mapping/macros model, Settings skeleton, approval-gated tool
+names. **No live privileged execution.** No real wipe, power-off, lock,
+flash, bootloader, RustDesk, Messenger bind, AIDL command, or Termux
+privileged action. Seams return "not implemented" after
+`SecureToolExecutor` → `ApprovalPrompt`. A remote trigger **never**
+auto-approves and **never** auto-sends on behalf of a remote caller.
 
 Honesty: **ON DISK / UNVERIFIED**.
 
-DroidCommand AI is the controller. It commands every fleet APK via
-direct AI control and via macros, across `EXTERNAL_NODE`,
-`BOUND_COMPANION`, and `TERMUX_IPC`.
+DroidCommand AI is the **controller / sole authorizer**. It commands every
+fleet APK via direct AI control and via macros, across `EXTERNAL_NODE`,
+`BOUND_COMPANION`, and `TERMUX_IPC`. An inbound node→controller command is
+an **untrusted request**.
 
 ---
 
@@ -22,14 +34,47 @@ direct AI control and via macros, across `EXTERNAL_NODE`,
 | In this PR | Not in this PR |
 |---|---|
 | Spec, JVM model, unit tests, Settings skeleton | Live privileged execution |
-| Frozen envelope + three binding codecs | Live Messenger / AIDL / RUN_COMMAND send |
-| Replay cache keyed by `(sourceNodeRef, nonce)` | VictorSMS cert pins (unpinned / fail-open) |
+| Nested `auth { nonce, issuedAt, ttlMs }` codec | Live Messenger / AIDL / RUN_COMMAND send |
+| ReplayGuard seen-nonce cache | VictorSMS / VictorSpoof cert pins (unpinned / fail-open) |
 | Advisory `destructive` ignored for gating | Changing Kali / pentest / YOLO pentest gates |
-| Macros list/create/edit/bind + dry-run | Live macro run, live scheduler |
-| Status-tray consume+publish | Live node status bind |
-| Unified local backup (no secrets) | Cloud backup |
-| VictorSpoof actionRef registry (isolated) | VictorSpoof package/certs / KnownFleet row |
+| Generic `capabilities.get` + `OpDescriptor` | Live node capability bind |
+| Node `macro.run` / `macro.step` runner (sequential, partial, no rollback) | Live macro execution / scheduler |
+| Trust pipeline (pairing → external-control OFF → replay → policy) | Exported controller BRIDGE receiver |
+| Error category enum | Auto-approve / auto-send for a remote caller |
+| Status-tray consume+publish (generic model) | Shared VictorLaunch schema/transport |
+| Unified local JSON backup (macros + mappings + pairings, versioned) | Unified fleet backup schema |
+| VictorSpoof `KnownFleet` row (isolated from destructive) | VictorSpoof cert pins / live spoof |
 | `docs/MANUAL.md` + in-app Help | — |
+
+---
+
+## TRUST MODEL (critical)
+
+**An inbound command is an UNTRUSTED REQUEST.**
+
+A whitelisted SMS sender + code word (VictorSMS's **own** check) is
+**not** authorization — it only **delivers** the request to the
+controller. The controller is the **sole authorizer and executor**.
+
+The dispatcher re-applies, **in this order**:
+
+1. **Caller-id** = package + cert pairing of the source node
+   (`Message.sendingUid` / Binder uid + signature permission /
+   Termux `RUN_COMMAND` permission + allow-list). Never a payload field.
+2. **External-control switch** — **OFF by default**. Enforced on **both**
+   node ops and the controller's inbound surface.
+3. **Envelope / replay check** (`auth` object + seen-nonce cache).
+4. **The controller's own policy gates** (mapping/macro exists, independent
+   `actionRef` classification, `SecureToolExecutor` → `ApprovalPrompt`).
+
+Destructive ops (**wipe, power-off, lock, flash, bootloader**) **always**
+stay behind device-admin / root / Shizuku **and** explicit on-device
+approval. A remote trigger **never auto-approves**. The controller
+**never auto-sends** on behalf of a remote caller.
+
+`trigger.sourceNumber` / `matchedKeyword` / `rawExtras` are telemetry
+only. Envelope `destructive` is **advisory only** — the receiver
+classifies `actionRef` independently.
 
 ---
 
@@ -38,49 +83,89 @@ direct AI control and via macros, across `EXTERNAL_NODE`,
 One field set, one op set, one replay rule, one gating rule. Three
 encodings (appendices A–C). **Do not invent per-class field names.**
 
-### Ops
+### Ops (generic command surface — every fleet APK)
 
 | Op | Meaning |
 |---|---|
-| `capabilities.get` | Advertise protocol **minor 1** (major stays 1). |
-| `remote.command` | One action on `targetNodeRef`. |
-| `macro.step` | One step of a named macro. |
-| `macro.run` | Whole macro (optional `dryRun`). |
+| `capabilities.get` | Advertise protocol **minor 1** (major stays 1) plus per-op descriptors. |
+| `remote.command` | One action on `targetNodeRef`. Controller inbound op. |
+| `macro.step` | `{ op, params }` — one advertised op on **this** node. |
+| `macro.run` | `{ steps: [{ op, params, onError, timeoutMs }], dryRun }` on **this** node. |
 
 Outer framing is still BridgeRequest / BridgeResponse
 (`protocol_major` 1, `Message.what` 1 request / 2 response, action
 `<pkg>.action.BRIDGE`).
 
-### Top-level fields (frozen)
+Controller inbound (NEW direction; the historical standard was
+controller→node only):
 
-There is **no nested `auth` object**. Fields are top-level:
+- Action: `ai.droidcommand.app.action.BRIDGE`
+- Op: `remote.command`
+- This skeleton **does not** export a live Messenger receiver.
+
+### `capabilities.get` result
+
+```json
+{
+  "protocolMajor": 1,
+  "protocolMinor": 1,
+  "ops": [
+    {
+      "name": "capabilities.get",
+      "kind": "read",
+      "remoteAllowed": true,
+      "requiresConfirm": false
+    }
+  ]
+}
+```
+
+Per-op descriptor: `{ name, kind: read|action|destructive, remoteAllowed:
+Boolean, requiresConfirm: Boolean }`.
+
+### Nested `auth` object (RATIFIED — not top-level)
+
+Anti-replay fields live **under `auth`**, not at the top level of
+`parameters`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `auth.nonce` | string | 128-bit unique (hex 32 chars, or equivalent base64). |
+| `auth.issuedAt` | number | Epoch ms (`Long`). |
+| `auth.ttlMs` | number | Default `120000`. Max `300000`. |
+
+Other top-level fields:
 
 | Field | Type | Notes |
 |---|---|---|
 | `requestId` | string | **The existing BridgeRequest `request_id`.** Reuse it. Do **not** add a second id. Correlates the response. |
-| `targetNodeRef` | string | Destination node id (`rootforge-<32hex>`, …) or the literal `controller` for inbound triggers. |
+| `targetNodeRef` | string | Destination node id or the literal `controller` for inbound. |
 | `actionRef` | string | Op to run on the target (e.g. `scan.run`, or a controller mapping id). |
 | `args` | object | Default `{}`. |
-| `nonce` | string | 128-bit unique (32 hex). Replay key together with transport `sourceNodeRef`. |
-| `timestampMs` | number | `issuedAt` epoch ms. |
-| `ttlMs` | number | Default `120000`. Max `300000`. |
 | `destructive` | bool | **ADVISORY ONLY.** Never used to authorize. |
 
-`macro.step` also carries:
+`macro.step` (generic node surface):
 
 | Field | Type | Notes |
 |---|---|---|
-| `macroId` | string | Macro id. |
-| `stepIndex` | number | 0-based. |
-| `onError` | `"abort"` \| `"continue"` | Default `"abort"`. |
+| `op` | string | Must be an advertised op on **this** node. |
+| `params` | object | Default `{}`. |
 
-`macro.run` also carries:
+`macro.run` (generic node surface):
 
 | Field | Type | Notes |
 |---|---|---|
-| `macroId` | string | Macro id. |
-| `steps` | array | Ordered step objects (`targetNodeRef`, `actionRef`, `args`, advisory `destructive`). |
-| `dryRun` | bool | Validate only. |
+| `steps` | array | `{ op, params, onError: "abort"\|"continue", timeoutMs }`. |
+| `dryRun` | bool | Validate params + gates **without executing**. |
+
+**Node macro runner:** dispatches **only** to that node's advertised ops,
+runs steps **sequentially**, returns per-step results. **`atomic`** =
+stop-on-first-error (`onError: "abort"`) **and report partial**. Do
+**not** promise rollback. `onError: "continue"` keeps going.
+
+Controller Settings macros (voice / SMS / schedule / manual spanning
+nodes) still exist above this surface; they are not a second wire
+contract.
 
 ### Authorization identity (prominent)
 
@@ -91,8 +176,7 @@ on Messenger; Binder caller uid + signature permission on AIDL;
 **Never authorize from a payload field.** A self-reported phone number,
 keyword flag, or `destructive:false` cannot grant anything.
 
-VictorSMS may attach an informational sub-object (the only nested
-object besides `args` / `steps`):
+VictorSMS may attach an informational sub-object:
 
 ```json
 "trigger": {
@@ -102,11 +186,10 @@ object besides `args` / `steps`):
 }
 ```
 
-`trigger.sourceNumber`, `trigger.matchedKeyword`, and `trigger.rawExtras`
-are **telemetry / UX only**. The dispatcher must not read them for
-allow/deny. VictorSMS still owns whitelist + code word + external-control
-switch (OFF by default) + consent **on its side**. DCA owns
-`actionRef` → mapping/macro.
+VictorSMS still owns whitelist + code word + its own external-control
+switch (OFF by default) + consent **on its side**. Those checks only
+**deliver** the request. DCA owns pairing, the controller external-control
+switch, replay, and `actionRef` → mapping/macro.
 
 ### Example (`remote.command` inbound to the controller)
 
@@ -123,9 +206,11 @@ Outer BridgeRequest (`request_id` is `requestId`):
     "targetNodeRef": "controller",
     "actionRef": "lock-tablet",
     "args": {},
-    "nonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "timestampMs": 1760920000000,
-    "ttlMs": 120000,
+    "auth": {
+      "nonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "issuedAt": 1760920000000,
+      "ttlMs": 120000
+    },
     "destructive": false,
     "trigger": {
       "sourceNumber": "+15555550100",
@@ -136,7 +221,8 @@ Outer BridgeRequest (`request_id` is `requestId`):
 }
 ```
 
-`requestId` is **not** duplicated inside `parameters`.
+`requestId` is **not** duplicated inside `parameters`. `nonce` /
+`issuedAt` / `ttlMs` are **not** top-level parameter fields.
 
 ### SMS flow
 
@@ -146,13 +232,16 @@ sequenceDiagram
     participant VS as VictorSMS
     participant DCA as DroidCommand AI
     Phone->>VS: SMS body
-    Note over VS: whitelist AND code word<br/>external-control ON + consent
-    VS->>DCA: BridgeRequest remote.command<br/>(frozen top-level fields + trigger{})
-    Note over DCA: identity = package+cert<br/>(sendingUid). trigger{} ignored.
-    DCA->>DCA: ReplayGuard (sourceNodeRef, nonce)
+    Note over VS: whitelist AND code word<br/>external-control ON + consent<br/>(delivery only — NOT authorization)
+    VS->>DCA: BridgeRequest remote.command<br/>(nested auth + trigger{})
+    Note over DCA: UNTRUSTED REQUEST
+    Note over DCA: (1) package+cert pairing
+    Note over DCA: (2) controller external-control OFF-default
+    Note over DCA: (3) ReplayGuard seen-nonce
+    Note over DCA: (4) controller policy
     DCA->>DCA: classify actionRef independently
     DCA->>DCA: SecureToolExecutor → ApprovalPrompt
-    Note over DCA: live execute is a stub
+    Note over DCA: live execute is a stub<br/>never auto-approve / never auto-send
 ```
 
 ### Voice flow
@@ -168,30 +257,42 @@ sequenceDiagram
     Note over DCA: live execute is a stub
 ```
 
+Local voice / manual Run are **not** inbound node commands; they still
+never auto-approve destructive work.
+
 ---
 
 ## 2. Replay
 
-Cache keyed by **`(sourceNodeRef, nonce)`**, not a bare nonce.
-`sourceNodeRef` comes from the **transport identity** (paired node id /
-companion id / Termux node), never from `trigger`.
-
-Retention: **≥ 10 minutes** (≥ max `ttlMs` of 5 minutes).
+Controller keeps a **seen-nonce cache** for the TTL window (retention ≥
+10 minutes, ≥ max `ttlMs`). Duplicate nonce → `replay_detected`
+regardless of source.
 
 Reject:
 
 | Condition | Code |
 |---|---|
-| `now > timestampMs + ttlMs` | `expired` |
-| `\|now - timestampMs\| > 120000` | `expired` (clock skew) |
-| nonce already seen for that `sourceNodeRef` | `replay_detected` |
-| optional: `timestampMs` older than last-accepted for that source | `expired` |
+| nonce already seen | `replay_detected` |
+| `now > issuedAt + ttlMs` | `expired` |
+| `\|now - issuedAt\| > 120000` | `expired` (clock skew) |
 
 In-memory in this skeleton (lost on process death). Not a MAC.
 
 ---
 
-## 3. Destructive flag is advisory
+## 3. Error categories (RATIFIED)
+
+Extend `{ invalid_parameters, not_paired, not_found, internal }` with:
+
+`unauthorized`, `replay_detected`, `expired`,
+`external_control_disabled`, `confirmation_required`, `unsupported_op`,
+`capability_off`.
+
+Modeled as `RemoteErrorCategory` in `core-remotecontrol`.
+
+---
+
+## 4. Destructive flag is advisory
 
 The **receiver independently classifies `actionRef`** (mapping, macro
 step, or `RemoteAction` table) and enforces
@@ -216,15 +317,17 @@ ACTIVE/EXPLOIT gates and `I confirm these targets are authorized` are
 
 ---
 
-## 4. Mappings, targets, macros
+## 5. Mappings, targets, macros, pairings
 
-Controller Settings store **command mappings, target devices, and
-macros**. They do **not** store VictorSMS whitelist or code word.
+Controller Settings store **command mappings, target devices, macros,
+device pairings, and the external-control switch (OFF by default)**.
+They do **not** store VictorSMS whitelist or code word.
 
 ```
 RemoteCommandMapping  id, displayName, voicePhrase?, smsCommandId?,
                       targetNodeId, action, deliveryMode, destructive
 TargetDevice          nodeId, displayName, integrationClass, packageName?
+DevicePairing         sourceNodeRef, packageName, certSha256?
 Macro                 id, displayName, steps[], trigger
 MacroStep             id, target NodeRef, actionRef, args, destructive,
                       onError abort|continue
@@ -235,18 +338,26 @@ or manual. Voice match is exact after normalize. Dry-run validates; live
 run is a stub. A macro with any independently classified destructive
 step requires approval at run.
 
-**VictorSpoof** actionRefs (`spoof.profile.apply`, `spoof.profile.clear`,
-`spoof.status`) live in `VictorSpoofRegistry`. They are **isolated from
-destructive classification**: even `destructive:true` on the envelope
-or a step flag does not turn them into wipe/power-off/lock /
-`remote_destructive`. Package, node-id, and certs are [CONTRACT TBD];
-VictorSpoof is **not** a `KnownFleet` member in this skeleton.
+**VictorSpoof** (`com.victorious.spoof`, `KnownFleet.VICTOR_SPOOF`,
+wiring order 11, `EXTERNAL_NODE`) is a known fleet **target**. ActionRefs
+(`spoof.profile.apply`, `spoof.profile.clear`, `spoof.status`) live in
+`VictorSpoofRegistry` and are **isolated from privileged/destructive
+paths**: even `destructive:true` on the envelope or a step flag does not
+turn them into wipe/power-off/lock/flash/bootloader /
+`remote_destructive`. Certs TBD — fail-open/unpinned. **TODO: pin later.
+Do not invent fingerprints.**
 
-**Status tray:** `RemoteStatusTray.consume` / `publish` — last snapshot
-per `sourceNodeRef`. In-memory. No live bind.
+**Status tray:** consume **and** publish shared fleet status-tray data
+(mesh / VPN / browser / SMS / node health). Generic
+`NodeStatusSnapshot` + `StatusTrayDomain`. Exact shared schema/transport
+with VictorLaunch is **[CONTRACT TBD pending Fleet Orchestrator]**.
+In-memory in this skeleton. No live bind.
 
-**Unified local backup:** mappings + targets + macros + tray rows to one
-JSON file on device. API keys and VictorSMS secrets are **not** included.
+**Unified settings/backup:** seam + core model for export/import of
+macros + device pairings. Exact unified fleet schema is **[CONTRACT TBD
+pending Fleet Orchestrator]**. This skeleton ships a **versioned local
+JSON** export/import of the **controller's own** macros + mappings +
+pairings (no API keys, no VictorSMS secrets).
 
 **Help:** `docs/MANUAL.md` and in-app `HelpScreen` (`RemoteControlManual`).
 
@@ -255,59 +366,78 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 
 ---
 
-## 5. Seams vs implemented
+## 6. Seams vs implemented
 
 | Piece | This slice |
 |---|---|
-| Frozen envelope codec (top-level fields) | implemented, unit-tested |
+| Nested `auth` envelope codec | implemented, unit-tested |
 | EXTERNAL_NODE BridgeRequest binding | implemented, unit-tested |
-| BOUND_COMPANION CommandEnvelope field map | implemented, unit-tested (Kotlin record; live AIDL not bumped) |
+| BOUND_COMPANION CommandEnvelope field map | implemented, unit-tested (Kotlin record; live AIDL not bumped — parcel fields stay `nonce`/`timestampMs`/`ttlMs`) |
 | TERMUX_IPC JSON-blob extra | implemented, unit-tested |
-| Replay `(sourceNodeRef, nonce)` | implemented, unit-tested |
+| ReplayGuard seen-nonce cache | implemented, unit-tested (replay / ttl / skew) |
+| Trust pipeline (pairing → external-control OFF → replay → policy) | implemented, unit-tested |
+| `RemoteErrorCategory` | implemented, unit-tested |
+| `OpDescriptor` + `capabilities.get` | implemented, unit-tested |
+| Node `macro.run` / `macro.step` runner | implemented, unit-tested |
 | Independent destructive classification | implemented, unit-tested |
-| Macros + dry-run | implemented, unit-tested |
+| Controller Settings macros + dry-run | implemented, unit-tested |
 | Settings UI | Compose skeleton |
-| Status tray consume+publish | implemented, unit-tested (in-memory) |
-| Unified local backup | implemented, unit-tested |
-| VictorSpoof registry | implemented, unit-tested (isolated) |
+| Status tray consume+publish | implemented, unit-tested (in-memory; **transport TBD**) |
+| Unified local backup (macros+mappings+pairings) | implemented, unit-tested (**unified schema TBD**) |
+| VictorSpoof KnownFleet + isolated registry | implemented, unit-tested (**certs TBD**) |
+| Controller BRIDGE action constant | implemented (no exported receiver) |
 | Help / `docs/MANUAL.md` | on disk |
-| Live execute / bind | **stub** |
+| Live execute / bind / wipe / RustDesk | **stub** |
 
 ---
 
-## 6. [CONTRACT TBD]
+## 7. [CONTRACT TBD]
 
 1. **VictorSMS signing certs (debug + release).** Catalogue fail-open /
    unpinned. **TODO pin both. Do not invent fingerprints.**
-2. Live AIDL parcel bump on `CommandEnvelope` / `ResultEnvelope` copies
-   (EDL + companions) to carry `nonce` / `timestampMs` / `ttlMs` /
-   `destructive` on the wire. Controller-side mapping is modeled; the
-   `.aidl` files are **not** changed in this skeleton (EDL contract is
-   copied verbatim until FO + EDL bump together).
-3. Termux extra key name on-device (`ai.droidcommand.REMOTE_ENVELOPE_JSON`
+2. **VictorSpoof signing certs (debug + release).** Catalogue fail-open /
+   unpinned. **TODO pin both. Do not invent fingerprints.**
+3. Live AIDL parcel bump on `CommandEnvelope` / `ResultEnvelope` copies
+   (EDL + companions) to carry `nonce` / `issuedAt` (`timestampMs`) /
+   `ttlMs` / `destructive` on the wire. Controller-side mapping is modeled;
+   the `.aidl` files are **not** changed in this skeleton (EDL contract is
+   copied verbatim until FO + EDL bump together). Nested `auth` is the
+   JSON encoding; AIDL stays flat parcel fields.
+4. Termux extra key name on-device (`ai.droidcommand.REMOTE_ENVELOPE_JSON`
    is the controller proposal).
-4. SMS body grammar on VictorSMS; who initiates Messenger bind.
-5. RustDesk plugin identity.
-6. Macro schedule expression language.
-7. **VictorSpoof package, node-id, signing certs.** ActionRef registry
-   exists; identity is not invented.
+5. SMS body grammar on VictorSMS; who initiates Messenger bind.
+6. RustDesk plugin identity.
+7. Macro schedule expression language.
+8. **Shared status-tray schema/transport with VictorLaunch** (mesh / VPN /
+   browser / SMS / node health). Generic model exists; the shared contract
+   is pending Fleet Orchestrator.
+9. **Unified fleet backup/restore schema** (cross-app). Local controller
+   JSON (macros + mappings + pairings) exists; the unified contract is
+   pending Fleet Orchestrator.
+10. Exported controller `ai.droidcommand.app.action.BRIDGE` receiver (live
+    inbound). Constant is named; the receiver is **not** shipped.
 
 ---
 
 ## Appendix A — EXTERNAL_NODE (JSON / Messenger)
 
 - Action: `<package>.action.BRIDGE` (VictorSMS:
-  `com.victorious.sms.action.BRIDGE`).
+  `com.victorious.sms.action.BRIDGE`; VictorSpoof:
+  `com.victorious.spoof.action.BRIDGE` planned; controller inbound:
+  `ai.droidcommand.app.action.BRIDGE`).
 - `Message.what` 1 = request (Bundle key `request`), 2 = response
   (`response`).
 - Body: existing `BridgeRequest` / `BridgeResponse`, `protocol_major` 1.
 - `requestId` **is** `BridgeRequest.request_id`. Not repeated in
   `parameters`.
-- Frozen fields live at the **top level of `parameters`** (camelCase).
+- Frozen fields live in `parameters` (camelCase). Anti-replay fields are
+  nested under `auth`.
 - Identity: `Message.sendingUid` + observed package/cert. Never
   `Binder.getCallingUid()`.
 - VictorSMS package `com.victorious.sms` (debug==release). Node-id
   `^victorsms-[0-9a-f]{32}$`. Certs TBD (fail-open).
+- VictorSpoof package `com.victorious.spoof`. Certs TBD (fail-open).
+  Isolated from destructive paths.
 
 ---
 
@@ -321,9 +451,9 @@ Same logical fields. Encoding: existing `CommandEnvelope` /
 | `requestId` | `requestId` |
 | `actionRef` | `command` |
 | `args` | `argsJson` |
-| `nonce` | parcel field `nonce` (modeled; AIDL bump later) |
-| `timestampMs` | parcel field `timestampMs` |
-| `ttlMs` | parcel field `ttlMs` |
+| `auth.nonce` | parcel field `nonce` (modeled; AIDL bump later) |
+| `auth.issuedAt` | parcel field `timestampMs` |
+| `auth.ttlMs` | parcel field `ttlMs` |
 | `destructive` | parcel field `destructive` (advisory) |
 | `targetNodeRef` | companion node id (hub-side; not a second name) |
 
@@ -341,7 +471,8 @@ This slice ships a Kotlin mapper (`BoundCompanionRemoteBinding`). It does
 Same logical fields. Encoding: **one JSON-blob extra** on the existing
 `com.termux.RUN_COMMAND` intent. Extra key (controller proposal):
 `ai.droidcommand.REMOTE_ENVELOPE_JSON`. The blob is the frozen camelCase
-object **including** `requestId` (there is no BridgeRequest wrapper).
+object **including** `requestId` and nested `auth` (there is no
+BridgeRequest wrapper).
 
 Identity: `com.termux.permission.RUN_COMMAND` + VictorSuite
 allow-external-apps allow-list. Not a new bound service.

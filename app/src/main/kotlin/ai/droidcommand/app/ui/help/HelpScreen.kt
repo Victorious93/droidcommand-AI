@@ -30,7 +30,7 @@ fun HelpScreen() {
             .testTag("help_screen"),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ScreenTitle("Help")
+        ScreenTitle("Help / Manual")
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(RemoteControlManual.TITLE, style = MaterialTheme.typography.titleMedium)

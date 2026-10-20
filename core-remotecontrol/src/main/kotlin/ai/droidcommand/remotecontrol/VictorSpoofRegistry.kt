@@ -1,18 +1,22 @@
 package ai.droidcommand.remotecontrol
 
 /**
- * VictorSpoof actionRefs. Isolated from destructive classification: these
- * names never become WIPE / POWER_OFF / LOCK / `remote_destructive`, even
- * when the envelope's advisory [FleetRemoteEnvelope.destructive] is true
- * or a macro step is flagged destructive.
+ * VictorSpoof actionRefs. Isolated from privileged / destructive paths:
+ * these names never become WIPE / POWER_OFF / LOCK / flash / bootloader /
+ * `remote_destructive`, even when the envelope's advisory
+ * [FleetRemoteEnvelope.destructive] is true or a macro step is flagged
+ * destructive. Mapped actions stay non-destructive unless Don explicitly
+ * maps otherwise.
  *
- * Package, node-id, and signing certs are **[CONTRACT TBD]**. This registry
- * is the actionRef table only — it is not a `KnownFleet` member and does
- * not invent a package or fingerprint.
+ * Catalogue identity: package [PACKAGE] (`EXTERNAL_NODE`),
+ * `KnownFleet.VICTOR_SPOOF`. Signing certs are **[CONTRACT TBD]** —
+ * fail-open / unpinned. **TODO: pin later. Do not invent fingerprints.**
  */
 object VictorSpoofRegistry {
     const val ID = "victorspoof"
     const val DISPLAY_NAME = "VictorSpoof"
+    const val PACKAGE = FleetRemoteEnvelope.VICTOR_SPOOF_PACKAGE
+    const val BRIDGE_ACTION = FleetRemoteEnvelope.VICTOR_SPOOF_BRIDGE_ACTION
 
     val ACTION_REFS: Set<String> = setOf(
         "spoof.profile.apply",
@@ -66,5 +70,9 @@ object ActionRefClassifier {
             lowered == "remote_lock" ||
             lowered.endsWith(".wipe") ||
             lowered.endsWith(".power_off") ||
-            lowered.endsWith(".lock")
+            lowered.endsWith(".lock") ||
+            lowered.contains("bootloader") ||
+            lowered == "flash" ||
+            lowered.endsWith(".flash") ||
+            lowered.contains("flash_")
 }

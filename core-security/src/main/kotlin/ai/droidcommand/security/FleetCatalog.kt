@@ -113,18 +113,21 @@ data class FleetMemberDescriptor(
 }
 
 /**
- * The ten room-fleet members. Wiring order (owner, 2026-10-14, File Manager
+ * The eleven room-fleet members. Wiring order (owner, 2026-10-14, File Manager
  * added 2026-10-15, Keyboard added 2026-10-17, Mesh added 2026-10-18,
- * Browser added 2026-10-18, VictorSMS added 2026-10-20): Pentest
+ * Browser added 2026-10-18, VictorSMS added 2026-10-20, VictorSpoof added
+ * 2026-10-20): Pentest
  * (when the base repo exists) → RootForge Messenger deepen → VictorSuite
  * RUN_COMMAND → EDL companion APK → KYC last → File Manager (when their
  * identity/default-off PR lands; after the RootForge Messenger client exists)
  * → Keyboard (catalog only; direction of hub-query vs keyboard slash-commands
  * is open) → Mesh (catalog only; EXTERNAL_NODE, own signing keys)
  * → Browser (catalog only; EXTERNAL_NODE, own signing keys)
- * → VictorSMS (EXTERNAL_NODE, SMS remote-command source; certs TBD / unpinned).
+ * → VictorSMS (EXTERNAL_NODE, SMS remote-command source; certs TBD / unpinned)
+ * → VictorSpoof (EXTERNAL_NODE, novelty/prank caller-ID; isolated from
+ * privileged/destructive paths; certs TBD / unpinned).
  *
- * HackerAI is already a bound companion in `KnownCompanions`; not one of these ten.
+ * HackerAI is already a bound companion in `KnownCompanions`; not one of these eleven.
  */
 object KnownFleet {
     val PENTEST_SWARM = FleetMemberDescriptor(
@@ -545,6 +548,57 @@ object KnownFleet {
         expectedSigningCertSha256 = emptyList(),
     )
 
+    /**
+     * VictorSpoof novelty/prank caller-ID node. Signing certs are **not yet
+     * committed** — [expectedSigningCertSha256] stays empty so the catalogue
+     * is fail-open / unpinned.
+     *
+     * Isolated from privileged/destructive paths: mapped actions stay
+     * non-destructive unless Don explicitly maps otherwise.
+     *
+     * TODO: pin debug + release SHA-256 once VictorSpoof publishes them.
+     * Do not invent fingerprints.
+     */
+    val VICTOR_SPOOF = FleetMemberDescriptor(
+        id = "victorspoof",
+        displayName = "VictorSpoof",
+        repo = null,
+        packageOrBinary = "com.victorious.spoof (novelty/prank caller-ID; EXTERNAL_NODE)",
+        integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
+        status = FleetHonestyStatus.PLANNED,
+        capabilityId = CapabilityId("fleet.victorspoof.node"),
+        providerId = "victorspoof",
+        existingToolNames = listOf("victorspoof_status"),
+        catalogStubName = "victorspoof_status",
+        wiringOrder = 11,
+        transports = listOf(
+            "messenger+json envelope (planned: action com.victorious.spoof.action.BRIDGE; " +
+                "Message what=1 request; protocol_major 1; " +
+                "caller identity = Message.sendingUid, not Binder.getCallingUid; " +
+                "remote.command target; isolated from wipe/power-off/lock/flash/bootloader)",
+        ),
+        usesAidl = false,
+        usesDependencyGuard = false,
+        riskTier = RiskTier.REVERSIBLE,
+        nextStep = "Generic Messenger client exists (core-fleet-messenger + :app) but VictorSpoof is not " +
+            "paired. Pair the node to call it. Isolated from privileged/destructive paths. " +
+            "TODO: pin debug+release SHA-256 (currently unpinned / fail-open). " +
+            "Never DependencyGuard, never a shared signing key.",
+        refusalMessage = "VictorSpoof is PLANNED EXTERNAL_NODE — this stub does not bind Messenger. " +
+            "Planned action com.victorious.spoof.action.BRIDGE (Message what=1 request, protocol_major 1). " +
+            "Package com.victorious.spoof. Signing certs are [CONTRACT TBD] — catalogue " +
+            "is fail-open/unpinned. TODO: pin debug+release SHA-256. Isolated from " +
+            "wipe/power-off/lock/flash/bootloader. Capability state is REQUIRES_EXTERNAL_SERVICE.",
+        notes = "EXTERNAL_NODE like RootForge / File Manager / Keyboard / Mesh / Browser / VictorSMS. Never " +
+            "DependencyGuard, never shared signing key, never KnownCompanions, never BIND_* " +
+            "signature permission, never AIDL. Package com.victorious.spoof. Novelty/prank " +
+            "caller-ID — isolated from privileged/destructive paths unless Don explicitly maps " +
+            "otherwise. Caller identity = Message.sendingUid. " +
+            "TODO: pin debug+release SHA-256 — expectedSigningCertSha256 is empty (fail-open).",
+        androidPackages = listOf("com.victorious.spoof"),
+        expectedSigningCertSha256 = emptyList(),
+    )
+
     val ALL: List<FleetMemberDescriptor> = listOf(
         PENTEST_SWARM,
         ROOTFORGE,
@@ -556,6 +610,7 @@ object KnownFleet {
         MESH,
         BROWSER,
         VICTOR_SMS,
+        VICTOR_SPOOF,
     )
 
     fun member(id: String): FleetMemberDescriptor? = ALL.find { it.id == id }
@@ -581,9 +636,9 @@ object KnownFleet {
     }
 
     fun formatListing(): String = buildString {
-        appendLine("DroidCommand AI room fleet — 10 members. None is LIVE.")
-        appendLine("Wiring order: Pentest (when repo exists) → RootForge Messenger → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager (when their identity/default-off PR lands) → Keyboard (catalog only; direction open) → Mesh (catalog only; own signing keys) → Browser (catalog only; own signing keys) → VictorSMS (EXTERNAL_NODE, SMS remote-command source; certs TBD).")
-        appendLine("AIDL + DependencyGuard apply only to BOUND_COMPANION (Pentest, EDL). RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS Messenger is not that.")
+        appendLine("DroidCommand AI room fleet — 11 members. None is LIVE.")
+        appendLine("Wiring order: Pentest (when repo exists) → RootForge Messenger → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager (when their identity/default-off PR lands) → Keyboard (catalog only; direction open) → Mesh (catalog only; own signing keys) → Browser (catalog only; own signing keys) → VictorSMS (EXTERNAL_NODE, SMS remote-command source; certs TBD) → VictorSpoof (EXTERNAL_NODE, novelty/prank caller-ID; isolated from destructive; certs TBD).")
+        appendLine("AIDL + DependencyGuard apply only to BOUND_COMPANION (Pentest, EDL). RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof Messenger is not that.")
         appendLine()
         for (member in ALL) {
             val repo = member.repo ?: "(repo unpublished / not found on public GitHub as of 2026-10-14)"
@@ -598,7 +653,7 @@ object KnownFleet {
             appendLine("  next: ${member.nextStep}")
             appendLine()
         }
-        appendLine("HackerAI (ai.hackerai.companion) is a BOUND_COMPANION already in KnownCompanions; not one of these ten.")
+        appendLine("HackerAI (ai.hackerai.companion) is a BOUND_COMPANION already in KnownCompanions; not one of these eleven.")
         appendLine("Controller-side node signature check: NodeSignatureVerifier (core-security). Default missing-expected policy is ALLOW.")
         appendLine("Catalogue is partial — fail-closed should be enabled only once remaining members and verified release pins are catalogued.")
         appendLine("Enforceable: DCA debug; Mesh debug+own release (com.victorious.mesh); Browser debug (com.victorious.browser); Pentest debug; EDL debug; HackerAI debug+verified release 9E:A7; RootForge debug (ai.rootforge.os.debug); Keyboard debug (not .bench); VictorSuite debug + own release.")

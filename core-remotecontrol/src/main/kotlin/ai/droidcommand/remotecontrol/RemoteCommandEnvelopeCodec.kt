@@ -9,8 +9,9 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 
 /**
- * Encode/decode the frozen envelope. EXTERNAL_NODE wrapping reuses
+ * Encode/decode the ratified envelope. EXTERNAL_NODE wrapping reuses
  * [BridgeRequest]: [FleetRemoteEnvelope.requestId] **is** `request_id`.
+ * Anti-replay fields serialize under nested [EnvelopeAuth].
  */
 object RemoteCommandEnvelopeCodec {
     private val json = Json {
@@ -82,11 +83,11 @@ private fun FleetRemoteParameters.toEnvelope(requestId: String) = FleetRemoteEnv
     targetNodeRef = targetNodeRef,
     actionRef = actionRef,
     args = args,
-    nonce = nonce,
-    timestampMs = timestampMs,
-    ttlMs = ttlMs,
+    auth = auth,
     destructive = destructive,
     trigger = trigger,
+    op = op,
+    params = params,
     macroId = macroId,
     stepIndex = stepIndex,
     onError = onError,

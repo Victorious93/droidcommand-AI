@@ -110,7 +110,27 @@ object ExternalNodeCatalog {
             "protocol minor 1 is capabilities.get (not a per-class field name).",
     )
 
-    val all: List<ExternalNodeSpec> = listOf(ROOTFORGE, FILE_MANAGER, KEYBOARD, MESH, BROWSER, VICTOR_SMS)
+    val VICTOR_SPOOF = ExternalNodeSpec(
+        id = "victorspoof",
+        displayName = "VictorSpoof",
+        nodeId = "victorspoof",
+        packages = listOf("com.victorious.spoof"),
+        capabilitiesOperation = "spoof.capabilities.get",
+        statusOperation = "spoof.status",
+        notes = "EXTERNAL_NODE. Planned action com.victorious.spoof.action.BRIDGE. Novelty/prank " +
+            "caller-ID. Isolated from wipe/power-off/lock/flash/bootloader. Never DependencyGuard. " +
+            "Signing certs TBD — catalogue fail-open/unpinned. TODO: pin debug+release SHA-256.",
+    )
+
+    val all: List<ExternalNodeSpec> = listOf(
+        ROOTFORGE,
+        FILE_MANAGER,
+        KEYBOARD,
+        MESH,
+        BROWSER,
+        VICTOR_SMS,
+        VICTOR_SPOOF,
+    )
 
     fun byId(id: String): ExternalNodeSpec? = all.find { it.id == id }
 }

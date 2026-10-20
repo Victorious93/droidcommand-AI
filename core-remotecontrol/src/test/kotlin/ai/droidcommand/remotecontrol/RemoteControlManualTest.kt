@@ -5,18 +5,23 @@ import kotlin.test.assertTrue
 
 class RemoteControlManualTest {
     @Test
-    fun `manual names the frozen envelope and that payload fields do not authorize`() {
+    fun `manual names the ratified envelope and that payload fields do not authorize`() {
         val body = RemoteControlManual.BODY
         assertTrue(body.contains("requestId"))
         assertTrue(body.contains("targetNodeRef"))
         assertTrue(body.contains("actionRef"))
+        assertTrue(body.contains("auth"))
         assertTrue(body.contains("nonce"))
-        assertTrue(body.contains("timestampMs"))
+        assertTrue(body.contains("issuedAt"))
         assertTrue(body.contains("ttlMs"))
         assertTrue(body.contains("advisory"))
         assertTrue(body.contains("package+cert"))
-        assertTrue(body.contains("never a"))
-        assertTrue(body.contains("payload field"))
+        assertTrue(body.contains("UNTRUSTED"))
+        assertTrue(body.contains("not authorization"))
         assertTrue(body.contains("VictorSpoof"))
+        assertTrue(body.contains("external-control"))
+        assertTrue(body.contains("status tray") || body.contains("Status tray"))
+        assertTrue(body.contains("YOLO"))
+        assertTrue(body.contains("Shizuku"))
     }
 }

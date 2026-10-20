@@ -56,6 +56,7 @@ class MainTest {
                 "mesh_status",
                 "browser_status",
                 "victorsms_status",
+                "victorspoof_status",
             ),
             specs.map { it.name },
         )

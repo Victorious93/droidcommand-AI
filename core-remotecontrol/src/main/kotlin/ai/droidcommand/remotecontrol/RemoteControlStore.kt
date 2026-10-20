@@ -11,6 +11,9 @@ data class RemoteControlConfig(
     val mappings: List<RemoteCommandMapping> = emptyList(),
     val targets: List<TargetDevice> = emptyList(),
     val macros: List<Macro> = emptyList(),
+    val pairings: List<DevicePairing> = emptyList(),
+    /** Controller inbound + node-op surface. OFF by default. */
+    val externalControlEnabled: Boolean = false,
 )
 
 interface RemoteControlStore {
@@ -78,6 +81,8 @@ internal fun validate(config: RemoteControlConfig) {
     require(targetIds.size == targetIds.toSet().size) { "duplicate target nodeId" }
     val macroIds = config.macros.map { it.id }
     require(macroIds.size == macroIds.toSet().size) { "duplicate macro id" }
+    val pairingIds = config.pairings.map { it.sourceNodeRef }
+    require(pairingIds.size == pairingIds.toSet().size) { "duplicate pairing sourceNodeRef" }
 
     val smsIds = config.mappings.mapNotNull { it.smsCommandId } +
         config.macros.mapNotNull { it.trigger.smsCommandId }
@@ -93,11 +98,15 @@ internal data class RemoteControlConfigDto(
     val mappings: List<RemoteCommandMappingDto> = emptyList(),
     val targets: List<TargetDeviceDto> = emptyList(),
     val macros: List<MacroDto> = emptyList(),
+    val pairings: List<DevicePairingDto> = emptyList(),
+    val externalControlEnabled: Boolean = false,
 ) {
     fun toModel(): RemoteControlConfig = RemoteControlConfig(
         mappings = mappings.map { it.toModel() },
         targets = targets.map { it.toModel() },
         macros = macros.map { it.toModel() },
+        pairings = pairings.map { it.toModel() },
+        externalControlEnabled = externalControlEnabled,
     )
 
     companion object {
@@ -105,6 +114,29 @@ internal data class RemoteControlConfigDto(
             mappings = config.mappings.map { RemoteCommandMappingDto.from(it) },
             targets = config.targets.map { TargetDeviceDto.from(it) },
             macros = config.macros.map { MacroDto.from(it) },
+            pairings = config.pairings.map { DevicePairingDto.from(it) },
+            externalControlEnabled = config.externalControlEnabled,
+        )
+    }
+}
+
+@Serializable
+internal data class DevicePairingDto(
+    val sourceNodeRef: String,
+    val packageName: String,
+    val certSha256: String? = null,
+) {
+    fun toModel(): DevicePairing = DevicePairing(
+        sourceNodeRef = sourceNodeRef,
+        packageName = packageName,
+        certSha256 = certSha256,
+    )
+
+    companion object {
+        fun from(pairing: DevicePairing) = DevicePairingDto(
+            sourceNodeRef = pairing.sourceNodeRef,
+            packageName = pairing.packageName,
+            certSha256 = pairing.certSha256,
         )
     }
 }
