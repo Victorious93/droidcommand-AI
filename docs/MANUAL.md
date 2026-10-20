@@ -81,10 +81,13 @@ A remote SMS or node trigger **never auto-approves**, even with YOLO.
 
 ## Fleet control
 
-Tools → Fleet lists HackerAI plus the **thirteen** `KnownFleet` members
-(Pentest, RootForge, VictorSuite, EDL-Commander, KYC-AuditLab, File
-Manager, Keyboard, Mesh, Browser, VictorSMS, VictorSpoof, Victorious
-Flash, VictorLaunch). None is LIVE.
+Tools → Fleet opens the home list of HackerAI plus the **thirteen**
+`KnownFleet` members (Pentest, RootForge, VictorSuite, EDL-Commander,
+KYC-AuditLab, File Manager, Keyboard, Mesh, Browser, VictorSMS,
+VictorSpoof, Victorious Flash, VictorLaunch). Each row shows a short
+role, a color for reachable / trouble / down / unknown, and last seen
+or “no snapshot yet”. Live status from the phone is **not wired**.
+Pair and manage nodes still opens the pairing screen. None is LIVE.
 
 EXTERNAL_NODE rows pair by **package + observed signing cert**. Pairing
 is an explicit confirm. A trusted pairing can run read-only Messenger

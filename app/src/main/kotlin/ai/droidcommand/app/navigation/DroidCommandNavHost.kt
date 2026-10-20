@@ -5,6 +5,7 @@ import ai.droidcommand.app.clipboard.ClipboardScreen
 import ai.droidcommand.app.ui.automation.AutomationScreen
 import ai.droidcommand.app.ui.chat.ChatScreen
 import ai.droidcommand.app.ui.coding.CodingScreen
+import ai.droidcommand.app.ui.fleet.FleetDashboardScreen
 import ai.droidcommand.app.ui.fleet.FleetOrchestratorScreen
 import ai.droidcommand.app.ui.fleet.FleetScreen
 import ai.droidcommand.app.ui.help.HelpScreen
@@ -87,6 +88,7 @@ object Routes {
     const val CODING = "tools/coding"
     const val NOTES = "tools/notes"
     const val FLEET = "tools/fleet"
+    const val FLEET_PAIRING = "tools/fleet/pairing"
     const val FLEET_ORCHESTRATOR = "tools/fleet/orchestrator"
     const val HELP = "help"
 }
@@ -152,7 +154,13 @@ fun DroidCommandNavHost(
             composable(Routes.AUTOMATION) { AutomationScreen() }
             composable(Routes.CODING) { CodingScreen() }
             composable(Routes.NOTES) { NotesScreen() }
-            composable(Routes.FLEET) { FleetScreen() }
+            composable(Routes.FLEET) {
+                FleetDashboardScreen(
+                    onOpenPairing = { navController.navigate(Routes.FLEET_PAIRING) },
+                    onOpenOrchestrator = { navController.navigate(Routes.FLEET_ORCHESTRATOR) },
+                )
+            }
+            composable(Routes.FLEET_PAIRING) { FleetScreen() }
             composable(Routes.FLEET_ORCHESTRATOR) { FleetOrchestratorScreen() }
         }
     }

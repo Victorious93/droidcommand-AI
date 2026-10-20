@@ -74,10 +74,12 @@ object RemoteControlManual {
         to unprivileged use; it does not skip confirmation.
 
         Fleet control
-        Tools → Fleet lists HackerAI plus thirteen KnownFleet members
-        (including VictorSMS, VictorSpoof, Victorious Flash, and VictorLaunch). None is LIVE. Pairing is
-        package + observed cert. EXTERNAL_NODE members never get
-        DependencyGuard or a shared signing key.
+        Tools → Fleet opens the home list of HackerAI plus thirteen
+        KnownFleet members (including VictorSMS, VictorSpoof, Victorious
+        Flash, and VictorLaunch). Live status from the phone is not
+        wired. Pair and manage nodes still opens pairing. None is LIVE.
+        Pairing is package + observed cert. EXTERNAL_NODE members never
+        get DependencyGuard or a shared signing key.
 
         VictorLaunch
         Package com.victorious.launch, EXTERNAL_NODE, status-tray consumer
