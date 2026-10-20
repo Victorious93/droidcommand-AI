@@ -60,6 +60,7 @@ class FleetMessengerControllerTest {
         assertEquals("com.victorious.browser", ExternalNodeCatalog.BROWSER.primaryPackage)
         assertEquals("com.victorious.sms", ExternalNodeCatalog.VICTOR_SMS.primaryPackage)
         assertEquals("com.victorious.spoof", ExternalNodeCatalog.VICTOR_SPOOF.primaryPackage)
+        assertEquals("com.victorious.flash.android", ExternalNodeCatalog.VICTORIOUS_FLASH.primaryPackage)
         assertEquals("com.identityshield.companion", ExternalNodeCatalog.KYC_AUDITLAB.primaryPackage)
         assertEquals("rootforge.capabilities.get", ExternalNodeCatalog.ROOTFORGE.capabilitiesOperation)
         assertEquals("filemanager.status", ExternalNodeCatalog.FILE_MANAGER.statusOperation)
@@ -73,6 +74,7 @@ class FleetMessengerControllerTest {
         assertNull(ExternalNodeCatalog.BROWSER.upOperation)
         assertNull(ExternalNodeCatalog.VICTOR_SMS.upOperation)
         assertNull(ExternalNodeCatalog.VICTOR_SPOOF.upOperation)
+        assertNull(ExternalNodeCatalog.VICTORIOUS_FLASH.upOperation)
         assertNull(ExternalNodeCatalog.KYC_AUDITLAB.upOperation)
         assertEquals("sms.capabilities.get", ExternalNodeCatalog.VICTOR_SMS.capabilitiesOperation)
         assertEquals("sms.status", ExternalNodeCatalog.VICTOR_SMS.statusOperation)
@@ -88,6 +90,11 @@ class FleetMessengerControllerTest {
         assertEquals("spoof.status", ExternalNodeCatalog.VICTOR_SPOOF.statusOperation)
         assertTrue(ExternalNodeCatalog.VICTOR_SPOOF.notes.contains("Isolated from"))
         assertTrue(ExternalNodeCatalog.VICTOR_SPOOF.notes.contains("fail-open"))
+        assertEquals("capabilities.get", ExternalNodeCatalog.VICTORIOUS_FLASH.capabilitiesOperation)
+        assertEquals("status.get", ExternalNodeCatalog.VICTORIOUS_FLASH.statusOperation)
+        assertTrue(ExternalNodeCatalog.VICTORIOUS_FLASH.notes.contains("FLEET_BRIDGE"))
+        assertTrue(ExternalNodeCatalog.VICTORIOUS_FLASH.notes.contains("gadget.expose is DESTRUCTIVE"))
+        assertTrue(ExternalNodeCatalog.VICTORIOUS_FLASH.notes.contains("enforced"))
         assertEquals("kyc.capabilities.get", ExternalNodeCatalog.KYC_AUDITLAB.capabilitiesOperation)
         assertEquals("kyc.status", ExternalNodeCatalog.KYC_AUDITLAB.statusOperation)
         assertTrue(ExternalNodeCatalog.KYC_AUDITLAB.notes.contains("remote.command OFF-by-default"))
@@ -101,7 +108,7 @@ class FleetMessengerControllerTest {
             ),
         )
         assertEquals(
-            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "kyc-auditlab"),
+            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "victorious-flash", "kyc-auditlab"),
             ExternalNodeCatalog.all.map { it.id },
         )
     }
@@ -332,7 +339,7 @@ class FleetMessengerControllerTest {
         val c = FleetMessengerController(store, resolver, gateway)
         val rows = c.snapshot()
         assertEquals(
-            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "kyc-auditlab"),
+            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "victorious-flash", "kyc-auditlab"),
             rows.map { it.spec.id },
         )
         assertTrue(rows.all { it.state == NodePairingState.NOT_INSTALLED })

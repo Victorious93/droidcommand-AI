@@ -21,6 +21,7 @@ class FleetCommandsTest {
                     "browser_status",
                     "victorsms_status",
                     "victorspoof_status",
+                    "victorious_flash_status",
                     "run_termux_command",
                 ),
             ),
@@ -30,7 +31,7 @@ class FleetCommandsTest {
 
     @Test
     fun `list-fleet text is the KnownFleet catalog`() {
-        assertEquals(11, KnownFleet.ALL.size)
+        assertEquals(12, KnownFleet.ALL.size)
         val text = KnownFleet.formatListing()
         assertTrue(text.contains("kyc-auditlab"))
         assertTrue(text.contains("edl-commander"))
@@ -49,7 +50,9 @@ class FleetCommandsTest {
         assertTrue(text.contains("victorsms"))
         assertTrue(text.contains("com.victorious.spoof.action.BRIDGE"))
         assertTrue(text.contains("victorspoof"))
-        assertTrue(text.contains("RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof/KYC companion Messenger is not that"))
+        assertTrue(text.contains("com.victorious.flash.android.FLEET_BRIDGE"))
+        assertTrue(text.contains("victorious-flash"))
+        assertTrue(text.contains("RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof/Flash/KYC companion Messenger is not that"))
         assertTrue(text.contains("signingCertSha256: [Unknown]"))
         assertTrue(text.contains("com.victorious.mesh"))
         assertTrue(text.contains("com.victorious.browser"))

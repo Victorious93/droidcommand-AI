@@ -81,9 +81,10 @@ A remote SMS or node trigger **never auto-approves**, even with YOLO.
 
 ## Fleet control
 
-Tools → Fleet lists HackerAI plus the **eleven** `KnownFleet` members
+Tools → Fleet lists HackerAI plus the **twelve** `KnownFleet` members
 (Pentest, RootForge, VictorSuite, EDL-Commander, KYC-AuditLab, File
-Manager, Keyboard, Mesh, Browser, VictorSMS, VictorSpoof). None is LIVE.
+Manager, Keyboard, Mesh, Browser, VictorSMS, VictorSpoof, Victorious
+Flash). None is LIVE.
 
 EXTERNAL_NODE rows pair by **package + observed signing cert**. Pairing
 is an explicit confirm. A trusted pairing can run read-only Messenger

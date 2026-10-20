@@ -111,6 +111,7 @@ class NodeSignatureTest {
             "com.victorious.mesh" to KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256,
             "com.victorious.mesh" to KnownNodeSigningCatalog.VICTORIOUS_MESH_RELEASE_SHA256,
             "com.victorious.browser" to KnownNodeSigningCatalog.VICTORIOUS_BROWSER_DEBUG_SHA256,
+            "com.victorious.flash.android" to KnownNodeSigningCatalog.VICTORIOUS_FLASH_DEBUG_SHA256,
             "ai.pentestswarm.companion" to KnownNodeSigningCatalog.PENTEST_SWARM_DEBUG_SHA256,
             "ai.edlcommander.companion" to KnownNodeSigningCatalog.EDL_COMMANDER_DEBUG_SHA256,
             "ai.hackerai.companion" to KnownNodeSigningCatalog.HACKERAI_DEBUG_SHA256,
@@ -134,6 +135,7 @@ class NodeSignatureTest {
             "ai.droidcommand.app",
             "com.victorious.mesh",
             "com.victorious.browser",
+            "com.victorious.flash.android",
             "ai.pentestswarm.companion",
             "ai.edlcommander.companion",
             "ai.hackerai.companion",
@@ -164,9 +166,14 @@ class NodeSignatureTest {
             KnownFleet.KEYBOARD.androidPackages,
         )
         assertEquals(listOf("com.identityshield.companion"), KnownFleet.KYC_AUDITLAB.androidPackages)
+        assertEquals(listOf("com.victorious.flash.android"), KnownFleet.VICTORIOUS_FLASH.androidPackages)
         assertTrue(KnownFleet.FILE_MANAGER.expectedSigningCertSha256.isEmpty())
         assertEquals("[Unknown]", KnownFleet.FILE_MANAGER.signingCertLabel())
         assertEquals("[Unknown]", KnownFleet.KYC_AUDITLAB.signingCertLabel())
+        assertEquals(
+            KnownNodeSigningCatalog.VICTORIOUS_FLASH_DEBUG_SHA256,
+            KnownFleet.VICTORIOUS_FLASH.signingCertLabel(),
+        )
     }
 
     @Test
@@ -303,10 +310,44 @@ class NodeSignatureTest {
     }
 
     @Test
-    fun `victorious-flash is not catalogued`() {
-        assertTrue(
-            KnownNodeSigningCatalog.all().none { it.packageName.contains("flash") },
+    fun `Victorious Flash debug is enforced and release stays TBD`() {
+        val identity = KnownNodeSigningCatalog.VICTORIOUS_FLASH_DEBUG
+        assertEquals("com.victorious.flash.android", identity.packageName)
+        assertEquals(FleetIntegrationClass.EXTERNAL_NODE, identity.integrationClass)
+        assertEquals("victorious-flash", identity.memberId)
+        assertEquals(
+            listOf(KnownNodeSigningCatalog.VICTORIOUS_FLASH_DEBUG_SHA256),
+            identity.expectedCerts.map { it.canonical },
         )
+        assertEquals(
+            "2C:52:0F:7A:A4:BE:72:6D:EB:F9:18:3D:04:3D:56:C5:58:E5:67:F7:77:BD:10:BE:3C:98:86:38:1C:6A:F6:ED",
+            KnownNodeSigningCatalog.VICTORIOUS_FLASH_DEBUG_SHA256,
+        )
+        assertEquals(identity, KnownNodeSigningCatalog.identityFor("com.victorious.flash.android"))
+        assertTrue(identity.notes.contains("Enforceable"))
+        assertTrue(identity.notes.contains("RELEASE is TBD"))
+        assertTrue(identity.notes.contains("gadget.expose is DESTRUCTIVE"))
+        assertEquals(listOf("com.victorious.flash.android"), KnownFleet.VICTORIOUS_FLASH.androidPackages)
+        assertEquals(
+            listOf(KnownNodeSigningCatalog.VICTORIOUS_FLASH_DEBUG_SHA256),
+            KnownFleet.VICTORIOUS_FLASH.expectedSigningCertSha256,
+        )
+        assertEquals(12, KnownFleet.VICTORIOUS_FLASH.wiringOrder)
+        assertEquals(FleetHonestyStatus.PLANNED, KnownFleet.VICTORIOUS_FLASH.status)
+        val allowed = assertIs<NodeSignatureDecision.Allowed>(
+            NodeSignatureVerifier().verify(
+                "com.victorious.flash.android",
+                listOf(KnownNodeSigningCatalog.VICTORIOUS_FLASH_DEBUG_SHA256),
+            ),
+        )
+        assertEquals(KnownNodeSigningCatalog.VICTORIOUS_FLASH_DEBUG_SHA256, allowed.matchedFingerprint)
+        val refused = assertIs<NodeSignatureDecision.Refused>(
+            NodeSignatureVerifier().verify(
+                "com.victorious.flash.android",
+                listOf("00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF"),
+            ),
+        )
+        assertEquals(NodeSignatureRefusal.CERT_MISMATCH, refused.kind)
     }
 
     @Test

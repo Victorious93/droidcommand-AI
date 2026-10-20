@@ -18,7 +18,7 @@ enum class FleetIntegrationClass {
     /**
      * Independent product. Live APK = Messenger + shared JSON envelope;
      * desktop/Docker = localhost API + bearer; SSH = CLI/ISO fallback.
-     * Never DependencyGuard. RootForge, File Manager, Keyboard, Mesh, Browser, and VictorSMS are this class.
+     * Never DependencyGuard. RootForge, File Manager, Keyboard, Mesh, Browser, VictorSMS, VictorSpoof, and Victorious Flash are this class.
      */
     EXTERNAL_NODE,
 
@@ -115,10 +115,10 @@ data class FleetMemberDescriptor(
 }
 
 /**
- * The eleven room-fleet members. Wiring order (owner, 2026-10-14, File Manager
+ * The twelve room-fleet members. Wiring order (owner, 2026-10-14, File Manager
  * added 2026-10-15, Keyboard added 2026-10-17, Mesh added 2026-10-18,
  * Browser added 2026-10-18, VictorSMS added 2026-10-20, VictorSpoof added
- * 2026-10-20): Pentest
+ * 2026-10-20, Victorious Flash added 2026-10-20): Pentest
  * (when the base repo exists) → RootForge Messenger deepen → VictorSuite
  * RUN_COMMAND → EDL companion APK → KYC last → File Manager (when their
  * identity/default-off PR lands; after the RootForge Messenger client exists)
@@ -128,12 +128,15 @@ data class FleetMemberDescriptor(
  * → VictorSMS (EXTERNAL_NODE, SMS remote-command source; debug cert
  * documented [planned/pending-merge] unenforced; release TBD / fail-open)
  * → VictorSpoof (EXTERNAL_NODE, novelty/prank caller-ID; isolated from
- * privileged/destructive paths; certs TBD / unpinned).
+ * privileged/destructive paths; certs TBD / unpinned)
+ * → Victorious Flash (EXTERNAL_NODE, Messenger FLEET_BRIDGE; gadget.expose
+ * destructive always confirmation_required + on-phone ERASE; debug cert
+ * enforced; release TBD).
  * KYC-AuditLab's KnownFleet row stays HOST_PROCESS_TOOL (localhost
  * simulator). Its companion APK is a separate `remote.command`
  * EXTERNAL_NODE ([provisional/pending-stable-cert], fail-open).
  *
- * HackerAI is already a bound companion in `KnownCompanions`; not one of these eleven.
+ * HackerAI is already a bound companion in `KnownCompanions`; not one of these twelve.
  */
 object KnownFleet {
     val PENTEST_SWARM = FleetMemberDescriptor(
@@ -653,6 +656,78 @@ object KnownFleet {
         expectedSigningCertSha256 = emptyList(),
     )
 
+    /**
+     * Victorious Flash Android EXTERNAL_NODE (phone-side Messenger). Distinct
+     * from the Linux SSH `core-flash` node (`vf-` prefix,
+     * `docs/FLASH_INTEGRATION.md`).
+     *
+     * Debug SHA-256 is **enforced** (flash PR #18 merged to main; debug cert
+     * is stable). Release cert TBD — do not invent.
+     *
+     * `gadget.expose` is DESTRUCTIVE: always confirmation_required plus an
+     * on-phone ERASE confirmation. Isolated from other destructive paths the
+     * same way wipe/power-off/lock/bootloader are gated. This catalog stub
+     * does not bind Messenger and never exposes a gadget.
+     */
+    val VICTORIOUS_FLASH = FleetMemberDescriptor(
+        id = "victorious-flash",
+        displayName = "Victorious Flash",
+        repo = "Victorious93/victorious-flash",
+        packageOrBinary = "com.victorious.flash.android",
+        integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
+        status = FleetHonestyStatus.PLANNED,
+        capabilityId = CapabilityId("fleet.victorious-flash.node"),
+        providerId = "victorious-flash",
+        existingToolNames = listOf("victorious_flash_status"),
+        catalogStubName = "victorious_flash_status",
+        wiringOrder = 12,
+        transports = listOf(
+            "messenger+json envelope (confirmed: exported service, action " +
+                "com.victorious.flash.android.FLEET_BRIDGE; " +
+                "Message what=1 json envelope + replyTo, reply what=2; " +
+                "node-id prefix ^vfa-[0-9a-f]{32}$; " +
+                "ops status.get / capabilities.get (read); " +
+                "netboot.serve.start / netboot.serve.stop (action); " +
+                "otg.write{deviceName}; gadget.expose (DESTRUCTIVE, always " +
+                "confirmation_required + on-phone ERASE confirmation))",
+        ),
+        usesAidl = false,
+        usesDependencyGuard = false,
+        riskTier = RiskTier.DESTRUCTIVE,
+        nextStep = "Generic Messenger client exists (core-fleet-messenger + :app) but " +
+            "Victorious Flash is not paired and this stub does not bind. Pair the node " +
+            "to call read ops. gadget.expose is DESTRUCTIVE — always confirmation_required " +
+            "plus on-phone ERASE confirmation; isolated from other destructive gating. " +
+            "Debug cert is enforced (KnownNodeSigningCatalog.VICTORIOUS_FLASH_DEBUG_SHA256, " +
+            "flash PR #18 merged). Release cert TBD — do not invent. Never DependencyGuard, " +
+            "never a shared signing key. Distinct from the Linux SSH core-flash node (vf-).",
+        refusalMessage = "Victorious Flash is PLANNED EXTERNAL_NODE — this stub does not bind " +
+            "Messenger. Confirmed action com.victorious.flash.android.FLEET_BRIDGE " +
+            "(exported service; Message what=1 json envelope + replyTo, reply what=2). " +
+            "Package com.victorious.flash.android. Node-id prefix ^vfa-[0-9a-f]{32}$. " +
+            "Read ops status.get / capabilities.get. Action ops netboot.serve.start / " +
+            "netboot.serve.stop / otg.write{deviceName}. gadget.expose is DESTRUCTIVE " +
+            "(always confirmation_required + on-phone ERASE confirmation). Debug SHA-256 " +
+            "2C:52:0F:7A:A4:BE:72:6D:EB:F9:18:3D:04:3D:56:C5:58:E5:67:F7:77:BD:10:BE:3C:98:" +
+            "86:38:1C:6A:F6:ED is catalogued and enforced. Release cert TBD. Distinct from " +
+            "the Linux SSH core-flash node (vf- prefix). Never DependencyGuard, never AIDL. " +
+            "Capability state is REQUIRES_EXTERNAL_SERVICE.",
+        notes = "EXTERNAL_NODE like RootForge / File Manager / Keyboard / Mesh / Browser / " +
+            "VictorSMS / VictorSpoof. Never DependencyGuard, never shared signing key, never " +
+            "KnownCompanions, never BIND_* signature permission, never AIDL. Package " +
+            "com.victorious.flash.android. Messenger action " +
+            "com.victorious.flash.android.FLEET_BRIDGE. Node-id prefix ^vfa-[0-9a-f]{32}$. " +
+            "Read ops status.get / capabilities.get; action ops netboot.serve.start / " +
+            "netboot.serve.stop / otg.write{deviceName}. gadget.expose is DESTRUCTIVE and " +
+            "always confirmation_required + on-phone ERASE confirmation — isolated like " +
+            "other destructive gating. Controller-side DEBUG cert is catalogued and " +
+            "enforced (KnownNodeSigningCatalog.VICTORIOUS_FLASH_DEBUG_SHA256; flash PR #18 " +
+            "merged, CI green 7a4c32c). Release cert TBD — do not invent. Distinct from " +
+            "the Linux SSH core-flash node (vf- prefix, docs/FLASH_INTEGRATION.md).",
+        androidPackages = listOf("com.victorious.flash.android"),
+        expectedSigningCertSha256 = listOf(KnownNodeSigningCatalog.VICTORIOUS_FLASH_DEBUG_SHA256),
+    )
+
     val ALL: List<FleetMemberDescriptor> = listOf(
         PENTEST_SWARM,
         ROOTFORGE,
@@ -665,6 +740,7 @@ object KnownFleet {
         BROWSER,
         VICTOR_SMS,
         VICTOR_SPOOF,
+        VICTORIOUS_FLASH,
     )
 
     fun member(id: String): FleetMemberDescriptor? = ALL.find { it.id == id }
@@ -690,9 +766,9 @@ object KnownFleet {
     }
 
     fun formatListing(): String = buildString {
-        appendLine("DroidCommand AI room fleet — 11 members. None is LIVE.")
-        appendLine("Wiring order: Pentest (when repo exists) → RootForge Messenger → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager (when their identity/default-off PR lands) → Keyboard (catalog only; direction open) → Mesh (catalog only; own signing keys) → Browser (catalog only; own signing keys) → VictorSMS (EXTERNAL_NODE, SMS remote-command source; debug cert documented [planned/pending-merge] unenforced; release TBD) → VictorSpoof (EXTERNAL_NODE, novelty/prank caller-ID; isolated from destructive; certs TBD). KYC companion APK is a remote.command EXTERNAL_NODE [provisional/pending-stable-cert] (fail-open; remote.command OFF-by-default; all PII ops remoteAllowed:false).")
-        appendLine("AIDL + DependencyGuard apply only to BOUND_COMPANION (Pentest, EDL). RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof/KYC companion Messenger is not that.")
+        appendLine("DroidCommand AI room fleet — 12 members. None is LIVE.")
+        appendLine("Wiring order: Pentest (when repo exists) → RootForge Messenger → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager (when their identity/default-off PR lands) → Keyboard (catalog only; direction open) → Mesh (catalog only; own signing keys) → Browser (catalog only; own signing keys) → VictorSMS (EXTERNAL_NODE, SMS remote-command source; debug cert documented [planned/pending-merge] unenforced; release TBD) → VictorSpoof (EXTERNAL_NODE, novelty/prank caller-ID; isolated from destructive; certs TBD) → Flash (EXTERNAL_NODE, Messenger FLEET_BRIDGE; gadget.expose destructive always confirmation_required + on-phone ERASE; debug cert enforced; release TBD). KYC companion APK is a remote.command EXTERNAL_NODE [provisional/pending-stable-cert] (fail-open; remote.command OFF-by-default; all PII ops remoteAllowed:false).")
+        appendLine("AIDL + DependencyGuard apply only to BOUND_COMPANION (Pentest, EDL). RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof/Flash/KYC companion Messenger is not that.")
         appendLine()
         for (member in ALL) {
             val repo = member.repo ?: "(repo unpublished / not found on public GitHub as of 2026-10-14)"
@@ -707,12 +783,12 @@ object KnownFleet {
             appendLine("  next: ${member.nextStep}")
             appendLine()
         }
-        appendLine("HackerAI (ai.hackerai.companion) is a BOUND_COMPANION already in KnownCompanions; not one of these eleven.")
+        appendLine("HackerAI (ai.hackerai.companion) is a BOUND_COMPANION already in KnownCompanions; not one of these twelve.")
         appendLine("Controller-side node signature check: NodeSignatureVerifier (core-security). Default missing-expected policy is ALLOW.")
         appendLine("Catalogue is partial — fail-closed should be enabled only once remaining members and verified release pins are catalogued.")
-        appendLine("Enforceable: DCA debug; Mesh debug+own release (com.victorious.mesh); Browser debug (com.victorious.browser); Pentest debug; EDL debug; HackerAI debug+verified release 9E:A7; RootForge debug (ai.rootforge.os.debug); Keyboard debug (not .bench); VictorSuite debug + own release.")
-        appendLine("HackerAI is the only member whose shared-fleet RELEASE 9E:A7:… is firsthand verified and enforced. DCA/Pentest/EDL release stays [planned/unverified]. Browser RELEASE is own-key [planned/unverified] (CI-only, cert TBD).")
-        appendLine("File-Manager DEBUG is [unstable/CI-secrets] — documented, not enforced. VictorSMS DEBUG is [planned/pending-merge] — documented, not enforced. KYC-AuditLab companion DEBUG is [provisional/pending-stable-cert] — active fail-open pin is per-machine debug.keystore 6F:46:…; pending permanent 22:4F:… (KYC PR #29, unmerged) recorded not enforced. Do not enforce either. Release cert TBD. victorious-flash / BakerPi are not catalogued.")
+        appendLine("Enforceable: DCA debug; Mesh debug+own release (com.victorious.mesh); Browser debug (com.victorious.browser); Flash debug (com.victorious.flash.android); Pentest debug; EDL debug; HackerAI debug+verified release 9E:A7; RootForge debug (ai.rootforge.os.debug); Keyboard debug (not .bench); VictorSuite debug + own release.")
+        appendLine("HackerAI is the only member whose shared-fleet RELEASE 9E:A7:… is firsthand verified and enforced. DCA/Pentest/EDL release stays [planned/unverified]. Browser RELEASE is own-key [planned/unverified] (CI-only, cert TBD). Flash RELEASE is TBD.")
+        appendLine("File-Manager DEBUG is [unstable/CI-secrets] — documented, not enforced. VictorSMS DEBUG is [planned/pending-merge] — documented, not enforced. KYC-AuditLab companion DEBUG is [provisional/pending-stable-cert] — active fail-open pin is per-machine debug.keystore 6F:46:…; pending permanent 22:4F:… (KYC PR #29, unmerged) recorded not enforced. Do not enforce either. Release cert TBD. BakerPi is not catalogued.")
     }
 }
 

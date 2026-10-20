@@ -57,6 +57,7 @@ class MainTest {
                 "browser_status",
                 "victorsms_status",
                 "victorspoof_status",
+                "victorious_flash_status",
             ),
             specs.map { it.name },
         )

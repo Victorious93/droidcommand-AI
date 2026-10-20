@@ -74,10 +74,16 @@ object RemoteControlManual {
         to unprivileged use; it does not skip confirmation.
 
         Fleet control
-        Tools → Fleet lists HackerAI plus eleven KnownFleet members
-        (including VictorSMS and VictorSpoof). None is LIVE. Pairing is
+        Tools → Fleet lists HackerAI plus twelve KnownFleet members
+        (including VictorSMS, VictorSpoof, and Victorious Flash). None is LIVE. Pairing is
         package + observed cert. EXTERNAL_NODE members never get
         DependencyGuard or a shared signing key.
+
+        Victorious Flash
+        Package com.victorious.flash.android, EXTERNAL_NODE. Messenger
+        action com.victorious.flash.android.FLEET_BRIDGE. Node-id prefix
+        vfa-<32 hex>. gadget.expose is DESTRUCTIVE (always confirmation
+        plus on-phone ERASE). Debug cert is enforced. Release cert TBD.
 
         VictorSpoof
         Package com.victorious.spoof, EXTERNAL_NODE, novelty/prank

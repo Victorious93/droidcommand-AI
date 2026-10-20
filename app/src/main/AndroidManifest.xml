@@ -57,12 +57,13 @@
         <package android:name="ai.victorious.filemanager" />
         <package android:name="com.victorious.keyboard" />
         <!-- Controller-side node signature check (NodeSignatureGuard) plus Tools → Fleet
-             package probe. Mesh is KnownFleet.MESH; Browser is KnownFleet.BROWSER
-             (both PLANNED EXTERNAL_NODE). -->
+             package probe. Mesh is KnownFleet.MESH; Browser is KnownFleet.BROWSER;
+             Flash is KnownFleet.VICTORIOUS_FLASH (all PLANNED EXTERNAL_NODE). -->
         <package android:name="com.victorious.mesh" />
         <package android:name="com.victorious.browser" />
         <package android:name="com.victorious.sms" />
         <package android:name="com.victorious.spoof" />
+        <package android:name="com.victorious.flash.android" />
         <!-- KYC companion EXTERNAL_NODE for remote.command
              ([provisional/pending-stable-cert], fail-open). Probe only. -->
         <package android:name="com.identityshield.companion" />
