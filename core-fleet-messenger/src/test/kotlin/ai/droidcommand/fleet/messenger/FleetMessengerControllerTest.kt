@@ -58,6 +58,9 @@ class FleetMessengerControllerTest {
         assertEquals("com.victorious.keyboard", ExternalNodeCatalog.KEYBOARD.primaryPackage)
         assertEquals("com.victorious.mesh", ExternalNodeCatalog.MESH.primaryPackage)
         assertEquals("com.victorious.browser", ExternalNodeCatalog.BROWSER.primaryPackage)
+        assertEquals("com.victorious.sms", ExternalNodeCatalog.VICTOR_SMS.primaryPackage)
+        assertEquals("com.victorious.spoof", ExternalNodeCatalog.VICTOR_SPOOF.primaryPackage)
+        assertEquals("com.identityshield.companion", ExternalNodeCatalog.KYC_AUDITLAB.primaryPackage)
         assertEquals("rootforge.capabilities.get", ExternalNodeCatalog.ROOTFORGE.capabilitiesOperation)
         assertEquals("filemanager.status", ExternalNodeCatalog.FILE_MANAGER.statusOperation)
         assertEquals("keyboard.capabilities.get", ExternalNodeCatalog.KEYBOARD.capabilitiesOperation)
@@ -68,11 +71,37 @@ class FleetMessengerControllerTest {
         assertNull(ExternalNodeCatalog.KEYBOARD.upOperation)
         assertNull(ExternalNodeCatalog.FILE_MANAGER.upOperation)
         assertNull(ExternalNodeCatalog.BROWSER.upOperation)
+        assertNull(ExternalNodeCatalog.VICTOR_SMS.upOperation)
+        assertNull(ExternalNodeCatalog.VICTOR_SPOOF.upOperation)
+        assertNull(ExternalNodeCatalog.KYC_AUDITLAB.upOperation)
+        assertEquals("sms.capabilities.get", ExternalNodeCatalog.VICTOR_SMS.capabilitiesOperation)
+        assertEquals("sms.status", ExternalNodeCatalog.VICTOR_SMS.statusOperation)
         assertTrue(ExternalNodeCatalog.KEYBOARD.notes.contains("Never forwards typed text"))
         assertTrue(ExternalNodeCatalog.MESH.notes.contains("own release key"))
         assertTrue(ExternalNodeCatalog.BROWSER.notes.contains("own release key"))
+        assertTrue(ExternalNodeCatalog.VICTOR_SMS.notes.contains("sms.remote_command.forward"))
+        assertTrue(ExternalNodeCatalog.VICTOR_SMS.notes.contains("remote.command"))
+        assertTrue(ExternalNodeCatalog.VICTOR_SMS.notes.contains("fail-open"))
+        assertTrue(ExternalNodeCatalog.VICTOR_SMS.notes.contains("[planned/pending-merge]"))
+        assertTrue(ExternalNodeCatalog.VICTOR_SMS.notes.contains("Isolated from"))
+        assertEquals("spoof.capabilities.get", ExternalNodeCatalog.VICTOR_SPOOF.capabilitiesOperation)
+        assertEquals("spoof.status", ExternalNodeCatalog.VICTOR_SPOOF.statusOperation)
+        assertTrue(ExternalNodeCatalog.VICTOR_SPOOF.notes.contains("Isolated from"))
+        assertTrue(ExternalNodeCatalog.VICTOR_SPOOF.notes.contains("fail-open"))
+        assertEquals("kyc.capabilities.get", ExternalNodeCatalog.KYC_AUDITLAB.capabilitiesOperation)
+        assertEquals("kyc.status", ExternalNodeCatalog.KYC_AUDITLAB.statusOperation)
+        assertTrue(ExternalNodeCatalog.KYC_AUDITLAB.notes.contains("remote.command OFF-by-default"))
+        assertTrue(ExternalNodeCatalog.KYC_AUDITLAB.notes.contains("remoteAllowed:false"))
+        assertTrue(ExternalNodeCatalog.KYC_AUDITLAB.notes.contains("[provisional/pending-stable-cert]"))
+        assertTrue(ExternalNodeCatalog.KYC_AUDITLAB.notes.contains("unenforced"))
+        assertTrue(ExternalNodeCatalog.KYC_AUDITLAB.notes.contains("KYC PR #29"))
+        assertTrue(
+            ExternalNodeCatalog.KYC_AUDITLAB.notes.contains(
+                "22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D",
+            ),
+        )
         assertEquals(
-            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser"),
+            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "kyc-auditlab"),
             ExternalNodeCatalog.all.map { it.id },
         )
     }
@@ -303,7 +332,7 @@ class FleetMessengerControllerTest {
         val c = FleetMessengerController(store, resolver, gateway)
         val rows = c.snapshot()
         assertEquals(
-            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser"),
+            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms", "victorspoof", "kyc-auditlab"),
             rows.map { it.spec.id },
         )
         assertTrue(rows.all { it.state == NodePairingState.NOT_INSTALLED })

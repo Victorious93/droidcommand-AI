@@ -7,6 +7,7 @@ import ai.droidcommand.app.ui.chat.ChatScreen
 import ai.droidcommand.app.ui.coding.CodingScreen
 import ai.droidcommand.app.ui.fleet.FleetOrchestratorScreen
 import ai.droidcommand.app.ui.fleet.FleetScreen
+import ai.droidcommand.app.ui.help.HelpScreen
 import ai.droidcommand.app.ui.logs.LogsScreen
 import ai.droidcommand.app.ui.memory.MemoryScreen
 import ai.droidcommand.app.ui.mode.EngineModeViewModel
@@ -87,6 +88,7 @@ object Routes {
     const val NOTES = "tools/notes"
     const val FLEET = "tools/fleet"
     const val FLEET_ORCHESTRATOR = "tools/fleet/orchestrator"
+    const val HELP = "help"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -141,7 +143,10 @@ fun DroidCommandNavHost(
             composable(Routes.TOOLS) { ToolsScreen(navController) }
             composable(Routes.METASPLOIT) { MetasploitScreen() }
             composable(Routes.SETOOLKIT) { SetToolScreen() }
-            composable(Routes.SETTINGS) { SettingsScreen() }
+            composable(Routes.SETTINGS) {
+                SettingsScreen(onOpenHelp = { navController.navigate(Routes.HELP) })
+            }
+            composable(Routes.HELP) { HelpScreen() }
             composable(Routes.MEMORY) { MemoryScreen() }
             composable(Routes.CLIPBOARDS) { ClipboardScreen() }
             composable(Routes.AUTOMATION) { AutomationScreen() }

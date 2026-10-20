@@ -33,10 +33,11 @@ sealed class AutoApprovalDecision {
  * pentest work — requires approval.
  *
  * [yoloMode] true (explicit opt-in only): auto-approves those same actions, including the hard gates
- * for shell / Termux / root / grant-gated tools / fleet nodes. Scope is everything **except** Kali /
- * pentest authorization gates ([YoloMode.pentestAuthorizationGate] and the per-step
- * [ApprovalPrompt] path that never consults this class). Every YOLO waiver's [reason] starts with
- * [YoloMode.AUDIT_REASON] so the audit log records that YOLO was active.
+ * for shell / Termux / root / grant-gated tools / fleet nodes / non-destructive remote commands.
+ * Scope is everything **except** Kali / pentest authorization gates
+ * ([YoloMode.pentestAuthorizationGate] and the per-step [ApprovalPrompt] path that never consults
+ * this class) **and** destructive remote actions ([YoloMode.destructiveRemoteGate]). Every YOLO
+ * waiver's [reason] starts with [YoloMode.AUDIT_REASON] so the audit log records that YOLO was active.
  *
  * There is deliberately no threshold knob besides the YOLO flag: widening the default means changing
  * this class, which review will see.
@@ -64,12 +65,15 @@ class AutoApprovalPolicy(
     }
 
     /**
-     * YOLO on — waive every confirmation except pentest authorization. Those gates are checked
-     * here so a playbook step that reached [evaluate] still cannot slip through, and they are also
-     * routed directly to [ApprovalPrompt] by the Kali runner so this method is never the only line.
+     * YOLO on — waive every confirmation except pentest authorization and destructive remote
+     * actions. Pentest gates are checked first and unchanged; destructive remote is a separate
+     * check so Kali/pentest tokens are not overloaded.
      */
     private fun evaluateYolo(spec: ToolSpec): AutoApprovalDecision {
         YoloMode.pentestAuthorizationGate(spec)?.let {
+            return AutoApprovalDecision.RequireApproval(it)
+        }
+        YoloMode.destructiveRemoteGate(spec)?.let {
             return AutoApprovalDecision.RequireApproval(it)
         }
         val risk = classifier.classify(spec) ?: ActionRisk.ADVANCED_CONTROL

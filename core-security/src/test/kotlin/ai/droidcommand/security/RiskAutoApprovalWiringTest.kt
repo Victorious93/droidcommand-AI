@@ -163,6 +163,11 @@ class RiskAutoApprovalWiringTest {
                     grantedCategories = setOf(PermissionCategory.REMOTE_CONTROL),
                     autoApprovalPolicy = yolo,
                 ),
+            sensitiveView("remote_command").copy(permissionCategory = PermissionCategory.REMOTE_CONTROL) to
+                SecurityPolicy(
+                    grantedCategories = setOf(PermissionCategory.REMOTE_CONTROL),
+                    autoApprovalPolicy = yolo,
+                ),
         )
         cases.forEach { (spec, policy) ->
             val h = WiringHarness(spec, policy)
@@ -183,11 +188,23 @@ class RiskAutoApprovalWiringTest {
             sensitiveView("run_metasploit_module").copy(permissionCategory = PermissionCategory.NETWORK),
             sensitiveView("run_setoolkit_attack").copy(permissionCategory = PermissionCategory.NETWORK),
             sensitiveView("pentest_swarm_scan").copy(permissionCategory = PermissionCategory.NETWORK),
+            sensitiveView("remote_wipe").copy(
+                securityLevel = SecurityLevel.ROOT,
+                permissionCategory = PermissionCategory.REMOTE_CONTROL,
+            ),
+            sensitiveView("remote_lock").copy(
+                securityLevel = SecurityLevel.ROOT,
+                permissionCategory = PermissionCategory.REMOTE_CONTROL,
+            ),
         )
         gated.forEach { spec ->
+            val category = spec.permissionCategory ?: PermissionCategory.NETWORK
             val h = WiringHarness(
                 spec,
-                SecurityPolicy(grantedCategories = setOf(PermissionCategory.NETWORK), autoApprovalPolicy = yolo),
+                SecurityPolicy(
+                    grantedCategories = setOf(category),
+                    autoApprovalPolicy = yolo,
+                ),
                 answer = false,
             )
             assertIs<ToolResult.Failure>(h.run(), spec.name)

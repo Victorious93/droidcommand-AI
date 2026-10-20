@@ -4,7 +4,6 @@ import ai.droidcommand.fleet.messenger.ExternalNodeCatalog
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FleetStatusTest {
@@ -21,17 +20,25 @@ class FleetStatusTest {
         assertEquals("com.victorious.keyboard", FleetCatalog.KEYBOARD_PACKAGE)
         assertEquals("com.victorious.mesh", FleetCatalog.MESH_PACKAGE)
         assertEquals("com.victorious.browser", FleetCatalog.BROWSER_PACKAGE)
+        assertEquals("com.victorious.sms", FleetCatalog.VICTORSMS_PACKAGE)
+        assertEquals("com.victorious.spoof", FleetCatalog.VICTORSPOOF_PACKAGE)
+        assertEquals("com.identityshield.companion", FleetCatalog.KYC_PACKAGE)
         assertEquals(FleetCatalog.ROOTFORGE_PACKAGE, FleetCatalog.ROOTFORGE.packageName)
         assertEquals(ExternalNodeCatalog.ROOTFORGE.primaryPackage, FleetCatalog.ROOTFORGE_PACKAGE)
         assertEquals(ExternalNodeCatalog.FILE_MANAGER.primaryPackage, FleetCatalog.FILEMANAGER_PACKAGE)
         assertEquals(ExternalNodeCatalog.KEYBOARD.primaryPackage, FleetCatalog.KEYBOARD_PACKAGE)
         assertEquals(ExternalNodeCatalog.MESH.primaryPackage, FleetCatalog.MESH_PACKAGE)
         assertEquals(ExternalNodeCatalog.BROWSER.primaryPackage, FleetCatalog.BROWSER_PACKAGE)
-        assertNull(FleetCatalog.KYC_AUDITLAB.packageName)
+        assertEquals(ExternalNodeCatalog.VICTOR_SMS.primaryPackage, FleetCatalog.VICTORSMS_PACKAGE)
+        assertEquals(ExternalNodeCatalog.VICTOR_SPOOF.primaryPackage, FleetCatalog.VICTORSPOOF_PACKAGE)
+        assertEquals(ExternalNodeCatalog.KYC_AUDITLAB.primaryPackage, FleetCatalog.KYC_PACKAGE)
+        assertEquals(FleetCatalog.KYC_PACKAGE, FleetCatalog.KYC_AUDITLAB.packageName)
         assertEquals(FleetCatalog.FILEMANAGER_PACKAGE, FleetCatalog.FILE_MANAGER.packageName)
         assertEquals(FleetCatalog.KEYBOARD_PACKAGE, FleetCatalog.KEYBOARD.packageName)
         assertEquals(FleetCatalog.MESH_PACKAGE, FleetCatalog.MESH.packageName)
         assertEquals(FleetCatalog.BROWSER_PACKAGE, FleetCatalog.BROWSER.packageName)
+        assertEquals(FleetCatalog.VICTORSMS_PACKAGE, FleetCatalog.VICTOR_SMS.packageName)
+        assertEquals(FleetCatalog.VICTORSPOOF_PACKAGE, FleetCatalog.VICTOR_SPOOF.packageName)
         assertEquals(
             listOf(FleetCatalog.ROOTFORGE_DEBUG_PACKAGE),
             FleetCatalog.ROOTFORGE.extraPackages,
@@ -52,6 +59,9 @@ class FleetStatusTest {
                 FleetCatalog.KEYBOARD,
                 FleetCatalog.MESH,
                 FleetCatalog.BROWSER,
+                FleetCatalog.VICTOR_SMS,
+                FleetCatalog.VICTOR_SPOOF,
+                FleetCatalog.KYC_AUDITLAB,
             ).flatMap { it.androidPackages }.toSet(),
         )
         assertEquals(
@@ -66,6 +76,8 @@ class FleetStatusTest {
                 "keyboard",
                 "mesh",
                 "browser",
+                "victorsms",
+                "victorspoof",
             ),
             FleetCatalog.all.map { it.id },
         )
@@ -87,6 +99,8 @@ class FleetStatusTest {
         val keyboard = rows.single { it.member.id == "keyboard" }
         val mesh = rows.single { it.member.id == "mesh" }
         val browser = rows.single { it.member.id == "browser" }
+        val victorSms = rows.single { it.member.id == "victorsms" }
+        val victorSpoof = rows.single { it.member.id == "victorspoof" }
 
         assertEquals(FleetInstallState.INSTALLED, hacker.installed)
         assertTrue(hacker.status.contains("disconnected"))
@@ -113,8 +127,14 @@ class FleetStatusTest {
         assertTrue(edl.member.summary.contains("BOUND_COMPANION"))
         assertTrue(edl.member.summary.contains("ai.edlcommander.companion.permission.BIND_COMPANION"))
 
-        assertEquals(FleetInstallState.NOT_APPLICABLE, kyc.installed)
+        assertEquals(FleetInstallState.NOT_INSTALLED, kyc.installed)
         assertTrue(kyc.status.contains("/scope admin"))
+        assertTrue(kyc.status.contains("[provisional/pending-stable-cert]"))
+        assertTrue(kyc.member.summary.contains("remoteAllowed:false"))
+        assertTrue(kyc.member.summary.contains("fail-open"))
+        assertTrue(kyc.member.summary.contains("com.identityshield.companion"))
+        assertTrue(kyc.member.summary.contains("KYC PR #29"))
+        assertTrue(kyc.status.contains("KYC PR #29"))
 
         assertEquals(FleetInstallState.NOT_INSTALLED, fileManager.installed)
         assertTrue(fileManager.status.contains("not paired"))
@@ -144,6 +164,24 @@ class FleetStatusTest {
         assertTrue(browser.member.summary.contains("com.victorious.browser.action.BRIDGE"))
         assertTrue(browser.member.summary.contains("own release key"))
         assertFalse(browser.status.contains("ready", ignoreCase = true), browser.status)
+
+        assertEquals(FleetInstallState.NOT_INSTALLED, victorSms.installed)
+        assertTrue(victorSms.status.contains("not paired"))
+        assertTrue(victorSms.status.contains("Not LIVE"))
+        assertTrue(victorSms.member.summary.contains("Never DependencyGuard"))
+        assertTrue(victorSms.member.summary.contains("com.victorious.sms.action.BRIDGE"))
+        assertTrue(victorSms.member.summary.contains("fail-open"))
+        assertTrue(victorSms.member.summary.contains("sms.remote_command.forward"))
+        assertTrue(victorSms.member.summary.contains("[planned/pending-merge]"))
+        assertFalse(victorSms.status.contains("ready", ignoreCase = true), victorSms.status)
+
+        assertEquals(FleetInstallState.NOT_INSTALLED, victorSpoof.installed)
+        assertTrue(victorSpoof.status.contains("not paired"))
+        assertTrue(victorSpoof.status.contains("Not LIVE"))
+        assertTrue(victorSpoof.member.summary.contains("Never DependencyGuard"))
+        assertTrue(victorSpoof.member.summary.contains("com.victorious.spoof.action.BRIDGE"))
+        assertTrue(victorSpoof.member.summary.contains("fail-open"))
+        assertFalse(victorSpoof.status.contains("ready", ignoreCase = true), victorSpoof.status)
 
         rows.forEach { row ->
             assertFalse(row.status.contains("ready", ignoreCase = true), row.status)

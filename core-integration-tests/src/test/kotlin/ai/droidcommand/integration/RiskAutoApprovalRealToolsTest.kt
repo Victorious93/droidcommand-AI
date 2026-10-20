@@ -9,6 +9,10 @@ import ai.droidcommand.metasploit.NullMetasploitExecutor
 import ai.droidcommand.pentestswarm.KaliAuthorizedScanTool
 import ai.droidcommand.pentestswarm.LocalKaliPlaybookRunner
 import ai.droidcommand.pentestswarm.PlaybookStepApprover
+import ai.droidcommand.remotecontrol.InMemoryRemoteControlStore
+import ai.droidcommand.remotecontrol.RemoteControlTool
+import ai.droidcommand.remotecontrol.RemoteControlToolNames
+import ai.droidcommand.remotecontrol.StubRemoteActionExecutor
 import ai.droidcommand.root.NullRootExecutor
 import ai.droidcommand.root.RootTool
 import ai.droidcommand.security.ActionRisk
@@ -83,7 +87,8 @@ class RiskAutoApprovalRealToolsTest {
                 stepApprover = PlaybookStepApprover { _, _, _, _ -> false },
             ),
         ),
-    ).associate { it.spec.name to it.spec }
+    ).associate { it.spec.name to it.spec } +
+        RemoteControlTool.all(StubRemoteActionExecutor(), InMemoryRemoteControlStore()).associate { it.spec.name to it.spec }
 
     private val deviceTools: List<Tool> = listOf(
         TapTool(device), SwipeTool(device), TypeTextTool(device), PressKeyTool(device), LaunchAppTool(device),
@@ -137,7 +142,16 @@ class RiskAutoApprovalRealToolsTest {
             val approved = assertIs<AutoApprovalDecision.AutoApprove>(on.evaluate(dangerousSpecs.getValue(name)), name)
             assertTrue(approved.reason.contains(YoloMode.AUDIT_REASON), approved.reason)
         }
+        listOf(RemoteControlToolNames.COMMAND, RemoteControlToolNames.SCREEN, RemoteControlToolNames.MACRO).forEach { name ->
+            assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(dangerousSpecs.getValue(name)), name)
+            val approved = assertIs<AutoApprovalDecision.AutoApprove>(on.evaluate(dangerousSpecs.getValue(name)), name)
+            assertTrue(approved.reason.contains(YoloMode.AUDIT_REASON), approved.reason)
+        }
         listOf("run_metasploit_module", "run_setoolkit_attack", "run_kali_authorized_scan").forEach { name ->
+            assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(dangerousSpecs.getValue(name)), name)
+            assertIs<AutoApprovalDecision.RequireApproval>(on.evaluate(dangerousSpecs.getValue(name)), name)
+        }
+        listOf(RemoteControlToolNames.WIPE, RemoteControlToolNames.POWER_OFF, RemoteControlToolNames.LOCK, RemoteControlToolNames.DESTRUCTIVE).forEach { name ->
             assertIs<AutoApprovalDecision.RequireApproval>(off.evaluate(dangerousSpecs.getValue(name)), name)
             assertIs<AutoApprovalDecision.RequireApproval>(on.evaluate(dangerousSpecs.getValue(name)), name)
         }

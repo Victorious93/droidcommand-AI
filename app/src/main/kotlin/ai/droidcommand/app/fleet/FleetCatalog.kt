@@ -66,6 +66,18 @@ object FleetCatalog {
     /** EXTERNAL_NODE. Probe only — do not bind Messenger. */
     const val BROWSER_PACKAGE = "com.victorious.browser"
 
+    /** EXTERNAL_NODE. Probe only. debug==release. Debug cert documented [planned/pending-merge], unenforced. */
+    const val VICTORSMS_PACKAGE = "com.victorious.sms"
+
+    /** EXTERNAL_NODE. Novelty/prank caller-ID. Isolated from destructive. Certs TBD (fail-open). */
+    const val VICTORSPOOF_PACKAGE = "com.victorious.spoof"
+
+    /**
+     * KYC companion EXTERNAL_NODE for remote.command. Probe-only.
+     * [provisional/pending-stable-cert] — fail-open.
+     */
+    const val KYC_PACKAGE = "com.identityshield.companion"
+
     /** Debug applicationId for RootForge OS. Catalogued for Messenger pairing / trust checks. */
     const val ROOTFORGE_DEBUG_PACKAGE = "ai.rootforge.os.debug"
 
@@ -125,9 +137,15 @@ object FleetCatalog {
     val KYC_AUDITLAB = FleetMember(
         id = "kyc-auditlab",
         name = "KYC-AuditLab",
-        packageName = null,
+        packageName = KYC_PACKAGE,
         kind = FleetKind.HOST_PROCESS,
-        summary = "HOST_PROCESS_TOOL, PLANNED. Simulator only, localhost only. Hub must not call /scope admin.",
+        summary = "HOST_PROCESS_TOOL simulator (localhost; hub must not call /scope admin) PLUS " +
+            "companion EXTERNAL_NODE com.identityshield.companion for remote.command. " +
+            "[provisional/pending-stable-cert]: active fail-open debug cert is per-machine default " +
+            "debug.keystore, documented not enforced. Pending permanent cert is KYC PR #29 " +
+            "(unmerged) — recorded, not enforced; swap once it merges. remote.command " +
+            "OFF-by-default. All PII ops remoteAllowed:false; controller never remote-allows " +
+            "them. Isolated from destructive paths. Never DependencyGuard, never AIDL. Not LIVE.",
     )
 
     val FILE_MANAGER = FleetMember(
@@ -177,6 +195,31 @@ object FleetCatalog {
             "(CI-only; [planned/unverified]). External control default OFF.",
     )
 
+    val VICTOR_SMS = FleetMember(
+        id = "victorsms",
+        name = "VictorSMS",
+        packageName = VICTORSMS_PACKAGE,
+        kind = FleetKind.EXTERNAL_NODE,
+        summary = "EXTERNAL_NODE, PLANNED [planned/pending-merge]. Messenger action " +
+            "com.victorious.sms.action.BRIDGE (Message what=1 request, protocol_major 1, inbound op " +
+            "sms.remote_command.forward). debug==release package. Isolated from destructive paths. " +
+            "Debug SHA-256 documented (alias androiddebugkey) but unenforced — catalogue " +
+            "fail-open/unpinned. Release cert TBD. Never DependencyGuard, never a shared signing key. " +
+            "SMS whitelist and code word live in VictorSMS; DCA owns commandId→action. trigger{} is " +
+            "informational. External control default OFF + explicit consent. Node-id victorsms-<32 hex>.",
+    )
+
+    val VICTOR_SPOOF = FleetMember(
+        id = "victorspoof",
+        name = "VictorSpoof",
+        packageName = VICTORSPOOF_PACKAGE,
+        kind = FleetKind.EXTERNAL_NODE,
+        summary = "EXTERNAL_NODE, PLANNED. Novelty/prank caller-ID. Planned Messenger action " +
+            "com.victorious.spoof.action.BRIDGE. Isolated from wipe/power-off/lock/flash/bootloader. " +
+            "Signing certs TBD — catalogue fail-open/unpinned. TODO pin debug+release SHA-256. " +
+            "Never DependencyGuard, never a shared signing key.",
+    )
+
     val all: List<FleetMember> = listOf(
         HACKERAI,
         PENTEST_SWARM,
@@ -188,6 +231,8 @@ object FleetCatalog {
         KEYBOARD,
         MESH,
         BROWSER,
+        VICTOR_SMS,
+        VICTOR_SPOOF,
     )
 
     /**
@@ -248,6 +293,9 @@ object FleetStatus {
                 "No APK on this row. Pair package + cert to enable Messenger. Not LIVE."
         }
         FleetKind.HOST_PROCESS ->
-            "Not started. Simulator only, localhost only. The hub must not call /scope admin. Not LIVE."
+            "Not started. Simulator only, localhost only. The hub must not call /scope admin. " +
+                "Companion APK is a remote.command EXTERNAL_NODE [provisional/pending-stable-cert], " +
+                "fail-open (active pin per-machine; pending permanent KYC PR #29 unmerged); " +
+                "PII ops are never remote-allowed. Not LIVE."
     }
 }

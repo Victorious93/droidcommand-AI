@@ -59,6 +59,10 @@ fun ToolsScreen(navController: NavHostController) {
                     onClick = { navController.navigate(Routes.FLEET_ORCHESTRATOR) },
                     modifier = Modifier.fillMaxWidth().testTag("tools_open_fleet_orchestrator"),
                 ) { Text("Open Fleet Orchestrator") }
+                Button(
+                    onClick = { navController.navigate(Routes.HELP) },
+                    modifier = Modifier.fillMaxWidth().testTag("tools_open_help"),
+                ) { Text("Open Help") }
             }
         }
 

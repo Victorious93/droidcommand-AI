@@ -216,6 +216,47 @@ object KnownNodeSigningCatalog {
         "8C:1F:E3:C9:E5:34:F2:71:05:C0:68:8F:45:28:D7:7E:47:11:AE:0A:79:DD:08:D1:E8:59:30:B9:E9:48:85:F2"
 
     /**
+     * VictorSMS debug SHA-256 (`com.victorious.sms`, alias `androiddebugkey`).
+     *
+     * **[planned/pending-merge] — not enforced.** The VictorSMS scaffold
+     * PR is still open/unmerged. Release cert TBD — do not invent.
+     * Putting this in [NodeSigningIdentity.expectedCerts] would pin a
+     * package whose APK is not yet on their main, so
+     * [KnownFleet.VICTOR_SMS.expectedSigningCertSha256] stays empty
+     * (fail-open). TODO: enforce after merge; pin release later.
+     */
+    const val VICTOR_SMS_DEBUG_SHA256_UNENFORCED =
+        "BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A"
+
+    /**
+     * KYC-AuditLab companion **active** debug SHA-256
+     * (`com.identityshield.companion`).
+     *
+     * **[provisional/pending-stable-cert] — not enforced.** This
+     * fingerprint is from a **per-machine default debug.keystore** and
+     * is **not stable across machines**. Keep it as the documented
+     * fail-open pin until [KYC_AUDITLAB_PENDING_STABLE_DEBUG_SHA256_UNENFORCED]
+     * can replace it (KYC PR #29). Putting this in
+     * [NodeSigningIdentity.expectedCerts] would pin a machine-local key,
+     * so [KnownFleet.KYC_AUDITLAB.expectedSigningCertSha256] stays empty
+     * (fail-open). **Do not enforce. Do not swap yet.**
+     */
+    const val KYC_AUDITLAB_DEBUG_SHA256_UNENFORCED =
+        "6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D"
+
+    /**
+     * KYC-AuditLab companion **pending permanent** debug SHA-256
+     * (`com.identityshield.companion`).
+     *
+     * Committed debug keystore, reproducible. Lives in **KYC PR #29**,
+     * **not merged yet**. Documented, **not enforced**. TODO: swap this
+     * in as the active pin once #29 merges; still fail-open until then.
+     * Do not invent a different value.
+     */
+    const val KYC_AUDITLAB_PENDING_STABLE_DEBUG_SHA256_UNENFORCED =
+        "22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D"
+
+    /**
      * DroidCommand AI hub debug identity (`ai.droidcommand.app`).
      * Shared fleet RELEASE [SHARED_FLEET_RELEASE_SHA256] is
      * [planned/unverified] for this package — not listed in

@@ -95,7 +95,64 @@ object ExternalNodeCatalog {
             "Caller identity = Message.sendingUid. Node-id prefix ^browser-[0-9a-f]{32}$.",
     )
 
-    val all: List<ExternalNodeSpec> = listOf(ROOTFORGE, FILE_MANAGER, KEYBOARD, MESH, BROWSER)
+    val VICTOR_SMS = ExternalNodeSpec(
+        id = "victorsms",
+        displayName = "VictorSMS",
+        nodeId = "victorsms",
+        packages = listOf("com.victorious.sms"),
+        capabilitiesOperation = "sms.capabilities.get",
+        statusOperation = "sms.status",
+        notes = "EXTERNAL_NODE. Confirmed action com.victorious.sms.action.BRIDGE, protocol_major 1, " +
+            "what=1, inbound op sms.remote_command.forward (controller op remote.command). " +
+            "debug==release package com.victorious.sms. Node-id prefix ^victorsms-[0-9a-f]{32}$. " +
+            "Never DependencyGuard. Isolated from wipe/power-off/lock/flash/bootloader. " +
+            "VictorSMS owns whitelist + code word; DCA owns commandId→action. trigger{} is " +
+            "informational. Debug SHA-256 documented (alias androiddebugkey) but " +
+            "[planned/pending-merge] unenforced — catalogue fail-open/unpinned. Release cert TBD. " +
+            "TODO: enforce debug pin after scaffold merge. Fleet-messenger read ops " +
+            "sms.capabilities.get / sms.status stay placeholders. The frozen remote-control op for " +
+            "protocol minor 1 is capabilities.get (not a per-class field name).",
+    )
+
+    val VICTOR_SPOOF = ExternalNodeSpec(
+        id = "victorspoof",
+        displayName = "VictorSpoof",
+        nodeId = "victorspoof",
+        packages = listOf("com.victorious.spoof"),
+        capabilitiesOperation = "spoof.capabilities.get",
+        statusOperation = "spoof.status",
+        notes = "EXTERNAL_NODE. Planned action com.victorious.spoof.action.BRIDGE. Novelty/prank " +
+            "caller-ID. Isolated from wipe/power-off/lock/flash/bootloader. Never DependencyGuard. " +
+            "Signing certs TBD — catalogue fail-open/unpinned. TODO: pin debug+release SHA-256.",
+    )
+
+    val KYC_AUDITLAB = ExternalNodeSpec(
+        id = "kyc-auditlab",
+        displayName = "KYC-AuditLab",
+        nodeId = "kyc-auditlab",
+        packages = listOf("com.identityshield.companion"),
+        capabilitiesOperation = "kyc.capabilities.get",
+        statusOperation = "kyc.status",
+        notes = "EXTERNAL_NODE companion APK. Planned action com.identityshield.companion.action.BRIDGE. " +
+            "remote.command OFF-by-default. All PII ops remoteAllowed:false; controller never " +
+            "remote-allows them. Isolated from wipe/power-off/lock/flash/bootloader. Never " +
+            "DependencyGuard, never AIDL. Active fail-open debug SHA-256 is per-machine default " +
+            "debug.keystore — [provisional/pending-stable-cert] unenforced. Pending permanent " +
+            "22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D " +
+            "(KYC PR #29, unmerged) recorded not enforced; swap once #29 merges. " +
+            "Hub must not call /scope admin.",
+    )
+
+    val all: List<ExternalNodeSpec> = listOf(
+        ROOTFORGE,
+        FILE_MANAGER,
+        KEYBOARD,
+        MESH,
+        BROWSER,
+        VICTOR_SMS,
+        VICTOR_SPOOF,
+        KYC_AUDITLAB,
+    )
 
     fun byId(id: String): ExternalNodeSpec? = all.find { it.id == id }
 }

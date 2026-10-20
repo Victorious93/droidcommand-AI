@@ -45,7 +45,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
  * Keystore-backed vault; this screen never displays a stored key, only its [KeyStatus].
  */
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(
+    viewModel: SettingsViewModel = hiltViewModel(),
+    onOpenHelp: () -> Unit = {},
+) {
     val status by viewModel.status.collectAsState()
     val searchStatus by viewModel.searchStatus.collectAsState()
     Column(
@@ -82,6 +85,18 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             )
         }
         VoiceSettingsSection()
+        SectionLabel("Help")
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Remote Control envelope, triggers, destructive gating, local backup, and VictorSpoof isolation.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = onOpenHelp, modifier = Modifier.fillMaxWidth()) { Text("Open Help") }
+            }
+        }
+        RemoteControlSettingsSection()
         ShizukuStatusSection()
         SectionLabel("Device tools")
         DroidCard {

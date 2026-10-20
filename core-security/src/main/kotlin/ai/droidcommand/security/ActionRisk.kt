@@ -60,7 +60,7 @@ class ActionRiskClassifier(private val declared: Map<String, ActionRisk> = empty
             spec.requiredInitiator != null -> "is restricted to initiators ${spec.requiredInitiator}"
             spec.allowedModes.isEmpty() -> "is only invoked explicitly, never offered to the planners"
             spec.permissionCategory != PermissionCategory.VIEW -> "has permission category ${spec.permissionCategory ?: "none"}, not VIEW"
-            NEVER_AUTO_APPROVE_NAME_TOKENS.any { it in name } -> "is shell/root/fleet/pentest tooling by name"
+            NEVER_AUTO_APPROVE_NAME_TOKENS.any { it in name } -> "is shell/root/fleet/pentest/remote tooling by name"
             else -> null
         }
     }
@@ -71,11 +71,13 @@ class ActionRiskClassifier(private val declared: Map<String, ActionRisk> = empty
     companion object {
         /**
          * Substrings of a lower-cased tool name that [hardGate] always refuses. [YoloMode] may waive
-         * the non-pentest tokens (shell/termux/root/fleet/…); [YoloMode.PENTEST_AUTHORIZATION_NAME_TOKENS]
-         * stay refused even with YOLO on.
+         * the non-pentest, non-destructive-remote tokens (shell/termux/root/fleet/shizuku/remote/…);
+         * [YoloMode.PENTEST_AUTHORIZATION_NAME_TOKENS] and
+         * [YoloMode.DESTRUCTIVE_REMOTE_NAME_TOKENS] stay refused even with YOLO on.
          */
         val NEVER_AUTO_APPROVE_NAME_TOKENS: Set<String> = setOf(
             "shell", "termux", "root", "adb", "ssh", "fleet", "flash", "hackerai", "shizuku",
-        ) + YoloMode.PENTEST_AUTHORIZATION_NAME_TOKENS
+            "remote",
+        ) + YoloMode.PENTEST_AUTHORIZATION_NAME_TOKENS + YoloMode.DESTRUCTIVE_REMOTE_NAME_TOKENS
     }
 }

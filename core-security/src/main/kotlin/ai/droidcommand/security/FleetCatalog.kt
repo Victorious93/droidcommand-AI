@@ -18,7 +18,7 @@ enum class FleetIntegrationClass {
     /**
      * Independent product. Live APK = Messenger + shared JSON envelope;
      * desktop/Docker = localhost API + bearer; SSH = CLI/ISO fallback.
-     * Never DependencyGuard. RootForge, File Manager, Keyboard, Mesh, and Browser are this class.
+     * Never DependencyGuard. RootForge, File Manager, Keyboard, Mesh, Browser, and VictorSMS are this class.
      */
     EXTERNAL_NODE,
 
@@ -75,8 +75,10 @@ data class FleetMemberDescriptor(
     val notes: String,
     /**
      * Android applicationIds this member may be bound or commanded as.
-     * Empty when there is no APK (KYC) or no single package in this repo
-     * (RootForge). Debug / release / benchmark ids are listed separately.
+     * Empty when there is no APK or no single package in this repo.
+     * KYC-AuditLab lists the companion APK `com.identityshield.companion`
+     * (fail-open; pin unenforced). Debug / release / benchmark ids are
+     * listed separately.
      */
     val androidPackages: List<String> = emptyList(),
     /**
@@ -113,17 +115,25 @@ data class FleetMemberDescriptor(
 }
 
 /**
- * The nine room-fleet members. Wiring order (owner, 2026-10-14, File Manager
+ * The eleven room-fleet members. Wiring order (owner, 2026-10-14, File Manager
  * added 2026-10-15, Keyboard added 2026-10-17, Mesh added 2026-10-18,
- * Browser added 2026-10-18): Pentest
+ * Browser added 2026-10-18, VictorSMS added 2026-10-20, VictorSpoof added
+ * 2026-10-20): Pentest
  * (when the base repo exists) → RootForge Messenger deepen → VictorSuite
  * RUN_COMMAND → EDL companion APK → KYC last → File Manager (when their
  * identity/default-off PR lands; after the RootForge Messenger client exists)
  * → Keyboard (catalog only; direction of hub-query vs keyboard slash-commands
  * is open) → Mesh (catalog only; EXTERNAL_NODE, own signing keys)
- * → Browser (catalog only; EXTERNAL_NODE, own signing keys).
+ * → Browser (catalog only; EXTERNAL_NODE, own signing keys)
+ * → VictorSMS (EXTERNAL_NODE, SMS remote-command source; debug cert
+ * documented [planned/pending-merge] unenforced; release TBD / fail-open)
+ * → VictorSpoof (EXTERNAL_NODE, novelty/prank caller-ID; isolated from
+ * privileged/destructive paths; certs TBD / unpinned).
+ * KYC-AuditLab's KnownFleet row stays HOST_PROCESS_TOOL (localhost
+ * simulator). Its companion APK is a separate `remote.command`
+ * EXTERNAL_NODE ([provisional/pending-stable-cert], fail-open).
  *
- * HackerAI is already a bound companion in `KnownCompanions`; not one of these nine.
+ * HackerAI is already a bound companion in `KnownCompanions`; not one of these eleven.
  */
 object KnownFleet {
     val PENTEST_SWARM = FleetMemberDescriptor(
@@ -274,7 +284,7 @@ object KnownFleet {
         id = "kyc-auditlab",
         displayName = "KYC-AuditLab",
         repo = null,
-        packageOrBinary = "identityshield simulator (localhost only); no Android package",
+        packageOrBinary = "identityshield simulator (localhost) + companion APK com.identityshield.companion",
         integrationClass = FleetIntegrationClass.HOST_PROCESS_TOOL,
         status = FleetHonestyStatus.PLANNED,
         capabilityId = CapabilityId("fleet.kyc-auditlab.host"),
@@ -282,17 +292,44 @@ object KnownFleet {
         existingToolNames = listOf("kyc_auditlab_status"),
         catalogStubName = "kyc_auditlab_status",
         wiringOrder = 5,
-        transports = listOf("localhost simulator (no auth yet)"),
+        transports = listOf(
+            "localhost simulator (no auth yet; hub must not call /scope admin)",
+            "messenger+json envelope (companion EXTERNAL_NODE: action " +
+                "com.identityshield.companion.action.BRIDGE; remote.command OFF-by-default; " +
+                "all PII ops remoteAllowed:false)",
+        ),
         usesAidl = false,
         usesDependencyGuard = false,
         riskTier = RiskTier.READ_ONLY,
-        nextStep = "Last. Simulator only, localhost only. Do not call /scope admin until KYC adds auth. " +
-            "Never AIDL. Do not log identity-document contents.",
+        nextStep = "Last among the original five. Simulator only, localhost only. Do not call /scope admin " +
+            "until KYC adds auth. Companion APK com.identityshield.companion is a remote.command " +
+            "EXTERNAL_NODE [provisional/pending-stable-cert]: active fail-open debug cert is the " +
+            "per-machine default debug.keystore (not stable). Pending permanent cert is in KYC PR #29 " +
+            "(unmerged) — do not swap or enforce until it merges. remote.command OFF-by-default; " +
+            "PII ops never remote-allowed from the controller either. Never AIDL. " +
+            "Do not log identity-document contents.",
         refusalMessage = "KYC-AuditLab is PLANNED. Simulator only, localhost only, no auth yet. " +
-            "The hub must not call /scope admin. This tool does not run the lab.",
-        notes = "Host tool. No public repo as of 2026-10-14. /scope admin is off-limits until they add auth. " +
-            "No Android package, so no signing-cert pin.",
-        androidPackages = emptyList(),
+            "The hub must not call /scope admin. Companion APK com.identityshield.companion is an " +
+            "EXTERNAL_NODE remote.command target [provisional/pending-stable-cert] — fail-open, " +
+            "active debug SHA-256 " +
+            "6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D " +
+            "documented not enforced (per-machine debug.keystore). Pending permanent " +
+            "22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D " +
+            "(KYC PR #29, unmerged) recorded not enforced. remote.command OFF-by-default; " +
+            "all PII ops remoteAllowed:false. This tool does not run the lab.",
+        notes = "Host-process simulator PLUS companion EXTERNAL_NODE for remote.command. " +
+            "Never DependencyGuard, never shared signing key, never KnownCompanions, never BIND_* " +
+            "signature permission, never AIDL. Package com.identityshield.companion. " +
+            "[provisional/pending-stable-cert]. Active fail-open debug SHA-256 " +
+            "6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D " +
+            "is per-machine default debug.keystore — documented, not enforced " +
+            "(expectedSigningCertSha256 empty / fail-open). Pending permanent debug SHA-256 " +
+            "22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D " +
+            "(KYC PR #29, unmerged, committed debug keystore, reproducible) — recorded, not " +
+            "enforced; swap the active pin once #29 merges. remote.command OFF-by-default. " +
+            "All PII ops remoteAllowed:false; controller never remote-allows them. " +
+            "/scope admin is off-limits. Isolated from wipe/power-off/lock/flash/bootloader.",
+        androidPackages = listOf("com.identityshield.companion"),
         expectedSigningCertSha256 = emptyList(),
     )
 
@@ -491,6 +528,131 @@ object KnownFleet {
         expectedSigningCertSha256 = listOf(KnownNodeSigningCatalog.VICTORIOUS_BROWSER_DEBUG_SHA256),
     )
 
+    /**
+     * VictorSMS SMS remote-command source **and** `remote.command` target
+     * registry / pairing-table row (alongside [VICTOR_SPOOF]).
+     *
+     * Status: **[planned/pending-merge]** — scaffold PR still open.
+     * Debug SHA-256 is documented
+     * ([KnownNodeSigningCatalog.VICTOR_SMS_DEBUG_SHA256_UNENFORCED], alias
+     * `androiddebugkey`) but **[expectedSigningCertSha256] stays empty** so
+     * the catalogue is fail-open / unpinned. Do **not** enforce the pin yet.
+     * Release cert TBD — do not invent fingerprints.
+     *
+     * Isolated from privileged/destructive paths: the catalogued inbound op
+     * `sms.remote_command.forward` is never wipe/power-off/lock/flash/
+     * bootloader. A forwarded commandId is classified independently.
+     * VictorSMS owns whitelist + code word; DCA owns commandId→action.
+     *
+     * TODO: enforce the debug pin after the scaffold PR merges; pin release
+     * later.
+     */
+    val VICTOR_SMS = FleetMemberDescriptor(
+        id = "victorsms",
+        displayName = "VictorSMS",
+        repo = null,
+        packageOrBinary = "com.victorious.sms (debug==release; no applicationIdSuffix)",
+        integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
+        status = FleetHonestyStatus.PLANNED,
+        capabilityId = CapabilityId("fleet.victorsms.node"),
+        providerId = "victorsms",
+        existingToolNames = listOf("victorsms_status"),
+        catalogStubName = "victorsms_status",
+        wiringOrder = 10,
+        transports = listOf(
+            "messenger+json envelope (confirmed: action com.victorious.sms.action.BRIDGE; " +
+                "Message what=1 request; protocol_major 1; " +
+                "inbound op sms.remote_command.forward; controller op remote.command; " +
+                "caller identity = Message.sendingUid, not Binder.getCallingUid; " +
+                "node-id prefix ^victorsms-[0-9a-f]{32}$)",
+        ),
+        usesAidl = false,
+        usesDependencyGuard = false,
+        riskTier = RiskTier.REVERSIBLE,
+        nextStep = "Generic Messenger client exists (core-fleet-messenger + :app) but VictorSMS is not " +
+            "paired and inbound sms.remote_command.forward is not live-wired. Pair the node to call it. " +
+            "External control default OFF + explicit consent on their side. SMS whitelist and code " +
+            "word live in VictorSMS, not here. Debug cert is documented " +
+            "(KnownNodeSigningCatalog.VICTOR_SMS_DEBUG_SHA256_UNENFORCED, alias androiddebugkey) " +
+            "but [planned/pending-merge] unenforced / fail-open — expectedSigningCertSha256 stays empty. " +
+            "TODO: enforce after scaffold merge; pin release SHA-256 once published. " +
+            "Never DependencyGuard, never a shared signing key.",
+        refusalMessage = "VictorSMS is PLANNED EXTERNAL_NODE [planned/pending-merge] — this stub does not " +
+            "bind Messenger. Confirmed action com.victorious.sms.action.BRIDGE (Message what=1 request, " +
+            "protocol_major 1). Inbound op sms.remote_command.forward. Node-id prefix " +
+            "^victorsms-[0-9a-f]{32}$. debug==release package com.victorious.sms. Debug SHA-256 " +
+            "BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A " +
+            "(alias androiddebugkey) is documented, not enforced. Catalogue is fail-open/unpinned. " +
+            "Release cert TBD. Isolated from wipe/power-off/lock/flash/bootloader. External control " +
+            "default OFF + explicit consent. SMS whitelist and code word live in VictorSMS; DCA owns " +
+            "commandId→action. trigger{} is informational. Capability state is REQUIRES_EXTERNAL_SERVICE.",
+        notes = "EXTERNAL_NODE like RootForge / File Manager / Keyboard / Mesh / Browser / VictorSpoof. Never " +
+            "DependencyGuard, never shared signing key, never KnownCompanions, never BIND_* " +
+            "signature permission, never AIDL. Package com.victorious.sms (debug==release). " +
+            "remote.command target registry + pairing-table row alongside VictorSpoof. " +
+            "Inbound op sms.remote_command.forward. Isolated from privileged/destructive paths. " +
+            "SMS gating (whitelist + code word) lives in VictorSMS; DCA owns commandId→action. " +
+            "trigger{} is informational, never authorization. External control default OFF. " +
+            "Caller identity = Message.sendingUid. Node-id prefix ^victorsms-[0-9a-f]{32}$. " +
+            "[planned/pending-merge]. Debug SHA-256 " +
+            "BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A " +
+            "(alias androiddebugkey) is documented, not enforced — expectedSigningCertSha256 is empty " +
+            "(fail-open). Release cert TBD. TODO: enforce debug pin after scaffold merge; pin release later.",
+        androidPackages = listOf("com.victorious.sms"),
+        expectedSigningCertSha256 = emptyList(),
+    )
+
+    /**
+     * VictorSpoof novelty/prank caller-ID node. Signing certs are **not yet
+     * committed** — [expectedSigningCertSha256] stays empty so the catalogue
+     * is fail-open / unpinned.
+     *
+     * Isolated from privileged/destructive paths: mapped actions stay
+     * non-destructive unless Don explicitly maps otherwise.
+     *
+     * TODO: pin debug + release SHA-256 once VictorSpoof publishes them.
+     * Do not invent fingerprints.
+     */
+    val VICTOR_SPOOF = FleetMemberDescriptor(
+        id = "victorspoof",
+        displayName = "VictorSpoof",
+        repo = null,
+        packageOrBinary = "com.victorious.spoof (novelty/prank caller-ID; EXTERNAL_NODE)",
+        integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
+        status = FleetHonestyStatus.PLANNED,
+        capabilityId = CapabilityId("fleet.victorspoof.node"),
+        providerId = "victorspoof",
+        existingToolNames = listOf("victorspoof_status"),
+        catalogStubName = "victorspoof_status",
+        wiringOrder = 11,
+        transports = listOf(
+            "messenger+json envelope (planned: action com.victorious.spoof.action.BRIDGE; " +
+                "Message what=1 request; protocol_major 1; " +
+                "caller identity = Message.sendingUid, not Binder.getCallingUid; " +
+                "remote.command target; isolated from wipe/power-off/lock/flash/bootloader)",
+        ),
+        usesAidl = false,
+        usesDependencyGuard = false,
+        riskTier = RiskTier.REVERSIBLE,
+        nextStep = "Generic Messenger client exists (core-fleet-messenger + :app) but VictorSpoof is not " +
+            "paired. Pair the node to call it. Isolated from privileged/destructive paths. " +
+            "TODO: pin debug+release SHA-256 (currently unpinned / fail-open). " +
+            "Never DependencyGuard, never a shared signing key.",
+        refusalMessage = "VictorSpoof is PLANNED EXTERNAL_NODE — this stub does not bind Messenger. " +
+            "Planned action com.victorious.spoof.action.BRIDGE (Message what=1 request, protocol_major 1). " +
+            "Package com.victorious.spoof. Signing certs are [CONTRACT TBD] — catalogue " +
+            "is fail-open/unpinned. TODO: pin debug+release SHA-256. Isolated from " +
+            "wipe/power-off/lock/flash/bootloader. Capability state is REQUIRES_EXTERNAL_SERVICE.",
+        notes = "EXTERNAL_NODE like RootForge / File Manager / Keyboard / Mesh / Browser / VictorSMS. Never " +
+            "DependencyGuard, never shared signing key, never KnownCompanions, never BIND_* " +
+            "signature permission, never AIDL. Package com.victorious.spoof. Novelty/prank " +
+            "caller-ID — isolated from privileged/destructive paths unless Don explicitly maps " +
+            "otherwise. Caller identity = Message.sendingUid. " +
+            "TODO: pin debug+release SHA-256 — expectedSigningCertSha256 is empty (fail-open).",
+        androidPackages = listOf("com.victorious.spoof"),
+        expectedSigningCertSha256 = emptyList(),
+    )
+
     val ALL: List<FleetMemberDescriptor> = listOf(
         PENTEST_SWARM,
         ROOTFORGE,
@@ -501,6 +663,8 @@ object KnownFleet {
         KEYBOARD,
         MESH,
         BROWSER,
+        VICTOR_SMS,
+        VICTOR_SPOOF,
     )
 
     fun member(id: String): FleetMemberDescriptor? = ALL.find { it.id == id }
@@ -526,9 +690,9 @@ object KnownFleet {
     }
 
     fun formatListing(): String = buildString {
-        appendLine("DroidCommand AI room fleet — 9 members. None is LIVE.")
-        appendLine("Wiring order: Pentest (when repo exists) → RootForge Messenger → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager (when their identity/default-off PR lands) → Keyboard (catalog only; direction open) → Mesh (catalog only; own signing keys) → Browser (catalog only; own signing keys).")
-        appendLine("AIDL + DependencyGuard apply only to BOUND_COMPANION (Pentest, EDL). RootForge/File Manager/Keyboard/Mesh/Browser Messenger is not that.")
+        appendLine("DroidCommand AI room fleet — 11 members. None is LIVE.")
+        appendLine("Wiring order: Pentest (when repo exists) → RootForge Messenger → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager (when their identity/default-off PR lands) → Keyboard (catalog only; direction open) → Mesh (catalog only; own signing keys) → Browser (catalog only; own signing keys) → VictorSMS (EXTERNAL_NODE, SMS remote-command source; debug cert documented [planned/pending-merge] unenforced; release TBD) → VictorSpoof (EXTERNAL_NODE, novelty/prank caller-ID; isolated from destructive; certs TBD). KYC companion APK is a remote.command EXTERNAL_NODE [provisional/pending-stable-cert] (fail-open; remote.command OFF-by-default; all PII ops remoteAllowed:false).")
+        appendLine("AIDL + DependencyGuard apply only to BOUND_COMPANION (Pentest, EDL). RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof/KYC companion Messenger is not that.")
         appendLine()
         for (member in ALL) {
             val repo = member.repo ?: "(repo unpublished / not found on public GitHub as of 2026-10-14)"
@@ -543,12 +707,12 @@ object KnownFleet {
             appendLine("  next: ${member.nextStep}")
             appendLine()
         }
-        appendLine("HackerAI (ai.hackerai.companion) is a BOUND_COMPANION already in KnownCompanions; not one of these nine.")
+        appendLine("HackerAI (ai.hackerai.companion) is a BOUND_COMPANION already in KnownCompanions; not one of these eleven.")
         appendLine("Controller-side node signature check: NodeSignatureVerifier (core-security). Default missing-expected policy is ALLOW.")
         appendLine("Catalogue is partial — fail-closed should be enabled only once remaining members and verified release pins are catalogued.")
         appendLine("Enforceable: DCA debug; Mesh debug+own release (com.victorious.mesh); Browser debug (com.victorious.browser); Pentest debug; EDL debug; HackerAI debug+verified release 9E:A7; RootForge debug (ai.rootforge.os.debug); Keyboard debug (not .bench); VictorSuite debug + own release.")
         appendLine("HackerAI is the only member whose shared-fleet RELEASE 9E:A7:… is firsthand verified and enforced. DCA/Pentest/EDL release stays [planned/unverified]. Browser RELEASE is own-key [planned/unverified] (CI-only, cert TBD).")
-        appendLine("File-Manager DEBUG is [unstable/CI-secrets] — documented, not enforced. victorious-flash / BakerPi / KYC are not catalogued.")
+        appendLine("File-Manager DEBUG is [unstable/CI-secrets] — documented, not enforced. VictorSMS DEBUG is [planned/pending-merge] — documented, not enforced. KYC-AuditLab companion DEBUG is [provisional/pending-stable-cert] — active fail-open pin is per-machine debug.keystore 6F:46:…; pending permanent 22:4F:… (KYC PR #29, unmerged) recorded not enforced. Do not enforce either. Release cert TBD. victorious-flash / BakerPi are not catalogued.")
     }
 }
 

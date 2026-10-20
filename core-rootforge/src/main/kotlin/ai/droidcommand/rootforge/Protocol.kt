@@ -16,6 +16,12 @@ import kotlinx.serialization.json.JsonObject
  */
 const val BRIDGE_PROTOCOL_MAJOR = 1
 
+/**
+ * Advertised in `capabilities.get`. Not a required field on [BridgeRequest]
+ * — adding one would break existing nodes that only send `protocol_major`.
+ */
+const val BRIDGE_PROTOCOL_MINOR = 1
+
 internal val bridgeJson = Json {
     ignoreUnknownKeys = true // tolerate additive minor changes in responses
     encodeDefaults = true
