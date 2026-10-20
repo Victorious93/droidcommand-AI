@@ -27,7 +27,7 @@ HackerAI (`ai.hackerai.companion`) is already a bound companion and is
 10. **VictorSMS** — EXTERNAL_NODE, SMS remote-command source; debug cert documented unenforced
 11. **VictorSpoof** — EXTERNAL_NODE, novelty/prank caller-ID; certs TBD / unpinned
 12. **Victorious Flash** — EXTERNAL_NODE, Messenger `FLEET_BRIDGE`; debug cert **enforced**; `gadget.expose` destructive always confirmation_required + on-phone ERASE
-13. **VictorLaunch** — EXTERNAL_NODE, status-tray consumer + bridge node; `config.export`/`config.import`; envelope v1.1; ACTION OPS OFF BY DEFAULT; debug cert documented `[planned/pending-merge]` unenforced; release TBD
+13. **VictorLaunch** — EXTERNAL_NODE, status-tray consumer + bridge node; `config.export`/`config.import`; envelope v1.1; ACTION OPS OFF BY DEFAULT; debug cert **enforced**; release TBD
 
 ## Integration classes (do not mix)
 
@@ -203,9 +203,11 @@ Kali/pentest authorization are unchanged.
 
 The catalogue is **partial**. Do **not** invent fingerprints. Victorious
 Flash debug is catalogued and **enforced** (flash PR #18 merged; debug
-cert is stable). Flash RELEASE is TBD — do not invent. Fail-closed should
-be enabled only once remaining members and verified release pins are
-catalogued.
+cert is stable). VictorLaunch debug is catalogued and **enforced**
+(node PR #6 merged; rotated key in CI secrets only; previous
+`1B:06:A8:…` pin revoked). Flash and VictorLaunch RELEASE certs are TBD
+— do not invent. Fail-closed should be enabled only once remaining
+members and verified release pins are catalogued.
 
 **Enforceable** (in `expectedSigningCertSha256` / `expectedCerts`; mismatch
 and missing-observed refuse):
@@ -217,6 +219,7 @@ and missing-observed refuse):
 | Victorious Mesh (8th wiring-order member, PLANNED catalog) | RELEASE (own key, **not** the shared fleet key) | `com.victorious.mesh` | `76:E9:15:83:31:40:DA:96:69:D3:CC:5D:54:F6:66:A9:01:51:51:FC:F6:4C:59:B6:3D:DA:6E:D2:8F:83:A4:0D` |
 | Victorious Browser (9th wiring-order member, PLANNED catalog) | DEBUG | `com.victorious.browser` | `2D:5D:9E:8B:53:8E:78:51:3D:B5:41:F4:DF:FD:67:BE:27:FF:EC:3F:37:EB:1A:D4:8D:77:83:AE:59:27:C3:E1` |
 | Victorious Flash (12th wiring-order member, PLANNED catalog) | DEBUG | `com.victorious.flash.android` | `2C:52:0F:7A:A4:BE:72:6D:EB:F9:18:3D:04:3D:56:C5:58:E5:67:F7:77:BD:10:BE:3C:98:86:38:1C:6A:F6:ED` |
+| VictorLaunch (13th wiring-order member, PLANNED catalog) | DEBUG | `com.victorious.launch` | `B9:9A:AF:E2:C1:41:8B:5D:64:AA:0D:4B:AC:61:FC:F7:A7:BA:81:44:35:E0:EF:89:E8:AA:55:BE:56:4E:4A:69` |
 | Pentest-Swarm-AI | DEBUG | `ai.pentestswarm.companion` | `5E:3A:B1:23:1F:7E:DA:18:78:B8:FF:D8:9E:AC:B1:F7:2E:EB:66:AF:3D:BA:2E:01:33:51:24:68:42:23:30:C7` |
 | EDL-Commander | DEBUG | `ai.edlcommander.companion` | `E5:60:B6:92:BD:E6:51:9E:B7:CB:B5:2C:E4:DC:91:5A:19:E4:41:A0:1A:5D:03:68:82:71:AC:99:78:8A:58:C8` |
 | HackerAI-Commander | DEBUG | `ai.hackerai.companion` | `AF:1C:8F:C5:44:9F:58:4A:46:C8:96:CC:C9:7F:35:B0:7B:35:7E:96:EE:66:5F:3A:BF:CB:0D:28:4D:F5:23:55` |
@@ -236,6 +239,7 @@ and missing-observed refuse):
 | EDL-Commander | RELEASE | [planned/unverified] |
 | Victorious Browser | RELEASE | [planned/unverified] — **own** key (NOT shared fleet `9E:A7`), CI-only, cert TBD — do not invent |
 | Victorious Flash | RELEASE | TBD — do not invent |
+| VictorLaunch | RELEASE | TBD — do not invent. Debug pin is enforced (node PR #6 merged). |
 
 **Caveated** (documented, **not** enforced — packages stay fail-open):
 
@@ -243,7 +247,6 @@ and missing-observed refuse):
 |---|---|---|---|
 | Victorious File Manager | DEBUG | `8C:1F:E3:C9:E5:34:F2:71:05:C0:68:8F:45:28:D7:7E:47:11:AE:0A:79:DD:08:D1:E8:59:30:B9:E9:48:85:F2` | **[unstable/CI-secrets]**. Not committed; CI injects from secrets and falls back to the generic Android debug key without them. Enforcing it would refuse the fallback. No release key yet. |
 | VictorSMS | DEBUG | `BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A` (alias `androiddebugkey`) | **[planned/pending-merge]**. Scaffold PR still open/unmerged. Documented, not enforced — `expectedSigningCertSha256` stays empty (fail-open). Release cert TBD. |
-| VictorLaunch | DEBUG | `1B:06:A8:9E:7F:F5:BA:21:C9:A4:F8:F1:F0:4F:95:E5:62:78:A1:22:18:AD:37:33:28:CE:E7:83:1D:4F:BA:CA` | **[planned/pending-merge]**. Source PR #2 is private, CI billing-blocked, assembleDebug green locally, NOT merged. Documented, not enforced — `expectedSigningCertSha256` stays empty (fail-open). Release cert TBD. |
 | KYC-AuditLab companion | DEBUG (active fail-open) | `6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D` | **[provisional/pending-stable-cert]**. Per-machine default debug.keystore — **not stable across machines**. Documented, not enforced — `expectedSigningCertSha256` stays empty (fail-open). Keep as the active pin until KYC PR #29 merges. |
 | KYC-AuditLab companion | DEBUG (pending permanent) | `22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D` | Committed debug keystore, reproducible. Lives in **KYC PR #29** (unmerged). Documented, **not enforced**. Swap this in as the active pin once #29 merges. Do not enforce either until then. |
 
@@ -255,7 +258,7 @@ and missing-observed refuse):
 | Keyboard RELEASE and `.bench` | No release key; `.bench` not in the debug pin |
 | File Manager RELEASE | No release key yet |
 | VictorSMS RELEASE | Cert TBD — do not invent |
-| VictorLaunch RELEASE | Cert TBD — do not invent. Debug pin stays `[planned/pending-merge]` fail-open until PR #2 merges. |
+| VictorLaunch RELEASE | Cert TBD — do not invent. Debug pin is enforced (node PR #6 merged; previous `1B:06:A8:…` pin revoked). |
 | KYC-AuditLab companion RELEASE | Cert TBD — do not invent. Active debug pin stays the provisional 6F:46:… fail-open value until KYC PR #29 merges, then swap to 22:4F:…. |
 | Victorious Flash RELEASE | Cert TBD — do not invent. Debug pin is enforced (flash PR #18 merged). |
 | BakerPi | Out of scope |
@@ -548,3 +551,15 @@ a shared signing key, never AIDL, never `KnownCompanions`.
 - Catalog stub `victorlaunch_status` always fails
   (`REQUIRES_EXTERNAL_SERVICE`). Tools → Fleet probes
   `com.victorious.launch` only.
+
+## 2026-10-20p — VictorLaunch debug cert rotated and ENFORCED
+
+Does **not** rewrite 2026-10-20n. VictorLaunch rotated its debug signing
+key. Node PR #6 is merged; the new key lives in CI secrets only (not
+committed). The cert fingerprint is stable, so the pin is now enforced.
+
+- **Revoked:** `1B:06:A8:9E:7F:F5:BA:21:C9:A4:F8:F1:F0:4F:95:E5:62:78:A1:22:18:AD:37:33:28:CE:E7:83:1D:4F:BA:CA`
+  (old fail-open documented pin). No longer accepted.
+- **Enforced:** `B9:9A:AF:E2:C1:41:8B:5D:64:AA:0D:4B:AC:61:FC:F7:A7:BA:81:44:35:E0:EF:89:E8:AA:55:BE:56:4E:4A:69`
+  (`KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256` on
+  `expectedSigningCertSha256`). Release cert TBD — do not invent.

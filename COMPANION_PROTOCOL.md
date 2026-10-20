@@ -393,7 +393,9 @@ value(s).
 more fingerprints (debug + release is the intended shape). Empty means
 `[Unknown]` — **do not invent a fingerprint**. The catalogue is **partial**;
 fail-closed should be enabled only once it is complete. Victorious Flash
-debug is catalogued and enforced (flash PR #18 merged). Flash RELEASE is
+debug is catalogued and enforced (flash PR #18 merged). VictorLaunch
+debug is catalogued and enforced (node PR #6 merged; previous
+`1B:06:A8:…` pin revoked). Flash and VictorLaunch RELEASE certs are
 TBD — do not invent.
 
 Enforceable today (mismatch / missing-observed refuse):
@@ -403,6 +405,7 @@ Enforceable today (mismatch / missing-observed refuse):
 - Victorious Mesh **own** RELEASE `com.victorious.mesh` `76:E9:15:83:…:A4:0D` (not the shared fleet key; RSA 4096, alias `victoriousmeshrelease`, CI-secrets only)
 - Victorious Browser debug `com.victorious.browser` `2D:5D:9E:8B:…:C3:E1` (9th wiring-order member, PLANNED catalog)
 - Victorious Flash debug `com.victorious.flash.android` `2C:52:0F:7A:…:F6:ED` (12th wiring-order member, PLANNED catalog; flash PR #18 merged, enforced)
+- VictorLaunch debug `com.victorious.launch` `B9:9A:AF:E2:…:4A:69` (13th wiring-order member, PLANNED catalog; node PR #6 merged, enforced; previous `1B:06:A8:…` pin revoked)
 - Pentest-Swarm-AI debug `ai.pentestswarm.companion` `5E:3A:B1:23:…:30:C7`
 - EDL-Commander debug `ai.edlcommander.companion` `E5:60:B6:92:…:58:C8`
 - HackerAI-Commander debug `ai.hackerai.companion` `AF:1C:8F:C5:…:23:55`
@@ -415,18 +418,17 @@ Enforceable today (mismatch / missing-observed refuse):
 Planned / unverified (**not** enforced): DroidCommand-AI / Pentest / EDL
 release `9E:A7:…` (`SHARED_FLEET_RELEASE_SHA256`); Victorious Browser
 RELEASE (own key, NOT shared fleet, CI-only, cert TBD); Victorious Flash
-RELEASE (TBD — do not invent).
+RELEASE (TBD — do not invent); VictorLaunch RELEASE (TBD — do not invent).
 
 Caveated / not enforced: File-Manager DEBUG `8C:1F:E3:C9:…:85:F2` is
 `[unstable/CI-secrets]` (CI injects from secrets, else generic Android
-debug key). VictorLaunch DEBUG `1B:06:A8:9E:…:BA:CA` is
-`[planned/pending-merge]` (source PR #2 unmerged) — documented, not
-enforced; `expectedSigningCertSha256` stays empty. Packages stay fail-open.
+debug key). Packages stay fail-open.
 
 Pending / out of scope: RootForge release, Keyboard release
 and `.bench`, File Manager release, KYC companion RELEASE (debug cert is
 `[provisional/pending-stable-cert]` unenforced), Victorious Flash
-RELEASE (debug pin is enforced), BakerPi.
+RELEASE (debug pin is enforced), VictorLaunch RELEASE (debug pin is
+enforced), BakerPi.
 
 **Default for `[Unknown]` members: ALLOW.** Fail-closed
 (`MissingExpectedCertPolicy.REFUSE`) is available

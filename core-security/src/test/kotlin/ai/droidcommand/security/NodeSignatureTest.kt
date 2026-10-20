@@ -112,6 +112,7 @@ class NodeSignatureTest {
             "com.victorious.mesh" to KnownNodeSigningCatalog.VICTORIOUS_MESH_RELEASE_SHA256,
             "com.victorious.browser" to KnownNodeSigningCatalog.VICTORIOUS_BROWSER_DEBUG_SHA256,
             "com.victorious.flash.android" to KnownNodeSigningCatalog.VICTORIOUS_FLASH_DEBUG_SHA256,
+            "com.victorious.launch" to KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256,
             "ai.pentestswarm.companion" to KnownNodeSigningCatalog.PENTEST_SWARM_DEBUG_SHA256,
             "ai.edlcommander.companion" to KnownNodeSigningCatalog.EDL_COMMANDER_DEBUG_SHA256,
             "ai.hackerai.companion" to KnownNodeSigningCatalog.HACKERAI_DEBUG_SHA256,
@@ -136,6 +137,7 @@ class NodeSignatureTest {
             "com.victorious.mesh",
             "com.victorious.browser",
             "com.victorious.flash.android",
+            "com.victorious.launch",
             "ai.pentestswarm.companion",
             "ai.edlcommander.companion",
             "ai.hackerai.companion",
@@ -169,7 +171,10 @@ class NodeSignatureTest {
         assertEquals(listOf("com.victorious.flash.android"), KnownFleet.VICTORIOUS_FLASH.androidPackages)
         assertEquals(listOf("com.victorious.launch"), KnownFleet.VICTOR_LAUNCH.androidPackages)
         assertTrue(KnownFleet.FILE_MANAGER.expectedSigningCertSha256.isEmpty())
-        assertEquals("[Unknown]", KnownFleet.VICTOR_LAUNCH.signingCertLabel())
+        assertEquals(
+            KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256,
+            KnownFleet.VICTOR_LAUNCH.signingCertLabel(),
+        )
         assertEquals("[Unknown]", KnownFleet.FILE_MANAGER.signingCertLabel())
         assertEquals("[Unknown]", KnownFleet.KYC_AUDITLAB.signingCertLabel())
         assertEquals(
@@ -249,29 +254,62 @@ class NodeSignatureTest {
     }
 
     @Test
-    fun `VictorLaunch debug cert is documented but not enforced`() {
-        val documented = SigningCertSha256.parseOrThrow(
-            KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256_UNENFORCED,
+    fun `VictorLaunch debug is enforced and the rotated cert is pinned`() {
+        val identity = KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG
+        assertEquals("com.victorious.launch", identity.packageName)
+        assertEquals(FleetIntegrationClass.EXTERNAL_NODE, identity.integrationClass)
+        assertEquals("victorlaunch", identity.memberId)
+        assertEquals(
+            listOf(KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256),
+            identity.expectedCerts.map { it.canonical },
         )
-        val identity = KnownNodeSigningCatalog.identityFor("com.victorious.launch")
-        assertTrue(identity?.expectedCerts.isNullOrEmpty())
-        assertTrue(KnownFleet.VICTOR_LAUNCH.expectedSigningCertSha256.isEmpty())
-        assertEquals("[Unknown]", KnownFleet.VICTOR_LAUNCH.signingCertLabel())
-        assertIs<NodeSignatureDecision.Allowed>(
+        assertEquals(
+            "B9:9A:AF:E2:C1:41:8B:5D:64:AA:0D:4B:AC:61:FC:F7:A7:BA:81:44:35:E0:EF:89:E8:AA:55:BE:56:4E:4A:69",
+            KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256,
+        )
+        assertEquals(identity, KnownNodeSigningCatalog.identityFor("com.victorious.launch"))
+        assertTrue(identity.notes.contains("Enforceable"))
+        assertTrue(identity.notes.contains("RELEASE is TBD"))
+        assertEquals(listOf("com.victorious.launch"), KnownFleet.VICTOR_LAUNCH.androidPackages)
+        assertEquals(
+            listOf(KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256),
+            KnownFleet.VICTOR_LAUNCH.expectedSigningCertSha256,
+        )
+        assertEquals(
+            KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256,
+            KnownFleet.VICTOR_LAUNCH.signingCertLabel(),
+        )
+        assertEquals(13, KnownFleet.VICTOR_LAUNCH.wiringOrder)
+        assertEquals(FleetHonestyStatus.PLANNED, KnownFleet.VICTOR_LAUNCH.status)
+        val allowed = assertIs<NodeSignatureDecision.Allowed>(
             NodeSignatureVerifier().verify(
                 "com.victorious.launch",
-                listOf(documented.canonical),
+                listOf(KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256),
             ),
+        )
+        assertEquals(KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256, allowed.matchedFingerprint)
+        val revoked = SigningCertSha256.parseOrThrow(
+            "1B:06:A8:9E:7F:F5:BA:21:C9:A4:F8:F1:F0:4F:95:E5:62:78:A1:22:18:AD:37:33:28:CE:E7:83:1D:4F:BA:CA",
         )
         assertTrue(
             KnownNodeSigningCatalog.all().none { candidate ->
-                documented in candidate.expectedCerts
+                revoked in candidate.expectedCerts
             },
         )
-        assertEquals(
-            "1B:06:A8:9E:7F:F5:BA:21:C9:A4:F8:F1:F0:4F:95:E5:62:78:A1:22:18:AD:37:33:28:CE:E7:83:1D:4F:BA:CA",
-            KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256_UNENFORCED,
+        val refusedOld = assertIs<NodeSignatureDecision.Refused>(
+            NodeSignatureVerifier().verify(
+                "com.victorious.launch",
+                listOf(revoked.canonical),
+            ),
         )
+        assertEquals(NodeSignatureRefusal.CERT_MISMATCH, refusedOld.kind)
+        val refused = assertIs<NodeSignatureDecision.Refused>(
+            NodeSignatureVerifier().verify(
+                "com.victorious.launch",
+                listOf("00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF"),
+            ),
+        )
+        assertEquals(NodeSignatureRefusal.CERT_MISMATCH, refused.kind)
     }
 
     @Test

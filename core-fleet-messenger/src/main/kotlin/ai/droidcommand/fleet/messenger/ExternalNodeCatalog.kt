@@ -154,10 +154,8 @@ object ExternalNodeCatalog {
             "Node-id prefix ^victorlaunch-[0-9a-f]{32}$. Status-tray consumer AND bridge node. " +
             "config.export/import supported. Envelope v1.1 dispatcher; ACTION OPS OFF BY DEFAULT " +
             "(external control default OFF). MANUAL + in-app Help. Never DependencyGuard. " +
-            "Caller identity = Message.sendingUid. Debug SHA-256 documented but " +
-            "[planned/pending-merge] unenforced — catalogue fail-open/unpinned. Release cert TBD. " +
-            "Source victorlaunch PR #2 (private, CI billing-blocked, NOT merged). " +
-            "TODO: enforce debug pin after PR #2 merges.",
+            "Caller identity = Message.sendingUid. Debug cert enforced (node PR #6 merged; " +
+            "rotated key in CI secrets only). Release cert TBD.",
     )
 
     val KYC_AUDITLAB = ExternalNodeSpec(
