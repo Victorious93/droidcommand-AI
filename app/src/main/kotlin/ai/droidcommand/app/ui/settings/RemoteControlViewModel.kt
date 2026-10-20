@@ -9,9 +9,9 @@ import ai.droidcommand.remotecontrol.MacroTrigger
 import ai.droidcommand.remotecontrol.MacroTriggerKind
 import ai.droidcommand.remotecontrol.MacroValidation
 import ai.droidcommand.remotecontrol.NodeRef
+import ai.droidcommand.remotecontrol.NodeStatusSnapshot
 import ai.droidcommand.remotecontrol.RemoteAction
 import ai.droidcommand.remotecontrol.RemoteCommandMapping
-import ai.droidcommand.remotecontrol.NodeStatusSnapshot
 import ai.droidcommand.remotecontrol.RemoteControlConfig
 import ai.droidcommand.remotecontrol.RemoteControlSettingsController
 import ai.droidcommand.remotecontrol.RemoteDispatchResult

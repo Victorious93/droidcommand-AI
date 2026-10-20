@@ -2,7 +2,6 @@ package ai.droidcommand.app.ui.settings
 
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.SectionLabel
-import ai.droidcommand.remotecontrol.DeliveryMode
 import ai.droidcommand.remotecontrol.Macro
 import ai.droidcommand.remotecontrol.MacroTriggerKind
 import ai.droidcommand.remotecontrol.RemoteAction
