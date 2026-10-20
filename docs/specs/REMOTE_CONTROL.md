@@ -98,6 +98,15 @@ encodings (appendices A–C). **Do not invent per-class field names.**
 | `node.status.get` | Frozen STATUS-TRAY snapshot. Canonical spec: [`docs/specs/STATUS_TRAY.md`](STATUS_TRAY.md). |
 | `config.export` / `config.import` | Frozen SETTINGS/BACKUP bundle. Canonical spec: [`docs/specs/UNIFIED_BACKUP.md`](UNIFIED_BACKUP.md). |
 
+`node.status.get` and `config.export` / `config.import` are
+**standalone BridgeRequest operations** (outer `operation` field).
+They use the **same frozen top-level envelope fields**. They are
+**not** `actionRef` values under `remote.command`.
+
+- `node.status.get` is **never** confirmation-gated
+  (`requiresConfirm=false`); ignore advisory `destructive` for gating.
+- Unknown `args` keys are **ignored, not rejected** (forward-compatible).
+
 Outer framing is still BridgeRequest / BridgeResponse
 (`protocol_major` 1, `Message.what` 1 request / 2 response, action
 `<pkg>.action.BRIDGE`).
@@ -463,7 +472,7 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 |---|---|
 | Top-level envelope codec (`nonce` / `timestampMs` / `ttlMs` / `destructive`) | implemented, unit-tested |
 | EXTERNAL_NODE BridgeRequest binding | implemented, unit-tested |
-| BOUND_COMPANION CommandEnvelope field map | implemented, unit-tested (Kotlin record; live AIDL not bumped — parcel fields stay `nonce`/`timestampMs`/`ttlMs`) |
+| BOUND_COMPANION logical field map (`BoundCompanionCommand`) | implemented, unit-tested (Kotlin record). **EDL** = `CommandEnvelope`/`ResultEnvelope` parcelables; **HackerAI / Pentest-Swarm** = JSON-string domain AIDL. Live `.aidl` not rewritten — copy EDL when EDL PR #10 merges. |
 | TERMUX_IPC JSON-blob extra | implemented, unit-tested |
 | ReplayGuard seen-nonce cache keyed by `(sourceNodeRef, nonce)` | implemented, unit-tested (replay / ttl / future-skew only) |
 | Trust pipeline (pairing → external-control OFF → replay → policy) | implemented, unit-tested |
@@ -500,13 +509,14 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
    **KYC PR #29** (unmerged) — recorded, not enforced. Catalogue stays
    fail-open. **TODO: swap the active pin once #29 merges; do not enforce
    either until then.**
-3. Live AIDL parcel bump on `CommandEnvelope` / `ResultEnvelope` copies
-   (EDL + companions) to carry `nonce` / `timestampMs` / `ttlMs` /
-   `destructive` on the wire. Controller-side mapping is already 1:1 onto
-   those parcel fields. The `.aidl` files are **not** changed in this
-   skeleton (EDL contract is copied verbatim until FO + EDL bump
-   together). JSON, AIDL model, and Termux blob all use the **same
-   top-level** field names.
+3. Live AIDL copy of EDL PR #10's `CommandEnvelope` / `ResultEnvelope`
+   bump (`bridgeProtocolMajor`/`Minor`, `op`, `actionRef`, `paramsJson`,
+   `nonce` / `timestampMs` / `ttlMs`, `ResultEnvelope.errorCode`).
+   **EDL-only parcelables.** HackerAI (`IHackerAIService`) and
+   Pentest-Swarm already pass JSON strings — do **not** invent
+   `CommandEnvelope`/`ResultEnvelope` for them. The `.aidl` copies in
+   `core-companion` are **not** changed in this skeleton (TBD: copy when
+   EDL #10 merges). Logical field names stay the frozen top-level set.
 4. Termux extra key name on-device (`ai.droidcommand.REMOTE_ENVELOPE_JSON`
    is the controller proposal).
 5. SMS body grammar on VictorSMS; who initiates Messenger bind.
@@ -514,16 +524,19 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 7. Macro schedule expression language.
 8. **Shared status-tray schema/transport with VictorLaunch** — **[CONTRACT]
    FROZEN** in [`docs/specs/STATUS_TRAY.md`](STATUS_TRAY.md). Op
-   `node.status.get`; snapshot `{ nodeId, packageName, connectionClass,
-   updatedAtMs, domains[{name,state,detail?}] }`. Aligns with the #233
-   `NodeStatusSnapshot` / `StatusTrayDomain` skeleton. Remaining: live
-   Messenger / AIDL / Termux **bind** (encode/decode/aggregate are JVM-
-   tested; no network).
+   `node.status.get` is a **standalone** BridgeRequest `operation`,
+   **not** an `actionRef` under `remote.command`. Snapshot `{ nodeId,
+   packageName, connectionClass, updatedAtMs, domains[{name,state,detail?}] }`.
+   Aligns with the #233 `NodeStatusSnapshot` / `StatusTrayDomain`
+   skeleton. Remaining: live Messenger / AIDL / Termux **bind**
+   (encode/decode/aggregate are JVM-tested; no network).
 9. **Unified fleet backup/restore schema** — **[CONTRACT] FROZEN** in
    [`docs/specs/UNIFIED_BACKUP.md`](UNIFIED_BACKUP.md). Envelope +
    `config.export` / `config.import` + AES-GCM + conflict policy.
-   Remaining: on-device Android Keystore wrap and live bind (JVM crypto
-   / test double are unit-tested; no network).
+   Those ops are **standalone** BridgeRequest `operation`s, **not**
+   `actionRef`s under `remote.command` (same as `node.status.get`;
+   see §1). Remaining: on-device Android Keystore wrap and live bind
+   (JVM crypto / test double are unit-tested; no network).
 10. Exported controller `ai.droidcommand.app.action.BRIDGE` receiver (live
     inbound). Constant is named; the receiver is **not** shipped.
 
@@ -563,10 +576,24 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 
 ## Appendix B — BOUND_COMPANION (AIDL)
 
-Same logical fields. Encoding: existing `CommandEnvelope` /
-`ResultEnvelope`, mapped 1:1:
+Same **logical** fields — the frozen top-level set: `requestId`,
+`actionRef`, `args`, `nonce`, `timestampMs`, `ttlMs`, `destructive`,
+`targetNodeRef`. Encodings differ per companion. `CommandEnvelope` /
+`ResultEnvelope` parcelables are **EDL-only**, not a universal
+BOUND_COMPANION wire.
 
-| Frozen field | CommandEnvelope |
+Controller-side `BoundCompanionCommand` is the **logical** 1:1 field
+map used by **both** encodings (`command` ← `actionRef`, `argsJson` ←
+`args`, plus the frozen anti-replay fields). It is not itself a
+parcelable.
+
+### EDL (`ai.edlcommander.companion`)
+
+Wire = existing `CommandEnvelope` / `ResultEnvelope` parcelables
+(copied AIDL under `ai.edlcommander.companion.aidl`). Map frozen
+fields onto parcel fields as today:
+
+| Frozen field | CommandEnvelope (copied AIDL today) |
 |---|---|
 | `requestId` | `requestId` |
 | `actionRef` | `command` |
@@ -581,8 +608,40 @@ Identity: Binder caller uid + signature permission + DependencyGuard.
 `dryRun` on today's EDL envelope stays EDL-specific; fleet `macro.run`
 uses frozen `dryRun`.
 
+**After EDL PR #10 merges** (TBD: copy the bumped AIDL; this PR does
+**not** rewrite `core-companion` copies): also send
+`bridgeProtocolMajor=1` / `bridgeProtocolMinor=1` / `op` /
+`actionRef` / `paramsJson` / `nonce` / `timestampMs` / `ttlMs`. Read
+`ResultEnvelope.errorCode` (new; distinct from existing `code` /
+`status`). `sourceNodeRef` / status `nodeId` for EDL =
+`ai.edlcommander.companion`. EDL remote switch **OFF** (default) →
+`node.status.get` fails closed with `external_control_disabled`.
+
+### HackerAI (`ai.hackerai.companion`) and Pentest-Swarm (`ai.pentestswarm.companion`)
+
+Wire = existing **domain AIDL methods that take/return JSON strings**
+(`IHackerAIService` / `IPentestSwarmService`; see
+[`COMPANION_PROTOCOL.md`](../../COMPANION_PROTOCOL.md) and
+`IHackerAIService.aidl`). **No** `CommandEnvelope` / `ResultEnvelope`.
+Do **not** invent new parcelables.
+
+Encode the same logical `BoundCompanionCommand` / `FleetRemoteEnvelope`
+fields into JSON for those calls.
+
+HackerAI remote `actionRef`s the controller sends (HackerAI PR #19
+gate; always `confirmation_required`, whatever the advisory
+`destructive` flag says):
+
+| `actionRef` | AIDL method | Notes |
+|---|---|---|
+| `agent.run` | `runAgentTask` | confirmation_required |
+| `finding.validate` | `validateFinding` | confirmation_required |
+| `task.cancel` | `cancelTask` | confirmation_required |
+| `shizuku.shell` | (JSON on the existing domain AIDL; no new parcelable) | destructive / confirmation_required |
+
 This slice ships a Kotlin mapper (`BoundCompanionRemoteBinding`). It does
-**not** rewrite `core-companion` AIDL (copied from EDL).
+**not** rewrite `core-companion` AIDL (EDL copies stay verbatim until
+EDL #10 merges).
 
 ---
 

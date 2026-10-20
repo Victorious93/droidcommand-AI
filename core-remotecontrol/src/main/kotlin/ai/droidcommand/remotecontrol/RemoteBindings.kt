@@ -7,9 +7,19 @@ import kotlinx.serialization.json.Json
 /**
  * Controller-side encodings of the **same** [FleetRemoteEnvelope].
  * Field names do not change per class. JSON and the Termux blob use
- * top-level `nonce` / `timestampMs` / `ttlMs` / `destructive`. AIDL
- * parcel fields are already flat (`nonce` / `timestampMs` / `ttlMs`)
- * until the live `.aidl` copies are bumped together with EDL.
+ * top-level `nonce` / `timestampMs` / `ttlMs` / `destructive`.
+ *
+ * BOUND_COMPANION is **not** one parcel type for every companion:
+ * - EDL (`ai.edlcommander.companion`): [BoundCompanionCommand] maps
+ *   1:1 onto `CommandEnvelope` / `ResultEnvelope` parcelables (copied
+ *   AIDL). Live copies are not rewritten here; copy when EDL PR #10
+ *   merges (`bridgeProtocolMajor`/`Minor`, `op`, `actionRef`,
+ *   `paramsJson`, `ResultEnvelope.errorCode`).
+ * - HackerAI (`ai.hackerai.companion`) and Pentest-Swarm: existing
+ *   domain AIDL methods take/return **JSON strings**
+ *   (`IHackerAIService` / `IPentestSwarmService`). No
+ *   CommandEnvelope/ResultEnvelope. Encode the same logical fields
+ *   into JSON for those calls. Do not invent new parcelables.
  */
 
 object ExternalNodeRemoteBinding {
@@ -21,9 +31,11 @@ object ExternalNodeRemoteBinding {
 }
 
 /**
- * 1:1 map onto existing companion [CommandEnvelope] fields, plus the
- * nonce/timestampMs/ttlMs/destructive parcel fields the live AIDL has not
- * grown yet. This skeleton does not rewrite `*.aidl` (EDL copies stay verbatim).
+ * Logical 1:1 map of frozen envelope fields for BOUND_COMPANION.
+ * Used by **both** encodings: EDL parcelables (`command` ← `actionRef`,
+ * `argsJson` ← `args`, plus nonce/timestampMs/ttlMs/destructive) and
+ * HackerAI/Pentest JSON-string AIDL. This skeleton does not rewrite
+ * `*.aidl` (EDL copies stay verbatim until EDL PR #10 merges).
  */
 data class BoundCompanionCommand(
     val requestId: String,
@@ -37,6 +49,11 @@ data class BoundCompanionCommand(
     val dryRun: Boolean = false,
 )
 
+/**
+ * Encodes [FleetRemoteEnvelope] to [BoundCompanionCommand] and back.
+ * That record is the logical field map; the wire is EDL parcelables or
+ * HackerAI/Pentest JSON-string AIDL, per Appendix B.
+ */
 object BoundCompanionRemoteBinding {
     private val json = Json { encodeDefaults = true }
 

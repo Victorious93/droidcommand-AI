@@ -66,7 +66,12 @@ and is advertised in `capabilities.get` — do **not** add a required
 |---|---|---|
 | `operation` | BridgeRequest | `node.status.get` |
 | `target_node_id` | BridgeRequest | The node being asked, or `controller` for the aggregated tray |
-| `parameters` | BridgeRequest | Frozen top-level envelope (`nonce` / `timestampMs` / `ttlMs` / `destructive`). Optional `args.nodeId` to ask for one node. Empty args = "this node" (or "all", on the controller). |
+| `parameters` | BridgeRequest | Frozen top-level envelope (`nonce` / `timestampMs` / `ttlMs` / `destructive`). Optional `args.nodeId` to ask for one node. Empty args = "this node" (or "all", on the controller). Unknown `args` keys are **ignored, not rejected**. |
+
+`node.status.get` is a **standalone** BridgeRequest `operation` (outer
+`operation` field), **not** an `actionRef` under `remote.command`. See
+`docs/specs/REMOTE_CONTROL.md` §1. It is **never** confirmation-gated
+(`requiresConfirm=false`); ignore advisory `destructive` for gating.
 
 `requestId` **is** `BridgeRequest.request_id`. Identity is package+cert
 (`Message.sendingUid` / Binder uid / Termux permission). Never a
@@ -201,8 +206,9 @@ only.
 
 Reuse `BridgeRequest` / `BridgeResponse`. `protocol_major` 1. Minor 1
 via `capabilities.get`. Same three encodings as remote control
-(EXTERNAL_NODE JSON, BOUND_COMPANION field map, TERMUX_IPC JSON blob).
-Do **not** invent a fourth envelope.
+(EXTERNAL_NODE JSON, BOUND_COMPANION logical field map, TERMUX_IPC
+JSON blob). Do **not** invent a fourth envelope. Do **not** send this
+op as `remote.command` + `actionRef=node.status.get`.
 
 `destructive` on the request is advisory and must be `false` for this
 read. Receivers ignore it for gating.

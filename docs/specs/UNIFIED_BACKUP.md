@@ -55,6 +55,11 @@ Reuse BridgeRequest / BridgeResponse (`protocol_major` 1). Minor stays
 `1` via `capabilities.get`. Same frozen envelope fields as remote
 control (`nonce` / `timestampMs` / `ttlMs` / `destructive` advisory).
 
+`config.export` / `config.import` are **standalone** BridgeRequest
+`operation`s (outer `operation` field), **not** `actionRef` values
+under `remote.command`. See `docs/specs/REMOTE_CONTROL.md` §1.
+Unknown `args` keys are ignored, not rejected.
+
 `config.export` args (all optional):
 
 | Arg | Meaning |
