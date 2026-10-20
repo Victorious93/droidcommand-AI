@@ -6,6 +6,9 @@ package ai.droidcommand.remotecontrol
  * Extends `{ invalid_parameters, not_paired, not_found, internal }` with
  * `unauthorized`, `replay_detected`, `expired`, `external_control_disabled`,
  * `confirmation_required`, `unsupported_op`, `capability_off`.
+ *
+ * Envelope `targetNodeRef`: blank/malformed → [INVALID_PARAMETERS];
+ * unknown/unresolvable → [NOT_FOUND]; known but unpaired → [NOT_PAIRED].
  */
 enum class RemoteErrorCategory(val wire: String) {
     INVALID_PARAMETERS("invalid_parameters"),

@@ -142,8 +142,15 @@ Plus `requestId` (the existing BridgeRequest `request_id`),
 informational only. A self-reported number cannot authorize anything.
 
 Replay: seen-nonce cache keyed by `(sourceNodeRef, nonce)`. Duplicate
-pair → `replay_detected`. Past `timestampMs + ttlMs` or clock skew >
-120s → `expired`.
+pair → `replay_detected`. Past `timestampMs + ttlMs` → `expired`. A
+timestamp more than 120s in the **future** → `expired`. The 120s window
+is future-skew only; past validity is TTL-only (full 300s max TTL is
+usable).
+
+`targetNodeRef` errors: blank/malformed → `invalid_parameters`; unknown →
+`not_found`; known but unpaired → `not_paired`. Envelope fields inside
+`parameters` are camelCase; the outer BridgeRequest wrapper is
+snake_case.
 
 ### Generic command surface
 

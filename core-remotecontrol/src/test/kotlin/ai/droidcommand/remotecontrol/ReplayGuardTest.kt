@@ -52,13 +52,49 @@ class ReplayGuardTest {
     }
 
     @Test
-    fun `rejects clock skew beyond 120 seconds as expired`() {
+    fun `accepts a 200s-old timestamp when ttl still covers it`() {
+        val now = 10_000_000L
+        val guard = ReplayGuard(nowMs = { now })
+        assertEquals(
+            ReplayDecision.Accept,
+            guard.check(
+                envelope(timestampMs = now - 200_000, ttlMs = 300_000),
+                source(),
+            ),
+        )
+        assertEquals(1, guard.seenCount())
+    }
+
+    @Test
+    fun `rejects a timestamp 200s in the future as expired`() {
+        val now = 10_000_000L
+        val guard = ReplayGuard(nowMs = { now })
+        val future = assertIs<ReplayDecision.Reject>(
+            guard.check(envelope(timestampMs = now + 200_000), source()),
+        )
+        assertEquals(RemoteErrorCategory.EXPIRED, future.category)
+        assertEquals("expired", future.code)
+        assertEquals(0, guard.seenCount())
+    }
+
+    @Test
+    fun `rejects future skew beyond 120 seconds as expired`() {
         val now = 10_000_000L
         val guard = ReplayGuard(nowMs = { now })
         val future = assertIs<ReplayDecision.Reject>(
             guard.check(envelope(timestampMs = now + 120_001), source()),
         )
         assertEquals(RemoteErrorCategory.EXPIRED, future.category)
+    }
+
+    @Test
+    fun `accepts a timestamp 100s in the future within the skew allowance`() {
+        val now = 10_000_000L
+        val guard = ReplayGuard(nowMs = { now })
+        assertEquals(
+            ReplayDecision.Accept,
+            guard.check(envelope(timestampMs = now + 100_000), source()),
+        )
     }
 
     @Test

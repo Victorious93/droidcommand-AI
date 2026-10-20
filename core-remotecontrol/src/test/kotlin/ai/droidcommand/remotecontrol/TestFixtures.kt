@@ -1,5 +1,7 @@
 package ai.droidcommand.remotecontrol
 
+import kotlinx.serialization.json.Json
+
 internal const val TEST_NONCE = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 internal const val TEST_NONCE_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 internal const val TEST_SOURCE = "victorsms-abababababababababababababababab"
@@ -30,6 +32,26 @@ internal fun inboundConfig(
     pairings = pairings,
     externalControlEnabled = externalControlEnabled,
 )
+
+internal fun rawParameters(
+    targetNodeRef: String,
+    actionRef: String = "ping",
+    nonce: String = TEST_NONCE,
+    timestampMs: Long = 50_000L,
+    ttlMs: Long = FleetRemoteEnvelope.DEFAULT_TTL_MS,
+): String {
+    val parameters = FleetRemoteParameters(
+        targetNodeRef = targetNodeRef,
+        actionRef = actionRef,
+        nonce = nonce,
+        timestampMs = timestampMs,
+        ttlMs = ttlMs,
+    )
+    return Json.encodeToString(
+        FleetRemoteParameters.serializer(),
+        parameters,
+    )
+}
 
 internal fun envelope(
     requestId: String = "req-1",

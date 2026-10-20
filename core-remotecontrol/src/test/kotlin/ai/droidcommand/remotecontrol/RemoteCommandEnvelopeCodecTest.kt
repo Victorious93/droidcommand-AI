@@ -16,13 +16,27 @@ class RemoteCommandEnvelopeCodecTest {
             timestampMs = 1_760_920_000_000L,
         )
         val json = RemoteCommandEnvelopeCodec.encodeBridgeRequest(envelope)
+        assertTrue(json.contains("\"protocol_major\":1"), json)
         assertTrue(json.contains("\"request_id\":\"bridge-id-1\""), json)
+        assertTrue(json.contains("\"target_node_id\""), json)
+        assertTrue(json.contains("\"timeout_ms\""), json)
         assertTrue(json.contains("\"operation\":\"remote.command\""), json)
+        assertTrue(json.contains("\"parameters\""), json)
+        assertFalse(json.contains("\"protocolMajor\""), json)
+        assertFalse(Regex(""""requestId"\s*:""").containsMatchIn(json), json)
+        assertFalse(Regex(""""targetNodeId"\s*:""").containsMatchIn(json), json)
+        assertFalse(Regex(""""timeoutMs"\s*:""").containsMatchIn(json), json)
         assertTrue(json.contains("\"targetNodeRef\""), json)
         assertTrue(json.contains("\"actionRef\""), json)
         assertTrue(json.contains("\"nonce\""), json)
         assertTrue(json.contains("\"timestampMs\""), json)
         assertTrue(json.contains("\"ttlMs\""), json)
+        assertTrue(json.contains("\"destructive\""), json)
+        assertTrue(json.contains("\"trigger\""), json)
+        assertFalse(json.contains("\"target_node_ref\""), json)
+        assertFalse(json.contains("\"action_ref\""), json)
+        assertFalse(json.contains("\"timestamp_ms\""), json)
+        assertFalse(json.contains("\"ttl_ms\""), json)
         assertFalse(json.contains("\"auth\""), json)
         assertFalse(json.contains("\"issuedAt\""), json)
         val parameters = RemoteCommandEnvelopeCodec.encodeParameters(envelope)
@@ -48,6 +62,16 @@ class RemoteCommandEnvelopeCodecTest {
         assertEquals("+15555550100", decoded.trigger?.sourceNumber)
         assertEquals(true, decoded.trigger?.matchedKeyword)
         assertFalse(json.contains("\"auth\""), json)
+    }
+
+    @Test
+    fun `missing targetNodeRef in parameters is invalid`() {
+        assertFailsWith<IllegalArgumentException> {
+            RemoteCommandEnvelopeCodec.decodeParameters(
+                """{"actionRef":"ping","nonce":"$TEST_NONCE","timestampMs":1,"ttlMs":120000}""",
+                "req",
+            )
+        }
     }
 
     @Test
