@@ -46,7 +46,7 @@ class UnifiedFleetBackupTest {
         exportedAtMs = at,
         config = config,
         statusTray = listOf(
-            NodeStatusSnapshot(
+            NodeStatusSnapshot.of(
                 sourceNodeRef = "node-1",
                 domain = StatusTrayDomain.BROWSER,
                 actionRef = "status",
