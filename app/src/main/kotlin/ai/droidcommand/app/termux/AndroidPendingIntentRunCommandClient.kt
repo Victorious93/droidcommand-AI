@@ -86,25 +86,25 @@ class AndroidPendingIntentRunCommandClient(
 
     companion object {
         fun isVictorSuiteInstalled(context: Context): Boolean = try {
-            context.packageManager.getPackageInfo(RunCommandContract.PACKAGE, 0)
+            context.packageManager.getPackageInfo(RunCommandContract.target().packageName, 0)
             true
         } catch (_: PackageManager.NameNotFoundException) {
             false
         }
 
         fun hasRunCommandPermission(context: Context): Boolean =
-            context.checkSelfPermission(RunCommandContract.PERMISSION) == PackageManager.PERMISSION_GRANTED
+            context.checkSelfPermission(RunCommandContract.target().permission) == PackageManager.PERMISSION_GRANTED
 
         fun toServiceIntent(request: RunCommandRequest, pendingIntent: PendingIntent): Intent {
             val intent = Intent(request.action)
             intent.component = android.content.ComponentName(request.packageName, request.componentClass)
-            intent.putExtra(RunCommandContract.EXTRA_PATH, request.path)
-            intent.putExtra(RunCommandContract.EXTRA_ARGUMENTS, request.arguments.toTypedArray())
-            request.workdir?.let { intent.putExtra(RunCommandContract.EXTRA_WORKDIR, it) }
-            intent.putExtra(RunCommandContract.EXTRA_BACKGROUND, true)
-            intent.putExtra(RunCommandContract.EXTRA_RUNNER, RunCommandContract.RUNNER_APP_SHELL)
-            request.commandLabel?.let { intent.putExtra(RunCommandContract.EXTRA_COMMAND_LABEL, it) }
-            intent.putExtra(RunCommandContract.EXTRA_PENDING_INTENT, pendingIntent)
+            intent.putExtra(request.target.extraPath, request.path)
+            intent.putExtra(request.target.extraArguments, request.arguments.toTypedArray())
+            request.workdir?.let { intent.putExtra(request.target.extraWorkdir, it) }
+            intent.putExtra(request.target.extraBackground, true)
+            intent.putExtra(request.target.extraRunner, RunCommandContract.RUNNER_APP_SHELL)
+            request.commandLabel?.let { intent.putExtra(request.target.extraCommandLabel, it) }
+            intent.putExtra(request.target.extraPendingIntent, pendingIntent)
             return intent
         }
 

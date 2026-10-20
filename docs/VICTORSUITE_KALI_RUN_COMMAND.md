@@ -11,9 +11,15 @@ wired this path had a device with VictorSuite + Kali + nmap/metasploit.
 VictorSuite itself does not need a code change; the non-root PendingIntent
 path already exists there.
 
+Live default is still `com.termux` (VictorSuite PR #51 draft would
+rename the package to `com.victorious.suite`). DCA can target the new
+identity only after `DROIDCOMMAND_VICTORSUITE_REPACKAGE=true` **and**
+FO go-signal + bootstrap rebuild. Do not send `com.victorious.suite`
+intents while VictorSuite still installs as `com.termux`.
+
 ## Request (caller → VictorSuite)
 
-- Action: `com.termux.RUN_COMMAND`
+- Action: `com.termux.RUN_COMMAND` (live default)
 - Component: `com.termux` / `com.termux.app.RunCommandService`
 - Start via: `startForegroundService(intent)` (API 26+)
 - Caller manifest **must** declare: `com.termux.permission.RUN_COMMAND`

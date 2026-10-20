@@ -1,13 +1,16 @@
 package ai.droidcommand.termux
 
 /**
- * The extras a caller must put on a `com.termux.RUN_COMMAND` Intent, minus
- * the Android [android.app.PendingIntent] itself (that object cannot exist
+ * The extras a caller must put on a `RUN_COMMAND` Intent, minus the
+ * Android [android.app.PendingIntent] itself (that object cannot exist
  * in this JVM module).
  *
  * [background] is always `true` when built by [from]: a foreground terminal
  * runner does not populate the result Bundle. Callers must still attach
- * [RunCommandContract.EXTRA_PENDING_INTENT] on the Android Intent.
+ * [RunCommandTarget.extraPendingIntent] on the Android Intent.
+ *
+ * Package / action / extras prefix follow [target]. Live default is
+ * [RunCommandTargets.TERMUX] (`com.termux`).
  */
 data class RunCommandRequest(
     val path: String,
@@ -15,9 +18,10 @@ data class RunCommandRequest(
     val workdir: String? = RunCommandContract.DEFAULT_WORKDIR,
     val background: Boolean = true,
     val commandLabel: String? = null,
-    val packageName: String = RunCommandContract.PACKAGE,
-    val componentClass: String = RunCommandContract.SERVICE_CLASS,
-    val action: String = RunCommandContract.ACTION,
+    val target: RunCommandTarget = RunCommandContract.target(),
+    val packageName: String = target.packageName,
+    val componentClass: String = target.serviceClass,
+    val action: String = target.action,
 ) {
     init {
         require(path.isNotBlank()) { "RUN_COMMAND_PATH must not be blank" }
@@ -27,32 +31,38 @@ data class RunCommandRequest(
     }
 
     fun extrasWithoutPendingIntent(): Map<String, Any> = buildMap {
-        put(RunCommandContract.EXTRA_PATH, path)
-        put(RunCommandContract.EXTRA_ARGUMENTS, arguments)
-        workdir?.let { put(RunCommandContract.EXTRA_WORKDIR, it) }
-        put(RunCommandContract.EXTRA_BACKGROUND, true)
-        put(RunCommandContract.EXTRA_RUNNER, RunCommandContract.RUNNER_APP_SHELL)
-        commandLabel?.let { put(RunCommandContract.EXTRA_COMMAND_LABEL, it) }
+        put(target.extraPath, path)
+        put(target.extraArguments, arguments)
+        workdir?.let { put(target.extraWorkdir, it) }
+        put(target.extraBackground, true)
+        put(target.extraRunner, RunCommandContract.RUNNER_APP_SHELL)
+        commandLabel?.let { put(target.extraCommandLabel, it) }
     }
 
     companion object {
         /**
          * Maps a [TermuxCommand] onto VictorSuite extras. Relative executables
-         * are resolved under Termux's `usr/bin`. [TermuxCommand.workingDirectory]
-         * defaults to VictorSuite's home. Background is forced on.
+         * are resolved under the active target's `usr/bin`.
+         * [TermuxCommand.workingDirectory] defaults to that target's home.
+         * Background is forced on.
          */
-        fun from(command: TermuxCommand, commandLabel: String? = null): RunCommandRequest {
+        fun from(
+            command: TermuxCommand,
+            commandLabel: String? = null,
+            target: RunCommandTarget = RunCommandContract.target(),
+        ): RunCommandRequest {
             val path = if (command.executable.startsWith("/")) {
                 command.executable
             } else {
-                "/data/data/com.termux/files/usr/bin/${command.executable}"
+                target.usrBin(command.executable)
             }
             return RunCommandRequest(
                 path = path,
                 arguments = command.args,
-                workdir = command.workingDirectory ?: RunCommandContract.DEFAULT_WORKDIR,
+                workdir = command.workingDirectory ?: target.homeDir,
                 background = true,
                 commandLabel = commandLabel,
+                target = target,
             )
         }
     }

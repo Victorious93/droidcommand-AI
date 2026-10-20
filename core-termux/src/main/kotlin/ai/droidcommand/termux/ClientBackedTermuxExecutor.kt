@@ -19,9 +19,10 @@ class ClientBackedTermuxExecutor(
 
     override fun execute(command: TermuxCommand, isCancelled: () -> Boolean): TermuxExecutionResult {
         if (!isAvailable()) {
+            val target = RunCommandContract.target()
             return TermuxExecutionResult.Failure(
-                "VictorSuite RUN_COMMAND is not available (is com.termux installed, " +
-                    "allow-external-apps=true, and com.termux.permission.RUN_COMMAND granted?)",
+                "VictorSuite RUN_COMMAND is not available (is ${target.packageName} installed, " +
+                    "allow-external-apps=true, and ${target.permission} granted?)",
             )
         }
         val request = RunCommandRequest.from(command, commandLabel)

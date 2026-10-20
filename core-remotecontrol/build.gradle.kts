@@ -11,6 +11,7 @@ dependencies {
     implementation(project(":core-agent"))
     implementation(project(":core-security"))
     implementation(project(":core-rootforge"))
+    implementation(project(":core-termux"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation(kotlin("test"))
 }

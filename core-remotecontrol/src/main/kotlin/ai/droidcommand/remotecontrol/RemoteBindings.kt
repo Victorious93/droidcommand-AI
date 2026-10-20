@@ -97,10 +97,13 @@ object BoundCompanionRemoteBinding {
 }
 
 /**
- * TERMUX_IPC extras: request [EXTRA] on `com.termux.RUN_COMMAND`,
- * response [RESPONSE_EXTRA] via the result PendingIntent. Live
- * broadcast is [UnwiredTermuxIpcSender] by default — encode / decode /
- * parse only unless a test injects a sender.
+ * TERMUX_IPC extras: request [EXTRA] on the active `RUN_COMMAND` action
+ * (live default `com.termux.RUN_COMMAND`; pending `com.victorious.suite`
+ * behind [ai.droidcommand.termux.VictorSuiteRepackageFlag]),
+ * response [RESPONSE_EXTRA] via the result PendingIntent. Envelope extra
+ * names stay `ai.droidcommand.*` either way. Live broadcast is
+ * [UnwiredTermuxIpcSender] by default — encode / decode / parse only
+ * unless a test injects a sender.
  */
 object TermuxIpcRemoteBinding {
     const val EXTRA = FleetRemoteEnvelope.TERMUX_JSON_EXTRA

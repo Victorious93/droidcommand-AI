@@ -42,19 +42,23 @@ class FleetDashboardRowsTest {
         assertFalse(members.getValue("edl-commander").opensPairing)
         assertFalse(members.getValue("victorsuite").opensPairing)
         assertTrue(members.getValue("victorsuite").pendingDeviceTest)
+        assertTrue(members.getValue("victorsuite").pendingRepackage)
     }
 
     @Test
-    fun `VictorSuite dashboard row is PENDING when not device-tested`() {
+    fun `VictorSuite dashboard row is PENDING-REPACKAGE until the package is switched`() {
         val member = FleetDashboardCatalog.fromKnown(KnownFleet.VICTORSUITE)
         assertTrue(member.pendingDeviceTest)
+        assertTrue(member.pendingRepackage)
+        assertEquals(listOf("com.termux"), member.packageNames)
         val row = FleetDashboardRows.build(
             members = listOf(member),
             pairings = emptyList(),
             snapshots = emptyList(),
             nowMs = now,
         ).single()
-        assertEquals(FleetDashboardRows.STATUS_PENDING, row.statusLabel)
+        assertEquals(FleetDashboardRows.STATUS_PENDING_REPACKAGE, row.statusLabel)
+        assertEquals("PENDING-REPACKAGE", row.statusLabel)
         assertEquals(FleetDashboardTone.UNKNOWN, row.tone)
     }
 
