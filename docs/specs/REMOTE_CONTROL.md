@@ -639,9 +639,15 @@ gate; always `confirmation_required`, whatever the advisory
 | `task.cancel` | `cancelTask` | confirmation_required |
 | `shizuku.shell` | (JSON on the existing domain AIDL; no new parcelable) | destructive / confirmation_required |
 
-This slice ships a Kotlin mapper (`BoundCompanionRemoteBinding`). It does
-**not** rewrite `core-companion` AIDL (EDL copies stay verbatim until
-EDL #10 merges).
+This slice ships a Kotlin mapper (`BoundCompanionRemoteBinding`). EDL
+copies stay verbatim until EDL #10 merges. HackerAI
+`IHackerAIService.aidl` now also declares additive `getTaskResult` and
+`executeEnvelope(String envelopeJson)` (HackerAI-Commander PR #23 /
+merge `e8d2bbcc`) so the hub can bind against the companion. **No live
+dispatcher is wired:** destructive `actionRef`s (`agent.run`,
+`finding.validate`, `task.cancel`, `shizuku.shell`) stay
+`confirmation_required` and never auto-execute; external control stays
+OFF by default.
 
 ---
 

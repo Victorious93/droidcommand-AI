@@ -1,36 +1,35 @@
-// Domain-specific AIDL interface for the HackerAI companion APK.
-// Exposed by ai.hackerai.companion's HackerAIBoundService, bound only by
-// DroidCommand AI via the ai.droidcommand.permission.BIND_HACKERAI
-// signature permission.
-//
-// All method parameters and return values are JSON strings.
-// Each return value is: {"ok": true, ...domain fields...} on success,
-//                        {"ok": false, "error": "...", "code": "..."} on failure.
-//
-// Thread-safety: the Stub implementation must be thread-safe; callers may
-// invoke methods from different binder threads concurrently.
+// IHackerAIService.aidl — AIDL contract between DroidCommand AI and the HackerAI companion APK.
+// Keep this file in sync with core-companion/src/main/aidl/ai/droidcommand/companion/IHackerAIService.aidl
+// in the droidcommand-AI repository. All parameters and return values are JSON strings to keep
+// the interface stable as capabilities are added.
 package ai.droidcommand.companion;
 
 interface IHackerAIService {
-    // Submit a new agent task.
-    // inputJson — JSON matching CreateAgentInput schema (see core-hackerai SubagentContracts)
-    // returns   — {"ok": true, "taskId": "<uuid>", "status": "queued"} or error
+    // Run an agent task. inputJson is a CreateAgentInput JSON object.
+    // Returns a taskId string on success, or an error JSON {"error": "..."}.
     String runAgentTask(String inputJson);
 
-    // Returns the full Strix skill catalog as a JSON array of SubagentSkill objects.
-    // Suitable for DCA to present skill selection UI without a round-trip per skill.
+    // Returns the full SubagentSkill[] catalog as a JSON array.
     String getSkillCatalog();
 
-    // Validate a candidate security finding against evidence-gating rules.
-    // candidateJson — JSON matching SecurityValidationCandidate schema
-    // returns       — {"ok": true, "verdict": "CONFIRMED|NEEDS_MORE_EVIDENCE|FALSE_POSITIVE",
-    //                  "gaps": [...]} or error
+    // Validate a security finding candidate. candidateJson is a SecurityValidationCandidate JSON.
+    // Returns a SecurityValidationResult JSON.
     String validateFinding(String candidateJson);
 
-    // Cancel a running task. Best-effort; non-blocking.
+    // Cancel a running task. Fire-and-forget (oneway).
     oneway void cancelTask(String taskId);
 
-    // Liveness + readiness probe.
-    // returns — "ok" if healthy, "busy" if at capacity, "no_llm_provider" if no LLM key
+    // Poll the result of a previously queued task.
+    // Returns {"status":"queued"|"running"|"done"|"cancelled"|"error","result":"...","error":"..."}.
+    // Returns {"ok":false,"error":"Unknown task"} if the taskId was never issued or has been evicted.
+    String getTaskResult(String taskId);
+
+    // Health check. Returns "ok", "busy", or "no_llm_provider".
     String healthCheck();
+
+    // Fleet remote-control envelope v1 (BOUND_COMPANION JSON field map).
+    // envelopeJson is a BoundCompanionCommand; the reply is a BoundCompanionResult.
+    // Additive: existing clients ignore methods they do not call. Sync this file into
+    // droidcommand-AI/core-companion before the hub binds against it.
+    String executeEnvelope(String envelopeJson);
 }
