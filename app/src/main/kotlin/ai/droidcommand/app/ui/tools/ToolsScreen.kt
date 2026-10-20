@@ -41,20 +41,20 @@ fun ToolsScreen(navController: NavHostController) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Fleet", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "DCA is the hub. Companions stay install-probe only. External nodes " +
-                        "(RootForge, File Manager, Keyboard, Mesh) can be paired on the fleet screen " +
-                        "(package + observed signing cert) and then run read-only Messenger status. " +
-                        "Nothing is LIVE. No companion is bound until you pair a node. " +
-                        "Fleet Orchestrator checks reachability per node (read-only) and can send an approved " +
-                        "command to a bound companion. External nodes show \"pairing required\", Termux shows " +
-                        "\"no runner yet\", and KYC-AuditLab and EDL-Commander are planned.",
+                    "DCA is the hub. Fleet home lists every catalogued node with saved pairing " +
+                        "and any status snapshot already in memory. Live status from the phone is not " +
+                        "wired yet. Companions stay install-probe only. External nodes " +
+                        "(RootForge first) can be paired on the pairing screen " +
+                        "(package + observed signing cert). Nothing is LIVE. " +
+                        "Fleet commands check reachability per node (read-only) and can send an approved " +
+                        "command to a bound companion.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Button(
                     onClick = { navController.navigate(Routes.FLEET) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Open fleet status") }
+                    modifier = Modifier.fillMaxWidth().testTag("tools_open_fleet"),
+                ) { Text("Open fleet home") }
                 Button(
                     onClick = { navController.navigate(Routes.FLEET_ORCHESTRATOR) },
                     modifier = Modifier.fillMaxWidth().testTag("tools_open_fleet_orchestrator"),
