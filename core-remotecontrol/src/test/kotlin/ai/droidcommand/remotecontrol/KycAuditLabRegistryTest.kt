@@ -31,7 +31,7 @@ class KycAuditLabRegistryTest {
     @Test
     fun `target registry lists KYC alongside VictorSMS and VictorSpoof as EXTERNAL_NODE`() {
         assertEquals(
-            listOf("victorsms", "victorspoof", "kyc-auditlab"),
+            listOf("victorsms", "victorspoof", "kyc-auditlab", "victorsuite"),
             RemoteCommandTargetRegistry.ALL.map { it.id },
         )
         val kyc = KycAuditLabRegistry.TARGET

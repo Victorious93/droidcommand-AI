@@ -52,6 +52,12 @@ object TargetNodeRefValidator {
         ) {
             return true
         }
+        val suitePrefix = FleetRemoteEnvelope.VICTORSUITE_NODE_ID_PREFIX
+        if (targetNodeRef.startsWith(suitePrefix) &&
+            !FleetRemoteEnvelope.VICTORSUITE_NODE_ID.matches(targetNodeRef)
+        ) {
+            return true
+        }
         return false
     }
 

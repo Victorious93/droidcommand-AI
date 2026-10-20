@@ -55,6 +55,7 @@ class FleetDashboardViewModel @Inject constructor(
                 nodeIdHints = (FleetDashboardCatalog.nodeIdHints(hintId) + member.id).distinct(),
                 highlighted = member.id == "rootforge",
                 opensPairing = member.id in FleetDashboardCatalog.PAIRING_FLOW_IDS,
+                pendingDeviceTest = member.id == "termux" || member.id == "victorsuite",
             )
         }
     }
