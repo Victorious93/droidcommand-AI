@@ -6,11 +6,16 @@ package ai.droidcommand.remotecontrol
  * [VictorSpoofRegistry].
  *
  * Status: **[provisional/pending-stable-cert]**. Package [PACKAGE]
- * (`com.identityshield.companion`). The documented debug SHA-256 is from
- * a **per-machine default debug.keystore** and is **not stable across
- * machines**. Keep the pin **fail-open** (`enforcePin = false`,
- * [suggestedPairing] leaves cert empty) until a stable value replaces
- * it. **Do not enforce this fingerprint. Do not invent a replacement.**
+ * (`com.identityshield.companion`). The **active** documented debug
+ * SHA-256 ([DEBUG_CERT_SHA256]) is from a **per-machine default
+ * debug.keystore** and is **not stable across machines**. Keep that pin
+ * **fail-open** (`enforcePin = false`, [suggestedPairing] leaves cert
+ * empty). **Do not enforce it.**
+ *
+ * [PENDING_STABLE_DEBUG_CERT_SHA256] is the **permanent** committed
+ * debug-keystore fingerprint (reproducible). It lives in **KYC PR #29**,
+ * which is **not merged yet**. Record it here; **do not swap** the
+ * active pin and **do not enforce** it until that PR merges.
  *
  * `remote.command` is **OFF by default**. Every PII op is advertised
  * `remoteAllowed:false`. The controller never remote-allows PII ops
@@ -32,11 +37,21 @@ object KycAuditLabRegistry {
     const val REMOTE_COMMAND_DEFAULT_OFF = true
 
     /**
-     * Documented debug SHA-256 from a per-machine default debug.keystore.
-     * **Not stable. Not enforced.**
+     * Active fail-open debug SHA-256 from a per-machine default
+     * debug.keystore. **Not stable. Not enforced.** Keep this as the
+     * documented pin until KYC PR #29 merges.
      */
     const val DEBUG_CERT_SHA256 =
         "6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D"
+
+    /**
+     * Pending permanent debug SHA-256 from KYC's committed debug
+     * keystore (reproducible). **KYC PR #29, not merged.** Recorded
+     * only — **do not enforce. Swap the active pin once #29 merges.**
+     */
+    const val PENDING_STABLE_DEBUG_CERT_SHA256 =
+        "22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D"
+    const val PENDING_STABLE_SOURCE = "KYC PR #29"
     const val ENFORCE_PIN = false
 
     val READ_OPS: Set<String> = setOf(CAPABILITIES_OP, STATUS_OP)
@@ -86,6 +101,7 @@ object KycAuditLabRegistry {
         packageName = PACKAGE,
         bridgeAction = BRIDGE_ACTION,
         documentedDebugCertSha256 = DEBUG_CERT_SHA256,
+        pendingPermanentDebugCertSha256 = PENDING_STABLE_DEBUG_CERT_SHA256,
         enforcePin = ENFORCE_PIN,
         status = STATUS,
         isolatedFromDestructive = true,
@@ -94,8 +110,12 @@ object KycAuditLabRegistry {
         piiOpsNeverRemoteAllowed = true,
         notes = "EXTERNAL_NODE companion APK. remote.command OFF-by-default. " +
             "All PII ops remoteAllowed:false; controller never remote-allows them. " +
-            "Isolated from destructive paths. Debug cert is per-machine " +
-            "debug.keystore — documented, not enforced. $STATUS",
+            "Isolated from destructive paths. Active fail-open debug cert is " +
+            "per-machine debug.keystore ($DEBUG_CERT_SHA256) — documented, not " +
+            "enforced. Pending permanent debug cert $PENDING_STABLE_DEBUG_CERT_SHA256 " +
+            "($PENDING_STABLE_SOURCE, unmerged, committed debug keystore, " +
+            "reproducible) — recorded, not enforced; swap the active pin once " +
+            "#29 merges. $STATUS",
     )
 
     fun isRegistered(actionRef: String): Boolean =

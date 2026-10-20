@@ -80,9 +80,12 @@ object RemoteControlManual {
 
         KYC-AuditLab companion
         Package com.identityshield.companion, remote.command EXTERNAL_NODE
-        [provisional/pending-stable-cert]. The documented debug cert is
-        from a per-machine default debug.keystore and is NOT stable across
-        machines — documented, not enforced (fail-open). remote.command
+        [provisional/pending-stable-cert]. The active debug cert is from
+        a per-machine default debug.keystore and is NOT stable across
+        machines — documented, not enforced (fail-open). The pending
+        permanent cert (committed debug keystore, reproducible) is in
+        KYC PR #29, not merged yet — recorded, not enforced; swap the
+        active pin once #29 merges. Do not enforce either. remote.command
         is OFF by default. All PII ops are remoteAllowed:false; the
         controller never remote-allows them either. Isolated from
         wipe/power-off/lock/flash/bootloader. The localhost simulator

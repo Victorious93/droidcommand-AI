@@ -18,6 +18,7 @@ data class KnownRemoteTarget(
     val nodeIdPrefix: String? = null,
     val integrationClass: FleetIntegrationClass = FleetIntegrationClass.EXTERNAL_NODE,
     val documentedDebugCertSha256: String? = null,
+    val pendingPermanentDebugCertSha256: String? = null,
     val debugCertAlias: String? = null,
     val enforcePin: Boolean = false,
     val status: String,

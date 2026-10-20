@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -42,7 +43,14 @@ class KycAuditLabRegistryTest {
         assertTrue(kyc.remoteCommandDefaultOff)
         assertTrue(kyc.piiOpsNeverRemoteAllowed)
         assertEquals(KycAuditLabRegistry.DEBUG_CERT_SHA256, kyc.documentedDebugCertSha256)
+        assertEquals(
+            KycAuditLabRegistry.PENDING_STABLE_DEBUG_CERT_SHA256,
+            kyc.pendingPermanentDebugCertSha256,
+        )
         assertEquals("com.identityshield.companion.action.BRIDGE", kyc.bridgeAction)
+        assertTrue(kyc.notes.contains("KYC PR #29"))
+        assertTrue(kyc.notes.contains(KycAuditLabRegistry.PENDING_STABLE_DEBUG_CERT_SHA256))
+        assertTrue(kyc.notes.contains("remoteAllowed:false"))
         assertNull(kyc.suggestedPairing("kyc-node").certSha256)
         assertFalse(
             kyc.cataloguedOps.any { name ->
@@ -142,6 +150,15 @@ class KycAuditLabRegistryTest {
         assertEquals(
             KnownNodeSigningCatalog.KYC_AUDITLAB_DEBUG_SHA256_UNENFORCED,
             KycAuditLabRegistry.DEBUG_CERT_SHA256,
+        )
+        assertEquals(
+            KnownNodeSigningCatalog.KYC_AUDITLAB_PENDING_STABLE_DEBUG_SHA256_UNENFORCED,
+            KycAuditLabRegistry.PENDING_STABLE_DEBUG_CERT_SHA256,
+        )
+        assertEquals("KYC PR #29", KycAuditLabRegistry.PENDING_STABLE_SOURCE)
+        assertNotEquals(
+            KycAuditLabRegistry.DEBUG_CERT_SHA256,
+            KycAuditLabRegistry.PENDING_STABLE_DEBUG_CERT_SHA256,
         )
         assertFalse(KycAuditLabRegistry.forbidsRemote(KycAuditLabRegistry.STATUS_OP))
         assertNotNull(KycAuditLabRegistry.entry(KycAuditLabRegistry.STATUS_OP))

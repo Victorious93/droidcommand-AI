@@ -133,6 +133,8 @@ class FleetStatusTest {
         assertTrue(kyc.member.summary.contains("remoteAllowed:false"))
         assertTrue(kyc.member.summary.contains("fail-open"))
         assertTrue(kyc.member.summary.contains("com.identityshield.companion"))
+        assertTrue(kyc.member.summary.contains("KYC PR #29"))
+        assertTrue(kyc.status.contains("KYC PR #29"))
 
         assertEquals(FleetInstallState.NOT_INSTALLED, fileManager.installed)
         assertTrue(fileManager.status.contains("not paired"))

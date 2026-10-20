@@ -236,7 +236,8 @@ and missing-observed refuse):
 |---|---|---|---|
 | Victorious File Manager | DEBUG | `8C:1F:E3:C9:E5:34:F2:71:05:C0:68:8F:45:28:D7:7E:47:11:AE:0A:79:DD:08:D1:E8:59:30:B9:E9:48:85:F2` | **[unstable/CI-secrets]**. Not committed; CI injects from secrets and falls back to the generic Android debug key without them. Enforcing it would refuse the fallback. No release key yet. |
 | VictorSMS | DEBUG | `BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A` (alias `androiddebugkey`) | **[planned/pending-merge]**. Scaffold PR still open/unmerged. Documented, not enforced — `expectedSigningCertSha256` stays empty (fail-open). Release cert TBD. |
-| KYC-AuditLab companion | DEBUG | `6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D` | **[provisional/pending-stable-cert]**. Per-machine default debug.keystore — **not stable across machines**. Documented, not enforced — `expectedSigningCertSha256` stays empty (fail-open). Do not enforce this fingerprint. |
+| KYC-AuditLab companion | DEBUG (active fail-open) | `6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D` | **[provisional/pending-stable-cert]**. Per-machine default debug.keystore — **not stable across machines**. Documented, not enforced — `expectedSigningCertSha256` stays empty (fail-open). Keep as the active pin until KYC PR #29 merges. |
+| KYC-AuditLab companion | DEBUG (pending permanent) | `22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D` | Committed debug keystore, reproducible. Lives in **KYC PR #29** (unmerged). Documented, **not enforced**. Swap this in as the active pin once #29 merges. Do not enforce either until then. |
 
 **Pending / out of scope** (fail-open; do not invent):
 
@@ -246,7 +247,7 @@ and missing-observed refuse):
 | Keyboard RELEASE and `.bench` | No release key; `.bench` not in the debug pin |
 | File Manager RELEASE | No release key yet |
 | VictorSMS RELEASE | Cert TBD — do not invent |
-| KYC-AuditLab companion RELEASE | Cert TBD — do not invent. The documented debug fingerprint is provisional. |
+| KYC-AuditLab companion RELEASE | Cert TBD — do not invent. Active debug pin stays the provisional 6F:46:… fail-open value until KYC PR #29 merges, then swap to 22:4F:…. |
 | victorious-flash | Debug cert is non-deterministic until they land a fixed keystore — **do not catalogue** |
 | BakerPi | Out of scope |
 
@@ -420,3 +421,14 @@ Isolated from wipe/power-off/lock/flash/bootloader the same way
 VictorSpoof is. KnownFleet.KYC_AUDITLAB stays `HOST_PROCESS_TOOL` for the
 localhost simulator (hub must not call `/scope` admin). Never
 DependencyGuard, never AIDL.
+
+## 2026-10-20f — KYC companion pending permanent debug cert (KYC PR #29)
+
+The permanent stable debug cert for `com.identityshield.companion` is
+SHA-256
+`22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D`
+(committed debug keystore, reproducible). It is in **KYC PR #29**, not
+merged yet. The registry **keeps** the provisional `6F:46:77:…:2D:4D`
+entry as the **active fail-open pin** and **records** `22:4F:C1:…:44:1D`
+as `pendingPermanentDebugCertSha256`. **Do not enforce either.** Swap
+the active pin once KYC #29 merges. PII ops stay `remoteAllowed:false`.

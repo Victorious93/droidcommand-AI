@@ -136,8 +136,11 @@ object ExternalNodeCatalog {
         notes = "EXTERNAL_NODE companion APK. Planned action com.identityshield.companion.action.BRIDGE. " +
             "remote.command OFF-by-default. All PII ops remoteAllowed:false; controller never " +
             "remote-allows them. Isolated from wipe/power-off/lock/flash/bootloader. Never " +
-            "DependencyGuard, never AIDL. Debug SHA-256 is per-machine default debug.keystore — " +
-            "[provisional/pending-stable-cert] unenforced / fail-open. Hub must not call /scope admin.",
+            "DependencyGuard, never AIDL. Active fail-open debug SHA-256 is per-machine default " +
+            "debug.keystore — [provisional/pending-stable-cert] unenforced. Pending permanent " +
+            "22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D " +
+            "(KYC PR #29, unmerged) recorded not enforced; swap once #29 merges. " +
+            "Hub must not call /scope admin.",
     )
 
     val all: List<ExternalNodeSpec> = listOf(

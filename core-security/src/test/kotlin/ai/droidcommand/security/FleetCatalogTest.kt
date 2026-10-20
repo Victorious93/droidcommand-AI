@@ -249,6 +249,17 @@ class FleetCatalogTest {
         assertTrue(KnownFleet.KYC_AUDITLAB.notes.contains("fail-open"))
         assertTrue(KnownFleet.KYC_AUDITLAB.notes.contains("remoteAllowed:false"))
         assertTrue(KnownFleet.KYC_AUDITLAB.notes.contains("per-machine default debug.keystore"))
+        assertTrue(KnownFleet.KYC_AUDITLAB.notes.contains("KYC PR #29"))
+        assertTrue(
+            KnownFleet.KYC_AUDITLAB.notes.contains(
+                "6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D",
+            ),
+        )
+        assertTrue(
+            KnownFleet.KYC_AUDITLAB.notes.contains(
+                "22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D",
+            ),
+        )
         assertEquals(listOf("com.identityshield.companion"), KnownFleet.KYC_AUDITLAB.androidPackages)
         assertTrue(KnownFleet.KYC_AUDITLAB.expectedSigningCertSha256.isEmpty())
         assertEquals("Victorious93/EDL-Commander", KnownFleet.EDL_COMMANDER.repo)
@@ -374,6 +385,8 @@ class FleetCatalogTest {
         assertTrue(text.contains("[provisional/pending-stable-cert]"))
         assertTrue(text.contains("com.identityshield.companion.action.BRIDGE"))
         assertTrue(text.contains("remoteAllowed:false"))
+        assertTrue(text.contains("KYC PR #29"))
+        assertTrue(text.contains("22:4F:"))
     }
 
     @Test

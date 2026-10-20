@@ -206,13 +206,17 @@ pinned yet (fail-open). TODO: pin later.
 
 KYC-AuditLab's companion APK (`com.identityshield.companion`) is a
 `remote.command` EXTERNAL_NODE **[provisional/pending-stable-cert]**. The
-documented debug SHA-256 is from a **per-machine default debug.keystore**
-and is **not stable across machines** — documented, **not enforced**
-(fail-open). `remote.command` is **OFF by default**. All PII ops are
+**active** debug SHA-256 (`6F:46:77:…:2D:4D`) is from a **per-machine
+default debug.keystore** and is **not stable across machines** —
+documented, **not enforced** (fail-open). The **pending permanent** debug
+SHA-256 (`22:4F:C1:…:44:1D`) is from KYC's **committed debug keystore**
+(reproducible) in **KYC PR #29**, which is **not merged yet** — recorded,
+**not enforced**. Swap the active pin once #29 merges. Do not enforce
+either. `remote.command` is **OFF by default**. All PII ops are
 `remoteAllowed:false`; the controller never remote-allows them either.
 Isolated from wipe / power-off / lock / flash / bootloader. The localhost
 IdentityShield simulator stays a host-process slot; the hub must not
-call `/scope` admin. TODO: replace with a stable pin; do not invent one.
+call `/scope` admin.
 
 ---
 

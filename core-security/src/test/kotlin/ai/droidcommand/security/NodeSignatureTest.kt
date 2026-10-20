@@ -263,6 +263,24 @@ class NodeSignatureTest {
             "6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D",
             KnownNodeSigningCatalog.KYC_AUDITLAB_DEBUG_SHA256_UNENFORCED,
         )
+        val pending = SigningCertSha256.parseOrThrow(
+            KnownNodeSigningCatalog.KYC_AUDITLAB_PENDING_STABLE_DEBUG_SHA256_UNENFORCED,
+        )
+        assertIs<NodeSignatureDecision.Allowed>(
+            NodeSignatureVerifier().verify(
+                "com.identityshield.companion",
+                listOf(pending.canonical),
+            ),
+        )
+        assertTrue(
+            KnownNodeSigningCatalog.all().none { candidate ->
+                pending in candidate.expectedCerts
+            },
+        )
+        assertEquals(
+            "22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D",
+            KnownNodeSigningCatalog.KYC_AUDITLAB_PENDING_STABLE_DEBUG_SHA256_UNENFORCED,
+        )
     }
 
     @Test

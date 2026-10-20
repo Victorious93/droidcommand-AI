@@ -303,27 +303,32 @@ object KnownFleet {
         riskTier = RiskTier.READ_ONLY,
         nextStep = "Last among the original five. Simulator only, localhost only. Do not call /scope admin " +
             "until KYC adds auth. Companion APK com.identityshield.companion is a remote.command " +
-            "EXTERNAL_NODE [provisional/pending-stable-cert]: debug cert documented but unenforced " +
-            "(per-machine default debug.keystore, not stable). remote.command OFF-by-default; " +
+            "EXTERNAL_NODE [provisional/pending-stable-cert]: active fail-open debug cert is the " +
+            "per-machine default debug.keystore (not stable). Pending permanent cert is in KYC PR #29 " +
+            "(unmerged) — do not swap or enforce until it merges. remote.command OFF-by-default; " +
             "PII ops never remote-allowed from the controller either. Never AIDL. " +
             "Do not log identity-document contents.",
         refusalMessage = "KYC-AuditLab is PLANNED. Simulator only, localhost only, no auth yet. " +
             "The hub must not call /scope admin. Companion APK com.identityshield.companion is an " +
             "EXTERNAL_NODE remote.command target [provisional/pending-stable-cert] — fail-open, " +
-            "debug SHA-256 " +
+            "active debug SHA-256 " +
             "6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D " +
-            "documented not enforced (per-machine debug.keystore). remote.command OFF-by-default; " +
+            "documented not enforced (per-machine debug.keystore). Pending permanent " +
+            "22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D " +
+            "(KYC PR #29, unmerged) recorded not enforced. remote.command OFF-by-default; " +
             "all PII ops remoteAllowed:false. This tool does not run the lab.",
         notes = "Host-process simulator PLUS companion EXTERNAL_NODE for remote.command. " +
             "Never DependencyGuard, never shared signing key, never KnownCompanions, never BIND_* " +
             "signature permission, never AIDL. Package com.identityshield.companion. " +
-            "[provisional/pending-stable-cert]. Debug SHA-256 " +
+            "[provisional/pending-stable-cert]. Active fail-open debug SHA-256 " +
             "6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D " +
             "is per-machine default debug.keystore — documented, not enforced " +
-            "(expectedSigningCertSha256 empty / fail-open). remote.command OFF-by-default. " +
+            "(expectedSigningCertSha256 empty / fail-open). Pending permanent debug SHA-256 " +
+            "22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D " +
+            "(KYC PR #29, unmerged, committed debug keystore, reproducible) — recorded, not " +
+            "enforced; swap the active pin once #29 merges. remote.command OFF-by-default. " +
             "All PII ops remoteAllowed:false; controller never remote-allows them. " +
-            "/scope admin is off-limits. Isolated from wipe/power-off/lock/flash/bootloader. " +
-            "TODO: replace with a stable pin; do not invent one.",
+            "/scope admin is off-limits. Isolated from wipe/power-off/lock/flash/bootloader.",
         androidPackages = listOf("com.identityshield.companion"),
         expectedSigningCertSha256 = emptyList(),
     )
@@ -707,7 +712,7 @@ object KnownFleet {
         appendLine("Catalogue is partial — fail-closed should be enabled only once remaining members and verified release pins are catalogued.")
         appendLine("Enforceable: DCA debug; Mesh debug+own release (com.victorious.mesh); Browser debug (com.victorious.browser); Pentest debug; EDL debug; HackerAI debug+verified release 9E:A7; RootForge debug (ai.rootforge.os.debug); Keyboard debug (not .bench); VictorSuite debug + own release.")
         appendLine("HackerAI is the only member whose shared-fleet RELEASE 9E:A7:… is firsthand verified and enforced. DCA/Pentest/EDL release stays [planned/unverified]. Browser RELEASE is own-key [planned/unverified] (CI-only, cert TBD).")
-        appendLine("File-Manager DEBUG is [unstable/CI-secrets] — documented, not enforced. VictorSMS DEBUG is [planned/pending-merge] — documented, not enforced. KYC-AuditLab companion DEBUG is [provisional/pending-stable-cert] — documented, not enforced (per-machine debug.keystore). Release cert TBD. victorious-flash / BakerPi are not catalogued.")
+        appendLine("File-Manager DEBUG is [unstable/CI-secrets] — documented, not enforced. VictorSMS DEBUG is [planned/pending-merge] — documented, not enforced. KYC-AuditLab companion DEBUG is [provisional/pending-stable-cert] — active fail-open pin is per-machine debug.keystore 6F:46:…; pending permanent 22:4F:… (KYC PR #29, unmerged) recorded not enforced. Do not enforce either. Release cert TBD. victorious-flash / BakerPi are not catalogued.")
     }
 }
 

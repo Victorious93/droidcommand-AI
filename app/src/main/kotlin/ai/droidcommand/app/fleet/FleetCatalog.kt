@@ -141,10 +141,11 @@ object FleetCatalog {
         kind = FleetKind.HOST_PROCESS,
         summary = "HOST_PROCESS_TOOL simulator (localhost; hub must not call /scope admin) PLUS " +
             "companion EXTERNAL_NODE com.identityshield.companion for remote.command. " +
-            "[provisional/pending-stable-cert]: debug cert is per-machine default debug.keystore, " +
-            "documented not enforced (fail-open). remote.command OFF-by-default. All PII ops " +
-            "remoteAllowed:false; controller never remote-allows them. Isolated from destructive " +
-            "paths. Never DependencyGuard, never AIDL. Not LIVE.",
+            "[provisional/pending-stable-cert]: active fail-open debug cert is per-machine default " +
+            "debug.keystore, documented not enforced. Pending permanent cert is KYC PR #29 " +
+            "(unmerged) — recorded, not enforced; swap once it merges. remote.command " +
+            "OFF-by-default. All PII ops remoteAllowed:false; controller never remote-allows " +
+            "them. Isolated from destructive paths. Never DependencyGuard, never AIDL. Not LIVE.",
     )
 
     val FILE_MANAGER = FleetMember(
@@ -294,6 +295,7 @@ object FleetStatus {
         FleetKind.HOST_PROCESS ->
             "Not started. Simulator only, localhost only. The hub must not call /scope admin. " +
                 "Companion APK is a remote.command EXTERNAL_NODE [provisional/pending-stable-cert], " +
-                "fail-open; PII ops are never remote-allowed. Not LIVE."
+                "fail-open (active pin per-machine; pending permanent KYC PR #29 unmerged); " +
+                "PII ops are never remote-allowed. Not LIVE."
     }
 }

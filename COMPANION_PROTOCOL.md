@@ -94,12 +94,16 @@ EXTERNAL_NODE. Catalog id `kyc-auditlab`; tool `kyc_auditlab_status`
 - Simulator only, localhost only. **No auth yet** — the hub must not call
   `/scope` admin until they add auth.
 - Companion APK: planned action `com.identityshield.companion.action.BRIDGE`.
-  Status **[provisional/pending-stable-cert]**. Debug SHA-256
+  Status **[provisional/pending-stable-cert]**. Active fail-open debug
+  SHA-256
   `6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D`
   is from a per-machine default debug.keystore and is **not stable across
-  machines** — documented, **not enforced** (fail-open). `remote.command`
-  OFF-by-default. All PII ops `remoteAllowed:false`; the controller never
-  remote-allows them either.
+  machines** — documented, **not enforced**. Pending permanent
+  `22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D`
+  (committed debug keystore, reproducible) is in **KYC PR #29** (unmerged)
+  — recorded, **not enforced**; swap the active pin once #29 merges. Do
+  not enforce either. `remote.command` OFF-by-default. All PII ops
+  `remoteAllowed:false`; the controller never remote-allows them either.
 - Do not log identity-document contents.
 - Status: **PLANNED**. Wiring order: last.
 

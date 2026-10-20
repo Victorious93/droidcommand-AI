@@ -209,10 +209,11 @@ JVM-only core modules now:
   is a `remote.command` EXTERNAL_NODE target ([planned/pending-merge])
   whose inbound op is `sms.remote_command.forward`. KYC-AuditLab companion
   (`com.identityshield.companion`) is a `remote.command` EXTERNAL_NODE
-  target ([provisional/pending-stable-cert]): debug cert documented from a
-  per-machine default debug.keystore and **not enforced** (fail-open);
-  `remote.command` OFF-by-default; all PII ops `remoteAllowed:false` and
-  never remote-allowed from the controller. An inbound
+  target ([provisional/pending-stable-cert]): active debug cert documented
+  from a per-machine default debug.keystore and **not enforced**
+  (fail-open); pending permanent `22:4F:…` from KYC PR #29 (unmerged)
+  recorded, not enforced; `remote.command` OFF-by-default; all PII ops
+  `remoteAllowed:false` and never remote-allowed from the controller. An inbound
   command is an **untrusted request**: VictorSMS whitelist + code word is
   delivery, not authorization. DCA owns only the commandId→action mapping.
   Debug cert is documented, not enforced (fail-open). The controller re-applies pairing →

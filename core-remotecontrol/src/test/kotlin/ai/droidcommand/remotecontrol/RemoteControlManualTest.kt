@@ -26,6 +26,7 @@ class RemoteControlManualTest {
         assertTrue(body.contains("[provisional/pending-stable-cert]"))
         assertTrue(body.contains("remoteAllowed:false"))
         assertTrue(body.contains("per-machine default debug.keystore"))
+        assertTrue(body.contains("KYC PR #29"))
         assertTrue(body.contains("external-control"))
         assertTrue(body.contains("status tray") || body.contains("Status tray"))
         assertTrue(body.contains("YOLO"))
