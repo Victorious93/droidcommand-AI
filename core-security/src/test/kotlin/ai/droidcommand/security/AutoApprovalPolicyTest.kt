@@ -140,6 +140,9 @@ class AutoApprovalPolicyTest {
             readTool("flash_capabilities").copy(permissionCategory = PermissionCategory.REMOTE_CONTROL),
             readTool("fleet_status"),
             readTool("hackerai_status"),
+            readTool("remote_command"),
+            readTool("remote_screen_control"),
+            readTool("remote_macro"),
         )
         waived.forEach { spec ->
             val decision = assertIs<AutoApprovalDecision.AutoApprove>(policy.evaluate(spec), spec.name)
@@ -158,6 +161,10 @@ class AutoApprovalPolicyTest {
             readTool("pentest_swarm_scan"),
             readTool("pentest_swarm_run_playbook"),
             readTool("msfconsole_search"),
+            readTool("remote_wipe"),
+            readTool("remote_power_off"),
+            readTool("remote_lock"),
+            readTool("remote_destructive"),
         )
         gated.forEach { spec ->
             val decision = assertIs<AutoApprovalDecision.RequireApproval>(policy.evaluate(spec), spec.name)
@@ -178,5 +185,20 @@ class AutoApprovalPolicyTest {
         assertTrue(!YoloMode.isPentestAuthorization("run_shell_command"))
         assertTrue(!YoloMode.isPentestAuthorization("run_shizuku_command"))
         assertTrue(!YoloMode.isPentestAuthorization("rootforge_list_devices"))
+        assertTrue(!YoloMode.isPentestAuthorization("remote_command"))
+        assertTrue(YoloMode.isDestructiveRemoteAction("remote_wipe"))
+        assertTrue(YoloMode.isDestructiveRemoteAction("remote_power_off"))
+        assertTrue(YoloMode.isDestructiveRemoteAction("remote_lock"))
+        assertTrue(YoloMode.isDestructiveRemoteAction("remote_destructive"))
+        assertTrue(!YoloMode.isDestructiveRemoteAction("remote_command"))
+        assertTrue(!YoloMode.isDestructiveRemoteAction("remote_screen_control"))
+        assertTrue(!YoloMode.isDestructiveRemoteAction("remote_macro"))
+        assertTrue(!YoloMode.isDestructiveRemoteAction("get_clipboard"))
+        assertTrue(!YoloMode.isDestructiveRemoteAction("set_clipboard"))
+        assertTrue("remote" in ActionRiskClassifier.NEVER_AUTO_APPROVE_NAME_TOKENS)
+        assertTrue(YoloMode.WARNING.contains("WIPE"))
+        assertTrue(YoloMode.PENTEST_AUTHORIZATION_NAME_TOKENS == setOf(
+            "kali", "pentest", "swarm", "metasploit", "msf", "setoolkit", "exploit", "playbook",
+        ))
     }
 }

@@ -204,6 +204,22 @@ JVM-only core modules now:
   authorized" and per-step ACTIVE/EXPLOIT prompts). Command stdout/stderr is
   never logged. Missing or not-running Shizuku degrades to unprivileged use;
   it does not crash or bypass confirmation. Not run against live Shizuku/Sui.
+- **Remote Control skeleton (2026-10-20, envelope frozen 2026-10-20b).**
+  SMS (VictorSMS) and voice triggers share one mapping pipeline. Frozen
+  top-level envelope (`requestId` / `targetNodeRef` / `actionRef` / `args` /
+  `nonce` / `timestampMs` / `ttlMs` / advisory `destructive`). Source
+  identity for authorization is package+cert (`sendingUid`);
+  `trigger.sourceNumber` / `matchedKeyword` / a forged `destructive:false`
+  cannot authorize. Replay cache is keyed by `(sourceNodeRef, nonce)`.
+  Tool names contain `remote`, so they are never-auto-approve like
+  shell/shizuku/root. YOLO may waive **non-destructive** remote commands
+  (including VictorSpoof registry entries) the same way it waives shell;
+  it must **not** waive WIPE / POWER_OFF / LOCK (`remote_wipe` /
+  `remote_power_off` / `remote_lock` / `remote_destructive`) and must not
+  waive Kali/pentest ACTIVE/EXPLOIT gates or the phrase "I confirm these
+  targets are authorized" (those pentest tokens are unchanged). Live wipe,
+  power-off, lock, and RustDesk are not implemented — the executor is a
+  stub after `ApprovalPrompt`. Spec: `docs/specs/REMOTE_CONTROL.md`.
 
 ## Design note: per-tool `validate()` vs. externalized policy
 

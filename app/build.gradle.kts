@@ -112,6 +112,7 @@ dependencies {
     implementation(project(":core-knowledge-android"))
     implementation(project(":core-llm"))
     implementation(project(":core-remote"))
+    implementation(project(":core-remotecontrol"))
     implementation(project(":core-coding-session"))
     implementation(project(":core-llm-factory"))
     implementation(project(":core-templates"))

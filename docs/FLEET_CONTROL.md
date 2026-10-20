@@ -315,3 +315,42 @@ GitHub-style applicationId placeholder is gone.
 Status stays **PLANNED**: AIDL is on disk here, the Fleet orchestrator
 does not auto-bind, and nothing has run against a real EDL APK. No flash
 tool. Kali/pentest gates and YOLO exclusions were not touched.
+
+## 2026-10-20 — Remote Control (VictorSMS trigger + voice) skeleton
+
+Approved fleet work. Spec: `docs/specs/REMOTE_CONTROL.md`. Code:
+`core-remotecontrol` + Settings skeleton. **Not LIVE.**
+
+VictorSMS (`com.victorious.sms`) is the SMS trigger source on the
+target/paired device: whitelist **and** secret code word, then an
+EXTERNAL_NODE Messenger forward (`protocol_major` 1, proposed op
+`remote.command`). It is **not** added to `KnownFleet.ALL` in this
+slice — whether it is a 10th member or a trigger app that reuses the
+generic Messenger client is **[CONTRACT TBD]**. Never DependencyGuard,
+never a shared signing key, never AIDL, never a `BIND_*` permission.
+
+Voice trigger is local to DCA (exact phrase match). Delivery mode is
+per mapping: `FULL_SCREEN_CONTROL` (RustDesk, stub) or
+`DISCRETE_COMMAND`. Destructive actions (WIPE, POWER_OFF, LOCK) always
+prompt; YOLO cannot waive them. Kali/pentest gates are untouched.
+
+No live wipe / power-off / lock / RustDesk in this slice.
+
+## 2026-10-20b — Frozen envelope + VictorSMS is the 10th member
+
+The Fleet Orchestrator froze the remote envelope (top-level fields, no
+nested `auth`). Spec: `docs/specs/REMOTE_CONTROL.md`. VictorSMS
+(`com.victorious.sms`, node-id `victorsms-<32 hex>`, action
+`com.victorious.sms.action.BRIDGE`) **is** `KnownFleet.VICTOR_SMS`
+(`wiringOrder` 10, empty `expectedSigningCertSha256`, fail-open).
+Inbound op is `remote.command` with informational `trigger{}`.
+Authorization is `Message.sendingUid` (package+cert), never a payload
+field. Replay is `(sourceNodeRef, nonce)`. `destructive` is advisory.
+
+VictorSpoof is a **remote-control actionRef registry** isolated from
+destructive classification, not an 11th `KnownFleet` member (package and
+certs [CONTRACT TBD]). Never DependencyGuard, never a shared signing
+key, never AIDL.
+
+Status tray consume+publish and unified local backup are controller-side
+skeletons. Live privileged execution is still absent.

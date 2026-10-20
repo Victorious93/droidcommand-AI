@@ -35,7 +35,8 @@ object DefaultActionRisks {
 
     /**
      * @param yoloMode explicit opt-in; default [YoloMode.ENABLED_DEFAULT] (false). Passing true
-     *   auto-approves shell/root/fleet and still never auto-approves Kali/pentest authorization.
+     *   auto-approves shell/root/fleet/non-destructive remote and still never auto-approves
+     *   Kali/pentest authorization or destructive remote actions (WIPE/POWER_OFF/LOCK).
      */
     fun policy(yoloMode: Boolean = YoloMode.ENABLED_DEFAULT): AutoApprovalPolicy =
         AutoApprovalPolicy(ActionRiskClassifier(TOOLS), yoloMode)

@@ -44,6 +44,17 @@ import ai.droidcommand.pentestswarm.KaliAuthorizedScanTool
 import ai.droidcommand.pentestswarm.LocalKaliPlaybookRunner
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.remote.HttpUrlConnectionTransport
+import ai.droidcommand.remotecontrol.InMemoryRemoteStatusTray
+import ai.droidcommand.remotecontrol.JsonFileRemoteControlStore
+import ai.droidcommand.remotecontrol.RemoteActionExecutor
+import ai.droidcommand.remotecontrol.RemoteCommandDispatcher
+import ai.droidcommand.remotecontrol.RemoteControlSettingsController
+import ai.droidcommand.remotecontrol.RemoteControlStore
+import ai.droidcommand.remotecontrol.RemoteControlTool
+import ai.droidcommand.remotecontrol.RemoteStatusTray
+import ai.droidcommand.remotecontrol.ReplayGuard
+import ai.droidcommand.remotecontrol.StubRemoteActionExecutor
+import ai.droidcommand.remotecontrol.UnifiedLocalBackupStore
 import ai.droidcommand.root.NullRootExecutor
 import ai.droidcommand.root.RootTool
 import ai.droidcommand.security.ApprovalPrompt
@@ -141,6 +152,8 @@ object AppModule {
         kaliPlaybookRunner: LocalKaliPlaybookRunner,
         fleetCommandTool: FleetCommandTool,
         privilegedShell: PrivilegedShell,
+        remoteControlStore: RemoteControlStore,
+        remoteActionExecutor: RemoteActionExecutor,
     ): ToolRegistry = ToolRegistry().apply {
         register(AutomationShellTool(AllowlistShellExecutor { advanced.shellAllowlist() }))
         register(AiPromptTool(CloudPromptClient(vault, transport)) { spec -> chatModelFor(context, spec) })
@@ -156,7 +169,49 @@ object AppModule {
         register(HackerAiTool())
         // Fleet Orchestrator action commands. SENSITIVE and always confirmed; hidden from the Pilot and Forge planners.
         register(fleetCommandTool)
+        // Remote Control skeleton. Names contain `remote`; destructive variants never YOLO-waive.
+        // execute() is a stub — no live wipe / power-off / lock / RustDesk.
+        RemoteControlTool.all(remoteActionExecutor, remoteControlStore).forEach { register(it) }
     }
+
+    @Provides
+    @Singleton
+    fun provideRemoteControlStore(@ApplicationContext context: Context): RemoteControlStore =
+        JsonFileRemoteControlStore(context.filesDir.toPath().resolve("remote-control").resolve("config.json"))
+
+    @Provides
+    @Singleton
+    fun provideReplayGuard(): ReplayGuard = ReplayGuard()
+
+    @Provides
+    @Singleton
+    fun provideRemoteStatusTray(): RemoteStatusTray = InMemoryRemoteStatusTray()
+
+    @Provides
+    @Singleton
+    fun provideUnifiedLocalBackupStore(@ApplicationContext context: Context): UnifiedLocalBackupStore =
+        UnifiedLocalBackupStore(context.filesDir.toPath().resolve("remote-control").resolve("backup.json"))
+
+    @Provides
+    @Singleton
+    fun provideRemoteActionExecutor(): RemoteActionExecutor = StubRemoteActionExecutor()
+
+    @Provides
+    @Singleton
+    fun provideRemoteCommandDispatcher(
+        store: RemoteControlStore,
+        replayGuard: ReplayGuard,
+        statusTray: RemoteStatusTray,
+    ): RemoteCommandDispatcher = RemoteCommandDispatcher(store, replayGuard, statusTray)
+
+    @Provides
+    @Singleton
+    fun provideRemoteControlSettingsController(
+        store: RemoteControlStore,
+        dispatcher: RemoteCommandDispatcher,
+        statusTray: RemoteStatusTray,
+        backupStore: UnifiedLocalBackupStore,
+    ): RemoteControlSettingsController = RemoteControlSettingsController(store, dispatcher, statusTray, backupStore)
 
     /** The model chat uses for [spec], read from the same preference chat writes. Falls back to the provider's suggestion. */
     private fun chatModelFor(context: Context, spec: CloudProviderSpec): String =
@@ -188,9 +243,15 @@ object AppModule {
     @Provides
     @Singleton
     fun provideSecurityPolicy(): SecurityPolicy = SecurityPolicy(
-        grantedCategories = setOf(PermissionCategory.TERMINAL, PermissionCategory.NETWORK, PermissionCategory.DEVICE_CONTROL),
+        grantedCategories = setOf(
+            PermissionCategory.TERMINAL,
+            PermissionCategory.NETWORK,
+            PermissionCategory.DEVICE_CONTROL,
+            PermissionCategory.REMOTE_CONTROL,
+        ),
         // READ_ONLY catalog only. YOLO stays off ([YoloMode.ENABLED_DEFAULT]); turning it on
-        // auto-approves shell/root/fleet/Shizuku but never Kali/pentest authorization. See [YoloMode.WARNING].
+        // auto-approves shell/root/fleet/Shizuku/non-destructive remote but never Kali/pentest
+        // authorization and never destructive remote actions (WIPE/POWER_OFF/LOCK). See [YoloMode.WARNING].
         autoApprovalPolicy = DefaultActionRisks.policy(),
     )
 

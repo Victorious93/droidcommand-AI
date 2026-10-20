@@ -58,6 +58,7 @@ class FleetMessengerControllerTest {
         assertEquals("com.victorious.keyboard", ExternalNodeCatalog.KEYBOARD.primaryPackage)
         assertEquals("com.victorious.mesh", ExternalNodeCatalog.MESH.primaryPackage)
         assertEquals("com.victorious.browser", ExternalNodeCatalog.BROWSER.primaryPackage)
+        assertEquals("com.victorious.sms", ExternalNodeCatalog.VICTOR_SMS.primaryPackage)
         assertEquals("rootforge.capabilities.get", ExternalNodeCatalog.ROOTFORGE.capabilitiesOperation)
         assertEquals("filemanager.status", ExternalNodeCatalog.FILE_MANAGER.statusOperation)
         assertEquals("keyboard.capabilities.get", ExternalNodeCatalog.KEYBOARD.capabilitiesOperation)
@@ -68,11 +69,16 @@ class FleetMessengerControllerTest {
         assertNull(ExternalNodeCatalog.KEYBOARD.upOperation)
         assertNull(ExternalNodeCatalog.FILE_MANAGER.upOperation)
         assertNull(ExternalNodeCatalog.BROWSER.upOperation)
+        assertNull(ExternalNodeCatalog.VICTOR_SMS.upOperation)
+        assertEquals("sms.capabilities.get", ExternalNodeCatalog.VICTOR_SMS.capabilitiesOperation)
+        assertEquals("sms.status", ExternalNodeCatalog.VICTOR_SMS.statusOperation)
         assertTrue(ExternalNodeCatalog.KEYBOARD.notes.contains("Never forwards typed text"))
         assertTrue(ExternalNodeCatalog.MESH.notes.contains("own release key"))
         assertTrue(ExternalNodeCatalog.BROWSER.notes.contains("own release key"))
+        assertTrue(ExternalNodeCatalog.VICTOR_SMS.notes.contains("remote.command"))
+        assertTrue(ExternalNodeCatalog.VICTOR_SMS.notes.contains("fail-open"))
         assertEquals(
-            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser"),
+            listOf("rootforge", "file-manager", "keyboard", "mesh", "browser", "victorsms"),
             ExternalNodeCatalog.all.map { it.id },
         )
     }

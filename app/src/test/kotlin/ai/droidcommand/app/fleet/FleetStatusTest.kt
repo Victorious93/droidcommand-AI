@@ -21,17 +21,20 @@ class FleetStatusTest {
         assertEquals("com.victorious.keyboard", FleetCatalog.KEYBOARD_PACKAGE)
         assertEquals("com.victorious.mesh", FleetCatalog.MESH_PACKAGE)
         assertEquals("com.victorious.browser", FleetCatalog.BROWSER_PACKAGE)
+        assertEquals("com.victorious.sms", FleetCatalog.VICTORSMS_PACKAGE)
         assertEquals(FleetCatalog.ROOTFORGE_PACKAGE, FleetCatalog.ROOTFORGE.packageName)
         assertEquals(ExternalNodeCatalog.ROOTFORGE.primaryPackage, FleetCatalog.ROOTFORGE_PACKAGE)
         assertEquals(ExternalNodeCatalog.FILE_MANAGER.primaryPackage, FleetCatalog.FILEMANAGER_PACKAGE)
         assertEquals(ExternalNodeCatalog.KEYBOARD.primaryPackage, FleetCatalog.KEYBOARD_PACKAGE)
         assertEquals(ExternalNodeCatalog.MESH.primaryPackage, FleetCatalog.MESH_PACKAGE)
         assertEquals(ExternalNodeCatalog.BROWSER.primaryPackage, FleetCatalog.BROWSER_PACKAGE)
+        assertEquals(ExternalNodeCatalog.VICTOR_SMS.primaryPackage, FleetCatalog.VICTORSMS_PACKAGE)
         assertNull(FleetCatalog.KYC_AUDITLAB.packageName)
         assertEquals(FleetCatalog.FILEMANAGER_PACKAGE, FleetCatalog.FILE_MANAGER.packageName)
         assertEquals(FleetCatalog.KEYBOARD_PACKAGE, FleetCatalog.KEYBOARD.packageName)
         assertEquals(FleetCatalog.MESH_PACKAGE, FleetCatalog.MESH.packageName)
         assertEquals(FleetCatalog.BROWSER_PACKAGE, FleetCatalog.BROWSER.packageName)
+        assertEquals(FleetCatalog.VICTORSMS_PACKAGE, FleetCatalog.VICTOR_SMS.packageName)
         assertEquals(
             listOf(FleetCatalog.ROOTFORGE_DEBUG_PACKAGE),
             FleetCatalog.ROOTFORGE.extraPackages,
@@ -52,6 +55,7 @@ class FleetStatusTest {
                 FleetCatalog.KEYBOARD,
                 FleetCatalog.MESH,
                 FleetCatalog.BROWSER,
+                FleetCatalog.VICTOR_SMS,
             ).flatMap { it.androidPackages }.toSet(),
         )
         assertEquals(
@@ -66,6 +70,7 @@ class FleetStatusTest {
                 "keyboard",
                 "mesh",
                 "browser",
+                "victorsms",
             ),
             FleetCatalog.all.map { it.id },
         )
@@ -87,6 +92,7 @@ class FleetStatusTest {
         val keyboard = rows.single { it.member.id == "keyboard" }
         val mesh = rows.single { it.member.id == "mesh" }
         val browser = rows.single { it.member.id == "browser" }
+        val victorSms = rows.single { it.member.id == "victorsms" }
 
         assertEquals(FleetInstallState.INSTALLED, hacker.installed)
         assertTrue(hacker.status.contains("disconnected"))
@@ -144,6 +150,14 @@ class FleetStatusTest {
         assertTrue(browser.member.summary.contains("com.victorious.browser.action.BRIDGE"))
         assertTrue(browser.member.summary.contains("own release key"))
         assertFalse(browser.status.contains("ready", ignoreCase = true), browser.status)
+
+        assertEquals(FleetInstallState.NOT_INSTALLED, victorSms.installed)
+        assertTrue(victorSms.status.contains("not paired"))
+        assertTrue(victorSms.status.contains("Not LIVE"))
+        assertTrue(victorSms.member.summary.contains("Never DependencyGuard"))
+        assertTrue(victorSms.member.summary.contains("com.victorious.sms.action.BRIDGE"))
+        assertTrue(victorSms.member.summary.contains("fail-open"))
+        assertFalse(victorSms.status.contains("ready", ignoreCase = true), victorSms.status)
 
         rows.forEach { row ->
             assertFalse(row.status.contains("ready", ignoreCase = true), row.status)

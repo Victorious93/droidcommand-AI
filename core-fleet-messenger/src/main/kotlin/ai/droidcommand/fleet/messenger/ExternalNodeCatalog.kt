@@ -95,7 +95,22 @@ object ExternalNodeCatalog {
             "Caller identity = Message.sendingUid. Node-id prefix ^browser-[0-9a-f]{32}$.",
     )
 
-    val all: List<ExternalNodeSpec> = listOf(ROOTFORGE, FILE_MANAGER, KEYBOARD, MESH, BROWSER)
+    val VICTOR_SMS = ExternalNodeSpec(
+        id = "victorsms",
+        displayName = "VictorSMS",
+        nodeId = "victorsms",
+        packages = listOf("com.victorious.sms"),
+        capabilitiesOperation = "sms.capabilities.get",
+        statusOperation = "sms.status",
+        notes = "EXTERNAL_NODE. Confirmed action com.victorious.sms.action.BRIDGE, protocol_major 1, " +
+            "what=1, inbound op remote.command. debug==release package com.victorious.sms. " +
+            "Node-id prefix ^victorsms-[0-9a-f]{32}$. Never DependencyGuard. Signing certs TBD — " +
+            "catalogue fail-open/unpinned. TODO: pin debug+release SHA-256. Fleet-messenger read ops " +
+            "sms.capabilities.get / sms.status stay placeholders. The frozen remote-control op for " +
+            "protocol minor 1 is capabilities.get (not a per-class field name).",
+    )
+
+    val all: List<ExternalNodeSpec> = listOf(ROOTFORGE, FILE_MANAGER, KEYBOARD, MESH, BROWSER, VICTOR_SMS)
 
     fun byId(id: String): ExternalNodeSpec? = all.find { it.id == id }
 }

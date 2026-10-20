@@ -66,6 +66,9 @@ object FleetCatalog {
     /** EXTERNAL_NODE. Probe only — do not bind Messenger. */
     const val BROWSER_PACKAGE = "com.victorious.browser"
 
+    /** EXTERNAL_NODE. Probe only. debug==release. Certs TBD (fail-open). */
+    const val VICTORSMS_PACKAGE = "com.victorious.sms"
+
     /** Debug applicationId for RootForge OS. Catalogued for Messenger pairing / trust checks. */
     const val ROOTFORGE_DEBUG_PACKAGE = "ai.rootforge.os.debug"
 
@@ -177,6 +180,18 @@ object FleetCatalog {
             "(CI-only; [planned/unverified]). External control default OFF.",
     )
 
+    val VICTOR_SMS = FleetMember(
+        id = "victorsms",
+        name = "VictorSMS",
+        packageName = VICTORSMS_PACKAGE,
+        kind = FleetKind.EXTERNAL_NODE,
+        summary = "EXTERNAL_NODE, PLANNED. Messenger action com.victorious.sms.action.BRIDGE " +
+            "(Message what=1 request, protocol_major 1, op remote.command). debug==release package. " +
+            "Signing certs TBD — catalogue fail-open/unpinned. TODO pin debug+release SHA-256. " +
+            "Never DependencyGuard, never a shared signing key. SMS whitelist and code word live in " +
+            "VictorSMS. External control default OFF + explicit consent. Node-id victorsms-<32 hex>.",
+    )
+
     val all: List<FleetMember> = listOf(
         HACKERAI,
         PENTEST_SWARM,
@@ -188,6 +203,7 @@ object FleetCatalog {
         KEYBOARD,
         MESH,
         BROWSER,
+        VICTOR_SMS,
     )
 
     /**
