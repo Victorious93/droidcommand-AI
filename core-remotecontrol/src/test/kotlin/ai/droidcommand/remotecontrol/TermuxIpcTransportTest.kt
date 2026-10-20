@@ -10,7 +10,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -98,7 +97,10 @@ class TermuxIpcTransportTest {
         val transport = TermuxIpcTransport(
             nowMs = { now },
             externalControlEnabled = true,
-            sender = TermuxIpcSender { sent += 1; TermuxIpcResult.Ready(it) },
+            sender = TermuxIpcSender { request ->
+                sent += 1
+                TermuxIpcResult.Ready(request)
+            },
         )
         val rejected = assertIs<TermuxIpcResult.Rejected>(
             transport.submit(
@@ -133,7 +135,10 @@ class TermuxIpcTransportTest {
         val transport = TermuxIpcTransport(
             nowMs = { now },
             externalControlEnabled = true,
-            sender = TermuxIpcSender { sent += 1; TermuxIpcResult.Ready(it) },
+            sender = TermuxIpcSender { request ->
+                sent += 1
+                TermuxIpcResult.Ready(request)
+            },
         )
         val rejected = assertIs<TermuxIpcResult.Rejected>(
             transport.submit(
