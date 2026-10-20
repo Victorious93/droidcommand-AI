@@ -106,36 +106,3 @@ internal data class UnifiedLocalBackupDto(
         )
     }
 }
-
-@Serializable
-internal data class NodeStatusSnapshotDto(
-    val sourceNodeRef: String,
-    val domain: String = StatusTrayDomain.NODE_HEALTH.name,
-    val capability: String = "status",
-    val healthy: Boolean? = null,
-    val actionRef: String,
-    val payload: Map<String, String> = emptyMap(),
-    val receivedAtMs: Long,
-) {
-    fun toModel(): NodeStatusSnapshot = NodeStatusSnapshot(
-        sourceNodeRef = sourceNodeRef,
-        domain = StatusTrayDomain.fromWire(domain),
-        capability = capability,
-        healthy = healthy,
-        actionRef = actionRef,
-        payload = payload,
-        receivedAtMs = receivedAtMs,
-    )
-
-    companion object {
-        fun from(snapshot: NodeStatusSnapshot) = NodeStatusSnapshotDto(
-            sourceNodeRef = snapshot.sourceNodeRef,
-            domain = snapshot.domain.name,
-            capability = snapshot.capability,
-            healthy = snapshot.healthy,
-            actionRef = snapshot.actionRef,
-            payload = snapshot.payload,
-            receivedAtMs = snapshot.receivedAtMs,
-        )
-    }
-}

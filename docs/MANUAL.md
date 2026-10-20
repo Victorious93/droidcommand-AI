@@ -160,6 +160,7 @@ Every fleet APK advertises:
   `{ name, kind: read|action|destructive, remoteAllowed, requiresConfirm }`
 - `macro.step` `{ op, params }`
 - `macro.run` `{ steps: [{ op, params, onError, timeoutMs }], dryRun }`
+- `node.status.get` — frozen STATUS-TRAY snapshot (`docs/specs/STATUS_TRAY.md`)
 
 The node runner dispatches **only** to its own advertised ops, sequentially.
 `onError: abort` (atomic) stops on first error and reports **partial**
@@ -186,8 +187,9 @@ classified destructive step requires approval at run.
 
 Settings → Remote Control → Status tray consumes **and** publishes last
 health rows per node (mesh / VPN / browser / SMS / node health). Shared
-with VictorLaunch. Exact schema/transport is still pending the Fleet
-Orchestrator; this app uses a generic in-memory model. No live bind.
+with VictorLaunch. The snapshot schema is frozen in
+`docs/specs/STATUS_TRAY.md` (`node.status.get`). This app still uses an
+in-memory aggregate. No live bind.
 
 ---
 

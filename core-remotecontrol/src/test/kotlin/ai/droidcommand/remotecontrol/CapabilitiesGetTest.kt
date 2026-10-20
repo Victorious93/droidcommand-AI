@@ -23,7 +23,7 @@ class CapabilitiesGetTest {
         assertEquals(1, result.protocolMajor)
         assertEquals(1, result.protocolMinor)
         assertEquals(
-            listOf("capabilities.get", "remote.command", "macro.step", "macro.run"),
+            listOf("capabilities.get", "remote.command", "macro.step", "macro.run", "node.status.get"),
             result.opNames,
         )
         val descriptors = result.ops
@@ -33,5 +33,9 @@ class CapabilitiesGetTest {
         assertFalse(descriptors.single { it.name == "capabilities.get" }.requiresConfirm)
         assertTrue(descriptors.single { it.name == "remote.command" }.requiresConfirm)
         assertEquals(OpKind.ACTION, descriptors.single { it.name == "macro.run" }.kind)
+        val status = descriptors.single { it.name == "node.status.get" }
+        assertEquals(OpKind.READ, status.kind)
+        assertTrue(status.remoteAllowed)
+        assertFalse(status.requiresConfirm)
     }
 }

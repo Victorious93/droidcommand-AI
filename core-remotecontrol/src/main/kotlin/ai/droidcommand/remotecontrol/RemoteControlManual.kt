@@ -99,8 +99,8 @@ object RemoteControlManual {
 
         Status tray
         Consumes and publishes last health rows per node (mesh / VPN /
-        browser / SMS / node health), shared with VictorLaunch. Exact
-        schema/transport is still pending. No live bind.
+        browser / SMS / node health), shared with VictorLaunch. Frozen
+        op node.status.get; schema docs/specs/STATUS_TRAY.md. No live bind.
 
         Local backup
         Settings can export versioned JSON of this controller's macros,
