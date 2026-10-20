@@ -160,9 +160,11 @@ Every fleet APK advertises:
   `{ name, kind: read|action|destructive, remoteAllowed, requiresConfirm }`
 - `macro.step` `{ op, params }`
 - `macro.run` `{ steps: [{ op, params, onError, timeoutMs }], dryRun }`
-- `node.status.get` — frozen STATUS-TRAY snapshot (`docs/specs/STATUS_TRAY.md`)
+- `node.status.get` — frozen STATUS-TRAY snapshot (`docs/specs/STATUS_TRAY.md`).
+  Standalone BridgeRequest `operation`, not a `remote.command` `actionRef`.
 - `config.export` / `config.import` — frozen SETTINGS/BACKUP bundle
-  (`docs/specs/UNIFIED_BACKUP.md`). Off the remote surface by default.
+  (`docs/specs/UNIFIED_BACKUP.md`). Standalone ops, not `remote.command`
+  `actionRef`s. Off the remote surface by default.
 
 The node runner dispatches **only** to its own advertised ops, sequentially.
 `onError: abort` (atomic) stops on first error and reports **partial**
