@@ -64,6 +64,8 @@ class FleetMessengerControllerTest {
         assertEquals("com.victorious.launch", ExternalNodeCatalog.VICTOR_LAUNCH.primaryPackage)
         assertEquals("com.identityshield.companion", ExternalNodeCatalog.KYC_AUDITLAB.primaryPackage)
         assertEquals("rootforge.capabilities.get", ExternalNodeCatalog.ROOTFORGE.capabilitiesOperation)
+        assertTrue(ExternalNodeCatalog.ROOTFORGE.notes.contains("First P1 candidate"))
+        assertTrue(ExternalNodeCatalog.ROOTFORGE.notes.contains("Hardware proof pending"))
         assertEquals("filemanager.status", ExternalNodeCatalog.FILE_MANAGER.statusOperation)
         assertEquals("keyboard.capabilities.get", ExternalNodeCatalog.KEYBOARD.capabilitiesOperation)
         assertEquals("mesh.capabilities.get", ExternalNodeCatalog.MESH.capabilitiesOperation)

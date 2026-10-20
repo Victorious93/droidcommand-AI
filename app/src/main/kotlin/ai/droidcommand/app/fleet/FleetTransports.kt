@@ -92,17 +92,35 @@ class BoundCompanionTransport(private val link: CompanionLink) : FleetNodeTransp
     }
 }
 
-/** A [RootForgeTransport] that says plainly the on-phone Messenger transport does not exist yet (Android has no `ssh`). */
+/**
+ * Leftover always-fail [RootForgeTransport] for the SSH-registry adapter and unit tests.
+ *
+ * **Not** what `:app` `FleetModule` wires for EXTERNAL_NODE today. Production traffic uses
+ * [MessengerFleetTransport] over [ai.droidcommand.fleet.messenger.PairedNodeGateway]. Android
+ * has no system `ssh`; this class exists so a [ai.droidcommand.rootforge.RootForgeClient] can
+ * still be constructed without a real transport. Do not read the failure string as a claim
+ * that the hub Messenger path is unwired.
+ */
 class UnwiredMessengerTransport : RootForgeTransport {
     override fun exchange(requestLine: String, timeoutMs: Long): Result<String> =
-        Result.failure(TransportException("the on-phone Messenger transport is not wired"))
+        Result.failure(
+            TransportException(
+                "UnwiredMessengerTransport leftover: this is not MessengerFleetTransport " +
+                    "(the live EXTERNAL_NODE path FleetModule wires)",
+            ),
+        )
 }
 
 /**
- * EXTERNAL_NODE. RootForge goes through `RootForgeNodeRegistry`/`RootForgeClient`; with no paired node the answer is
- * "pairing required". Even with one, [UnwiredMessengerTransport] cannot deliver, so nothing here ever claims a live
- * session. Other external nodes (File Manager, Keyboard) are a package probe only: their bridge is a stub or planned.
- * Never sends a command.
+ * Leftover SSH-registry EXTERNAL_NODE adapter. Production Fleet Orchestrator EXTERNAL_NODE
+ * traffic goes through [MessengerFleetTransport] (see `FleetModule.provideFleetNodeTransport`),
+ * not this class.
+ *
+ * RootForge here still goes through `RootForgeNodeRegistry`/`RootForgeClient`. With no paired
+ * SSH node the answer is "pairing required". Even with one, [UnwiredMessengerTransport] cannot
+ * deliver a Messenger session — that is this leftover adapter, not a statement about
+ * [MessengerFleetTransport]. Other external nodes (File Manager, Keyboard) are a package probe
+ * only. Never sends a command. Hardware proof of any live Messenger session is pending.
  */
 class ExternalNodeTransport(
     private val rootForge: RootForgeNodeRegistry,
@@ -125,7 +143,7 @@ class ExternalNodeTransport(
         val nodeId = rootForge.nodeIds.sorted().firstOrNull()
             ?: return FleetProbeResult(
                 FleetReachability.UNKNOWN,
-                "Pairing required. No RootForge node is paired, and the on-phone Messenger transport is not wired.",
+                "Pairing required. No RootForge node is paired. This leftover SSH-registry adapter is not MessengerFleetTransport.",
             )
         val client = rootForge.clientFor(nodeId)
             ?: return FleetProbeResult(FleetReachability.UNKNOWN, "Pairing required. No client for node $nodeId.")

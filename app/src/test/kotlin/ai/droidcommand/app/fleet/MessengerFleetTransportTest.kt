@@ -56,13 +56,16 @@ class MessengerFleetTransportTest {
 
     @Test
     fun `a paired node that answers capabilities is reachable with a command channel`() {
+        val fake = FakeExternalNodeTransport { _, _, _ -> RootForgeResult.Success(JsonObject(emptyMap())) }
         val gateway = PairedNodeGateway(
             InMemoryPairedNodeStore(listOf(ROOTFORGE_PAIRED)),
-            FakeExternalNodeTransport { _, _, _ -> RootForgeResult.Success(JsonObject(emptyMap())) },
+            fake,
         )
         val r = MessengerFleetTransport(gateway) { true }.probe(rootforge)
         assertEquals(FleetReachability.REACHABLE, r.reachability)
         assertTrue(r.commandChannel)
+        assertEquals("rootforge.capabilities.get", fake.lastOperation)
+        assertTrue(r.detail.contains("rootforge.capabilities.get"))
     }
 
     @Test

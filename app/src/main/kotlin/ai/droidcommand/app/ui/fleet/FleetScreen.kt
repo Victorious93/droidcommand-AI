@@ -61,6 +61,11 @@ fun FleetScreen(viewModel: FleetViewModel = hiltViewModel()) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Text(
+            "P1 target: RootForge — Pair → Capabilities",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
         state.pairingMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         if (state.loading && state.externalNodes.isEmpty()) {
             CircularProgressIndicator()

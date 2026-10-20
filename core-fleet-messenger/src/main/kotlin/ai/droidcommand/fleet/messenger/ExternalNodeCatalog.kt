@@ -48,7 +48,7 @@ object ExternalNodeCatalog {
         capabilitiesOperation = "rootforge.capabilities.get",
         statusOperation = "rootforge.status",
         upOperation = "rootforge.up",
-        notes = "EXTERNAL_NODE. Messenger action ai.rootforge.os.action.BRIDGE. Never DependencyGuard. SSH is CLI/ISO fallback only.",
+        notes = "First P1 candidate. Hub Messenger client is live (MessengerFleetTransport). Hardware proof pending. EXTERNAL_NODE. Messenger action ai.rootforge.os.action.BRIDGE. Never DependencyGuard. SSH is CLI/ISO fallback only.",
     )
 
     val FILE_MANAGER = ExternalNodeSpec(
