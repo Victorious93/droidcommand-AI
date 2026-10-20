@@ -124,6 +124,42 @@ class UnifiedFleetBackupTest {
     }
 
     @Test
+    fun `VictorSpoof twilio authToken and numberPool payloads are refused`() {
+        val payloads = listOf(
+            """{"twilio":"AC"}""",
+            """{"TwilioAccountSid":"AC"}""",
+            """{"authToken":"x"}""",
+            """{"auth_token":"x"}""",
+            """{"numberPool":["+15555550100"]}""",
+            """{"ownedNumberPool":[]}""",
+        )
+        payloads.forEach { payload ->
+            val error = assertFailsWith<IllegalArgumentException>(payload) {
+                UnifiedFleetBackupCodec.encode(
+                    UnifiedFleetBackup(
+                        createdAtMs = 1,
+                        sourceNodeRef = "victorspoof-1",
+                        wrapping = BackupWrapping.NONE,
+                        entries = listOf(
+                            UnifiedBackupEntry(
+                                packageName = FleetRemoteEnvelope.VICTOR_SPOOF_PACKAGE,
+                                schemaVersion = 1,
+                                clearPayload = payload,
+                            ),
+                        ),
+                    ),
+                )
+            }
+            val lower = error.message!!.lowercase()
+            assertTrue(
+                lower.contains("must not carry") &&
+                    (lower.contains("twilio") || lower.contains("auth") || lower.contains("number")),
+                "refused '$payload' with: ${error.message}",
+            )
+        }
+    }
+
+    @Test
     fun `import skip keeps live ids adds missing and never enables external control`() {
         val bundle = UnifiedFleetBackupCodec.controllerClearEntry(local(), "controller")
         val report = UnifiedFleetBackupImporter().import(

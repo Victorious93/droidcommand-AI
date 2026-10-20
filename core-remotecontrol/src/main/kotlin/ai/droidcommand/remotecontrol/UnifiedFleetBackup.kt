@@ -224,14 +224,36 @@ object FleetBackupPrivacy {
         "cookie",
         "authorization",
         "bearer",
+        // VictorSpoof isolated fleet secrets — a spoof node must never export these.
+        "twilio",
+        "authtoken",
+        "auth_token",
+        "auth-token",
+        "numberpool",
+        "number_pool",
+        "number-pool",
     )
+
+    /**
+     * VictorSpoof Twilio creds + owned-number pool. Matched as
+     * case-insensitive substrings (so `twilioAccountSid` /
+     * `ownedNumberPool` also fail closed).
+     */
+    val VICTOR_SPOOF_SUBSTRINGS = listOf("twilio", "authtoken", "numberpool")
 
     fun assertSafeJson(raw: String) {
         val folded = raw.lowercase()
+        val compact = folded.replace("_", "").replace("-", "")
         FORBIDDEN_KEY_FRAGMENTS.forEach { fragment ->
-            val needle = "\"$fragment\""
-            val alt = "\"${fragment.replace("_", "")}\""
+            val lower = fragment.lowercase()
+            val needle = "\"$lower\""
+            val alt = "\"${lower.replace("_", "").replace("-", "")}\""
             if (folded.contains(needle) || folded.contains(alt)) {
+                throw IllegalArgumentException("backup payload must not carry '$fragment'")
+            }
+        }
+        VICTOR_SPOOF_SUBSTRINGS.forEach { fragment ->
+            if (compact.contains(fragment)) {
                 throw IllegalArgumentException("backup payload must not carry '$fragment'")
             }
         }

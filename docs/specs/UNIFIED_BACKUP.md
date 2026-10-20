@@ -162,6 +162,9 @@ variants (`api_key`, `apiKey`, …):
 - signing keys, keystore passwords, private keys, cert PEMs
 - API tokens / API keys / bearer tokens
 - VictorSMS secrets, code word, sender whitelist
+- VictorSpoof Twilio credentials and owned-number pool (`twilio`,
+  `authToken`, `numberPool` — case-insensitive substrings; a spoof
+  node must **never** export these)
 - plaintext passwords, cookies
 
 Refusal is `invalid_parameters`, not a silent strip. The #233 local

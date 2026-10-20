@@ -444,7 +444,8 @@ as aliases. In-memory aggregate only. No live bind.
 schemaVersion, ciphertext\|clearPayload}] }`. Ops `config.export` /
 `config.import` (`kind=action`, `remoteAllowed=false` by default,
 `requiresConfirm=true` on import). AES-256-GCM; never signing keys / API
-tokens / VictorSMS secrets / plaintext passwords. Import dry-run +
+tokens / VictorSMS secrets / VictorSpoof Twilio creds or owned-number
+pool / plaintext passwords. Import dry-run +
 conflict policy (`skip` \| `overwrite` \| `merge-by-id`); **never**
 auto-enables `remote.command`. The #233 controller-local JSON is the
 `ai.droidcommand.app` entry. No live bind.
