@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="assets/logo.png" alt="droidcommand-AI logo" width="200">
+</p>
+
+<p align="center">
   <img src="docs/images/logo.jpg" alt="DroidCommand AI logo" width="200">
 </p>
 
