@@ -122,6 +122,73 @@ class RemoteCommandDispatcherTest {
     }
 
     @Test
+    fun `blank or malformed targetNodeRef is invalid_parameters`() {
+        val blank = assertIs<RemoteDispatchResult.Rejected>(
+            dispatcher.dispatch(rawParameters(targetNodeRef = ""), source()),
+        )
+        assertEquals(RemoteErrorCategory.INVALID_PARAMETERS, blank.category)
+        val spaced = assertIs<RemoteDispatchResult.Rejected>(
+            dispatcher.dispatch(
+                envelope(
+                    actionRef = "ping",
+                    nonce = "c".repeat(32),
+                    timestampMs = now,
+                    targetNodeRef = "controller node",
+                ),
+                source(),
+            ),
+        )
+        assertEquals(RemoteErrorCategory.INVALID_PARAMETERS, spaced.category)
+        assertTrue(spaced.reason.contains("malformed"), spaced.reason)
+        val badSms = assertIs<RemoteDispatchResult.Rejected>(
+            dispatcher.dispatch(
+                envelope(
+                    actionRef = "ping",
+                    nonce = "d".repeat(32),
+                    timestampMs = now,
+                    targetNodeRef = "victorsms-not-32-hex",
+                ),
+                source(),
+            ),
+        )
+        assertEquals(RemoteErrorCategory.INVALID_PARAMETERS, badSms.category)
+    }
+
+    @Test
+    fun `unknown targetNodeRef is not_found`() {
+        val rejected = assertIs<RemoteDispatchResult.Rejected>(
+            dispatcher.dispatch(
+                envelope(
+                    actionRef = "ping",
+                    nonce = "e".repeat(32),
+                    timestampMs = now,
+                    targetNodeRef = "no-such-node",
+                ),
+                source(),
+            ),
+        )
+        assertEquals(RemoteErrorCategory.NOT_FOUND, rejected.category)
+        assertTrue(rejected.reason.contains("unknown targetNodeRef"), rejected.reason)
+    }
+
+    @Test
+    fun `known unpaired targetNodeRef is not_paired`() {
+        val rejected = assertIs<RemoteDispatchResult.Rejected>(
+            dispatcher.dispatch(
+                envelope(
+                    actionRef = "ping",
+                    nonce = "f".repeat(32),
+                    timestampMs = now,
+                    targetNodeRef = VictorSpoofRegistry.ID,
+                ),
+                source(),
+            ),
+        )
+        assertEquals(RemoteErrorCategory.NOT_PAIRED, rejected.category)
+        assertTrue(rejected.reason.contains("not paired"), rejected.reason)
+    }
+
+    @Test
     fun `sms rejects an unknown actionRef as not_found`() {
         val rejected = assertIs<RemoteDispatchResult.Rejected>(
             dispatcher.dispatch(envelope(actionRef = "nope", timestampMs = now), source()),

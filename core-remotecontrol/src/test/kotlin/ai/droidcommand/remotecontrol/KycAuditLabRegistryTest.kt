@@ -94,6 +94,14 @@ class KycAuditLabRegistryTest {
 
     @Test
     fun `remote command targeting KYC is OFF by default`() {
+        store.save(
+            store.load().copy(
+                pairings = store.load().pairings + pairing(
+                    sourceNodeRef = KycAuditLabRegistry.ID,
+                    packageName = KycAuditLabRegistry.PACKAGE,
+                ),
+            ),
+        )
         val rejected = assertIs<RemoteDispatchResult.Rejected>(
             dispatcher.dispatch(
                 envelope(
@@ -111,6 +119,11 @@ class KycAuditLabRegistryTest {
             KycAuditLabRegistry.forbidsRemote(
                 FleetRemoteEnvelope.OP_REMOTE_COMMAND,
                 "kyc-auditlab",
+            ),
+        )
+        store.save(
+            store.load().copy(
+                pairings = store.load().pairings.filterNot { it.sourceNodeRef == KycAuditLabRegistry.ID },
             ),
         )
     }

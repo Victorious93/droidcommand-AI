@@ -89,7 +89,10 @@ data class FleetRemoteEnvelope(
 
         const val DEFAULT_TTL_MS = 120_000L
         const val MAX_TTL_MS = 300_000L
-        const val SKEW_MS = 120_000L
+
+        /** Future-skew allowance only. Past validity is TTL-only. */
+        const val FUTURE_SKEW_MS = 120_000L
+
         const val REPLAY_RETENTION_MS = 10 * 60 * 1000L
 
         const val ON_ERROR_ABORT = "abort"

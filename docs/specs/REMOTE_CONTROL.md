@@ -142,6 +142,23 @@ field name for issued-at is **`timestampMs`**, not `issuedAt`.
 | `ttlMs` | number | Default `120000`. Max `300000`. |
 | `destructive` | bool | **ADVISORY ONLY.** Never used to authorize. |
 
+### Casing
+
+Two JSON casings, on purpose. Nodes must not mix them.
+
+**Envelope fields** (inside `parameters`, the TERMUX_IPC JSON blob, and
+the BOUND_COMPANION field map) are **camelCase**: `targetNodeRef`,
+`actionRef`, `args`, `nonce`, `timestampMs`, `ttlMs`, `destructive`,
+`trigger`.
+
+**Outer BridgeRequest / BridgeResponse** wrappers are **snake_case**:
+`protocol_major`, `protocol_minor` (optional; **not** required on
+`BridgeRequest`), `request_id`, `target_node_id`, `operation`,
+`timeout_ms`, `parameters`.
+
+`requestId` is the logical field; on EXTERNAL_NODE it **is** the outer
+`request_id` and is **not** repeated inside `parameters`.
+
 `macro.step` / `macro.run` keep their existing step fields; they use the
 same top-level anti-replay fields (do **not** nest them).
 
@@ -276,7 +293,12 @@ Reject:
 |---|---|
 | seen `(sourceNodeRef, nonce)` | `replay_detected` |
 | `now > timestampMs + ttlMs` | `expired` |
-| `\|now - timestampMs\| > 120000` | `expired` (clock skew) |
+| `timestampMs > now + 120000` | `expired` (future skew only) |
+
+The 120s window is a **future-skew allowance only**, not a two-sided
+cap. Past validity is TTL-only, so the full 300s max TTL is usable. A
+request with `timestampMs = now - 200000` and `ttlMs = 300000` is still
+valid. Do **not** apply `|now - timestampMs| > 120000`.
 
 In-memory in this skeleton (lost on process death). Not a MAC.
 
@@ -291,6 +313,20 @@ Extend `{ invalid_parameters, not_paired, not_found, internal }` with:
 `capability_off`.
 
 Modeled as `RemoteErrorCategory` in `core-remotecontrol`.
+
+### `targetNodeRef` errors
+
+Destination resolution for envelope `targetNodeRef` (not source identity):
+
+| Condition | Code |
+|---|---|
+| blank / malformed | `invalid_parameters` |
+| unknown / unresolvable | `not_found` |
+| known (catalog id, package, stored target, or well-formed prefix such as `victorsms-<32 hex>`) but unpaired | `not_paired` |
+
+The literal `controller` is always resolvable (the hub itself) and does
+not need a `DevicePairing` row. Source pairing is a separate, earlier
+trust-pipeline check.
 
 ---
 
@@ -419,7 +455,7 @@ WIPE/POWER_OFF/LOCK/CUSTOM). Live RustDesk is a stub.
 | EXTERNAL_NODE BridgeRequest binding | implemented, unit-tested |
 | BOUND_COMPANION CommandEnvelope field map | implemented, unit-tested (Kotlin record; live AIDL not bumped — parcel fields stay `nonce`/`timestampMs`/`ttlMs`) |
 | TERMUX_IPC JSON-blob extra | implemented, unit-tested |
-| ReplayGuard seen-nonce cache keyed by `(sourceNodeRef, nonce)` | implemented, unit-tested (replay / ttl / skew) |
+| ReplayGuard seen-nonce cache keyed by `(sourceNodeRef, nonce)` | implemented, unit-tested (replay / ttl / future-skew only) |
 | Trust pipeline (pairing → external-control OFF → replay → policy) | implemented, unit-tested |
 | `RemoteErrorCategory` | implemented, unit-tested |
 | `OpDescriptor` + `capabilities.get` | implemented, unit-tested |

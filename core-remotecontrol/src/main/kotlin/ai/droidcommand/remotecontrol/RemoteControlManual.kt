@@ -44,9 +44,14 @@ object RemoteControlManual {
         nonce, timestampMs, ttlMs.
         Plus requestId (BridgeRequest request_id), targetNodeRef, actionRef,
         args, destructive (advisory only). Replay is keyed by
-        (sourceNodeRef, nonce). Authorization is package+cert
-        (sendingUid), never a payload field. trigger extras are
-        informational only.
+        (sourceNodeRef, nonce). Past timestampMs + ttlMs is expired; a
+        timestamp more than 120s in the future is expired. The 120s
+        window is future-skew only — past validity is TTL-only.
+        targetNodeRef blank/malformed → invalid_parameters; unknown →
+        not_found; known but unpaired → not_paired. Envelope fields
+        inside parameters are camelCase; the outer BridgeRequest wrapper
+        is snake_case. Authorization is package+cert (sendingUid), never
+        a payload field. trigger extras are informational only.
 
         Generic command surface
         capabilities.get advertises protocol minor 1 and per-op descriptors

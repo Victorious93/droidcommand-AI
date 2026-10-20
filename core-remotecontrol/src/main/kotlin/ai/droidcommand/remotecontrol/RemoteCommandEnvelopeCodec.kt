@@ -14,6 +14,12 @@ import kotlinx.serialization.json.jsonObject
  * [BridgeRequest]: [FleetRemoteEnvelope.requestId] **is** `request_id`.
  * Anti-replay fields serialize at the top level of `parameters`
  * (`nonce` / `timestampMs` / `ttlMs`), never under `auth`.
+ *
+ * Casing: envelope fields inside `parameters` / Termux blob are camelCase
+ * (`targetNodeRef`, `actionRef`, `args`, `nonce`, `timestampMs`, `ttlMs`,
+ * `destructive`, `trigger`). The outer BridgeRequest/BridgeResponse
+ * wrapper is snake_case (`protocol_major`, `request_id`, `target_node_id`,
+ * `operation`, `timeout_ms`, `parameters`).
  */
 object RemoteCommandEnvelopeCodec {
     private val json = Json {

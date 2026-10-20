@@ -38,6 +38,12 @@ class RemoteCommandDispatcher(
         operation: String = FleetRemoteEnvelope.OP_REMOTE_COMMAND,
     ): RemoteDispatchResult {
         TrustPipeline.evaluate(source, store.load(), envelope, replayGuard)?.let { return it }
+        TargetNodeRefValidator.classify(envelope.targetNodeRef, store.load())?.let { category ->
+            return TrustPipeline.reject(
+                category,
+                TargetNodeRefValidator.rejectReason(category, envelope.targetNodeRef),
+            )
+        }
         consumeTray(envelope, source)
         val op = operation.ifBlank { FleetRemoteEnvelope.OP_REMOTE_COMMAND }
         return when (op) {

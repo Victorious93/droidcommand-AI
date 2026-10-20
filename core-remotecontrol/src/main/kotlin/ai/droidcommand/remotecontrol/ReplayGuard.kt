@@ -1,7 +1,5 @@
 package ai.droidcommand.remotecontrol
 
-import kotlin.math.abs
-
 /**
  * Seen-nonce cache keyed by ([SourceIdentity.sourceNodeRef], nonce).
  * Retention ≥ 10 minutes. Duplicate (source, nonce) → replay_detected.
@@ -10,11 +8,14 @@ import kotlin.math.abs
  * Reject:
  * - seen (sourceNodeRef, nonce) → [RemoteErrorCategory.REPLAY_DETECTED]
  * - `now > timestampMs + ttlMs` → [RemoteErrorCategory.EXPIRED]
- * - `|now - timestampMs| > 120000` → [RemoteErrorCategory.EXPIRED] (clock skew)
+ * - `timestampMs > now + 120000` → [RemoteErrorCategory.EXPIRED]
+ *   (future-skew allowance only — not a two-sided cap)
+ *
+ * Past validity is TTL-only, so the full 300s max TTL is usable.
  */
 class ReplayGuard(
     private val retentionMs: Long = FleetRemoteEnvelope.REPLAY_RETENTION_MS,
-    private val skewMs: Long = FleetRemoteEnvelope.SKEW_MS,
+    private val futureSkewMs: Long = FleetRemoteEnvelope.FUTURE_SKEW_MS,
     private val maxNonces: Int = DEFAULT_MAX_NONCES,
     private val nowMs: () -> Long = { System.currentTimeMillis() },
 ) {
@@ -36,7 +37,7 @@ class ReplayGuard(
         if (now > timestampMs + ttl) {
             return ReplayDecision.Reject(RemoteErrorCategory.EXPIRED)
         }
-        if (abs(now - timestampMs) > skewMs) {
+        if (timestampMs > now + futureSkewMs) {
             return ReplayDecision.Reject(RemoteErrorCategory.EXPIRED)
         }
         val key = SeenNonce(sourceNodeRef, nonce)
