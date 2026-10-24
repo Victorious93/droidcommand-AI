@@ -56,7 +56,7 @@ private fun FleetNodeState.last(): FleetCommandRecord = checkNotNull(lastCommand
 private val HACKERAI = FleetNode("hackerai", "HackerAI", FleetIntegrationClass.BOUND_COMPANION, FleetHonestyStatus.PARTIAL, "ai.hackerai.companion")
 private val EDL = FleetNode.from(KnownFleet.EDL_COMMANDER, packageName = "ai.edlcommander.companion")
 private val ROOTFORGE = FleetNode.from(KnownFleet.ROOTFORGE)
-private val FILE_MANAGER = FleetNode.from(KnownFleet.FILE_MANAGER, packageName = "ai.victorious.filemanager")
+private val FILE_MANAGER = FleetNode.from(KnownFleet.FILE_MANAGER, packageName = "ai.victorious.victorfiles")
 private val VICTORSUITE = FleetNode.from(KnownFleet.VICTORSUITE, packageName = "com.termux")
 private val KYC = FleetNode.from(KnownFleet.KYC_AUDITLAB)
 private val ALL_NODES = listOf(HACKERAI, EDL, ROOTFORGE, FILE_MANAGER, VICTORSUITE, KYC)

@@ -216,7 +216,7 @@ class FleetCatalogTest {
         assertTrue(pentest.reason.contains("awaiting the base companion repo"))
         val fileManager = tools.first { it.spec.name == "filemanager_status" }.execute(emptyMap()) as ToolResult.Failure
         assertTrue(fileManager.reason.contains("does not bind Messenger"))
-        assertTrue(fileManager.reason.contains("ai.victorious.filemanager.action.BRIDGE"))
+        assertTrue(fileManager.reason.contains("ai.victorious.victorfiles.action.BRIDGE"))
         val keyboard = tools.first { it.spec.name == "keyboard_status" }.execute(emptyMap()) as ToolResult.Failure
         assertTrue(keyboard.reason.contains("does not bind Messenger"))
         assertTrue(keyboard.reason.contains("com.victorious.keyboard.action.BRIDGE"))
@@ -326,8 +326,8 @@ class FleetCatalogTest {
         assertTrue(KnownFleet.KYC_AUDITLAB.expectedSigningCertSha256.isEmpty())
         assertEquals("Victorious93/EDL-Commander", KnownFleet.EDL_COMMANDER.repo)
         assertEquals("Victorious93/File-Manager", KnownFleet.FILE_MANAGER.repo)
-        assertTrue(KnownFleet.FILE_MANAGER.packageOrBinary.contains("ai.victorious.filemanager"))
-        assertTrue(KnownFleet.FILE_MANAGER.transports.any { it.contains("ai.victorious.filemanager.action.BRIDGE") })
+        assertTrue(KnownFleet.FILE_MANAGER.packageOrBinary.contains("ai.victorious.victorfiles"))
+        assertTrue(KnownFleet.FILE_MANAGER.transports.any { it.contains("ai.victorious.victorfiles.action.BRIDGE") })
         assertTrue(KnownFleet.FILE_MANAGER.notes.contains("Never DependencyGuard"))
         assertTrue(KnownFleet.FILE_MANAGER.notes.contains("never KnownCompanions"))
         assertTrue(KnownFleet.FILE_MANAGER.notes.contains("dca_required:false"))
@@ -489,7 +489,7 @@ class FleetCatalogTest {
         assertTrue(text.contains("None is LIVE"))
         assertTrue(text.contains("Pentest (when repo exists)"))
         assertTrue(text.contains("RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof/Flash/VictorLaunch/KYC companion Messenger is not that"))
-        assertTrue(text.contains("ai.victorious.filemanager.action.BRIDGE"))
+        assertTrue(text.contains("ai.victorious.victorfiles.action.BRIDGE"))
         assertTrue(text.contains("com.victorious.keyboard.action.BRIDGE"))
         assertTrue(text.contains("com.victorious.mesh.action.BRIDGE"))
         assertTrue(text.contains("com.victorious.browser.action.BRIDGE"))
@@ -590,7 +590,7 @@ class FleetCatalogTest {
             catalog.first { it.packageName == "com.victorious.keyboard.bench" }.expectedCerts.isEmpty(),
         )
         assertTrue(
-            catalog.first { it.packageName == "ai.victorious.filemanager" }.expectedCerts.isEmpty(),
+            catalog.first { it.packageName == "ai.victorious.victorfiles" }.expectedCerts.isEmpty(),
         )
         assertTrue(
             catalog.first { it.packageName == "com.victorious.sms" }.expectedCerts.isEmpty(),
