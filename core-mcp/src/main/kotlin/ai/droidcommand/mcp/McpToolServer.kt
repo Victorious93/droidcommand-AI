@@ -18,6 +18,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.io.asSink
 import kotlinx.io.asSource
 import kotlinx.io.buffered
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
@@ -51,7 +52,10 @@ import kotlinx.serialization.json.JsonPrimitive
  * `Map<String, String>`, but MCP arguments arrive as a JSON object whose
  * values can be any JSON type. A JSON primitive is converted via its raw
  * text form (e.g. `42` -> `"42"`, matching how existing tools like
- * `set_volume` already parse a numeric string themselves). A JSON array or
+ * `set_volume` already parse a numeric string themselves). A JSON `null` is
+ * dropped, exactly as if the client had omitted the argument: an explicit
+ * `null` for an optional parameter is routine and must not reach a tool as the
+ * four-character text `null`. A JSON array or
  * nested object is **no longer dropped**: it is re-serialized to its
  * compact JSON text form (e.g. `["a","b"]` -> the string `["a","b"]`) and
  * passed through unchanged, so a tool that wants structured data can parse
@@ -91,6 +95,7 @@ class McpToolServer(
         for (spec in registry.list(mode, initiator)) {
             server.addTool(name = spec.name, description = spec.description) { request ->
                 val input = request.arguments
+                    ?.filterValues { it !is JsonNull }
                     ?.mapValues { (_, value) -> (value as? JsonPrimitive)?.content ?: value.toString() }
                     .orEmpty()
                 val result = executor.run(spec.name, input, mode = mode, initiator = initiator)

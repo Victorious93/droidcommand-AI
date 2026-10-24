@@ -323,4 +323,43 @@ class AdbRootExecutorTest {
         assertIs<RootExecutionResult.Success>(result)
         assertEquals("hello-from-env\n", result.stdout)
     }
+
+    @Test
+    fun `underscore and digit-bearing environment variable names are still accepted`() {
+        val executor = AdbRootExecutor(adbExecutable = writeScript("adb", adbScript()), suExecutable = writeScript("su", suScriptAvailable()))
+
+        val result = executor.execute(
+            RootCommand(
+                executable = "sh",
+                args = listOf("-c", "echo \$_ADB_ROOT_TEST_1"),
+                environment = mapOf("_ADB_ROOT_TEST_1" to "ok"),
+            ),
+        )
+
+        assertIs<RootExecutionResult.Success>(result)
+        assertEquals("ok\n", result.stdout)
+    }
+
+    @Test
+    fun `an environment variable name that is not a plain shell identifier is refused before anything runs`() {
+        val executor = AdbRootExecutor(adbExecutable = writeScript("adb", adbScript()), suExecutable = writeScript("su", suScriptAvailable()))
+        val injectionMarker = File(tempDir, "env-name-injection-marker")
+
+        // A name is written unquoted in front of the command, so these used to be interpreted by the root shell.
+        val hostileNames = listOf(
+            "A=1; touch ${injectionMarker.absolutePath}; B",
+            "A\$(touch ${injectionMarker.absolutePath})",
+            "A B",
+            "1ABC",
+            "A-B",
+            "A\nB",
+            "",
+        )
+        for (name in hostileNames) {
+            val result = executor.execute(RootCommand(executable = "true", environment = mapOf(name to "v")))
+            assertIs<RootExecutionResult.Failure>(result, "name '$name'")
+            assertTrue(result.reason.contains("environment variable names"))
+        }
+        assertFalse(injectionMarker.exists(), "a variable name must never be interpreted as a command")
+    }
 }

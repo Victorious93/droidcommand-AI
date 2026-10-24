@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import java.io.IOException
+import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
@@ -48,7 +49,10 @@ private data class GrantRecordDto(
  * `JsonFileKnowledgeStore` already uses. [issue] fails closed at [capacity]
  * exactly like [InMemoryGrantStore], counting existing grant files rather
  * than trusting an in-process counter, so capacity is enforced correctly
- * even across a restart.
+ * even across a restart. As there, only live grants use up capacity (spent,
+ * revoked and expired records stay on disk but are not counted, and a record
+ * that cannot be read counts as live), and [issue] never overwrites a record:
+ * a revoked or spent grant cannot be revived by issuing its id again.
  */
 class JsonFileGrantStore(private val directory: Path, private val capacity: Int = 10_000) : GrantStore {
     private val json = Json {
@@ -62,16 +66,19 @@ class JsonFileGrantStore(private val directory: Path, private val capacity: Int 
     }
 
     override fun issue(grant: Grant): Boolean = synchronized(lock) {
-        if (count() >= capacity) return false
-        write(
-            GrantRecordDto(
-                id = grant.id,
-                capability = grant.capability,
-                issuedAt = grant.issuedAt.toString(),
-                expiresAt = grant.expiresAt?.toString(),
-                singleUse = grant.singleUse,
-            ),
+        if (count() >= capacity && liveCount(Instant.now()) >= capacity) return false
+        val record = GrantRecordDto(
+            id = grant.id,
+            capability = grant.capability,
+            issuedAt = grant.issuedAt.toString(),
+            expiresAt = grant.expiresAt?.toString(),
+            singleUse = grant.singleUse,
         )
+        try {
+            write(record, createOnly = true)
+        } catch (e: FileAlreadyExistsException) {
+            return false
+        }
         true
     }
 
@@ -111,13 +118,39 @@ class JsonFileGrantStore(private val directory: Path, private val capacity: Int 
         Files.newDirectoryStream(directory, "*$EXTENSION").use { stream -> return stream.count() }
     }
 
-    private fun write(record: GrantRecordDto) {
+    /** Grants whose record says they can still be used: not revoked, not a spent single-use grant, not expired. */
+    private fun liveCount(now: Instant): Int {
+        if (!Files.isDirectory(directory)) return 0
+        Files.newDirectoryStream(directory, "*$EXTENSION").use { stream -> return stream.count { isLive(it, now) } }
+    }
+
+    /** A record that cannot be read counts as live: corruption must never free up capacity. */
+    private fun isLive(file: Path, now: Instant): Boolean = try {
+        val record = json.decodeFromString(GrantRecordDto.serializer(), Files.readString(file))
+        val expiresAt = record.expiresAt?.let(::parseInstant)
+        !record.revoked && !(record.singleUse && record.consumed) && (expiresAt == null || !now.isAfter(expiresAt))
+    } catch (e: IOException) {
+        true
+    } catch (e: SerializationException) {
+        true
+    }
+
+    /** With [createOnly] the write fails with [FileAlreadyExistsException] instead of replacing an existing record. */
+    private fun write(record: GrantRecordDto, createOnly: Boolean = false) {
         val file = fileFor(record.id)
         val bytes = json.encodeToString(GrantRecordDto.serializer(), record).toByteArray()
-        Files.write(file, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)
+        if (createOnly) {
+            // CREATE_NEW is atomic, so of two racing issuers of one id exactly one wins.
+            Files.write(file, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)
+        } else {
+            Files.write(file, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)
+        }
     }
 
     private fun read(id: String): GrantRecordDto? {
+        // An id outside ID_PATTERN can never have been issued, so it is unknown rather than an error: check, consume
+        // and revoke take ids from callers, and only issue (which goes through fileFor) rejects a malformed one.
+        if (!ID_PATTERN.matches(id)) return null
         val file = fileFor(id)
         if (!Files.isRegularFile(file)) return null
         return try {

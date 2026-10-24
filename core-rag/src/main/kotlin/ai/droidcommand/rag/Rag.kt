@@ -37,7 +37,7 @@ class TextChunker(private val size: Int = 512, private val overlap: Int = 64) {
     }
 
     fun chunk(docId: String, text: String): List<Chunk> {
-        val words = text.split(WHITESPACE).filter { it.isNotEmpty() }
+        val words = words(text)
         if (words.isEmpty()) return emptyList()
         val step = size - overlap
         val out = mutableListOf<Chunk>()
@@ -51,8 +51,26 @@ class TextChunker(private val size: Int = 512, private val overlap: Int = 64) {
         return out
     }
 
-    private companion object {
-        val WHITESPACE = Regex("\\s+")
+    /**
+     * The whitespace-separated words of [text], where whitespace is any Unicode space. A regex `\s` would only match
+     * ASCII whitespace, so text separated by no-break spaces (common in PDF extraction) would never split: a long
+     * document would become one chunk far larger than the embedder's context.
+     */
+    private fun words(text: String): List<String> {
+        val words = ArrayList<String>()
+        var start = -1
+        for (i in text.indices) {
+            if (text[i].isWhitespace()) {
+                if (start >= 0) {
+                    words += text.substring(start, i)
+                    start = -1
+                }
+            } else if (start < 0) {
+                start = i
+            }
+        }
+        if (start >= 0) words += text.substring(start)
+        return words
     }
 }
 

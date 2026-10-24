@@ -3,6 +3,7 @@ package ai.droidcommand.remote.pairing
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.net.InetSocketAddress
+import java.net.ServerSocket
 import java.net.Socket
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
@@ -140,6 +141,51 @@ class PairedSocketTest {
             assertEquals(-1, DataInputStream(socket.getInputStream()).read())
         }
         assertEquals(0, handled.get())
+    }
+
+    @Test
+    fun `a handshake frame no real handshake needs is refused at once, even if a record could be that large`() {
+        val address = startServer(handshakeTimeout = Duration.ofSeconds(10))
+        Socket(address.address, address.port).use { socket ->
+            socket.soTimeout = 2_500
+            val out = DataOutputStream(socket.getOutputStream())
+            out.writeByte(Frames.CLIENT_HELLO.toInt())
+            out.writeInt(1_000_000) // within MAX_PAYLOAD, yet nothing before authentication is anywhere near that big
+            out.flush()
+            // The server hangs up now; it must not sit waiting (up to the handshake timeout) for a megabyte.
+            assertEquals(-1, DataInputStream(socket.getInputStream()).read())
+        }
+        assertEquals(0, handled.get())
+    }
+
+    @Test
+    fun `an authenticated connection still carries a message far larger than any handshake frame`() {
+        val address = startServer()
+        val laptop = registry.pair("Laptop")
+        PairedSocketClient.connect(address, laptop.device.id, laptop.secret).use { connection ->
+            connection.send("a".repeat(600_000).toByteArray())
+            assertEquals("A".repeat(600_000), connection.receive()?.decodeToString())
+        }
+    }
+
+    @Test
+    fun `a transient accept failure does not stop the server accepting controllers`() {
+        val address = startServer()
+        // The listening socket is private; a short timeout on it makes accept() throw SocketTimeoutException, an
+        // IOException that is not "the socket was closed", standing in for a transient failure such as fd exhaustion.
+        val listening = PairedSocketServer::class.java.getDeclaredField("serverSocket")
+            .apply { isAccessible = true }
+            .get(servers.single()) as ServerSocket
+        listening.soTimeout = 150
+        Socket(address.address, address.port).close() // completes the accept() already in flight
+        Thread.sleep(500) // the loop's next accept() times out meanwhile
+        listening.soTimeout = 0
+
+        val laptop = registry.pair("Laptop")
+        PairedSocketClient.connect(address, laptop.device.id, laptop.secret, timeout = Duration.ofSeconds(3)).use { connection ->
+            connection.send("ping".toByteArray())
+            assertEquals("PING", connection.receive()?.decodeToString())
+        }
     }
 
     @Test

@@ -355,6 +355,51 @@ class AdbTermuxExecutorTest {
     }
 
     @Test
+    fun `adb output larger than the OS pipe buffer on both streams is read instead of deadlocking into a timeout`() {
+        // The script blocks on a full pipe until its output is read; reading only after it exits used to hang for
+        // the whole dispatch timeout and then report the version as unknown.
+        val dumpsys = """
+            #!/bin/sh
+            if [ "${'$'}1" = "shell" ] && [ "${'$'}2" = "dumpsys" ] && [ "${'$'}4" = "com.termux" ]; then
+              head -c 200000 /dev/zero | tr '\0' e >&2
+              head -c 200000 /dev/zero | tr '\0' x
+              echo
+              echo "    versionName=0.118.3.54"
+              exit 0
+            fi
+            exit 1
+        """.trimIndent()
+        assertEquals("0.118.3.54", executor(dumpsys).termuxPackageVersionName())
+    }
+
+    @Test
+    fun `underscore and digit-bearing environment variable names are still dispatched`() {
+        val root = FakeRootExecutor()
+        executor(rootExecutor = root).execute(TermuxCommand("true", environment = mapOf("_FOO_1" to "bar")))
+
+        val am = assertNotNull(root.amCommand)
+        val wrapped = am.args[am.args.indexOf("com.termux.RUN_COMMAND_ARGUMENTS") + 1]
+        assertTrue(wrapped.contains("_FOO_1='bar'"))
+    }
+
+    @Test
+    fun `an environment variable name that is not a plain shell identifier is refused before anything is dispatched`() {
+        val root = FakeRootExecutor()
+        val executor = executor(rootExecutor = root)
+
+        // A name is written unquoted in front of the command, so these used to reach the shell Termux runs.
+        for (name in listOf("A=1; touch /tmp/pwned; B", "A\$(touch /tmp/pwned)", "A B", "1ABC", "A-B", "A\nB", "")) {
+            val result = assertIs<TermuxExecutionResult.Failure>(
+                executor.execute(TermuxCommand("true", environment = mapOf(name to "v"))),
+                "name '$name'",
+            )
+            assertTrue(result.reason.contains("environment variable names"))
+        }
+        assertTrue(root.commands.isEmpty(), "a refused command must not reach the device at all")
+        assertFalse(recorderFile.exists())
+    }
+
+    @Test
     fun `encodeRunCommandArguments comma-separates elements and escapes literal commas and backslashes`() {
         assertEquals("-c,echo hi", encodeRunCommandArguments(listOf("-c", "echo hi")))
         assertEquals("a\\,b", encodeRunCommandArguments(listOf("a,b")))

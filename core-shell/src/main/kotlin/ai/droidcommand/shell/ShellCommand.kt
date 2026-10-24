@@ -6,6 +6,10 @@ package ai.droidcommand.shell
  * and handed to a shell (`sh -c "..."`). That is a deliberate, structural
  * choice: it makes shell-metacharacter injection impossible by
  * construction, not merely discouraged by convention.
+ *
+ * [maxOutputBytes] caps what is kept from each of stdout and stderr (decoded
+ * characters for text capture, raw bytes for binary capture) however the output
+ * is split into lines; anything beyond it is read and discarded.
  */
 data class ShellCommand(
     val executable: String,

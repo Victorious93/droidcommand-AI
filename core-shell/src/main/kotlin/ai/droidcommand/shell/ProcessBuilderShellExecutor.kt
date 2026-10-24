@@ -80,8 +80,9 @@ class ProcessBuilderShellExecutor(private val policy: ShellSecurityPolicy) : She
             return Authorization.Denied("No working directory is authorized; cannot run in '${command.workingDirectory}'")
         }
         val candidate = File(command.workingDirectory).canonicalFile
+        // Compare path elements, not characters: "/srv/work-evil" starts with the string "/srv/work" but is not inside it.
         val authorized = policy.allowedWorkingDirectories.any { allowed ->
-            candidate.path.startsWith(File(allowed).canonicalFile.path)
+            candidate.toPath().startsWith(File(allowed).canonicalFile.toPath())
         }
         if (!authorized) {
             return Authorization.Denied("Working directory '${command.workingDirectory}' is not authorized")
@@ -147,12 +148,35 @@ class ProcessBuilderShellExecutor(private val policy: ShellSecurityPolicy) : She
         return ProcessOutcome.Completed(process.exitValue(), System.currentTimeMillis() - startedAt)
     }
 
-    private fun drainText(input: InputStream, into: StringBuilder, maxBytes: Long) {
-        input.bufferedReader().forEachLine { line ->
-            if (into.length < maxBytes) {
-                into.append(line).append('\n')
+    /**
+     * Captures at most [maxChars] decoded characters, line by line like [java.io.BufferedReader.readLine]: `\n`, `\r\n`
+     * and `\r` each end a line, and every line (a final unterminated one included) is re-terminated with `\n`. Unlike
+     * `readLine`/`forEachLine` it never holds more than the cap in memory, so one enormous line can neither exhaust memory
+     * nor slip past [maxChars]. It keeps reading after the cap so the process never blocks on a full pipe.
+     */
+    private fun drainText(input: InputStream, into: StringBuilder, maxChars: Long) {
+        val reader = input.bufferedReader()
+        val chunk = CharArray(DRAIN_CHUNK_CHARS)
+        var lineOpen = false // the current line has a character, so end-of-stream still owes it a terminator
+        var afterCr = false // the previous character was '\r', so a directly following '\n' is part of the same terminator
+        while (true) {
+            val read = reader.read(chunk)
+            if (read < 0) break
+            for (i in 0 until read) {
+                val c = chunk[i]
+                if (afterCr) {
+                    afterCr = false
+                    if (c == '\n') continue
+                }
+                val terminator = c == '\n' || c == '\r'
+                if (into.length < maxChars) into.append(if (terminator) '\n' else c)
+                lineOpen = !terminator
+                afterCr = c == '\r'
             }
         }
+        if (lineOpen && into.length < maxChars) into.append('\n')
+        // Don't leave half a surrogate pair at the cut.
+        if (into.isNotEmpty() && Character.isHighSurrogate(into[into.length - 1])) into.setLength(into.length - 1)
     }
 
     /** No charset decode, no line splitting — copies raw bytes exactly as read, capped at [maxBytes]. */
@@ -171,5 +195,6 @@ class ProcessBuilderShellExecutor(private val policy: ShellSecurityPolicy) : She
     private companion object {
         const val POLL_INTERVAL_MILLIS = 50L
         const val JOIN_TIMEOUT_MILLIS = 2_000L
+        const val DRAIN_CHUNK_CHARS = 8192
     }
 }

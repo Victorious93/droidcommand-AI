@@ -201,6 +201,19 @@ class McpToolServerTest {
     }
 
     @Test
+    fun `an explicit JSON null argument is treated as absent, not passed on as the text null`() {
+        val registry = ToolRegistry().apply { register(EchoInputTool()) }
+        val executor = ToolExecutor(registry, AgentStateMachine())
+        val mcpServer = McpToolServer(registry, executor)
+
+        withMcpClient(mcpServer) { client ->
+            val result = client.callTool("echo", mapOf("text" to "hi", "optional" to null))
+            val content = assertIs<TextContent>(result.content.single())
+            assertEquals("text=hi", content.text)
+        }
+    }
+
+    @Test
     fun `executor accepts a real SecureToolExecutor, not only the plain ToolExecutor`() {
         val registry = ToolRegistry().apply { register(FixedResultTool("greet", ToolResult.Success("hi"))) }
         val secureExecutor = SecureToolExecutor(
