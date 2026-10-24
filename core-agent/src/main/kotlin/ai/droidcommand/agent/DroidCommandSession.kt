@@ -31,11 +31,12 @@ class IllegalModeSwitch(val from: AgentMode, val to: AgentMode, reason: String) 
  * [Initiator.AI] — so a tool scoped via [ToolSpec.requiredInitiator] to one
  * of them is never reachable from the other entry point either.
  *
- * [lock] guards only the [taskActive] test-and-set, not the task execution
- * itself: a mode switch attempted while a task is running must fail
- * immediately, not block until the task finishes, so the lock is never held
+ * [lock] guards only the [activeTasks] count and the mode test-and-set, not the
+ * task execution itself: a mode switch attempted while any task is running must
+ * fail immediately, not block until the task finishes, so the lock is never held
  * across a (potentially long-running) [ToolRunner.run] or
- * [ObjectiveEngine.run] call.
+ * [ObjectiveEngine.run] call. It is a count rather than a flag so that when tasks
+ * overlap, one finishing cannot re-enable switching while another is still running.
  */
 class DroidCommandSession(
     private val registry: ToolRegistry,
@@ -48,12 +49,12 @@ class DroidCommandSession(
     var mode: AgentMode = AgentMode.PILOT
         private set
 
-    @Volatile
-    private var taskActive = false
+    /** How many tasks are running right now. Read and written only under [lock]. */
+    private var activeTasks = 0
 
     fun switchMode(to: AgentMode) {
         synchronized(lock) {
-            if (taskActive) {
+            if (activeTasks > 0) {
                 throw IllegalModeSwitch(mode, to, "a task is currently active")
             }
             mode = to
@@ -69,12 +70,12 @@ class DroidCommandSession(
     ): ToolResult {
         synchronized(lock) {
             check(mode == AgentMode.PILOT) { "runPilotInstruction called while in $mode mode" }
-            taskActive = true
+            activeTasks++
         }
         try {
             return executor.run(toolName, input, retryPolicy, isCancelled, AgentMode.PILOT, initiator)
         } finally {
-            synchronized(lock) { taskActive = false }
+            synchronized(lock) { activeTasks-- }
         }
     }
 
@@ -99,7 +100,7 @@ class DroidCommandSession(
     ): ObjectiveOutcome {
         synchronized(lock) {
             check(mode == AgentMode.FORGE) { "runForgeObjective called while in $mode mode" }
-            taskActive = true
+            activeTasks++
         }
         try {
             val engine = ObjectiveEngine(
@@ -114,7 +115,7 @@ class DroidCommandSession(
             )
             return engine.run(objective, context, retryPolicy, isCancelled)
         } finally {
-            synchronized(lock) { taskActive = false }
+            synchronized(lock) { activeTasks-- }
         }
     }
 }

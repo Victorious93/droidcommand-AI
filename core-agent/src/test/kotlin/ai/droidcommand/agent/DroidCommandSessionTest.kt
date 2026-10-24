@@ -1,5 +1,8 @@
 package ai.droidcommand.agent
 
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -9,6 +12,19 @@ import kotlin.test.assertTrue
 private class SessionNoopTool(name: String, allowedModes: Set<AgentMode> = AgentMode.entries.toSet()) : Tool {
     override val spec = ToolSpec(name = name, description = "no-op", allowedModes = allowedModes)
     override fun execute(input: Map<String, String>) = ToolResult.Success("noop")
+}
+
+/** Holds its task open until [release] is counted down, so a test can overlap other tasks with it. */
+private class SessionBlockingTool(name: String) : Tool {
+    override val spec = ToolSpec(name = name, description = "blocks until released")
+    val entered = CountDownLatch(1)
+    val release = CountDownLatch(1)
+
+    override fun execute(input: Map<String, String>): ToolResult {
+        entered.countDown()
+        release.await(10, TimeUnit.SECONDS)
+        return ToolResult.Success("released")
+    }
 }
 
 private class ImmediateCompletePlanner : Planner {
@@ -104,6 +120,33 @@ class DroidCommandSessionTest {
 
         assertEquals(true, attemptedSwitchFailed)
         assertEquals(AgentMode.PILOT, session.mode) // switch never actually applied
+    }
+
+    @Test
+    fun `keeps rejecting a mode switch until every overlapping task has finished`() {
+        val blocking = SessionBlockingTool("blocking")
+        val registry = ToolRegistry().apply {
+            register(blocking)
+            register(SessionNoopTool("echo"))
+        }
+        val stateMachine = AgentStateMachine()
+        val session = DroidCommandSession(registry, ToolExecutor(registry, stateMachine, sleep = { }), stateMachine)
+
+        val running = thread { session.runPilotInstruction("blocking", emptyMap()) }
+        try {
+            assertTrue(blocking.entered.await(5, TimeUnit.SECONDS))
+            // A second task starts and finishes while the first is still running; that must not re-enable switching.
+            assertIs<ToolResult.Success>(session.runPilotInstruction("echo", emptyMap()))
+
+            assertFailsWith<IllegalModeSwitch> { session.switchMode(AgentMode.FORGE) }
+            assertEquals(AgentMode.PILOT, session.mode)
+        } finally {
+            blocking.release.countDown()
+            running.join(5_000)
+        }
+
+        session.switchMode(AgentMode.FORGE) // both tasks are over now
+        assertEquals(AgentMode.FORGE, session.mode)
     }
 
     @Test
