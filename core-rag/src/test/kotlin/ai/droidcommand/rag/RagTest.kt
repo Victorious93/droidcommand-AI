@@ -39,6 +39,19 @@ class RagTest {
     }
 
     @Test
+    fun `chunker splits on Unicode spaces such as the no-break space PDF text is full of`() {
+        val text = (1..10).joinToString(" ") { "w$it" }
+        val chunks = TextChunker(size = 4, overlap = 1).chunk("d", text)
+        assertEquals(listOf("w1 w2 w3 w4", "w4 w5 w6 w7", "w7 w8 w9 w10"), chunks.map { it.text })
+    }
+
+    @Test
+    fun `chunker treats ASCII, no-break, ideographic and line-separator spaces alike`() {
+        val text = "  a b c　d e\tf\ng  "
+        assertEquals(listOf("a b c d e f g"), TextChunker(size = 10, overlap = 0).chunk("d", text).map { it.text })
+    }
+
+    @Test
     fun `chunker rejects bad sizes`() {
         assertFailsWith<IllegalArgumentException> { TextChunker(size = 0) }
         assertFailsWith<IllegalArgumentException> { TextChunker(size = 4, overlap = 4) }
