@@ -25,7 +25,11 @@ sealed class GrantCheck {
 }
 
 interface GrantStore {
-    /** Returns false (rather than evicting an older grant) once at capacity. */
+    /**
+     * Returns false (rather than evicting an older grant) once the live grants fill the store's capacity, and also
+     * when a grant with this id was ever issued: an id is never reused, so issuing it again cannot revive a grant
+     * that was revoked or spent. Only live grants use up capacity; spent, revoked and expired ones stay on record.
+     */
     fun issue(grant: Grant): Boolean
 
     fun check(id: String?, capability: String, now: Instant = Instant.now()): GrantCheck
@@ -38,9 +42,12 @@ interface GrantStore {
 }
 
 /**
- * In-memory grant lifecycle store. Fails closed at [capacity] (refuses new
- * grants rather than evicting an older one, which would silently reopen an
- * authorization window someone believed was closed).
+ * In-memory grant lifecycle store. Fails closed once [capacity] grants are live
+ * (refuses new grants rather than evicting an older one, which would silently
+ * reopen an authorization window someone believed was closed). Spent, revoked
+ * and expired grants no longer count toward [capacity] — otherwise a long-running
+ * process would be locked out for good after [capacity] grants over its lifetime —
+ * but they stay on record, so their ids can never be issued again.
  */
 class InMemoryGrantStore(private val capacity: Int = 10_000) : GrantStore {
     private val grants = mutableMapOf<String, Grant>()
@@ -49,9 +56,17 @@ class InMemoryGrantStore(private val capacity: Int = 10_000) : GrantStore {
 
     @Synchronized
     override fun issue(grant: Grant): Boolean {
-        if (grants.size >= capacity) return false
+        if (grant.id in grants) return false
+        if (grants.size >= capacity && liveCount(Instant.now()) >= capacity) return false
         grants[grant.id] = grant
         return true
+    }
+
+    /** The same conditions [check] applies, minus the capability match. */
+    private fun liveCount(now: Instant): Int = grants.values.count { grant ->
+        grant.id !in revoked &&
+            !(grant.singleUse && grant.id in consumed) &&
+            (grant.expiresAt == null || !now.isAfter(grant.expiresAt))
     }
 
     @Synchronized
