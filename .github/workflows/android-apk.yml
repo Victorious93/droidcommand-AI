@@ -27,6 +27,10 @@ on:
           - all
           - arm64-v8a
         default: all
+      release_tag:
+        description: "Tag to publish as a debug-signed pre-release (e.g. v0.1.0-phase0.1). Empty = just build."
+        type: string
+        default: ""
   push:
     branches:
       - main
@@ -190,3 +194,44 @@ jobs:
             app/build/outputs/apk/debug/SHA256SUMS
           if-no-files-found: error
           retention-days: 7
+
+  # Manual only (workflow_dispatch with release_tag). The only job with write access: it publishes the
+  # exact APK the apk job just built. If that job fails or its artifact is missing, nothing is published.
+  publish-release:
+    name: Publish pre-release
+    needs: apk
+    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.abi == 'arm64-v8a' && 'app-arm64-debug-apk' || 'app-debug-apk' }}
+          path: dist
+
+      - name: Publish GitHub pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag }}
+          ABI: ${{ inputs.abi }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.]+)?$ ]] || { echo "bad tag: $TAG" >&2; exit 1; }
+          (cd dist && sha256sum -c SHA256SUMS)
+          cat > notes.md <<NOTES
+          Debug-signed pre-release built by CI from commit ${GITHUB_SHA} (ABIs: ${ABI}). Sideload only,
+          not Play Store or production-signed.
+          **Not device-tested**: CI built the APK, ran JVM/\`:app\` unit tests and launched it on an API 28 emulator.
+          Many backends are still stubs; expect incomplete or placeholder behaviour.
+
+          Fleet note: this build recognises VictorFiles by its new package \`ai.victorious.victorfiles\`
+          (not the old \`ai.victorious.filemanager\`). VictorFiles' bridge is still a stub, so DroidCommand
+          can find it but cannot control it yet.
+          Verify the download with \`sha256sum -c SHA256SUMS\`.
+          NOTES
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --prerelease --title "DroidCommand AI ${TAG} (debug-signed pre-release)" \
+            --notes-file notes.md --generate-notes
