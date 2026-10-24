@@ -54,7 +54,7 @@ class NodeSignatureTest {
 
     @Test
     fun `uncatalogued member is allowed under the documented fail-open default`() {
-        val decision = NodeSignatureVerifier().verify("ai.victorious.filemanager", listOf(attacker))
+        val decision = NodeSignatureVerifier().verify("ai.victorious.victorfiles", listOf(attacker))
         val allowed = assertIs<NodeSignatureDecision.Allowed>(decision)
         assertNull(allowed.matchedFingerprint)
         assertTrue(allowed.message.contains("no catalogued signing cert"))
@@ -67,7 +67,7 @@ class NodeSignatureTest {
     @Test
     fun `missing expected cert is refused when policy is fail-closed`() {
         val verifier = NodeSignatureVerifier(missingExpectedPolicy = MissingExpectedCertPolicy.REFUSE)
-        val decision = verifier.verify("ai.victorious.filemanager", listOf(attacker))
+        val decision = verifier.verify("ai.victorious.victorfiles", listOf(attacker))
         val refused = assertIs<NodeSignatureDecision.Refused>(decision)
         assertEquals(NodeSignatureRefusal.EXPECTED_CERT_MISSING, refused.kind)
         assertTrue(refused.message.contains("fail-closed"))
@@ -156,7 +156,7 @@ class NodeSignatureTest {
         assertEquals(listOf("ai.rootforge.os.debug"), KnownFleet.ROOTFORGE.androidPackages)
         assertEquals(listOf("com.termux"), KnownFleet.VICTORSUITE.androidPackages)
         assertEquals(
-            listOf("ai.victorious.filemanager", "ai.victorious.filemanager.debug"),
+            listOf("ai.victorious.victorfiles", "ai.victorious.victorfiles.debug"),
             KnownFleet.FILE_MANAGER.androidPackages,
         )
         assertEquals(
@@ -361,7 +361,7 @@ class NodeSignatureTest {
         val unstable = SigningCertSha256.parseOrThrow(
             KnownNodeSigningCatalog.FILE_MANAGER_DEBUG_UNSTABLE_CI_SECRETS,
         )
-        for (pkg in listOf("ai.victorious.filemanager", "ai.victorious.filemanager.debug")) {
+        for (pkg in listOf("ai.victorious.victorfiles", "ai.victorious.victorfiles.debug")) {
             val identity = KnownNodeSigningCatalog.identityFor(pkg)
             assertTrue(identity?.expectedCerts.isNullOrEmpty(), pkg)
             assertIs<NodeSignatureDecision.Allowed>(

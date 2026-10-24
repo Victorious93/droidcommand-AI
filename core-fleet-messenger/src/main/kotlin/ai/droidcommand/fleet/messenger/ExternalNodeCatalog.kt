@@ -53,12 +53,12 @@ object ExternalNodeCatalog {
 
     val FILE_MANAGER = ExternalNodeSpec(
         id = "file-manager",
-        displayName = "Victorious File Manager",
+        displayName = "VictorFiles",
         nodeId = "file-manager",
-        packages = listOf("ai.victorious.filemanager", "ai.victorious.filemanager.debug"),
+        packages = listOf("ai.victorious.victorfiles", "ai.victorious.victorfiles.debug"),
         capabilitiesOperation = "filemanager.capabilities.get",
         statusOperation = "filemanager.status",
-        notes = "EXTERNAL_NODE. Messenger action ai.victorious.filemanager.action.BRIDGE. Never DependencyGuard. Never AIDL.",
+        notes = "EXTERNAL_NODE. Messenger action ai.victorious.victorfiles.action.BRIDGE. Never DependencyGuard. Never AIDL.",
     )
 
     val KEYBOARD = ExternalNodeSpec(
