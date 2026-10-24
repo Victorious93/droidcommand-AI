@@ -43,6 +43,13 @@ internal object Frames {
     const val MAX_PAYLOAD = (1 shl 20) + SecureChannel.COUNTER_BYTES + SecureChannel.TAG_BYTES
     const val MAX_PEER_ID_BYTES = 256
 
+    /**
+     * Largest payload accepted from a peer that has not authenticated yet. Real handshake frames are tiny (the biggest,
+     * a client hello, is a 2-byte length, a peer id of at most [MAX_PEER_ID_BYTES] and 33 bytes of hello), so allowing
+     * [MAX_PAYLOAD] here would let any anonymous connection make the server allocate a megabyte and wait for it.
+     */
+    const val MAX_HANDSHAKE_PAYLOAD = 4 * 1024
+
     class Frame(val type: Byte, val payload: ByteArray)
 
     fun write(out: DataOutputStream, type: Byte, payload: ByteArray = ByteArray(0)) {
@@ -53,19 +60,23 @@ internal object Frames {
         out.flush()
     }
 
-    /** The next frame, or null when the peer closed the connection cleanly between frames. */
-    fun read(input: DataInputStream): Frame? {
+    /**
+     * The next frame, or null when the peer closed the connection cleanly between frames. A payload longer than
+     * [maxPayload] is refused before any of it is allocated or read.
+     */
+    fun read(input: DataInputStream, maxPayload: Int = MAX_PAYLOAD): Frame? {
         val type = input.read()
         if (type == -1) return null
         val length = input.readInt()
-        if (length < 0 || length > MAX_PAYLOAD) throw IOException("Frame length $length is out of range")
+        if (length < 0 || length > maxPayload) throw IOException("Frame length $length is out of range")
         val payload = ByteArray(length)
         input.readFully(payload)
         return Frame(type.toByte(), payload)
     }
 
+    /** The next handshake frame, which must be of [type]. Only used before the peer is authenticated, hence the small cap. */
     fun expect(input: DataInputStream, type: Byte, step: String): ByteArray {
-        val frame = read(input) ?: throw PairingRejectedException("Connection closed during $step")
+        val frame = read(input, MAX_HANDSHAKE_PAYLOAD) ?: throw PairingRejectedException("Connection closed during $step")
         if (frame.type == REJECT) throw PairingRejectedException(frame.payload.decodeToString())
         if (frame.type != type) throw IOException("Expected frame type $type during $step, got ${frame.type}")
         return frame.payload
@@ -238,7 +249,16 @@ class PairedSocketServer(
             val socket = try {
                 serverSocket.accept()
             } catch (e: IOException) {
-                return
+                if (serverSocket.isClosed) return
+                // Anything else (running out of file descriptors, say) is transient and must not stop the server for
+                // good. Back off briefly so a failure that persists doesn't turn this loop into a busy spin.
+                try {
+                    Thread.sleep(ACCEPT_RETRY_BACKOFF_MILLIS)
+                } catch (interrupted: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return
+                }
+                continue
             }
             liveSockets += socket
             executor.execute { handle(socket) }
@@ -307,5 +327,6 @@ class PairedSocketServer(
     private companion object {
         // Deliberately the same text for an unknown peer and a wrong proof.
         const val PAIRING_REJECTED = "Pairing rejected"
+        const val ACCEPT_RETRY_BACKOFF_MILLIS = 100L
     }
 }
