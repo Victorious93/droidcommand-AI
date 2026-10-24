@@ -260,7 +260,7 @@ object FleetDashboardCatalog {
     fun packagesOf(member: FleetMemberDescriptor): List<String> {
         val extras = when (member.id) {
             "rootforge" -> listOf("ai.rootforge.os", "ai.rootforge.os.debug")
-            "file-manager" -> listOf("ai.victorious.filemanager", "ai.victorious.filemanager.debug")
+            "file-manager" -> listOf("ai.victorious.victorfiles", "ai.victorious.victorfiles.debug")
             "keyboard" -> listOf(
                 "com.victorious.keyboard",
                 "com.victorious.keyboard.debug",
