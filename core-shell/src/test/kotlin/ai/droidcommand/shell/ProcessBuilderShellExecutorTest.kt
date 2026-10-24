@@ -1,5 +1,6 @@
 package ai.droidcommand.shell
 
+import java.io.File
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -127,6 +128,84 @@ class ProcessBuilderShellExecutorTest {
             executor.execute(ShellCommand(executable = "seq", args = listOf("1", "1000000"), maxOutputBytes = 100)),
         )
         assertTrue(result.stdout.length < 1000)
+    }
+
+    @Test
+    fun `caps a single very long line at maxOutputBytes instead of capturing it whole`() {
+        // One 3,000,000-character line with no newline: the cap used to be checked per line, so all of it was kept.
+        val executor = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf("sh")))
+        val result = assertIs<ShellExecutionResult.Success>(
+            executor.execute(
+                ShellCommand(executable = "sh", args = listOf("-c", "head -c 3000000 /dev/zero | tr '\\0' a"), maxOutputBytes = 100),
+            ),
+        )
+        assertEquals(100, result.stdout.length)
+    }
+
+    @Test
+    fun `still turns every line ending into a newline and terminates a final unterminated line`() {
+        val executor = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf("printf")))
+        // a CRLF b CR c LF LF d (no trailing newline)
+        val result = assertIs<ShellExecutionResult.Success>(
+            executor.execute(ShellCommand(executable = "printf", args = listOf("a\\r\\nb\\rc\\n\\nd"))),
+        )
+        assertEquals("a\nb\nc\n\nd\n", result.stdout)
+    }
+
+    @Test
+    fun `denies a sibling directory that only shares a name prefix with the authorized one`() {
+        val root = Files.createTempDirectory("droidcommand-shell-prefix").toFile()
+        try {
+            val authorized = File(root, "work").apply { mkdirs() }
+            val sibling = File(root, "work-evil").apply { mkdirs() }
+            val executor = ProcessBuilderShellExecutor(
+                ShellSecurityPolicy(allowedExecutables = setOf("pwd"), allowedWorkingDirectories = listOf(authorized.path)),
+            )
+            val result = assertIs<ShellExecutionResult.Failure>(
+                executor.execute(ShellCommand(executable = "pwd", workingDirectory = sibling.path)),
+            )
+            assertTrue(result.reason.contains("not authorized"))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `still allows a subdirectory of the authorized directory`() {
+        val root = Files.createTempDirectory("droidcommand-shell-subdir").toFile()
+        try {
+            val authorized = File(root, "work").apply { mkdirs() }
+            val child = File(authorized, "sub").apply { mkdirs() }
+            val executor = ProcessBuilderShellExecutor(
+                ShellSecurityPolicy(allowedExecutables = setOf("pwd"), allowedWorkingDirectories = listOf(authorized.path)),
+            )
+            val result = assertIs<ShellExecutionResult.Success>(
+                executor.execute(ShellCommand(executable = "pwd", workingDirectory = child.path)),
+            )
+            assertEquals(child.canonicalPath, result.stdout.trim())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `denies a symlink inside the authorized directory that points outside it`() {
+        val root = Files.createTempDirectory("droidcommand-shell-symlink").toFile()
+        try {
+            val authorized = File(root, "work").apply { mkdirs() }
+            val outside = File(root, "outside").apply { mkdirs() }
+            val link = File(authorized, "escape")
+            Files.createSymbolicLink(link.toPath(), outside.toPath())
+            val executor = ProcessBuilderShellExecutor(
+                ShellSecurityPolicy(allowedExecutables = setOf("pwd"), allowedWorkingDirectories = listOf(authorized.path)),
+            )
+            val result = assertIs<ShellExecutionResult.Failure>(
+                executor.execute(ShellCommand(executable = "pwd", workingDirectory = link.path)),
+            )
+            assertTrue(result.reason.contains("not authorized"))
+        } finally {
+            root.deleteRecursively()
+        }
     }
 
     @Test
