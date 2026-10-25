@@ -43,7 +43,7 @@ class FleetCommandsTest {
         assertTrue(text.contains("aidl=false  dependencyGuard=false"))
         assertTrue(text.contains("ai.pentestswarm.companion"))
         assertTrue(text.contains("ai.rootforge.os.action.BRIDGE"))
-        assertTrue(text.contains("ai.victorious.victorfiles.action.BRIDGE"))
+        assertTrue(text.contains("ai.victorious.filemanager.action.BRIDGE"))
         assertTrue(text.contains("com.victorious.keyboard.action.BRIDGE"))
         assertTrue(text.contains("com.victorious.mesh.action.BRIDGE"))
         assertTrue(text.contains("com.victorious.browser.action.BRIDGE"))

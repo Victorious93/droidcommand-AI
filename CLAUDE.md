@@ -350,8 +350,8 @@ shared JSON (`docs/DROIDCOMMAND_INTEGRATION.md` in `rootforge-os`, action
 `ai.rootforge.os.action.BRIDGE`, `protocol_major` 1); SSH is CLI/ISO
 fallback only. Never DependencyGuard, never a shared signing key.
 VictorFiles is a second **EXTERNAL_NODE**, **PLANNED** —
-package `ai.victorious.victorfiles`, action
-`ai.victorious.victorfiles.action.BRIDGE` already on their `main`
+package `ai.victorious.filemanager`, action
+`ai.victorious.filemanager.action.BRIDGE` already on their `main`
 (`dca_required:false` stub ops); this repo does not bind it, and must
 never get DependencyGuard / a shared signing key / `KnownCompanions` /
 AIDL. Victorious Keyboard is a third **EXTERNAL_NODE**, **PLANNED** —

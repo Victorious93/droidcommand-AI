@@ -60,7 +60,7 @@ class ShizukuToolTest {
     fun `exec parses argv and timeout`() {
         val shell = RecordingShell()
         val result = ShizukuTool(shell, ShizukuToolKind.EXEC).execute(
-            mapOf("executable" to "pm", "args" to "list packages", "timeoutMs" to "5000", "onBehalfOf" to "ai.victorious.victorfiles"),
+            mapOf("executable" to "pm", "args" to "list packages", "timeoutMs" to "5000", "onBehalfOf" to "ai.victorious.filemanager"),
         )
         assertIs<ToolResult.Success>(result)
         assertEquals(listOf("pm", "list", "packages"), shell.lastExec)

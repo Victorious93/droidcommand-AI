@@ -54,7 +54,7 @@ class FleetMessengerControllerTest {
     @Test
     fun `catalog names the documented EXTERNAL_NODE packages and read-only ops`() {
         assertEquals("ai.rootforge.os", ExternalNodeCatalog.ROOTFORGE.primaryPackage)
-        assertEquals("ai.victorious.victorfiles", ExternalNodeCatalog.FILE_MANAGER.primaryPackage)
+        assertEquals("ai.victorious.filemanager", ExternalNodeCatalog.FILE_MANAGER.primaryPackage)
         assertEquals("com.victorious.keyboard", ExternalNodeCatalog.KEYBOARD.primaryPackage)
         assertEquals("com.victorious.mesh", ExternalNodeCatalog.MESH.primaryPackage)
         assertEquals("com.victorious.browser", ExternalNodeCatalog.BROWSER.primaryPackage)

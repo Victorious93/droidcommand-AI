@@ -16,7 +16,7 @@ class FleetStatusTest {
         assertEquals("ai.edlcommander.companion.BIND", FleetCatalog.EDLCOMMANDER_BIND_ACTION)
         assertEquals("ai.edlcommander.companion.permission.BIND_COMPANION", FleetCatalog.EDLCOMMANDER_BIND_PERMISSION)
         assertEquals("ai.rootforge.os", FleetCatalog.ROOTFORGE_PACKAGE)
-        assertEquals("ai.victorious.victorfiles", FleetCatalog.FILEMANAGER_PACKAGE)
+        assertEquals("ai.victorious.filemanager", FleetCatalog.FILEMANAGER_PACKAGE)
         assertEquals("com.victorious.keyboard", FleetCatalog.KEYBOARD_PACKAGE)
         assertEquals("com.victorious.mesh", FleetCatalog.MESH_PACKAGE)
         assertEquals("com.victorious.browser", FleetCatalog.BROWSER_PACKAGE)
@@ -151,7 +151,7 @@ class FleetStatusTest {
         assertEquals(FleetInstallState.NOT_INSTALLED, fileManager.installed)
         assertTrue(fileManager.status.contains("not paired"))
         assertTrue(fileManager.member.summary.contains("Never DependencyGuard"))
-        assertTrue(fileManager.member.summary.contains("ai.victorious.victorfiles.action.BRIDGE"))
+        assertTrue(fileManager.member.summary.contains("ai.victorious.filemanager.action.BRIDGE"))
         assertFalse(fileManager.status.contains("ready", ignoreCase = true), fileManager.status)
 
         assertEquals(FleetInstallState.NOT_INSTALLED, keyboard.installed)

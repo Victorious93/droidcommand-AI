@@ -18,7 +18,7 @@ class PairingAndWireTest {
         assertEquals("request", MessengerWire.KEY_REQUEST)
         assertEquals("response", MessengerWire.KEY_RESPONSE)
         assertEquals(10_000, MessengerWire.DEFAULT_TIMEOUT_MS)
-        assertEquals("ai.victorious.victorfiles.action.BRIDGE", PairedNode.of("ai.victorious.victorfiles", "fm-1", CERT).action)
+        assertEquals("ai.victorious.filemanager.action.BRIDGE", PairedNode.of("ai.victorious.filemanager", "fm-1", CERT).action)
     }
 
     @Test

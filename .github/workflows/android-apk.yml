@@ -227,8 +227,8 @@ jobs:
           **Not device-tested**: CI built the APK, ran JVM/\`:app\` unit tests and launched it on an API 28 emulator.
           Many backends are still stubs; expect incomplete or placeholder behaviour.
 
-          Fleet note: this build recognises VictorFiles by its new package \`ai.victorious.victorfiles\`
-          (not the old \`ai.victorious.filemanager\`). VictorFiles' bridge is still a stub, so DroidCommand
+          Fleet note: this build recognises VictorFiles by its package \`ai.victorious.filemanager\`
+          (debug: \`ai.victorious.filemanager.debug\`). VictorFiles' bridge is still a stub, so DroidCommand
           can find it but cannot control it yet.
           Verify the download with \`sha256sum -c SHA256SUMS\`.
           NOTES
