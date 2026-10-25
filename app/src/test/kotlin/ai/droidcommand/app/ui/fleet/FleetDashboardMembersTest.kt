@@ -16,6 +16,7 @@ class FleetDashboardMembersTest {
         assertEquals("Talks to a rooted phone and its gadgets", members.single { it.id == "rootforge" }.role)
         assertEquals("Linux tools on this phone", members.single { it.id == "termux" }.role)
         assertTrue(members.single { it.id == "termux" }.pendingDeviceTest)
+        assertTrue(members.single { it.id == "termux" }.pendingRepackage)
         assertTrue(members.single { it.id == "rootforge" }.opensPairing)
         assertTrue(members.none { it.id == "hackerai" && it.opensPairing })
     }
@@ -31,7 +32,11 @@ class FleetDashboardMembersTest {
                 .all { it.statusLabel == FleetDashboardRows.STATUS_NOT_PAIRED },
         )
         assertTrue(
-            rows.filter { it.member.pendingDeviceTest }
+            rows.filter { it.member.pendingRepackage }
+                .all { it.statusLabel == FleetDashboardRows.STATUS_PENDING_REPACKAGE },
+        )
+        assertTrue(
+            rows.filter { it.member.pendingDeviceTest && !it.member.pendingRepackage }
                 .all { it.statusLabel == FleetDashboardRows.STATUS_PENDING },
         )
         assertTrue(rows.all { it.seenLabel == FleetDashboardRows.SEEN_NONE })

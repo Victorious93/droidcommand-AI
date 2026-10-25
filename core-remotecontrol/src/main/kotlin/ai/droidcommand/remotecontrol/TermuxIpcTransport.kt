@@ -4,14 +4,23 @@ import ai.droidcommand.rootforge.BRIDGE_PROTOCOL_MAJOR
 import ai.droidcommand.rootforge.BridgeErrorBody
 import ai.droidcommand.rootforge.BridgeResponse
 import ai.droidcommand.security.FleetIntegrationClass
+import ai.droidcommand.termux.RunCommandContract
+import ai.droidcommand.termux.RunCommandTarget
+import ai.droidcommand.termux.RunCommandTargets
+import ai.droidcommand.termux.VictorSuiteRepackageFlag
 
 /**
- * Controller-side TERMUX_IPC sender + response parser for VictorSuite
- * (`com.termux`). Builds a `com.termux.RUN_COMMAND` extras map carrying
- * the frozen [FleetRemoteEnvelope] JSON as
- * [FleetRemoteEnvelope.TERMUX_JSON_EXTRA], and parses
- * [FleetRemoteEnvelope.TERMUX_RESPONSE_EXTRA] back into [BridgeResponse]
- * (the frozen result type).
+ * Controller-side TERMUX_IPC sender + response parser for VictorSuite.
+ * Live default is still `com.termux` / `com.termux.RUN_COMMAND`. The
+ * pending `com.victorious.suite` identity is behind
+ * [VictorSuiteRepackageFlag] / [useVictorSuiteRepackage] — off until FO
+ * go-signal + bootstrap rebuild (VictorSuite PR #51, draft).
+ *
+ * Builds a `RUN_COMMAND` extras map carrying the frozen
+ * [FleetRemoteEnvelope] JSON as [FleetRemoteEnvelope.TERMUX_JSON_EXTRA],
+ * and parses [FleetRemoteEnvelope.TERMUX_RESPONSE_EXTRA] back into
+ * [BridgeResponse] (the frozen result type). Those two extras stay
+ * `ai.droidcommand.*` either way.
  *
  * Additive and non-executing: the default [TermuxIpcSender] never
  * broadcasts. Destructive ops and `config.import` apply always return
@@ -24,6 +33,9 @@ import ai.droidcommand.security.FleetIntegrationClass
 data class TermuxIpcRequest(
     val action: String = FleetRemoteEnvelope.TERMUX_RUN_COMMAND_ACTION,
     val packageName: String = FleetRemoteEnvelope.TERMUX_PACKAGE,
+    val component: String = "$packageName/${RunCommandTargets.SERVICE_CLASS}",
+    val permission: String = "com.termux.permission.RUN_COMMAND",
+    val extrasPrefix: String = "com.termux.",
     val envelopeJson: String,
     val extras: Map<String, String>,
 ) {
@@ -76,10 +88,18 @@ class TermuxIpcTransport(
     private val nowMs: () -> Long = { System.currentTimeMillis() },
     private val externalControlEnabled: Boolean = false,
     private val sender: TermuxIpcSender = UnwiredTermuxIpcSender,
+    private val useVictorSuiteRepackage: Boolean = VictorSuiteRepackageFlag.isEnabled(),
 ) {
+    private val runCommandTarget: RunCommandTarget = RunCommandContract.target(useVictorSuiteRepackage)
+
     fun buildRequest(envelope: FleetRemoteEnvelope): TermuxIpcRequest {
         val json = TermuxIpcRemoteBinding.encodeBlob(envelope)
         return TermuxIpcRequest(
+            action = runCommandTarget.action,
+            packageName = runCommandTarget.packageName,
+            component = runCommandTarget.component,
+            permission = runCommandTarget.permission,
+            extrasPrefix = runCommandTarget.extrasPrefix,
             envelopeJson = json,
             extras = mapOf(FleetRemoteEnvelope.TERMUX_JSON_EXTRA to json),
         )
@@ -216,17 +236,18 @@ class TermuxIpcTransport(
 }
 
 /**
- * VictorSuite TERMUX_IPC catalogue: package `com.termux`, envelope v1,
- * BRIDGE_PROTOCOL 1.1. Status **PENDING** — node PR #48 (`a6f4e2a`)
- * merged; this controller slice is not device-tested.
+ * VictorSuite TERMUX_IPC catalogue. Live package stays `com.termux`
+ * until [VictorSuiteRepackageFlag] is flipped (VictorSuite PR #51 draft,
+ * PENDING-REPACKAGE). Envelope v1, BRIDGE_PROTOCOL 1.1. Node PR #48
+ * (`a6f4e2a`) merged; this controller slice is not device-tested.
  */
 object VictorSuiteRegistry {
     const val ID = "victorsuite"
     const val DISPLAY_NAME = "VictorSuite"
     const val PACKAGE = FleetRemoteEnvelope.TERMUX_PACKAGE
     const val ACTION = FleetRemoteEnvelope.TERMUX_RUN_COMMAND_ACTION
-    const val STATUS = "PENDING"
-    const val NODE_SOURCE = "VictorSuite PR #48 a6f4e2a"
+    const val STATUS = "PENDING-REPACKAGE"
+    const val NODE_SOURCE = "VictorSuite PR #48 a6f4e2a; PR #51 draft pending Don"
 
     val OPS: Set<String> = setOf(
         FleetRemoteEnvelope.OP_CAPABILITIES_GET,
@@ -248,29 +269,45 @@ object VictorSuiteRegistry {
         OpDescriptor(FleetRemoteEnvelope.OP_CONFIG_IMPORT, OpKind.ACTION, remoteAllowed = false, requiresConfirm = true),
     )
 
-    val TARGET: KnownRemoteTarget = KnownRemoteTarget(
-        id = ID,
-        displayName = DISPLAY_NAME,
-        packageName = PACKAGE,
-        bridgeAction = ACTION,
-        nodeIdPrefix = FleetRemoteEnvelope.VICTORSUITE_NODE_ID_PREFIX,
-        integrationClass = FleetIntegrationClass.TERMUX_IPC,
-        documentedDebugCertSha256 = null,
-        enforcePin = false,
-        status = STATUS,
-        isolatedFromDestructive = false,
-        cataloguedOps = OPS,
-        remoteCommandDefaultOff = true,
-        notes = "TERMUX_IPC controller transport. Action $ACTION extra " +
-            "${FleetRemoteEnvelope.TERMUX_JSON_EXTRA}; response " +
-            "${FleetRemoteEnvelope.TERMUX_RESPONSE_EXTRA}. Envelope v1, " +
-            "BRIDGE_PROTOCOL 1.1. Ops ${OPS.joinToString()}. External " +
-            "control OFF by default. Destructive and config.import apply " +
-            "always confirmation_required and are not executed. " +
-            "node.status.get is never confirmation-gated. $NODE_SOURCE. " +
-            "$STATUS — not device-tested. Signing certs stay on " +
-            "KnownFleet.VICTORSUITE (do not invent a fingerprint).",
-    )
+    val TARGET: KnownRemoteTarget get() = target()
+
+    fun runCommandTarget(
+        useVictorSuiteRepackage: Boolean = VictorSuiteRepackageFlag.isEnabled(),
+    ): RunCommandTarget = RunCommandContract.target(useVictorSuiteRepackage)
+
+    fun target(
+        useVictorSuiteRepackage: Boolean = VictorSuiteRepackageFlag.isEnabled(),
+    ): KnownRemoteTarget {
+        val ipc = runCommandTarget(useVictorSuiteRepackage)
+        return KnownRemoteTarget(
+            id = ID,
+            displayName = DISPLAY_NAME,
+            packageName = ipc.packageName,
+            bridgeAction = ipc.action,
+            nodeIdPrefix = FleetRemoteEnvelope.VICTORSUITE_NODE_ID_PREFIX,
+            integrationClass = FleetIntegrationClass.TERMUX_IPC,
+            documentedDebugCertSha256 = null,
+            enforcePin = false,
+            status = STATUS,
+            isolatedFromDestructive = false,
+            cataloguedOps = OPS,
+            remoteCommandDefaultOff = true,
+            notes = "TERMUX_IPC controller transport. Live default remains " +
+                "${RunCommandTargets.TERMUX.packageName} / ${RunCommandTargets.TERMUX.action}. " +
+                "Pending package rename to ${RunCommandTargets.VICTORSUITE_REPACKAGE.packageName} " +
+                "is behind VictorSuiteRepackageFlag " +
+                "(${VictorSuiteRepackageFlag.CONFIG_KEY}, default off). " +
+                "Action ${ipc.action} extra ${FleetRemoteEnvelope.TERMUX_JSON_EXTRA}; " +
+                "response ${FleetRemoteEnvelope.TERMUX_RESPONSE_EXTRA} " +
+                "(envelope extras unchanged either way). Envelope v1, " +
+                "BRIDGE_PROTOCOL 1.1. Ops ${OPS.joinToString()}. External " +
+                "control OFF by default. Destructive and config.import apply " +
+                "always confirmation_required and are not executed. " +
+                "node.status.get is never confirmation-gated. $NODE_SOURCE. " +
+                "$STATUS — not yet switched, not device-tested. Signing certs stay on " +
+                "KnownFleet.VICTORSUITE (do not invent a fingerprint).",
+        )
+    }
 
     fun isRegisteredOp(name: String): Boolean = name in OPS
 }

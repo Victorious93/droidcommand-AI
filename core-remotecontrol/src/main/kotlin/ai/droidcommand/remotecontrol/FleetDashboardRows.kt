@@ -21,6 +21,8 @@ data class FleetDashboardMember(
     val opensPairing: Boolean = false,
     /** Controller transport is on disk but has never run on a device. */
     val pendingDeviceTest: Boolean = false,
+    /** Live package is still `com.termux`; rename not switched yet. */
+    val pendingRepackage: Boolean = false,
 ) {
     init {
         require(id.isNotBlank()) { "id is required" }
@@ -83,6 +85,7 @@ object FleetDashboardRows {
     const val STATUS_UNKNOWN = "Unknown"
     const val STATUS_NOT_PAIRED = "Not paired"
     const val STATUS_PENDING = "PENDING"
+    const val STATUS_PENDING_REPACKAGE = "PENDING-REPACKAGE"
     const val STATUS_AWAITING = "Awaiting status"
     const val STATUS_REACHABLE = "Reachable"
     const val STATUS_TROUBLE = "Having trouble"
@@ -108,7 +111,12 @@ object FleetDashboardRows {
             member = member,
             paired = paired,
             tone = tone,
-            statusLabel = statusLabel(paired, snapshot, member.pendingDeviceTest),
+            statusLabel = statusLabel(
+                paired,
+                snapshot,
+                member.pendingDeviceTest,
+                member.pendingRepackage,
+            ),
             seenLabel = seenLabel(snapshot, nowMs),
             snapshot = snapshot,
         )
@@ -129,7 +137,9 @@ object FleetDashboardRows {
         paired: Boolean,
         snapshot: NodeStatusSnapshot?,
         pendingDeviceTest: Boolean = false,
+        pendingRepackage: Boolean = false,
     ): String = when {
+        pendingRepackage && snapshot == null -> STATUS_PENDING_REPACKAGE
         pendingDeviceTest && snapshot == null -> STATUS_PENDING
         !paired -> STATUS_NOT_PAIRED
         snapshot == null -> STATUS_AWAITING
@@ -220,6 +230,7 @@ object FleetDashboardCatalog {
         highlighted = member.id == "rootforge",
         opensPairing = member.id in PAIRING_FLOW_IDS,
         pendingDeviceTest = member.id == "victorsuite" || member.id == "termux",
+        pendingRepackage = member.id == "victorsuite" || member.id == "termux",
     )
 
     fun roleFor(id: String): String = when (id) {
@@ -249,7 +260,7 @@ object FleetDashboardCatalog {
     fun packagesOf(member: FleetMemberDescriptor): List<String> {
         val extras = when (member.id) {
             "rootforge" -> listOf("ai.rootforge.os", "ai.rootforge.os.debug")
-            "file-manager" -> listOf("ai.victorious.filemanager", "ai.victorious.filemanager.debug")
+            "file-manager" -> listOf("ai.victorious.victorfiles", "ai.victorious.victorfiles.debug")
             "keyboard" -> listOf(
                 "com.victorious.keyboard",
                 "com.victorious.keyboard.debug",

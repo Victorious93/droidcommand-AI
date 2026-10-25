@@ -49,4 +49,36 @@ class RunCommandRequestTest {
         assertTrue(RunCommandContract.shouldRequestRuntimePermission(packageInstalled = true, permissionGranted = false))
         assertFalse(RunCommandContract.shouldRequestRuntimePermission(packageInstalled = true, permissionGranted = true))
     }
+
+    @Test
+    fun `default extras keep the live com termux prefix`() {
+        val extras = RunCommandRequest.from(TermuxCommand(executable = "id", args = emptyList()))
+            .extrasWithoutPendingIntent()
+        assertTrue(extras.keys.all { it.startsWith("com.termux.") })
+        assertEquals(true, extras[RunCommandContract.EXTRA_BACKGROUND])
+        assertEquals(RunCommandContract.RUNNER_APP_SHELL, extras[RunCommandContract.EXTRA_RUNNER])
+    }
+
+    @Test
+    fun `flag-on extras use the suite prefix and package`() {
+        val target = RunCommandTargets.VICTORSUITE_REPACKAGE
+        val request = RunCommandRequest.from(
+            TermuxCommand(executable = "id", args = emptyList()),
+            commandLabel = "id",
+            target = target,
+        )
+        assertEquals("com.victorious.suite", request.packageName)
+        assertEquals("com.victorious.suite.RUN_COMMAND", request.action)
+        assertEquals("com.termux.app.RunCommandService", request.componentClass)
+        assertEquals("/data/data/com.victorious.suite/files/usr/bin/id", request.path)
+        assertEquals(target.homeDir, request.workdir)
+        val extras = request.extrasWithoutPendingIntent()
+        assertEquals(target.usrBin("id"), extras[target.extraPath])
+        assertEquals(true, extras[target.extraBackground])
+        assertEquals("id", extras[target.extraCommandLabel])
+        assertTrue(extras.keys.all { it.startsWith("com.victorious.suite.") })
+        assertTrue(extras.keys.none { it.startsWith("com.termux.") })
+        assertTrue("ai.droidcommand.REMOTE_ENVELOPE_JSON" !in extras.keys)
+        assertTrue("ai.droidcommand.REMOTE_RESPONSE_JSON" !in extras.keys)
+    }
 }

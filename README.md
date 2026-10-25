@@ -1,3 +1,29 @@
+<!-- victorious-fleet-readme-refresh:start -->
+<p align="center">
+  <img src="assets/logo.png" alt="droidcommand-AI logo" width="200">
+</p>
+
+# droidcommand-AI
+
+Fleet controller/brain — remote command and orchestration of every app in the Victorious fleet.
+
+**Package id:** `ai.droidcommand.app`
+
+**Status:** CI green / awaiting device test *(from [fleet-manifest ROADMAP](https://github.com/Victorious93/fleet-manifest/blob/main/ROADMAP.md))*
+
+## Install / build
+
+Kotlin / Jetpack Compose multi-module Gradle project. Typical: `./gradlew :app:assembleDebug` (requires Android SDK). See repo Gradle files for modules.
+
+_Steps above are taken from this repo’s build files / existing docs; anything not exercised in this refresh is unlabeled as verified on a device._
+
+## Victorious fleet
+
+- Monorepo: [https://github.com/Victorious93/victorious-fleet](https://github.com/Victorious93/victorious-fleet)
+- Fleet site: [https://victorious-framework.pages.dev](https://victorious-framework.pages.dev)
+
+<!-- victorious-fleet-readme-refresh:end -->
+
 <p align="center">
   <img src="assets/logo.png" alt="droidcommand-AI logo" width="200">
 </p>
@@ -68,7 +94,7 @@ Defined in code as `BOUND_COMPANION`, `EXTERNAL_NODE`, `TERMUX_IPC`, and
   `DependencyGuard`.
 
 AIDL + `DependencyGuard` apply **only** to bound companions (HackerAI,
-Pentest-Swarm-AI, EDL-Commander). RootForge OS, Victorious File Manager,
+Pentest-Swarm-AI, EDL-Commander). RootForge OS, VictorFiles,
 Victorious Keyboard, Victorious Mesh, VictorSuite, and KYC-AuditLab must
 not get them.
 
@@ -80,7 +106,7 @@ not get them.
 | **RootForge OS** | [Victorious93/rootforge-os](https://github.com/Victorious93/rootforge-os) | External node | Their main already has Messenger + JSON (`ai.rootforge.os.action.BRIDGE`). This repo speaks SSH fallback only. No DependencyGuard, no shared signing key | PARTIAL |
 | **KYC-AuditLab** | unpublished as of 2026-10-14 | Host process | `kyc_auditlab_status` stub — localhost simulator; hub must not call `/scope` admin | PLANNED |
 | **EDL-Commander** | `Victorious93/EDL-Commander` (APK in progress) | Bound companion | Package `ai.edlcommander.companion`. `edl_commander_status` stub. AIDL `IEdlCompanion` copied; bind action `ai.edlcommander.companion.BIND`. Owns Sahara/Firehose | PLANNED |
-| **Victorious File Manager** | [Victorious93/File-Manager](https://github.com/Victorious93/File-Manager) | External node | `filemanager_status` stub. Their main already has Messenger `ai.victorious.filemanager.action.BRIDGE`. This repo does not bind it. No DependencyGuard, no shared signing key | PLANNED |
+| **VictorFiles** | [Victorious93/File-Manager](https://github.com/Victorious93/File-Manager) | External node | `filemanager_status` stub. Their main already has Messenger `ai.victorious.victorfiles.action.BRIDGE`. This repo does not bind it. No DependencyGuard, no shared signing key | PLANNED |
 | **Victorious Keyboard** | [Victorious93/Victorious-Keyboard](https://github.com/Victorious93/Victorious-Keyboard) | External node | `keyboard_status` stub. Planned Messenger `com.victorious.keyboard.action.BRIDGE`. This repo does not bind it. Never forwards typed text/keystrokes. No DependencyGuard, no shared signing key | PLANNED |
 | **Victorious Mesh** | [Victorious93/victorious-mesh](https://github.com/Victorious93/victorious-mesh) | External node | `mesh_status` stub. Planned Messenger `com.victorious.mesh.action.BRIDGE`. Package `com.victorious.mesh` (debug==release). This repo does not bind it. Own release key. No DependencyGuard, no shared signing key | PLANNED |
 | **Victorious Browser** | unpublished as of 2026-10-18 (repo not in ratified facts) | External node | `browser_status` stub. Planned Messenger `com.victorious.browser.action.BRIDGE`. Package `com.victorious.browser`. This repo does not bind it. Own release key (CI-only; [planned/unverified]). No DependencyGuard, no shared signing key | PLANNED |

@@ -656,17 +656,22 @@ OFF by default.
 
 ## Appendix C — TERMUX_IPC (`RUN_COMMAND` JSON blob)
 
-Same logical fields. Encoding: **one JSON-blob extra** on the existing
-`com.termux.RUN_COMMAND` intent. Request extra:
-`ai.droidcommand.REMOTE_ENVELOPE_JSON`. The blob is the frozen camelCase
+Same logical fields. Encoding: **one JSON-blob extra** on the
+`RUN_COMMAND` intent. Live default action is still
+`com.termux.RUN_COMMAND`. The pending VictorSuite package rename
+(`com.victorious.suite`, VictorSuite PR #51 draft) is behind
+`DROIDCOMMAND_VICTORSUITE_REPACKAGE` (default off) — do not flip until
+FO go-signal + bootstrap rebuild. Request extra stays
+`ai.droidcommand.REMOTE_ENVELOPE_JSON` either way. The blob is the frozen camelCase
 object **including** `requestId` and the same top-level
 `nonce` / `timestampMs` / `ttlMs` / `destructive` (there is no
 BridgeRequest wrapper and no nested `auth`). Response extra (via the
-caller's `com.termux.RUN_COMMAND_PENDING_INTENT`):
+caller's `RUN_COMMAND_PENDING_INTENT`) stays
 `ai.droidcommand.REMOTE_RESPONSE_JSON`, frozen [BridgeResponse] shape
 (`protocol_major` 1, `request_id`, `ok`, `result` / `error.category`).
 
-Identity: `com.termux.permission.RUN_COMMAND` + VictorSuite
+Identity: live default `com.termux.permission.RUN_COMMAND`; flag-on
+`com.victorious.suite.permission.RUN_COMMAND`. Plus VictorSuite
 allow-external-apps allow-list. Not a new bound service.
 
 Supported ops: `capabilities.get`, `remote.command`, `macro.step`,
@@ -679,4 +684,5 @@ default. Destructive ops and `config.import` apply always return
 Controller-side `TermuxIpcTransport` builds the extras and parses the
 response. The default sender is unwired — **no live `RUN_COMMAND`
 broadcast, no privileged execution.** Node side: VictorSuite PR #48
-(`a6f4e2a`). PENDING / not device-tested.
+(`a6f4e2a`). **PENDING-REPACKAGE** / pending package rename / not yet
+switched. Live default remains `com.termux`.

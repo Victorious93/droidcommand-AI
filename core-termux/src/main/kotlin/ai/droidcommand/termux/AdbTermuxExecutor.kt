@@ -6,6 +6,7 @@ import ai.droidcommand.root.RootCommand
 import ai.droidcommand.root.RootExecutionResult
 import ai.droidcommand.root.RootExecutor
 import java.io.IOException
+import java.io.InputStream
 import java.io.StringReader
 import java.util.Properties
 import java.util.UUID
@@ -16,6 +17,42 @@ private sealed class LocalProcessResult {
     data class FailedToStart(val reason: String) : LocalProcessResult()
     data object TimedOut : LocalProcessResult()
 }
+
+/**
+ * Reads [input] to its end on a daemon thread, so the process that owns it never blocks on a full pipe. [finish] waits a
+ * bounded time for the end and returns whatever was read: a descendant that inherited the pipe (a daemonized `adb` server
+ * can) keeps it open after the process itself has exited, and must not hang the caller.
+ */
+private class StreamCapture(input: InputStream) {
+    private val buffer = StringBuffer()
+    private val thread = Thread {
+        try {
+            input.bufferedReader().use { reader ->
+                val chunk = CharArray(8192)
+                while (true) {
+                    val read = reader.read(chunk)
+                    if (read < 0) break
+                    buffer.append(chunk, 0, read)
+                }
+            }
+        } catch (e: IOException) {
+            // The stream was closed under us (the process was destroyed): what was read so far is all there is.
+        }
+    }.apply {
+        isDaemon = true
+        start()
+    }
+
+    fun finish(): String {
+        thread.join(JOIN_TIMEOUT_MILLIS)
+        return buffer.toString()
+    }
+}
+
+private const val JOIN_TIMEOUT_MILLIS = 2_000L
+
+/** A shell variable name, the only form that is safe to write unquoted in front of a command (`NAME='value' cmd`). */
+private val ENVIRONMENT_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
 
 /**
  * A real [TermuxExecutor] reaching Termux's `RUN_COMMAND` service over adb (dispatched as root, see
@@ -74,9 +111,10 @@ class AdbTermuxExecutor(
     private val rootExecutor: RootExecutor,
     private val adbExecutable: String = "adb",
     private val serial: String? = null,
-    private val termuxPackage: String = "com.termux",
-    private val termuxHomeDir: String = "/data/data/com.termux/files/home",
-    private val bashExecutable: String = "/data/data/com.termux/files/usr/bin/bash",
+    private val runCommandTarget: RunCommandTarget = RunCommandContract.target(),
+    private val termuxPackage: String = runCommandTarget.packageName,
+    private val termuxHomeDir: String = runCommandTarget.homeDir,
+    private val bashExecutable: String = runCommandTarget.bashPath,
     private val pollIntervalMillis: Long = 300,
     private val dispatchTimeoutMillis: Long = 10_000,
     private val logger: Logger = NoOpLogger,
@@ -136,6 +174,12 @@ class AdbTermuxExecutor(
         isDeviceConnected() && isTermuxInstalled() && rootExecutor.isRootAvailable() && isExternalAppsAllowed()
 
     override fun execute(command: TermuxCommand, isCancelled: () -> Boolean): TermuxExecutionResult {
+        if (!command.environment.keys.all { ENVIRONMENT_NAME.matches(it) }) {
+            return TermuxExecutionResult.Failure(
+                "Refusing to run: environment variable names must match ${ENVIRONMENT_NAME.pattern}, because a name is " +
+                    "written unquoted into the shell command Termux runs",
+            )
+        }
         if (!isDeviceConnected()) return TermuxExecutionResult.Failure("No authorized adb device connected")
         if (!isTermuxInstalled()) return TermuxExecutionResult.Failure("Termux ($termuxPackage) is not installed on the connected device")
         if (!rootExecutor.isRootAvailable()) {
@@ -201,6 +245,7 @@ class AdbTermuxExecutor(
     private fun wrapCommand(command: TermuxCommand, markerDir: String, outFile: String, errFile: String, exitFile: String): String {
         val innerCommand = (listOf(command.executable) + command.args).joinToString(" ") { shellQuote(it) }
         val cdPrefix = command.workingDirectory?.let { "cd ${shellQuote(it)} && " } ?: ""
+        // A name cannot be quoted; [execute] has already refused any that is not a plain identifier.
         val envPrefix = command.environment.entries.joinToString("") { (key, value) -> "$key=${shellQuote(value)} " }
         val mkdirPrefix = "mkdir -p ${shellQuote(markerDir)} && "
         return "$mkdirPrefix$cdPrefix$envPrefix$innerCommand > ${shellQuote(outFile)} 2> ${shellQuote(errFile)}; echo \$? > ${shellQuote(exitFile)}"
@@ -218,11 +263,11 @@ class AdbTermuxExecutor(
             executable = "am",
             args = listOf(
                 "start-foreground-service", "--user", "0",
-                "-n", "$termuxPackage/com.termux.app.RunCommandService",
-                "-a", "com.termux.RUN_COMMAND",
-                "--es", "com.termux.RUN_COMMAND_PATH", bashExecutable,
-                "--esa", "com.termux.RUN_COMMAND_ARGUMENTS", encodeRunCommandArguments(listOf("-c", wrapped)),
-                "--ez", "com.termux.RUN_COMMAND_BACKGROUND", "true",
+                "-n", runCommandTarget.component,
+                "-a", runCommandTarget.action,
+                "--es", runCommandTarget.extraPath, bashExecutable,
+                "--esa", runCommandTarget.extraArguments, encodeRunCommandArguments(listOf("-c", wrapped)),
+                "--ez", runCommandTarget.extraBackground, "true",
             ),
             timeoutMillis = dispatchTimeoutMillis,
         ),
@@ -258,19 +303,24 @@ class AdbTermuxExecutor(
         }
     }
 
+    /**
+     * Runs [argv] locally. stdout and stderr are read on their own threads *while* waiting: a process that writes more than
+     * the OS pipe buffer holds (about 64 KiB on Linux) blocks until someone reads, so waiting first and reading afterwards
+     * would turn any large output into a false timeout. The same pattern `core-root`'s `runProcess` uses.
+     */
     private fun runLocal(argv: List<String>, timeoutMillis: Long): LocalProcessResult {
         val process = try {
             ProcessBuilder(argv).start()
         } catch (e: IOException) {
             return LocalProcessResult.FailedToStart(e.message ?: "process failed to start")
         }
-        if (!process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)) {
-            process.destroyForcibly()
-            return LocalProcessResult.TimedOut
-        }
-        val stdout = process.inputStream.bufferedReader().readText()
-        val stderr = process.errorStream.bufferedReader().readText()
-        return LocalProcessResult.Ran(process.exitValue(), stdout, stderr)
+        val stdout = StreamCapture(process.inputStream)
+        val stderr = StreamCapture(process.errorStream)
+        val finished = process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)
+        if (!finished) process.destroyForcibly()
+        val stdoutText = stdout.finish()
+        val stderrText = stderr.finish()
+        return if (finished) LocalProcessResult.Ran(process.exitValue(), stdoutText, stderrText) else LocalProcessResult.TimedOut
     }
 }
 

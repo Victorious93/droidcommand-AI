@@ -8,6 +8,9 @@ private sealed class AdbRootShellProbe {
     data class Unavailable(val reason: String) : AdbRootShellProbe()
 }
 
+/** A shell variable name, the only form that is safe to write unquoted in front of a command (`NAME='value' cmd`). */
+private val ENVIRONMENT_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
+
 /**
  * A real, verifying [RootProvider] that reaches root over `adb shell su -c '<command>'` rather than
  * spawning `su` as a local process the way [MagiskProvider] does. [MagiskProvider] assumes the JVM
@@ -22,8 +25,10 @@ private sealed class AdbRootShellProbe {
  * [RootCommand.environment] are encoded directly into the remote shell command line (`cd <dir> &&
  * VAR=value ... command`) rather than applied to the local `adb` process's own working
  * directory/environment — the latter would silently do nothing remotely, since `adb` does not forward
- * its own local environment to the device shell. Every piece is [shellQuote]d individually before
- * being joined, and the resulting compound string is [shellQuote]d **again** before being appended to
+ * its own local environment to the device shell. Every value is [shellQuote]d individually before
+ * being joined (a variable *name* cannot be quoted, so [execute] refuses any name that is not a plain
+ * shell identifier rather than let it inject commands into a root shell), and the resulting compound
+ * string is [shellQuote]d **again** before being appended to
  * the local `adb` argv: `adb shell` flattens all of its trailing local arguments into one space-joined
  * line before sending it to the device's shell (unlike a true local `ProcessBuilder` call, which
  * preserves argv boundaries) — without this second quoting layer a multi-word command would be
@@ -129,6 +134,12 @@ class AdbRootExecutor(
      * are folded into the remote command string rather than applied to the local `adb` process.
      */
     override fun execute(command: RootCommand, isCancelled: () -> Boolean): RootExecutionResult {
+        if (!command.environment.keys.all { ENVIRONMENT_NAME.matches(it) }) {
+            return RootExecutionResult.Failure(
+                "Refusing to run: environment variable names must match ${ENVIRONMENT_NAME.pattern}, because a name is " +
+                    "written unquoted into the command a root shell runs",
+            )
+        }
         val innerCommand = (listOf(command.executable) + command.args).joinToString(" ") { shellQuote(it) }
         val cdPrefix = command.workingDirectory?.let { "cd ${shellQuote(it)} && " } ?: ""
         val envPrefix = command.environment.entries.joinToString("") { (key, value) -> "$key=${shellQuote(value)} " }

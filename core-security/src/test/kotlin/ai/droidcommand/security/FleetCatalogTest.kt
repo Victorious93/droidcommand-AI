@@ -216,7 +216,7 @@ class FleetCatalogTest {
         assertTrue(pentest.reason.contains("awaiting the base companion repo"))
         val fileManager = tools.first { it.spec.name == "filemanager_status" }.execute(emptyMap()) as ToolResult.Failure
         assertTrue(fileManager.reason.contains("does not bind Messenger"))
-        assertTrue(fileManager.reason.contains("ai.victorious.filemanager.action.BRIDGE"))
+        assertTrue(fileManager.reason.contains("ai.victorious.victorfiles.action.BRIDGE"))
         val keyboard = tools.first { it.spec.name == "keyboard_status" }.execute(emptyMap()) as ToolResult.Failure
         assertTrue(keyboard.reason.contains("does not bind Messenger"))
         assertTrue(keyboard.reason.contains("com.victorious.keyboard.action.BRIDGE"))
@@ -292,14 +292,19 @@ class FleetCatalogTest {
         assertTrue(KnownFleet.ROOTFORGE.nextStep.contains("Hardware proof pending"))
         assertTrue(KnownFleet.ROOTFORGE.nextStep.contains("File Manager stays PLANNED"))
         assertEquals("com.termux", KnownFleet.VICTORSUITE.packageOrBinary)
+        assertEquals(listOf("com.termux"), KnownFleet.VICTORSUITE.androidPackages)
         assertEquals(FleetIntegrationClass.TERMUX_IPC, KnownFleet.VICTORSUITE.integrationClass)
         assertTrue(KnownFleet.VICTORSUITE.notes.contains("PR #15"))
         assertTrue(KnownFleet.VICTORSUITE.notes.contains("PR #48"))
         assertTrue(KnownFleet.VICTORSUITE.notes.contains("a6f4e2a"))
-        assertTrue(KnownFleet.VICTORSUITE.notes.contains("PENDING"))
+        assertTrue(KnownFleet.VICTORSUITE.notes.contains("PR #51"))
+        assertTrue(KnownFleet.VICTORSUITE.notes.contains("PENDING-REPACKAGE"))
+        assertTrue(KnownFleet.VICTORSUITE.notes.contains("DROIDCOMMAND_VICTORSUITE_REPACKAGE"))
         assertTrue(KnownFleet.VICTORSUITE.transports.any { it.contains("REMOTE_ENVELOPE_JSON") })
         assertTrue(KnownFleet.VICTORSUITE.transports.any { it.contains("capabilities.get") })
-        assertTrue(KnownFleet.VICTORSUITE.refusalMessage.contains("PENDING"))
+        assertTrue(KnownFleet.VICTORSUITE.transports.any { it.contains("PENDING-REPACKAGE") })
+        assertTrue(KnownFleet.VICTORSUITE.refusalMessage.contains("PENDING-REPACKAGE"))
+        assertTrue(KnownFleet.VICTORSUITE.notes.contains("Do not invent a fingerprint"))
         assertNull(KnownFleet.KYC_AUDITLAB.repo)
         assertTrue(KnownFleet.KYC_AUDITLAB.packageOrBinary.contains("com.identityshield.companion"))
         assertTrue(KnownFleet.KYC_AUDITLAB.notes.contains("[provisional/pending-stable-cert]"))
@@ -321,8 +326,8 @@ class FleetCatalogTest {
         assertTrue(KnownFleet.KYC_AUDITLAB.expectedSigningCertSha256.isEmpty())
         assertEquals("Victorious93/EDL-Commander", KnownFleet.EDL_COMMANDER.repo)
         assertEquals("Victorious93/File-Manager", KnownFleet.FILE_MANAGER.repo)
-        assertTrue(KnownFleet.FILE_MANAGER.packageOrBinary.contains("ai.victorious.filemanager"))
-        assertTrue(KnownFleet.FILE_MANAGER.transports.any { it.contains("ai.victorious.filemanager.action.BRIDGE") })
+        assertTrue(KnownFleet.FILE_MANAGER.packageOrBinary.contains("ai.victorious.victorfiles"))
+        assertTrue(KnownFleet.FILE_MANAGER.transports.any { it.contains("ai.victorious.victorfiles.action.BRIDGE") })
         assertTrue(KnownFleet.FILE_MANAGER.notes.contains("Never DependencyGuard"))
         assertTrue(KnownFleet.FILE_MANAGER.notes.contains("never KnownCompanions"))
         assertTrue(KnownFleet.FILE_MANAGER.notes.contains("dca_required:false"))
@@ -484,7 +489,7 @@ class FleetCatalogTest {
         assertTrue(text.contains("None is LIVE"))
         assertTrue(text.contains("Pentest (when repo exists)"))
         assertTrue(text.contains("RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof/Flash/VictorLaunch/KYC companion Messenger is not that"))
-        assertTrue(text.contains("ai.victorious.filemanager.action.BRIDGE"))
+        assertTrue(text.contains("ai.victorious.victorfiles.action.BRIDGE"))
         assertTrue(text.contains("com.victorious.keyboard.action.BRIDGE"))
         assertTrue(text.contains("com.victorious.mesh.action.BRIDGE"))
         assertTrue(text.contains("com.victorious.browser.action.BRIDGE"))
@@ -585,7 +590,7 @@ class FleetCatalogTest {
             catalog.first { it.packageName == "com.victorious.keyboard.bench" }.expectedCerts.isEmpty(),
         )
         assertTrue(
-            catalog.first { it.packageName == "ai.victorious.filemanager" }.expectedCerts.isEmpty(),
+            catalog.first { it.packageName == "ai.victorious.victorfiles" }.expectedCerts.isEmpty(),
         )
         assertTrue(
             catalog.first { it.packageName == "com.victorious.sms" }.expectedCerts.isEmpty(),

@@ -1,13 +1,21 @@
 package ai.droidcommand.termux
 
 /**
- * VictorSuite / Termux `com.termux.RUN_COMMAND` extras and result keys.
+ * VictorSuite / Termux `RUN_COMMAND` extras and result keys.
+ *
+ * **Live default is still [RunCommandTargets.TERMUX] (`com.termux`).**
+ * The constants below are that live binding. [target] resolves the
+ * pending `com.victorious.suite` identity only when
+ * [VictorSuiteRepackageFlag] is on — see that flag's KDoc for how to
+ * flip it after FO go-signal + bootstrap rebuild. Do not send the new
+ * package while VictorSuite still installs as `com.termux`.
  *
  * **[Certain]** — this is the contract VictorSuite documented for the Kali
- * first-win. On-device callers must use [EXTRA_PENDING_INTENT] for results
- * (no ADB, no root, no terminal scraping). [EXTRA_BACKGROUND] must be true
- * so the app-shell runner captures stdout/stderr into the result Bundle;
- * a foreground terminal session paints the screen instead and does not
+ * first-win. On-device callers must use [EXTRA_PENDING_INTENT] (or the
+ * active [RunCommandTarget.extraPendingIntent]) for results (no ADB, no
+ * root, no terminal scraping). [EXTRA_BACKGROUND] must be true so the
+ * app-shell runner captures stdout/stderr into the result Bundle; a
+ * foreground terminal session paints the screen instead and does not
  * fill the Bundle.
  *
  * The PC-over-adb topology ([AdbTermuxExecutor]) cannot hold a
@@ -30,6 +38,16 @@ object RunCommandContract {
     const val EXTRA_RESULT_DIRECTORY = "com.termux.RUN_COMMAND_RESULT_DIRECTORY"
     const val EXTRA_RESULT_SINGLE_FILE = "com.termux.RUN_COMMAND_RESULT_SINGLE_FILE"
     const val EXTRA_RESULT_FILE_BASENAME = "com.termux.RUN_COMMAND_RESULT_FILE_BASENAME"
+
+    /**
+     * Live Termux binding, or the pending VictorSuite package, depending
+     * on [useVictorSuiteRepackage]. Default follows
+     * [VictorSuiteRepackageFlag.isEnabled] (off).
+     */
+    fun target(
+        useVictorSuiteRepackage: Boolean = VictorSuiteRepackageFlag.isEnabled(),
+    ): RunCommandTarget =
+        if (useVictorSuiteRepackage) RunCommandTargets.VICTORSUITE_REPACKAGE else RunCommandTargets.TERMUX
 
     /** Bundle extra on the Intent VictorSuite delivers through the PendingIntent. */
     const val RESULT_BUNDLE_EXTRA = "result"
