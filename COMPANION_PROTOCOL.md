@@ -112,9 +112,9 @@ EXTERNAL_NODE. Catalog id `kyc-auditlab`; tool `kyc_auditlab_status`
 VictorFiles (`Victorious93/File-Manager`) is an independent
 product, the same class as RootForge. It is **not** a companion.
 
-- Package: `ai.victorious.victorfiles` (debug: `ai.victorious.victorfiles.debug`).
-- Service: `ai.victorious.victorfiles.fleet.FileManagerBridgeService` (Messenger).
-- Action: `ai.victorious.victorfiles.action.BRIDGE`, `protocol_major` 1.
+- Package: `ai.victorious.filemanager` (debug: `ai.victorious.filemanager.debug`).
+- Service: `ai.victorious.filemanager.fleet.FileManagerBridgeService` (Messenger).
+- Action: `ai.victorious.filemanager.action.BRIDGE`, `protocol_major` 1.
 - Transport: Message what=1 Bundle key `request` (JSON); reply what=2 Bundle
   key `response`. Envelope fields match RootForge (`protocol_major`,
   `request_id`, `target_node_id` / `node_id`, `operation`, `timeout_ms`,

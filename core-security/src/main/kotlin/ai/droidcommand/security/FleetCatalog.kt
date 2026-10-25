@@ -370,7 +370,7 @@ object KnownFleet {
         id = "file-manager",
         displayName = "VictorFiles",
         repo = "Victorious93/File-Manager",
-        packageOrBinary = "ai.victorious.victorfiles (debug: ai.victorious.victorfiles.debug)",
+        packageOrBinary = "ai.victorious.filemanager (debug: ai.victorious.filemanager.debug)",
         integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
         status = FleetHonestyStatus.PLANNED,
         capabilityId = CapabilityId("fleet.file-manager.node"),
@@ -379,8 +379,8 @@ object KnownFleet {
         catalogStubName = "filemanager_status",
         wiringOrder = 6,
         transports = listOf(
-            "messenger+json envelope (their main: service ai.victorious.victorfiles.fleet.FileManagerBridgeService, " +
-                "action ai.victorious.victorfiles.action.BRIDGE, protocol_major 1; " +
+            "messenger+json envelope (their main: service ai.victorious.filemanager.fleet.FileManagerBridgeService, " +
+                "action ai.victorious.filemanager.action.BRIDGE, protocol_major 1; " +
                 "Message what=1 Bundle key request, reply what=2 Bundle key response)",
         ),
         usesAidl = false,
@@ -392,7 +392,7 @@ object KnownFleet {
             "ai.droidcommand.app and its .debug build), pair the node to call it. Never DependencyGuard, " +
             "never shared signing key.",
         refusalMessage = "VictorFiles is PLANNED EXTERNAL_NODE — this stub does not bind Messenger. " +
-            "Their main already exposes action ai.victorious.victorfiles.action.BRIDGE (protocol_major 1, " +
+            "Their main already exposes action ai.victorious.filemanager.action.BRIDGE (protocol_major 1, " +
             "dca_required:false, live:false stub ops). Identity/default-off PR is still landing. " +
             "Capability state is REQUIRES_EXTERNAL_SERVICE.",
         notes = "EXTERNAL_NODE like RootForge. Never DependencyGuard, never shared signing key, never " +
@@ -404,8 +404,8 @@ object KnownFleet {
             "not enforced. CI injects from secrets and falls back to the generic Android debug " +
             "key without them. No release key yet. Packages stay fail-open.",
         androidPackages = listOf(
-            "ai.victorious.victorfiles",
-            "ai.victorious.victorfiles.debug",
+            "ai.victorious.filemanager",
+            "ai.victorious.filemanager.debug",
         ),
         expectedSigningCertSha256 = emptyList(),
     )

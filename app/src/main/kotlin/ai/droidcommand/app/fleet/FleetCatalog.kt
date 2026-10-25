@@ -55,7 +55,7 @@ object FleetCatalog {
     const val ROOTFORGE_PACKAGE = "ai.rootforge.os"
 
     /** EXTERNAL_NODE. Probe only until the owner pairs package + signing cert. */
-    const val FILEMANAGER_PACKAGE = "ai.victorious.victorfiles"
+    const val FILEMANAGER_PACKAGE = "ai.victorious.filemanager"
 
     /** EXTERNAL_NODE. Probe only until the owner pairs package + signing cert. */
     const val KEYBOARD_PACKAGE = "com.victorious.keyboard"
@@ -88,7 +88,7 @@ object FleetCatalog {
     const val ROOTFORGE_DEBUG_PACKAGE = "ai.rootforge.os.debug"
 
     /** Debug applicationId for VictorFiles. */
-    const val FILEMANAGER_DEBUG_PACKAGE = "ai.victorious.victorfiles.debug"
+    const val FILEMANAGER_DEBUG_PACKAGE = "ai.victorious.filemanager.debug"
 
     /** Debug applicationId for Victorious Keyboard. */
     const val KEYBOARD_DEBUG_PACKAGE = "com.victorious.keyboard.debug"
@@ -159,7 +159,7 @@ object FleetCatalog {
         name = "VictorFiles",
         packageName = FILEMANAGER_PACKAGE,
         kind = FleetKind.EXTERNAL_NODE,
-        summary = "EXTERNAL_NODE, PLANNED. Messenger action ai.victorious.victorfiles.action.BRIDGE " +
+        summary = "EXTERNAL_NODE, PLANNED. Messenger action ai.victorious.filemanager.action.BRIDGE " +
             "(protocol_major 1) already on their main. Generic client exists but is not started unless " +
             "this node is paired (package + signing cert). Never DependencyGuard, never a shared signing key. " +
             "Identity/default-off PR still landing.",

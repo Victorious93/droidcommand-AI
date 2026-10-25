@@ -54,7 +54,7 @@
         <package android:name="com.termux" />
         <intent><action android:name="com.termux.RUN_COMMAND" /></intent>
         <package android:name="ai.edlcommander.companion" />
-        <package android:name="ai.victorious.victorfiles" />
+        <package android:name="ai.victorious.filemanager" />
         <package android:name="com.victorious.keyboard" />
         <!-- Controller-side node signature check (NodeSignatureGuard) plus Tools → Fleet
              package probe. Mesh is KnownFleet.MESH; Browser is KnownFleet.BROWSER;
@@ -75,7 +75,7 @@
              bench variants are listed so a paired debug APK can be inspected; they are not probed by the
              Fleet screen. RootForge's id is inferred from its documented action prefix
              (ai.rootforge.os.action.BRIDGE) and has not been confirmed against a real install. -->
-        <package android:name="ai.victorious.victorfiles.debug" />
+        <package android:name="ai.victorious.filemanager.debug" />
         <package android:name="com.victorious.keyboard.debug" />
         <package android:name="com.victorious.keyboard.bench" />
         <package android:name="ai.rootforge.os" />
