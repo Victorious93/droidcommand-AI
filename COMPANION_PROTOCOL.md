@@ -454,24 +454,29 @@ grant/audit path. Companion tools are never silently bypassed.
 package ai.droidcommand.companion;
 
 interface IHackerAIService {
-    // Start an agent task. Input: CreateAgentInput JSON.
-    // Returns: {"ok":true,"taskId":"..."} or {"ok":false,"error":"..."}
+    // Run an agent task. inputJson is a CreateAgentInput JSON object.
+    // Returns a taskId string on success, or an error JSON {"error": "..."}.
     String runAgentTask(String inputJson);
 
-    // Returns the full Strix skill catalog as a JSON array.
-    // Each entry: {id, name, description, category, tags}
+    // Returns the full SubagentSkill[] catalog as a JSON array.
     String getSkillCatalog();
 
-    // Validate a security finding candidate.
-    // Input: SecurityFindingCandidate JSON.
-    // Returns: SecurityValidationResult JSON.
+    // Validate a security finding candidate. candidateJson is a SecurityValidationCandidate JSON.
+    // Returns a SecurityValidationResult JSON.
     String validateFinding(String candidateJson);
 
-    // Cancel a running agent task. Fire-and-forget.
+    // Cancel a running task. Fire-and-forget (oneway).
     oneway void cancelTask(String taskId);
 
-    // Returns "ok" | "busy" | "no_llm_provider" | "dca_not_installed"
+    // Poll the result of a previously queued task.
+    String getTaskResult(String taskId);
+
+    // Health check. Returns "ok", "busy", or "no_llm_provider".
     String healthCheck();
+
+    // Fleet remote-control envelope v1 (BOUND_COMPANION JSON field map).
+    // Additive declaration only — hub does not dispatch here yet.
+    String executeEnvelope(String envelopeJson);
 }
 ```
 
