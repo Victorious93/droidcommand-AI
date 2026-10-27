@@ -646,11 +646,17 @@ This slice ships a Kotlin mapper (`BoundCompanionRemoteBinding`). EDL
 copies stay verbatim until EDL #10 merges. HackerAI
 `IHackerAIService.aidl` now also declares additive `getTaskResult` and
 `executeEnvelope(String envelopeJson)` (HackerAI-Commander PR #23 /
-merge `e8d2bbcc`) so the hub can bind against the companion. **No live
-dispatcher is wired:** destructive `actionRef`s (`agent.run`,
+merge `e8d2bbcc`) so the hub can bind against the companion.
+`HackerAiEnvelopeTransport` is the hub dispatcher: it talks to
+`IHackerAIService` (not `ICompanionService`), sends the frozen
+`BoundCompanionCommand` JSON through `executeEnvelope` for
+non-destructive envelopes, and polls once via `getTaskResult` when the
+caller supplies a `taskId`. Destructive `actionRef`s (`agent.run`,
 `finding.validate`, `task.cancel`, `shizuku.shell`) stay
 `confirmation_required` and never auto-execute; external control stays
-OFF by default.
+OFF by default. `executeEnvelope` is synchronous; there is no
+`getTaskResult` wait-loop. On-device companion execution remains a
+stub / UNVERIFIED — this is BIND/DISPATCH only.
 
 ---
 

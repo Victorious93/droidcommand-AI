@@ -1,6 +1,8 @@
 package ai.droidcommand.remotecontrol
 
 import ai.droidcommand.rootforge.BridgeResponse
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -38,6 +40,7 @@ object ExternalNodeRemoteBinding {
  * HackerAI/Pentest JSON-string AIDL. This skeleton does not rewrite
  * `*.aidl` (EDL copies stay verbatim until EDL PR #10 merges).
  */
+@Serializable
 data class BoundCompanionCommand(
     val requestId: String,
     val command: String,
@@ -93,6 +96,23 @@ object BoundCompanionRemoteBinding {
             destructive = parcel.destructive,
             dryRun = parcel.dryRun,
         )
+    }
+
+    /**
+     * Frozen BOUND_COMPANION JSON field map for HackerAI
+     * `IHackerAIService.executeEnvelope`. Same logical fields as
+     * [FleetRemoteEnvelope]; not a new envelope shape.
+     */
+    fun encodeJson(envelope: FleetRemoteEnvelope): String =
+        json.encodeToString(BoundCompanionCommand.serializer(), encode(envelope))
+
+    fun decodeJson(raw: String): FleetRemoteEnvelope {
+        val parsed = try {
+            json.decodeFromString(BoundCompanionCommand.serializer(), raw)
+        } catch (e: SerializationException) {
+            throw IllegalArgumentException("Invalid BoundCompanionCommand JSON: ${e.message}", e)
+        }
+        return decode(parsed)
     }
 }
 

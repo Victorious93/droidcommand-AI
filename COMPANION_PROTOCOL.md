@@ -475,7 +475,8 @@ interface IHackerAIService {
     String healthCheck();
 
     // Fleet remote-control envelope v1 (BOUND_COMPANION JSON field map).
-    // Additive declaration only — hub does not dispatch here yet.
+    // Hub dispatches non-destructive envelopes here via HackerAiEnvelopeTransport.
+    // Destructive actionRefs stay confirmation_required and are not auto-executed.
     String executeEnvelope(String envelopeJson);
 }
 ```

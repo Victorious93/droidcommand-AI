@@ -6,18 +6,30 @@ import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolSpec
+import ai.droidcommand.remotecontrol.DisconnectedHackerAiChannel
+import ai.droidcommand.remotecontrol.HackerAiEnvelopeChannel
+import ai.droidcommand.remotecontrol.HackerAiEnvelopeTransport
 
 /**
- * Tool stub: invokes an AI agent task via the HackerAI companion APK AIDL service.
+ * Hub tool: `run_hackerai_agent_task`.
  *
- * Real implementation wires IHackerAIService at runtime (Phase 5 / `core-companion`).
- * Until then, `execute` returns [ToolResult.Failure] with a clear "companion not connected"
- * reason so the planner can report the gap rather than silently doing nothing.
+ * When a [HackerAiEnvelopeChannel] is bound (the live HackerAI AIDL
+ * wrapper), this dispatches the frozen remote-control envelope v1.1 JSON
+ * through [HackerAiEnvelopeTransport] → `executeEnvelope` /
+ * `getTaskResult`. Destructive actionRefs (`agent.run`,
+ * `finding.validate`, `task.cancel`, `shizuku.shell`) stay
+ * `confirmation_required` and are never auto-executed.
  *
- * Design note: all companion AIDL calls use [Initiator.REMOTE] so SecureToolExecutor
- * applies the REMOTE policy tier (same as remote-shell tools), not the AI tier.
+ * Without a connected channel this still returns [ToolResult.Failure]
+ * ("not connected") — the same honest gap [AppModule] documents when
+ * AIDL bind is not started.
  */
-class HackerAiTool : Tool {
+class HackerAiTool(
+    private val channel: HackerAiEnvelopeChannel = DisconnectedHackerAiChannel,
+    private val nowMs: () -> Long = { System.currentTimeMillis() },
+) : Tool {
+    private val transport = HackerAiEnvelopeTransport(channel, nowMs)
+
     override val spec = ToolSpec(
         name = "run_hackerai_agent_task",
         description = "Delegate a security task to the HackerAI companion APK. " +
@@ -30,9 +42,23 @@ class HackerAiTool : Tool {
         requiredInitiator = setOf(Initiator.REMOTE),
     )
 
-    override fun execute(input: Map<String, String>): ToolResult =
-        ToolResult.Failure(
-            "HackerAI companion APK is not connected. " +
-                "Install ai.hackerai.companion and ensure DroidCommand AI has bound to its service.",
-        )
+    override fun execute(input: Map<String, String>): ToolResult {
+        if (!channel.connected) {
+            return ToolResult.Failure(HackerAiEnvelopeTransport.NOT_CONNECTED)
+        }
+        val taskId = input["taskId"]
+        val hasEnvelope = !input["envelope"].isNullOrBlank() || looksLikeEnvelopeJson(input["input"])
+        if (!taskId.isNullOrBlank() && !hasEnvelope) {
+            return transport.pollTask(taskId).toToolResult()
+        }
+        val envelope = try {
+            HackerAiEnvelopeTransport.envelopeFromToolInput(input, nowMs())
+        } catch (e: IllegalArgumentException) {
+            return ToolResult.Failure("invalid_parameters: ${e.message ?: "invalid envelope"}", e)
+        }
+        return transport.submit(envelope).toToolResult()
+    }
+
+    private fun looksLikeEnvelopeJson(raw: String?): Boolean =
+        !raw.isNullOrBlank() && raw.trim().startsWith("{")
 }
