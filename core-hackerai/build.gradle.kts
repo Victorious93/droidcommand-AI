@@ -10,6 +10,7 @@ repositories {
 dependencies {
     implementation(project(":core-agent"))
     implementation(project(":core-security"))
+    implementation(project(":core-remotecontrol"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation(kotlin("test"))
 }

@@ -6,6 +6,8 @@ import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolSpec
+import ai.droidcommand.remotecontrol.HackerAiEnvelopeChannel
+import ai.droidcommand.remotecontrol.HackerAiEnvelopeTransport
 
 /**
  * Wraps any AIDL companion capability as a [Tool] visible to DCA's
@@ -21,6 +23,13 @@ import ai.droidcommand.agent.ToolSpec
  * the planner from scheduling this tool when the companion is absent, but
  * the runtime check here is the final safety gate.
  *
+ * HackerAI talks to [IHackerAIService] (the interface
+ * [CompanionRegistry.getHackerAiService] actually returns). It does **not**
+ * cast that binder to [ICompanionService] — that cast always failed because
+ * the companion exposes `IHackerAIService`, not `ICompanionService`.
+ * Commands go through [HackerAiEnvelopeTransport] → `executeEnvelope` /
+ * `getTaskResult` with the frozen remote-control envelope v1.1 JSON.
+ *
  * @param registry      Live [CompanionRegistry] managed by the :app module.
  * @param capabilityId  One of the IDs advertised by the companion's
  *                      [ICompanionService.listCapabilities].
@@ -32,12 +41,16 @@ class CompanionTool(
     private val registry: CompanionRegistry,
     private val capabilityId: String,
     override val spec: ToolSpec,
+    private val nowMs: () -> Long = { System.currentTimeMillis() },
 ) : Tool {
     override fun execute(input: Map<String, String>): ToolResult {
-        // Route to the correct companion service by capability ID namespace.
+        if (capabilityId.startsWith("ai.companion.hackerai.")) {
+            return executeHackerAi(input)
+        }
+
+        // Pentest-Swarm still only has domain AIDL, not ICompanionService.
+        // This slice does not invent a Pentest executeEnvelope path.
         val service: ICompanionService? = when {
-            capabilityId.startsWith("ai.companion.hackerai.") ->
-                registry.getHackerAiService() as? ICompanionService
             capabilityId.startsWith("ai.companion.pentestswarm.") ->
                 registry.getPentestSwarmService() as? ICompanionService
             else -> null
@@ -59,6 +72,38 @@ class CompanionTool(
         }.getOrElse { e ->
             ToolResult.Failure("Companion AIDL call failed: ${e.message}", e)
         }
+    }
+
+    private fun executeHackerAi(input: Map<String, String>): ToolResult {
+        val service = registry.getHackerAiService()
+            ?: return ToolResult.Failure(
+                "Companion service for capability '$capabilityId' is not connected. " +
+                    "Install and launch the companion APK, then retry.",
+            )
+        val channel = object : HackerAiEnvelopeChannel {
+            override val connected: Boolean = true
+            override fun executeEnvelope(envelopeJson: String): String =
+                service.executeEnvelope(envelopeJson)
+            override fun getTaskResult(taskId: String): String =
+                service.getTaskResult(taskId)
+        }
+        val transport = HackerAiEnvelopeTransport(channel, nowMs)
+        val taskId = input["taskId"]
+        val hasEnvelope = !input["envelope"].isNullOrBlank() ||
+            (!input["input"].isNullOrBlank() && input["input"]!!.trim().startsWith("{"))
+        if (!taskId.isNullOrBlank() && !hasEnvelope) {
+            return transport.pollTask(taskId).toToolResult()
+        }
+        val envelope = try {
+            HackerAiEnvelopeTransport.envelopeFromToolInput(
+                input = input,
+                nowMs = nowMs(),
+                defaultActionRef = HackerAiEnvelopeTransport.defaultActionRefForCapability(capabilityId),
+            )
+        } catch (e: IllegalArgumentException) {
+            return ToolResult.Failure("invalid_parameters: ${e.message ?: "invalid envelope"}", e)
+        }
+        return transport.submit(envelope).toToolResult()
     }
 }
 

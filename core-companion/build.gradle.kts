@@ -40,6 +40,7 @@ android {
 dependencies {
     implementation(project(":core-agent"))
     implementation(project(":core-security"))
+    implementation(project(":core-remotecontrol"))
 }
 
 kotlin {
