@@ -1,14 +1,18 @@
 package ai.droidcommand.app.ui.theme
 
+import ai.droidcommand.security.FleetThemePalette
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// Dark-only, by explicit request — no light scheme, no dynamic-color branch, no theme toggle.
-// Every `MaterialTheme.colorScheme.*` call site in this module reads through this scheme, so
-// wrapping the app in it repaints each screen; the OpenDroid-style extras (bright-blue title, cyan
-// label, indigo user bubble) are the named constants in Color.kt, used by `ui.components`.
+// Dark-only app chrome — no second theme picker. VictorLaunch is the sole
+// writer of a live fleet palette; [fleetPalette] overlays provider values
+// onto this scheme. Missing fields keep the constants below (Color.kt).
+// Every `MaterialTheme.colorScheme.*` call site in this module reads through
+// this scheme, so wrapping the app in it repaints each screen; the
+// OpenDroid-style extras (bright-blue title, cyan label, indigo user bubble)
+// are the named constants in Color.kt, used by `ui.components`.
 private val DroidCommandDarkColorScheme = darkColorScheme(
     primary = AccentBlue,
     onPrimary = OnAccent,
@@ -39,9 +43,12 @@ private val DroidCommandDarkColorScheme = darkColorScheme(
 )
 
 @Composable
-fun DroidCommandTheme(content: @Composable () -> Unit) {
+fun DroidCommandTheme(
+    fleetPalette: FleetThemePalette = FleetThemePalette(),
+    content: @Composable () -> Unit,
+) {
     MaterialTheme(
-        colorScheme = DroidCommandDarkColorScheme,
+        colorScheme = DroidCommandDarkColorScheme.withFleetPalette(fleetPalette),
         content = content,
     )
 }

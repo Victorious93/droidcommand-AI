@@ -114,12 +114,24 @@ class ManifestPolicyTest {
     }
 
     @Test
-    fun `only the launcher activity is exported`() {
+    fun `only the launcher activity, fleet-theme receiver, and Shizuku provider are exported`() {
         val exported = listOf("activity", "service", "receiver", "provider")
             .flatMap { application.children(it) }
             .filter { it.androidAttr("exported") == "true" }
             .map { it.androidAttr("name") }
-        assertEquals(listOf(".MainActivity", "rikka.shizuku.ShizukuProvider"), exported)
+        assertEquals(
+            listOf(
+                ".MainActivity",
+                ".fleet.FleetThemeChangedReceiver",
+                "rikka.shizuku.ShizukuProvider",
+            ),
+            exported,
+        )
+        val receiver = application.children("receiver").single {
+            it.androidAttr("name") == ".fleet.FleetThemeChangedReceiver"
+        }
+        val actions = receiver.children("intent-filter").single().children("action").map { it.androidAttr("name") }
+        assertEquals(listOf("com.victorious.launch.action.FLEET_THEME_CHANGED"), actions)
     }
 
     @Test

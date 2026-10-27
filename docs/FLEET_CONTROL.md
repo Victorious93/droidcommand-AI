@@ -608,3 +608,20 @@ sent to `com.termux` still reach real Termux, not VictorSuite.
 - Catalogue: existing `KnownFleet.VICTORSUITE` (`TERMUX_IPC`) updated,
   not duplicated. Dashboard **PENDING-REPACKAGE**. No new signing
   cert. No live privileged execution. Flip only after FO go-signal.
+
+## 2026-10-27b — FLEET_THEME reader (VictorLaunch writes, DCA reads)
+
+Does **not** rewrite 2026-10-20p. VictorLaunch (`com.victorious.launch`)
+is the sole writer of the fleet theme (schemaVersion 1). This repo now
+ships a **reader**: query
+`content://com.victorious.launch.theme/current` on start, observe that
+URI, listen for `com.victorious.launch.action.FLEET_THEME_CHANGED`,
+re-query, and overlay `palette.*` onto the existing Compose scheme.
+
+Auth is package + `KnownFleet.VICTOR_LAUNCH.expectedSigningCertSha256`
+(debug pin enforced; revoked `1B:06:A8:…` is not accepted). No shared
+signature permission, no shared fleet key, no second theme picker, no
+provider writes. `SecurityException` keeps the app default theme and
+shows a dismissible "Trust installed fleet share apps" hint. Missing
+palette fields keep `Color.kt` defaults — no invented colors.
+[Certain] JVM parse/pin tests. [Guessing] live provider on a phone.

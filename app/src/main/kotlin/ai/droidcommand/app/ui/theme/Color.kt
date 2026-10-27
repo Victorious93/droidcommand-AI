@@ -4,6 +4,9 @@ import androidx.compose.ui.graphics.Color
 
 // Blue-on-deep-navy dark palette. Token names keep the surface/text roles of the earlier
 // OpenDroid-derived palette; only the values and the accent names changed.
+// FleetThemeDefaults.APP in core-security copies these hexes for JVM fallback
+// tests (background/surface/primary/secondary/onBackground/muted/danger/tile).
+// Do not invent a stale token here.
 
 // Surfaces
 val BackgroundDark = Color(0xFF050912)
