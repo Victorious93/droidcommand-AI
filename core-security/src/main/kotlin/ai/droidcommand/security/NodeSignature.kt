@@ -215,17 +215,21 @@ object KnownNodeSigningCatalog {
         "9E:A7:B3:14:94:5B:0A:62:97:15:6F:F7:06:E7:0C:0A:B1:B7:24:DE:06:D5:09:9C:A5:12:8A:B4:43:F7:2D:8D"
 
     /**
-     * File-Manager DEBUG, supplied by the fleet custodian.
+     * File-Manager / VictorFiles DEBUG, supplied by the fleet custodian
+     * (`ai.victorious.filemanager` / `.debug`).
      *
-     * **[unstable / CI-secrets] — not enforced.** Not committed; CI
-     * injects from secrets and falls back to the generic Android debug
-     * key without them. Only stable when secrets are present. No
-     * release key yet. Putting this in [expectedCerts] would refuse
-     * the generic-debug fallback, so File-Manager packages stay
-     * fail-open until the keystore is fixed.
+     * Outbound Messenger binds stay fail-open: this value is **not** in
+     * [KnownFleet.FILE_MANAGER.expectedSigningCertSha256], because CI
+     * injects the keystore from secrets and falls back to the generic
+     * Android debug key without them — pinning it there would refuse the
+     * fallback. Inbound CODE_ASSIST is different: [codeAssistCallerIdentities]
+     * enforces this pin fail-closed. RELEASE cert TBD — do not invent.
      */
     const val FILE_MANAGER_DEBUG_UNSTABLE_CI_SECRETS =
         "8C:1F:E3:C9:E5:34:F2:71:05:C0:68:8F:45:28:D7:7E:47:11:AE:0A:79:DD:08:D1:E8:59:30:B9:E9:48:85:F2"
+
+    /** Same bytes as [FILE_MANAGER_DEBUG_UNSTABLE_CI_SECRETS]; inbound CODE_ASSIST pin. */
+    const val FILE_MANAGER_DEBUG_SHA256 = FILE_MANAGER_DEBUG_UNSTABLE_CI_SECRETS
 
     /**
      * VictorSMS debug SHA-256 (`com.victorious.sms`, alias `androiddebugkey`).
@@ -439,6 +443,37 @@ object KnownNodeSigningCatalog {
         packageName: String,
         members: List<FleetMemberDescriptor> = KnownFleet.ALL,
     ): NodeSigningIdentity? = all(members).find { it.packageName == packageName }
+
+    /**
+     * Caller identities for inbound CODE_ASSIST. Debug pin is enforced
+     * here even though fleet outbound for File-Manager stays fail-open.
+     *
+     * TODO: add File-Manager RELEASE cert when one exists. Do not invent
+     * a fingerprint. Until then the debug pin is the only accepted cert
+     * for both `ai.victorious.filemanager` and `.debug`.
+     */
+    fun codeAssistCallerIdentities(): List<NodeSigningIdentity> {
+        val debug = SigningCertSha256.parseOrThrow(FILE_MANAGER_DEBUG_SHA256)
+        val notes = "CODE_ASSIST inbound. Debug pin enforced. " +
+            "TODO: pin File-Manager RELEASE cert when one exists — do not invent. " +
+            "KnownFleet.FILE_MANAGER outbound expectedCerts stay empty (fail-open)."
+        return listOf(
+            NodeSigningIdentity(
+                packageName = "ai.victorious.filemanager",
+                expectedCerts = listOf(debug),
+                memberId = "file-manager",
+                integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
+                notes = notes,
+            ),
+            NodeSigningIdentity(
+                packageName = "ai.victorious.filemanager.debug",
+                expectedCerts = listOf(debug),
+                memberId = "file-manager",
+                integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
+                notes = notes,
+            ),
+        )
+    }
 }
 
 /**

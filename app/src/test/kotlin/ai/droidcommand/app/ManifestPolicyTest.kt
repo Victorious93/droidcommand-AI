@@ -114,7 +114,7 @@ class ManifestPolicyTest {
     }
 
     @Test
-    fun `only the launcher activity, fleet-theme receiver, and Shizuku provider are exported`() {
+    fun `exported components are the launcher, CODE_ASSIST, fleet-theme receiver, and Shizuku`() {
         val exported = listOf("activity", "service", "receiver", "provider")
             .flatMap { application.children(it) }
             .filter { it.androidAttr("exported") == "true" }
@@ -122,6 +122,7 @@ class ManifestPolicyTest {
         assertEquals(
             listOf(
                 ".MainActivity",
+                ".codeassist.CodeAssistActivity",
                 ".fleet.FleetThemeChangedReceiver",
                 "rikka.shizuku.ShizukuProvider",
             ),
@@ -132,6 +133,23 @@ class ManifestPolicyTest {
         }
         val actions = receiver.children("intent-filter").single().children("action").map { it.androidAttr("name") }
         assertEquals(listOf("com.victorious.launch.action.FLEET_THEME_CHANGED"), actions)
+    }
+
+    @Test
+    fun `CODE_ASSIST activity is exported with the Phase 17 action`() {
+        val activity = application.children("activity").single {
+            it.androidAttr("name") == ".codeassist.CodeAssistActivity"
+        }
+        assertEquals("true", activity.androidAttr("exported"))
+        val filter = activity.children("intent-filter").single()
+        assertEquals(
+            "ai.droidcommand.action.CODE_ASSIST",
+            filter.children("action").single().androidAttr("name"),
+        )
+        assertEquals(
+            "android.intent.category.DEFAULT",
+            filter.children("category").single().androidAttr("name"),
+        )
     }
 
     @Test

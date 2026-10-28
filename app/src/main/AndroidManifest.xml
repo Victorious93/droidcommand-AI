@@ -132,6 +132,22 @@
             </intent-filter>
         </activity>
 
+        <!-- Inbound CODE_ASSIST for VictorFiles (File-Manager PHASE17 §1).
+             Exported so startActivityForResult from ai.victorious.filemanager
+             can reach it. Caller package + signing cert are checked in
+             CodeAssistActivity before any UI or model call; deny / mismatch
+             / bad input return RESULT_CANCELED. Never auto-approves. -->
+        <activity
+            android:name=".codeassist.CodeAssistActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="ai.droidcommand.action.CODE_ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:exported="false"
