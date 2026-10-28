@@ -269,7 +269,13 @@ Fail-closed (`MissingExpectedCertPolicy.REFUSE`) is the stronger posture and
 is available (`DROIDCOMMAND_NODE_CERT_MISSING_EXPECTED=refuse`). The
 **default is ALLOW** so existing flows for members with no catalogued cert
 are not blocked. When a cert **is** catalogued, mismatch and
-missing-observed always refuse.
+missing-observed always refuse. `TrustPipeline` pairing uses that same
+catalog as a floor: a saved pairing with an empty cert still refuses a
+blank or mismatched source cert when the package has
+`expectedSigningCertSha256`. `suggestedPairing()` copies the first
+catalogued pin. UNENFORCED documented constants (VictorSMS, KYC) and
+packages with an empty expected list stay pairing-unpinned. The global
+`MissingExpectedCertPolicy` default is not flipped.
 
 ## 2026-10-18 — EXTERNAL_NODE Messenger transport (implemented, default-off)
 

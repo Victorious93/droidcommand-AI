@@ -233,7 +233,13 @@ data class SourceIdentity(
     }
 }
 
-/** Controller-side pairing of a source node (package + optional cert). Empty cert = fail-open / unpinned. */
+/**
+ * Controller-side pairing of a source node (package + optional cert).
+ *
+ * An empty [certSha256] is unpinned **at the pairing-row layer**. If the
+ * package has catalogued expected fingerprints, [TrustPipeline] still
+ * fail-closes against those. Genuinely-unknown packages stay unpinned.
+ */
 data class DevicePairing(
     val sourceNodeRef: String,
     val packageName: String,
