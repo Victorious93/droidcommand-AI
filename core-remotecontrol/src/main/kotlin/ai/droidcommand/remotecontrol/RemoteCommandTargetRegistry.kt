@@ -7,8 +7,14 @@ import ai.droidcommand.security.FleetIntegrationClass
  *
  * These are catalogue entries, not live pairings. A row does **not**
  * authorize inbound commands; [DevicePairing] still has to be saved, and
- * the trust pipeline still runs. Empty [KnownRemoteTarget.enforcePin]
- * / null cert on [suggestedPairing] is fail-open / unpinned.
+ * the trust pipeline still runs.
+ *
+ * [suggestedPairing] copies a pin from
+ * [ai.droidcommand.security.KnownNodeSigningCatalog] /
+ * [ai.droidcommand.security.FleetMemberDescriptor.expectedSigningCertSha256]
+ * when one exists. Empty [KnownRemoteTarget.enforcePin] and UNENFORCED
+ * documented constants (VictorSMS, KYC) are **not** a pin — those
+ * packages stay unpinned here, same as a genuinely-unknown package.
  */
 data class KnownRemoteTarget(
     val id: String,
@@ -40,11 +46,16 @@ data class KnownRemoteTarget(
         }
     }
 
-    /** Fail-open pairing suggestion. Never copies the documented cert onto the pin. */
+    /**
+     * Pairing suggestion for this target. When the package has catalogued
+     * expected certs, the first one is copied onto [DevicePairing.certSha256]
+     * so a suggested row carries the pin. UNENFORCED documented fingerprints
+     * and packages with an empty expected list stay `null`.
+     */
     fun suggestedPairing(sourceNodeRef: String): DevicePairing = DevicePairing(
         sourceNodeRef = sourceNodeRef,
         packageName = packageName,
-        certSha256 = null,
+        certSha256 = suggestedCatalogPin(packageName),
     )
 }
 
