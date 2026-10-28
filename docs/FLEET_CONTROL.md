@@ -631,3 +631,17 @@ provider writes. `SecurityException` keeps the app default theme and
 shows a dismissible "Trust installed fleet share apps" hint. Missing
 palette fields keep `Color.kt` defaults — no invented colors.
 [Certain] JVM parse/pin tests. [Guessing] live provider on a phone.
+
+## 2026-10-28b — Inbound COMPANION_ASSIST (13 apps; 4 excluded)
+
+Does **not** add anyone to `KnownFleet.ALL` and does **not** copy
+signing certs. Inbound callers are `InboundEntryPointCatalog`
+(`docs/ENTRY_POINTS.md`). Action
+`ai.droidcommand.action.COMPANION_ASSIST`. External control stays OFF
+by default. Destructive stays `confirmation_required`.
+
+**Later additions — Don to confirm:** rootforge-os, VictorGPS,
+Victorious Keyboard.
+
+**Excluded (not controllable by droidcommand-AI):** VictoryPed,
+VictorLink64, MatchVictorious, VictorOps Zombies.

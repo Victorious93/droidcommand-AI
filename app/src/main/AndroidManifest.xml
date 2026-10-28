@@ -148,6 +148,24 @@
             </intent-filter>
         </activity>
 
+        <!-- Inbound COMPANION_ASSIST for the 13 included fleet apps.
+             Exported so startActivityForResult from those packages can
+             reach it. Caller package + signing cert are checked in
+             CompanionAssistActivity before any UI or model call; deny /
+             excluded / pending-refused / mismatch / bad input return
+             RESULT_CANCELED. Never auto-approves. CODE_ASSIST for
+             VictorFiles is a separate activity (CodeAssistActivity). -->
+        <activity
+            android:name=".companionassist.CompanionAssistActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="ai.droidcommand.action.COMPANION_ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:exported="false"

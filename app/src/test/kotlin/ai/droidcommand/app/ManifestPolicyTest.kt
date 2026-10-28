@@ -114,7 +114,7 @@ class ManifestPolicyTest {
     }
 
     @Test
-    fun `exported components are the launcher, CODE_ASSIST, fleet-theme receiver, and Shizuku`() {
+    fun `exported components are the launcher, CODE_ASSIST, COMPANION_ASSIST, fleet-theme receiver, and Shizuku`() {
         val exported = listOf("activity", "service", "receiver", "provider")
             .flatMap { application.children(it) }
             .filter { it.androidAttr("exported") == "true" }
@@ -123,6 +123,7 @@ class ManifestPolicyTest {
             listOf(
                 ".MainActivity",
                 ".codeassist.CodeAssistActivity",
+                ".companionassist.CompanionAssistActivity",
                 ".fleet.FleetThemeChangedReceiver",
                 "rikka.shizuku.ShizukuProvider",
             ),
@@ -144,6 +145,23 @@ class ManifestPolicyTest {
         val filter = activity.children("intent-filter").single()
         assertEquals(
             "ai.droidcommand.action.CODE_ASSIST",
+            filter.children("action").single().androidAttr("name"),
+        )
+        assertEquals(
+            "android.intent.category.DEFAULT",
+            filter.children("category").single().androidAttr("name"),
+        )
+    }
+
+    @Test
+    fun `COMPANION_ASSIST activity is exported with the inbound action`() {
+        val activity = application.children("activity").single {
+            it.androidAttr("name") == ".companionassist.CompanionAssistActivity"
+        }
+        assertEquals("true", activity.androidAttr("exported"))
+        val filter = activity.children("intent-filter").single()
+        assertEquals(
+            "ai.droidcommand.action.COMPANION_ASSIST",
             filter.children("action").single().androidAttr("name"),
         )
         assertEquals(

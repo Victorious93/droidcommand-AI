@@ -1585,3 +1585,20 @@ physical device.
 | `ChatModelCatalog` (`core-llm-local`) | TEMPLATE — ships EMPTY on purpose | No chat model is downloadable out of the box: an entry needs a real commit-pinned URL, exact size, SHA-256 and a checked license, none of which may be invented. The KDoc holds a placeholder template; `ModelDownloadPolicy` refuses an incomplete entry before any request. |
 | `ModelDownloadWorker`, `ModelDownloadScheduler`, `ModelDownloadState`, `LocalModelRuntime.installDownloadable` (`:app`) | ON DISK — compiled, never run on a device | WorkManager `CoroutineWorker` (data-sync foreground service, unmetered + storage-not-low constraints by default, exponential backoff, `.part` resume via `HttpsModelDownloader`) that installs a catalog model through `ModelRepository.install`. `installDownloadable` and `ModelDownloadState.from` are JVM-tested; WorkManager scheduling, the foreground service, the notification and resume-after-process-death are UNVERIFIED. No UI yet: nothing in the app calls `ModelDownloadScheduler.enqueue`. Adapted from OpenDroid's `ModelDownloadWorker` (Apache-2.0). |
 | Sensitive private-clip copy | ON DISK — compiled, no unit test | `EXTRA_IS_SENSITIVE` on clips copied from the private list (Android 13+ hides the preview). Does not stop another foreground app reading the clipboard. |
+
+## 15. Inbound companion entry points (2026-10-28b)
+
+`core-security.InboundEntryPointCatalog` is the per-app allow-list for
+inbound `ai.droidcommand.action.COMPANION_ASSIST` (13 included fleet
+apps) and the File-Manager `code-assist` allow-list that PR #255 can
+rebase onto. Pins come from `KnownNodeSigningCatalog` / `KnownFleet`
+only. Undocumented or unenforced certs are **pending-refused** (fail
+closed). VictoryPed, VictorLink64, MatchVictorious, and VictorOps
+Zombies are excluded. rootforge-os, VictorGPS, and Victorious Keyboard
+are **later additions — Don to confirm**. Full table:
+`docs/ENTRY_POINTS.md`.
+
+| Component | Status | Notes |
+|---|---|---|
+| `InboundEntryPointCatalog` / `CompanionAssist` | IMPLEMENTED — JVM-tested | Request parse, 60k cap, caller package+cert via `NodeSignatureVerifier` (fail-closed). Excluded apps refused. Pending-refused apps refused with a TODO naming the missing pin. |
+| `:app` `CompanionAssistActivity` | ON DISK — compiled, never run on a device | Exported Allow/Deny Activity. Model never called before Allow. `RESULT_CANCELED` on deny / bad caller / bad input. [Certain] no device run. |
