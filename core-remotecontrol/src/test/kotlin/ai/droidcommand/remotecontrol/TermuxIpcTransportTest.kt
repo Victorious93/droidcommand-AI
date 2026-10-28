@@ -266,6 +266,10 @@ class TermuxIpcTransportTest {
         assertFalse(VictorSuiteRegistry.TARGET.enforcePin)
         assertNull(VictorSuiteRegistry.TARGET.documentedDebugCertSha256)
         assertEquals(
+            KnownNodeSigningCatalog.VICTORSUITE_DEBUG_SHA256,
+            VictorSuiteRegistry.TARGET.suggestedPairing("suite-node").certSha256,
+        )
+        assertEquals(
             KnownFleet.VICTORSUITE.expectedSigningCertSha256,
             listOf(
                 KnownNodeSigningCatalog.VICTORSUITE_DEBUG_SHA256,

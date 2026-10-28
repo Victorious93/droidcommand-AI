@@ -1,5 +1,8 @@
 package ai.droidcommand.remotecontrol
 
+import ai.droidcommand.security.KnownNodeSigningCatalog
+import ai.droidcommand.security.SigningCertSha256
+
 /**
  * Inbound trust checks applied **in order** before policy:
  * (1) caller-id = package + cert pairing of the source node
@@ -9,6 +12,15 @@ package ai.droidcommand.remotecontrol
  *
  * A VictorSMS whitelist + code word is **not** an input here. Those only
  * deliver the request.
+ *
+ * Cert pinning: catalogued expected fingerprints
+ * ([KnownNodeSigningCatalog] / [ai.droidcommand.security.FleetMemberDescriptor.expectedSigningCertSha256])
+ * are a fail-closed floor. A blank or mismatched source cert is rejected
+ * for those packages even when the saved [DevicePairing.certSha256] is
+ * empty. Genuinely-unknown packages (empty expected list) stay unpinned
+ * here; [ai.droidcommand.security.MissingExpectedCertPolicy] (default
+ * ALLOW) still governs [ai.droidcommand.security.NodeSignatureVerifier]
+ * and is not flipped by this pipeline.
  */
 object TrustPipeline {
     fun evaluate(
@@ -36,12 +48,45 @@ object TrustPipeline {
 
     private fun pairingMatches(pairing: DevicePairing, source: SourceIdentity): Boolean {
         val packageOk = source.packageName == null || pairing.packageName == source.packageName
-        val certOk = pairing.certSha256.isNullOrBlank() ||
-            source.certSha256.isNullOrBlank() ||
-            pairing.certSha256.equals(source.certSha256, ignoreCase = true)
-        return packageOk && certOk
+        return packageOk && certMatches(pairing, source)
+    }
+
+    private fun certMatches(pairing: DevicePairing, source: SourceIdentity): Boolean {
+        val packageName = source.packageName ?: pairing.packageName
+        val catalogExpected = cataloguedExpectedCerts(packageName)
+        val pairingRaw = pairing.certSha256?.takeIf { it.isNotBlank() }
+        val pairingPin = pairingRaw?.let { SigningCertSha256.parse(it) }
+
+        val expected = when {
+            catalogExpected.isNotEmpty() -> catalogExpected
+            pairingPin != null -> listOf(pairingPin)
+            pairingRaw == null -> emptyList()
+            else -> {
+                val observedRaw = source.certSha256?.takeIf { it.isNotBlank() } ?: return false
+                return pairingRaw.equals(observedRaw, ignoreCase = true)
+            }
+        }
+
+        if (expected.isEmpty()) {
+            return true
+        }
+
+        val observed = source.certSha256?.let { SigningCertSha256.parse(it) } ?: return false
+        return expected.any { it.canonical == observed.canonical }
     }
 
     fun reject(category: RemoteErrorCategory, reason: String = category.wire): RemoteDispatchResult.Rejected =
         RemoteDispatchResult.Rejected(reason, category)
 }
+
+/** Catalogued expected fingerprints for [packageName], or empty when `[Unknown]`. */
+internal fun cataloguedExpectedCerts(packageName: String): List<SigningCertSha256> =
+    KnownNodeSigningCatalog.identityFor(packageName)?.expectedCerts.orEmpty()
+
+/**
+ * First catalogued expected fingerprint for a suggested pairing, or
+ * null when the package has none (UNENFORCED documented constants and
+ * genuinely-unknown packages stay unpinned).
+ */
+internal fun suggestedCatalogPin(packageName: String): String? =
+    cataloguedExpectedCerts(packageName).firstOrNull()?.canonical

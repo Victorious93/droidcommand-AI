@@ -88,6 +88,23 @@ class RemoteCommandDispatcherTest {
     }
 
     @Test
+    fun `blank source cert is unauthorized when the pairing pins a fingerprint`() {
+        store.save(
+            store.load().copy(
+                pairings = listOf(pairing(certSha256 = "aa".repeat(32))),
+            ),
+        )
+        val rejected = assertIs<RemoteDispatchResult.Rejected>(
+            dispatcher.dispatch(
+                envelope(actionRef = "ping", timestampMs = now),
+                source().copy(certSha256 = null),
+            ),
+        )
+        assertEquals(RemoteErrorCategory.UNAUTHORIZED, rejected.category)
+        store.save(store.load().copy(pairings = listOf(pairing())))
+    }
+
+    @Test
     fun `matchedKeyword false does not authorize or deny`() {
         val ready = assertIs<RemoteDispatchResult.Ready>(
             dispatcher.dispatch(
