@@ -401,8 +401,11 @@ object KnownFleet {
             "live:false, mode:stub, dca_required:false. Default-off + caller allowlist still landing in their PR. " +
             "Controller-side DEBUG cert is [unstable/CI-secrets] " +
             "(KnownNodeSigningCatalog.FILE_MANAGER_DEBUG_UNSTABLE_CI_SECRETS) — documented, " +
-            "not enforced. CI injects from secrets and falls back to the generic Android debug " +
-            "key without them. No release key yet. Packages stay fail-open.",
+            "not enforced on outbound Messenger (expectedSigningCertSha256 empty / fail-open) " +
+            "because CI may fall back to the generic Android debug key. Inbound CODE_ASSIST " +
+            "enforces the same pin via KnownNodeSigningCatalog.codeAssistCallerIdentities. " +
+            "TODO: pin File-Manager RELEASE cert when one exists — do not invent. " +
+            "No release key yet.",
         androidPackages = listOf(
             "ai.victorious.filemanager",
             "ai.victorious.filemanager.debug",
