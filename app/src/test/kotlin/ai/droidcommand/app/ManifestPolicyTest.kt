@@ -114,12 +114,40 @@ class ManifestPolicyTest {
     }
 
     @Test
-    fun `only the launcher activity is exported`() {
+    fun `exported components are the launcher, COMPANION_ASSIST, optional CODE_ASSIST, and Shizuku`() {
         val exported = listOf("activity", "service", "receiver", "provider")
             .flatMap { application.children(it) }
             .filter { it.androidAttr("exported") == "true" }
             .map { it.androidAttr("name") }
-        assertEquals(listOf(".MainActivity", "rikka.shizuku.ShizukuProvider"), exported)
+            .toSet()
+        // CODE_ASSIST lands in PR #255; allow it here so that PR rebases cleanly.
+        val allowed = setOf(
+            ".MainActivity",
+            ".companionassist.CompanionAssistActivity",
+            ".codeassist.CodeAssistActivity",
+            "rikka.shizuku.ShizukuProvider",
+        )
+        assertTrue(exported.all { it in allowed }, "Unexpected exported component: ${exported - allowed}")
+        assertTrue(".MainActivity" in exported)
+        assertTrue(".companionassist.CompanionAssistActivity" in exported)
+        assertTrue("rikka.shizuku.ShizukuProvider" in exported)
+    }
+
+    @Test
+    fun `COMPANION_ASSIST activity is exported with the inbound action`() {
+        val activity = application.children("activity").single {
+            it.androidAttr("name") == ".companionassist.CompanionAssistActivity"
+        }
+        assertEquals("true", activity.androidAttr("exported"))
+        val filter = activity.children("intent-filter").single()
+        assertEquals(
+            "ai.droidcommand.action.COMPANION_ASSIST",
+            filter.children("action").single().androidAttr("name"),
+        )
+        assertEquals(
+            "android.intent.category.DEFAULT",
+            filter.children("category").single().androidAttr("name"),
+        )
     }
 
     @Test

@@ -608,3 +608,17 @@ sent to `com.termux` still reach real Termux, not VictorSuite.
 - Catalogue: existing `KnownFleet.VICTORSUITE` (`TERMUX_IPC`) updated,
   not duplicated. Dashboard **PENDING-REPACKAGE**. No new signing
   cert. No live privileged execution. Flip only after FO go-signal.
+
+## 2026-10-28b — Inbound COMPANION_ASSIST (13 apps; 4 excluded)
+
+Does **not** add anyone to `KnownFleet.ALL` and does **not** copy
+signing certs. Inbound callers are `InboundEntryPointCatalog`
+(`docs/ENTRY_POINTS.md`). Action
+`ai.droidcommand.action.COMPANION_ASSIST`. External control stays OFF
+by default. Destructive stays `confirmation_required`.
+
+**Later additions — Don to confirm:** rootforge-os, VictorGPS,
+Victorious Keyboard.
+
+**Excluded (not controllable by droidcommand-AI):** VictoryPed,
+VictorLink64, MatchVictorious, VictorOps Zombies.
