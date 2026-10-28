@@ -245,7 +245,7 @@ and missing-observed refuse):
 
 | Member | Type | SHA-256 | Why unenforced |
 |---|---|---|---|
-| VictorFiles | DEBUG | `8C:1F:E3:C9:E5:34:F2:71:05:C0:68:8F:45:28:D7:7E:47:11:AE:0A:79:DD:08:D1:E8:59:30:B9:E9:48:85:F2` | **[unstable/CI-secrets]**. Not committed; CI injects from secrets and falls back to the generic Android debug key without them. Enforcing it would refuse the fallback. No release key yet. |
+| VictorFiles | DEBUG | `8C:1F:E3:C9:E5:34:F2:71:05:C0:68:8F:45:28:D7:7E:47:11:AE:0A:79:DD:08:D1:E8:59:30:B9:E9:48:85:F2` | **[unstable/CI-secrets]** for outbound Messenger (`expectedSigningCertSha256` empty / fail-open — CI may fall back to the generic Android debug key). **Enforced inbound** on CODE_ASSIST (`KnownNodeSigningCatalog.codeAssistCallerIdentities`). TODO: pin RELEASE cert when one exists — do not invent. |
 | VictorSMS | DEBUG | `BA:81:F5:C7:6E:2C:59:04:E8:A0:E5:0C:80:67:A2:A1:6C:23:14:86:2F:13:DA:7F:49:67:94:8A:53:E7:D1:7A` (alias `androiddebugkey`) | **[planned/pending-merge]**. Scaffold PR still open/unmerged. Documented, not enforced — `expectedSigningCertSha256` stays empty (fail-open). Release cert TBD. |
 | KYC-AuditLab companion | DEBUG (active fail-open) | `6F:46:77:2A:B4:C1:E0:2F:12:F3:ED:9D:7A:65:FD:CD:61:32:B2:71:D9:07:75:FF:5A:15:9A:68:55:C9:2D:4D` | **[provisional/pending-stable-cert]**. Per-machine default debug.keystore — **not stable across machines**. Documented, not enforced — `expectedSigningCertSha256` stays empty (fail-open). Keep as the active pin until KYC PR #29 merges. |
 | KYC-AuditLab companion | DEBUG (pending permanent) | `22:4F:C1:64:D6:8A:28:88:B9:FE:8F:10:C7:B6:B5:E5:78:67:2B:D2:F8:97:05:06:68:4B:23:A9:43:FA:44:1D` | Committed debug keystore, reproducible. Lives in **KYC PR #29** (unmerged). Documented, **not enforced**. Swap this in as the active pin once #29 merges. Do not enforce either until then. |
@@ -614,6 +614,23 @@ sent to `com.termux` still reach real Termux, not VictorSuite.
 - Catalogue: existing `KnownFleet.VICTORSUITE` (`TERMUX_IPC`) updated,
   not duplicated. Dashboard **PENDING-REPACKAGE**. No new signing
   cert. No live privileged execution. Flip only after FO go-signal.
+
+## 2026-10-27b — FLEET_THEME reader (VictorLaunch writes, DCA reads)
+
+Does **not** rewrite 2026-10-20p. VictorLaunch (`com.victorious.launch`)
+is the sole writer of the fleet theme (schemaVersion 1). This repo now
+ships a **reader**: query
+`content://com.victorious.launch.theme/current` on start, observe that
+URI, listen for `com.victorious.launch.action.FLEET_THEME_CHANGED`,
+re-query, and overlay `palette.*` onto the existing Compose scheme.
+
+Auth is package + `KnownFleet.VICTOR_LAUNCH.expectedSigningCertSha256`
+(debug pin enforced; revoked `1B:06:A8:…` is not accepted). No shared
+signature permission, no shared fleet key, no second theme picker, no
+provider writes. `SecurityException` keeps the app default theme and
+shows a dismissible "Trust installed fleet share apps" hint. Missing
+palette fields keep `Color.kt` defaults — no invented colors.
+[Certain] JVM parse/pin tests. [Guessing] live provider on a phone.
 
 ## 2026-10-28b — Inbound COMPANION_ASSIST (13 apps; 4 excluded)
 

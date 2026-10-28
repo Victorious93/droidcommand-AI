@@ -114,23 +114,43 @@ class ManifestPolicyTest {
     }
 
     @Test
-    fun `exported components are the launcher, COMPANION_ASSIST, optional CODE_ASSIST, and Shizuku`() {
+    fun `exported components are the launcher, CODE_ASSIST, COMPANION_ASSIST, fleet-theme receiver, and Shizuku`() {
         val exported = listOf("activity", "service", "receiver", "provider")
             .flatMap { application.children(it) }
             .filter { it.androidAttr("exported") == "true" }
             .map { it.androidAttr("name") }
-            .toSet()
-        // CODE_ASSIST lands in PR #255; allow it here so that PR rebases cleanly.
-        val allowed = setOf(
-            ".MainActivity",
-            ".companionassist.CompanionAssistActivity",
-            ".codeassist.CodeAssistActivity",
-            "rikka.shizuku.ShizukuProvider",
+        assertEquals(
+            listOf(
+                ".MainActivity",
+                ".codeassist.CodeAssistActivity",
+                ".companionassist.CompanionAssistActivity",
+                ".fleet.FleetThemeChangedReceiver",
+                "rikka.shizuku.ShizukuProvider",
+            ),
+            exported,
         )
-        assertTrue(exported.all { it in allowed }, "Unexpected exported component: ${exported - allowed}")
-        assertTrue(".MainActivity" in exported)
-        assertTrue(".companionassist.CompanionAssistActivity" in exported)
-        assertTrue("rikka.shizuku.ShizukuProvider" in exported)
+        val receiver = application.children("receiver").single {
+            it.androidAttr("name") == ".fleet.FleetThemeChangedReceiver"
+        }
+        val actions = receiver.children("intent-filter").single().children("action").map { it.androidAttr("name") }
+        assertEquals(listOf("com.victorious.launch.action.FLEET_THEME_CHANGED"), actions)
+    }
+
+    @Test
+    fun `CODE_ASSIST activity is exported with the Phase 17 action`() {
+        val activity = application.children("activity").single {
+            it.androidAttr("name") == ".codeassist.CodeAssistActivity"
+        }
+        assertEquals("true", activity.androidAttr("exported"))
+        val filter = activity.children("intent-filter").single()
+        assertEquals(
+            "ai.droidcommand.action.CODE_ASSIST",
+            filter.children("action").single().androidAttr("name"),
+        )
+        assertEquals(
+            "android.intent.category.DEFAULT",
+            filter.children("category").single().androidAttr("name"),
+        )
     }
 
     @Test
