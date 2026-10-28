@@ -66,6 +66,10 @@
         <package android:name="com.victorious.spoof" />
         <package android:name="com.victorious.flash.android" />
         <package android:name="com.victorious.launch" />
+        <!-- FLEET_THEME reader (schemaVersion 1). Package visibility above is enough
+             to resolve the writer; the authority is named so a ContentResolver
+             query is visible on Android 11+. Reader only — never write. -->
+        <provider android:authorities="com.victorious.launch.theme" />
         <!-- KYC companion EXTERNAL_NODE for remote.command
              ([provisional/pending-stable-cert], fail-open). Probe only. -->
         <package android:name="com.identityshield.companion" />
@@ -149,6 +153,17 @@
             android:exported="false"
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
+
+        <!-- FLEET_THEME live update. VictorLaunch sends this with setPackage to us.
+             Exported because the send is explicit. Extras are a wake-up only —
+             AndroidFleetThemeClient re-queries and pin-checks the provider. -->
+        <receiver
+            android:name=".fleet.FleetThemeChangedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.victorious.launch.action.FLEET_THEME_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Official Shizuku provider. exported + INTERACT_ACROSS_USERS_FULL is the
              documented setup; only the system can hold that permission. -->

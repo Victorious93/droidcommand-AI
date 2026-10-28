@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">DroidCommand AI</string>
+    <string name="fleet_theme_trust_hint">Trust installed fleet share apps to apply the fleet theme.</string>
+    <string name="fleet_theme_trust_dismiss">Dismiss</string>
 </resources>
