@@ -13,6 +13,7 @@ import ai.droidcommand.app.ui.logs.LogsScreen
 import ai.droidcommand.app.ui.memory.MemoryScreen
 import ai.droidcommand.app.ui.mode.EngineModeViewModel
 import ai.droidcommand.app.ui.mode.PilotScreen
+import ai.droidcommand.app.ui.models.ModelsScreen
 import ai.droidcommand.app.ui.notes.NotesScreen
 import ai.droidcommand.app.ui.plan.PlanScreen
 import ai.droidcommand.app.ui.settings.SettingsScreen
@@ -91,6 +92,7 @@ object Routes {
     const val FLEET_PAIRING = "tools/fleet/pairing"
     const val FLEET_ORCHESTRATOR = "tools/fleet/orchestrator"
     const val HELP = "help"
+    const val MODELS = "models"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -138,7 +140,7 @@ fun DroidCommandNavHost(
             // would be counted twice. Every screen's text fields therefore stay above the keyboard.
             modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding).imePadding(),
         ) {
-            composable(Routes.CHAT) { ChatScreen() }
+            composable(Routes.CHAT) { ChatScreen(onOpenModels = { navController.navigate(Routes.MODELS) }) }
             composable(Routes.PILOT) { PilotScreen() }
             composable(Routes.PLAN) { PlanScreen() }
             composable(Routes.LOGS) { LogsScreen() }
@@ -146,9 +148,13 @@ fun DroidCommandNavHost(
             composable(Routes.METASPLOIT) { MetasploitScreen() }
             composable(Routes.SETOOLKIT) { SetToolScreen() }
             composable(Routes.SETTINGS) {
-                SettingsScreen(onOpenHelp = { navController.navigate(Routes.HELP) })
+                SettingsScreen(
+                    onOpenHelp = { navController.navigate(Routes.HELP) },
+                    onOpenModels = { navController.navigate(Routes.MODELS) },
+                )
             }
             composable(Routes.HELP) { HelpScreen() }
+            composable(Routes.MODELS) { ModelsScreen() }
             composable(Routes.MEMORY) { MemoryScreen() }
             composable(Routes.CLIPBOARDS) { ClipboardScreen() }
             composable(Routes.AUTOMATION) { AutomationScreen() }

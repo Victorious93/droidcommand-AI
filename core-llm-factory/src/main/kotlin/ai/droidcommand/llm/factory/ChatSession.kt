@@ -241,7 +241,7 @@ class ChatSession(
         val resources = local ?: return ChatResult.Failure("On-device models are not available on this device.")
         if (resources.repository.get(modelId) == null) return ChatResult.Failure("Unknown on-device model '$modelId'.")
         return turn(
-            { localProviders.getOrPut(modelId) { LocalLlmProvider(modelId, resources.repository, resources.backendFactory()) } },
+            { localProviders.getOrPut(modelId) { LocalLlmProvider(modelId, resources.repository, resources.backendFactory(), memory = resources.memory) } },
             key = null,
             userText.trim(),
             useWebSearch,

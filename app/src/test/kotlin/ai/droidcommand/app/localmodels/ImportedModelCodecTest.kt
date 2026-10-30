@@ -34,4 +34,12 @@ class ImportedModelCodecTest {
         val badDigest = listOf("user-1", "name", "user-1.gguf", "not-a-digest", "2048", "10", "5").joinToString("\t")
         assertNull(ImportedModelCodec.decode(badDigest))
     }
+
+    @Test
+    fun `an eighth field round-trips an in-place shared-storage path`() {
+        val withPath = sample.copy(externalPath = "/storage/emulated/0/Download/tiny.gguf")
+        assertEquals(withPath, ImportedModelCodec.decode(ImportedModelCodec.encode(withPath)))
+        assertEquals(sample, ImportedModelCodec.decode(ImportedModelCodec.encode(sample)))
+        assertNull(ImportedModelCodec.decode(ImportedModelCodec.encode(sample) + "\textra\tninth"))
+    }
 }

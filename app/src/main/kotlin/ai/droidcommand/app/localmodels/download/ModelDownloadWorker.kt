@@ -13,6 +13,7 @@ import ai.droidcommand.llm.local.ChatModelCatalog
 import ai.droidcommand.llm.local.HttpsModelDownloader
 import ai.droidcommand.llm.local.InstallDisposition
 import ai.droidcommand.llm.local.ModelInstallResult
+import ai.droidcommand.llm.local.ModelMetadata
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -56,8 +57,7 @@ class ModelDownloadWorker(
     override suspend fun getForegroundInfo(): ForegroundInfo = foregroundInfo(modelLabel(), bytes = null, total = null)
 
     override suspend fun doWork(): Result {
-        val modelId = inputData.getString(KEY_MODEL_ID) ?: return failure("No model was requested.")
-        val model = ChatModelCatalog.find(modelId) ?: return failure("This model is not in the download catalog.")
+        val model = modelFromInput() ?: return failure("This model is not in the download catalog.")
         val runtime = EntryPointAccessors.fromApplication(applicationContext, Dependencies::class.java).localModels()
 
         try {
@@ -97,8 +97,22 @@ class ModelDownloadWorker(
 
     private fun failure(reason: String): Result = Result.failure(workDataOf(KEY_ERROR to reason))
 
+    private fun modelFromInput(): ModelMetadata? {
+        val id = inputData.getString(KEY_MODEL_ID) ?: return null
+        ChatModelCatalog.find(id)?.let { return it }
+        val display = inputData.getString(KEY_DISPLAY_NAME) ?: return null
+        val fileName = inputData.getString(KEY_FILE_NAME) ?: return null
+        val sha = inputData.getString(KEY_SHA256) ?: return null
+        val contextTokens = inputData.getInt(KEY_CONTEXT, 2048)
+        val size = inputData.getLong(KEY_SIZE, -1L).takeIf { it > 0L }
+        val url = inputData.getString(KEY_URL)?.takeIf { it.isNotBlank() }
+        return runCatching { ModelMetadata(id, display, fileName, sha, contextTokens, size, url) }.getOrNull()
+    }
+
     private fun modelLabel(): String =
-        inputData.getString(KEY_MODEL_ID)?.let { ChatModelCatalog.find(it)?.displayName } ?: "model"
+        inputData.getString(KEY_DISPLAY_NAME)
+            ?: inputData.getString(KEY_MODEL_ID)?.let { ChatModelCatalog.find(it)?.displayName }
+            ?: "model"
 
     private fun foregroundInfo(label: String, bytes: Long?, total: Long?): ForegroundInfo {
         val manager = applicationContext.getSystemService(NotificationManager::class.java)
@@ -126,6 +140,12 @@ class ModelDownloadWorker(
 
     companion object {
         const val KEY_MODEL_ID = "model_id"
+        const val KEY_DISPLAY_NAME = "display_name"
+        const val KEY_FILE_NAME = "file_name"
+        const val KEY_SHA256 = "sha256"
+        const val KEY_CONTEXT = "context"
+        const val KEY_SIZE = "size"
+        const val KEY_URL = "url"
         const val KEY_BYTES = "bytes"
         const val KEY_ERROR = "error"
         private const val TAG = "ModelDownloadWorker"

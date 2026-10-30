@@ -68,6 +68,20 @@ class ModelRepositoryGgufTest {
     }
 
     @Test
+    fun `register with an explicit file loads from outside modelsDir`() {
+        val d = dir()
+        val outside = Files.createTempDirectory("gguf-outside").toFile().also { it.deleteOnExit() }
+        val target = File(outside, "user.gguf")
+        target.writeBytes(gguf)
+        val r = ModelRepository(d, requireGguf = true).also {
+            it.register(ModelMetadata("m", "M", "user.gguf", sha(gguf), 2048, gguf.size.toLong()), target)
+        }
+        val verified = assertIs<ModelCheck.Verified>(r.verify("m"))
+        assertEquals(target.path, verified.path)
+        assertFalse(File(d, "user.gguf").exists(), "the catalog copy is not created for an external file")
+    }
+
+    @Test
     fun `without requireGguf stand-in bytes still work, as the existing tests rely on`() {
         val d = dir()
         val bytes = "pretend".toByteArray()

@@ -30,6 +30,17 @@
          Same-signing grants it. Do not invent ai.droidcommand.permission.BIND_EDLCOMMANDER. -->
     <uses-permission android:name="ai.edlcommander.companion.permission.BIND_COMPANION" />
 
+    <!-- Optional all-files access so the Models screen can scan Download/models and /sdcard/models.
+         Off by default: the user has to grant it on the system Settings screen after an in-app
+         explanation. SAF import (ACTION_OPEN_DOCUMENT) works without it. READ_EXTERNAL_STORAGE
+         covers Android 9–10 (minSdk 28); MANAGE_EXTERNAL_STORAGE is Android 11+. -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+
     <!-- Phase 4 voice input. Requested at runtime only when the user taps the mic; denial degrades to a
          message, never a crash. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />

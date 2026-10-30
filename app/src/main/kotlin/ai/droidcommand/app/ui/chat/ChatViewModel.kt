@@ -25,7 +25,10 @@ import ai.droidcommand.llm.factory.SavedChat
 import ai.droidcommand.llm.factory.WebSearchCatalog
 import ai.droidcommand.llm.factory.newChatId
 import ai.droidcommand.llm.factory.savedChats
+import ai.droidcommand.llm.local.GgufFileName
 import ai.droidcommand.llm.local.ModelInstallResult
+import ai.droidcommand.llm.local.RamFit
+import ai.droidcommand.llm.local.RamFitVerdict
 import ai.droidcommand.rag.AttachResult
 import ai.droidcommand.rag.DocumentInfo
 import ai.droidcommand.remote.HttpTransport
@@ -45,10 +48,12 @@ import ai.droidcommand.voice.neural.WakeWordService
 import ai.droidcommand.voice.selectTts
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
+import android.system.Os
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
@@ -61,6 +66,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 
 data class ChatLine(val fromUser: Boolean, val text: String)
@@ -282,10 +288,16 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             var reportedBytes = 0L
             val outcome = runCatching {
-                val name = displayName(uri)
+                try {
+                    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (_: SecurityException) {
+                    // One-shot grants still work for the copy below.
+                }
+                val name = GgufFileName.resolve(displayName(uri), uri.lastPathSegment, uri.toString())
+                    ?: displayName(uri)
                 val size = sizeOf(uri)
                 val stream = context.contentResolver.openInputStream(uri) ?: error("The file could not be opened.")
-                stream.use {
+                val copied = stream.use {
                     onDeviceModels.importModel(name, it, size) { bytes ->
                         if (bytes - reportedBytes >= PROGRESS_STEP_BYTES) {
                             reportedBytes = bytes
@@ -293,10 +305,24 @@ class ChatViewModel @Inject constructor(
                         }
                     }
                 }
+                if (copied is ImportOutcome.Failed && copied.reason.contains("Not enough free storage")) {
+                    val path = runCatching {
+                        context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                            Os.readlink("/proc/self/fd/${pfd.fd}").takeIf { it.startsWith("/") && File(it).canRead() }
+                        }
+                    }.getOrNull()
+                    if (path != null) onDeviceModels.importExisting(File(path)) else copied
+                } else {
+                    copied
+                }
             }.getOrElse { ImportOutcome.Failed("Import failed: ${it.message ?: it.javaClass.simpleName}.") }
             val models = onDeviceModels.list()
             when (outcome) {
-                is ImportOutcome.Imported -> selectImported(outcome.model.id, models, "Imported ${outcome.model.label}. Chat now runs on this device.")
+                is ImportOutcome.Imported -> selectImported(
+                    outcome.model.id,
+                    models,
+                    "Imported ${outcome.model.label}. Chat now runs on this device." + ramSuffix(outcome.model.metadata.sizeBytes, outcome.model.metadata.contextTokens),
+                )
                 is ImportOutcome.Duplicate -> selectImported(outcome.id, models, "That file is already imported. Selected it.")
                 is ImportOutcome.Rejected -> mutableState.update { it.copy(localImporting = false, localStatus = outcome.reason) }
                 is ImportOutcome.Failed -> mutableState.update { it.copy(localImporting = false, localStatus = outcome.reason) }
@@ -485,6 +511,13 @@ class ChatViewModel @Inject constructor(
             if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
         }
     }.getOrNull()
+
+    private fun ramSuffix(sizeBytes: Long?, contextTokens: Int): String {
+        val size = sizeBytes ?: return ""
+        val snap = onDeviceModels.resources.memory?.snapshot() ?: return ""
+        val fit = RamFit.assess(size, contextTokens, snap.totalBytes, snap.availableBytes)
+        return if (fit.verdict == RamFitVerdict.TOO_BIG || fit.verdict == RamFitVerdict.TIGHT) " ${fit.reason}" else ""
+    }
 
     /** Starts an empty conversation and keeps the previous one in the list. */
     fun newChat() {

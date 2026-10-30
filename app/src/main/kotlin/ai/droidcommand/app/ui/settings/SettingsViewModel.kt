@@ -13,6 +13,7 @@ import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.llm.factory.SecretSlot
 import ai.droidcommand.llm.factory.WebSearchCatalog
+import ai.droidcommand.llm.local.HuggingFaceGgufClient
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +37,9 @@ class SettingsViewModel @Inject constructor(
 
     private val mutableSearchStatus = MutableStateFlow(WebSearchCatalog.all.associateWith { statusOf(it.secretId) })
     val searchStatus: StateFlow<Map<SecretSlot, KeyStatus>> = mutableSearchStatus.asStateFlow()
+
+    private val mutableHfStatus = MutableStateFlow(statusOf(HuggingFaceGgufClient.SECRET_ID))
+    val hfStatus: StateFlow<KeyStatus> = mutableHfStatus.asStateFlow()
 
     private val mutableToolbar = MutableStateFlow(advanced.toolbarToggles())
     val toolbarToggles: StateFlow<Set<ToolbarToggle>> = mutableToolbar.asStateFlow()
@@ -85,6 +89,28 @@ class SettingsViewModel @Inject constructor(
             return
         }
         mutableSearchStatus.value = mutableSearchStatus.value + (slot to statusOf(slot.secretId))
+    }
+
+    fun saveHuggingFaceToken(key: String) {
+        val trimmed = key.trim()
+        if (trimmed.isEmpty()) return
+        try {
+            vault.putSecret(HuggingFaceGgufClient.SECRET_ID, trimmed)
+        } catch (_: SecretStorageException) {
+            mutableHfStatus.value = KeyStatus.STORAGE_ERROR
+            return
+        }
+        mutableHfStatus.value = statusOf(HuggingFaceGgufClient.SECRET_ID)
+    }
+
+    fun clearHuggingFaceToken() {
+        try {
+            vault.revokeSecret(HuggingFaceGgufClient.SECRET_ID)
+        } catch (_: SecretStorageException) {
+            mutableHfStatus.value = KeyStatus.STORAGE_ERROR
+            return
+        }
+        mutableHfStatus.value = statusOf(HuggingFaceGgufClient.SECRET_ID)
     }
 
     fun save(provider: CloudProviderSpec, key: String) {

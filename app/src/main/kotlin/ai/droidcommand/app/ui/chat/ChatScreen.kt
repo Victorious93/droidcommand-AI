@@ -1,5 +1,6 @@
 package ai.droidcommand.app.ui.chat
 
+import ai.droidcommand.app.localmodels.OpenGgufDocument
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import ai.droidcommand.app.ui.components.rememberDraft
@@ -84,7 +85,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
  * model field is still free text because model ids change and no list here was verified.
  */
 @Composable
-fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
+fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> Unit = {}) {
     val state by viewModel.state.collectAsState()
     // Saved across rotation, folding and theme changes: with plain remember a half-typed message vanished while the
     // ViewModel (and the conversation) survived.
@@ -109,8 +110,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val documentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(viewModel::attachDocument)
     }
-    // Model picker: the owner picks one .gguf file, and the app copies it into its own storage.
-    val modelLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    // Model picker: ACTION_OPEN_DOCUMENT, any MIME, persistable read. Name/magic filtering happens after the pick.
+    val modelLauncher = rememberLauncherForActivityResult(OpenGgufDocument()) { uri ->
         uri?.let(viewModel::importLocalModel)
     }
     val onMic = {
@@ -146,7 +147,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         )
 
         if (optionsOpen) {
-            OptionsPanel(state, viewModel) { modelLauncher.launch(arrayOf("*/*")) }
+            OptionsPanel(state, viewModel, onImportModel = { modelLauncher.launch(Unit) }, onOpenModels = onOpenModels)
         }
         if (libraryOpen) {
             ChatLibrary(state, viewModel)
@@ -299,7 +300,7 @@ private fun Header(
 }
 
 @Composable
-private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportModel: () -> Unit) {
+private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportModel: () -> Unit, onOpenModels: () -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
     val activeLocal = state.localModels.firstOrNull { it.id == state.activeLocalModelId }
     DroidCard(modifier = Modifier.padding(bottom = 12.dp)) {
@@ -329,6 +330,13 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
                         onClick = {
                             menuOpen = false
                             onImportModel()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("On-device catalog…") },
+                        onClick = {
+                            menuOpen = false
+                            onOpenModels()
                         },
                     )
                 }
