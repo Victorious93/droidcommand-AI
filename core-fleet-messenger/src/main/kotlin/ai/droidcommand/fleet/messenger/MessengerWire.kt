@@ -18,6 +18,7 @@ object MessengerWire {
     const val WHAT_RESPONSE = 2
     const val KEY_REQUEST = "request"
     const val KEY_RESPONSE = "response"
+
     /**
      * Flash (`FLEET_BRIDGE`) stores the envelope under `json` instead of
      * `request`/`response`. The Android channel writes and reads both key

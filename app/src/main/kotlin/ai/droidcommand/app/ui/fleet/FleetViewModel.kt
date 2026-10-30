@@ -3,6 +3,7 @@ package ai.droidcommand.app.ui.fleet
 import ai.droidcommand.app.fleet.FleetCatalog
 import ai.droidcommand.app.fleet.FleetRow
 import ai.droidcommand.app.fleet.FleetStatus
+import ai.droidcommand.app.fleet.FleetTrustedLivePublisher
 import ai.droidcommand.app.fleet.PackageFleetProbe
 import ai.droidcommand.fleet.messenger.ExternalNodeRow
 import ai.droidcommand.fleet.messenger.FleetMessengerController
@@ -10,9 +11,8 @@ import ai.droidcommand.fleet.messenger.LiveCallResult
 import ai.droidcommand.fleet.messenger.MutablePairedNodeStore
 import ai.droidcommand.fleet.messenger.PackageIdentityResolver
 import ai.droidcommand.fleet.messenger.PairedNodeGateway
-import ai.droidcommand.app.fleet.FleetTrustedLivePublisher
-import ai.droidcommand.remotecontrol.RemoteStatusTray
 import ai.droidcommand.fleet.messenger.PairingResult
+import ai.droidcommand.remotecontrol.RemoteStatusTray
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

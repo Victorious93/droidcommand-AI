@@ -68,16 +68,20 @@ object FleetLiveStatusMapping {
     fun looksLikePeerControlOff(text: String?): Boolean {
         if (text.isNullOrBlank()) return false
         val t = text.lowercase()
-        return (t.contains("external control") || t.contains("peer control") || t.contains("remote.command") ||
-            t.contains("remote command") || t.contains("action ops")) &&
+        return (
+            t.contains("external control") || t.contains("peer control") || t.contains("remote.command") ||
+                t.contains("remote command") || t.contains("action ops")
+        ) &&
             (t.contains("off") || t.contains("disabled") || t.contains("not enabled") || t.contains("default"))
     }
 
     fun looksLikeSignatureRefusal(text: String?): Boolean {
         if (text.isNullOrBlank()) return false
         val t = text.lowercase()
-        return t.contains("signature") && (t.contains("refus") || t.contains("denied") || t.contains("mismatch") ||
-            t.contains("permission") || t.contains("not allowed") || t.contains("pin"))
+        return t.contains("signature") && (
+            t.contains("refus") || t.contains("denied") || t.contains("mismatch") ||
+                t.contains("permission") || t.contains("not allowed") || t.contains("pin")
+        )
     }
 
     fun looksLikeCertRefusal(text: String?): Boolean {

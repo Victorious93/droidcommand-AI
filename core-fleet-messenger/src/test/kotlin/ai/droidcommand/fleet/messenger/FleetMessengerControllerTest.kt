@@ -404,5 +404,4 @@ class FleetMessengerControllerTest {
         assertTrue(c.refreshTrustedLive().isEmpty())
         assertEquals(0, ch.opens)
     }
-
 }
