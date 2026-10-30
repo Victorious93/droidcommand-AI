@@ -18,6 +18,13 @@ object MessengerWire {
     const val WHAT_RESPONSE = 2
     const val KEY_REQUEST = "request"
     const val KEY_RESPONSE = "response"
+
+    /**
+     * Flash (`FLEET_BRIDGE`) stores the envelope under `json` instead of
+     * `request`/`response`. The Android channel writes and reads both key
+     * styles so either peer works.
+     */
+    const val KEY_JSON = "json"
     const val ACTION_SUFFIX = ".action.BRIDGE"
 
     /** Default `timeout_ms`, same as the SSH clients. */

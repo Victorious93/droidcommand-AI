@@ -25,8 +25,12 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Binds `<package>.action.BRIDGE` and speaks the Messenger framing: request = `Message.what=1` with the
- * envelope JSON in Bundle key `request`; reply = `Message.what=2` with the response JSON in key `response`.
+ * Binds `<package>.action.BRIDGE` (or a catalogued custom action such as Flash
+ * `FLEET_BRIDGE`) and speaks the Messenger framing: request = `Message.what=1`
+ * with the envelope JSON in Bundle keys `request` **and** `json`; reply =
+ * `Message.what=2` reading `response` or, if absent, `json`. Flash peers use
+ * `json`; hub-style peers use `request`/`response`. Writing both on send keeps
+ * either style working.
  * This class is only plumbing. Envelope building and response validation are in `core-fleet-messenger`, and it
  * is only ever called after `NodeTrustVerifier` has trusted the package.
  *
@@ -125,16 +129,27 @@ class AndroidMessengerChannel(private val context: Context) : MessengerChannel {
                         pending.fail(IOException("reply came from uid ${msg.sendingUid}, not the verified node"))
                         return
                     }
-                    val json = msg.data?.getString(MessengerWire.KEY_RESPONSE)
+                    val data = msg.data
+                    val json = data?.getString(MessengerWire.KEY_RESPONSE)
+                        ?: data?.getString(MessengerWire.KEY_JSON)
                     if (json == null) {
-                        pending.fail(IOException("reply carries no '${MessengerWire.KEY_RESPONSE}' string"))
+                        pending.fail(
+                            IOException(
+                                "reply carries neither '${MessengerWire.KEY_RESPONSE}' nor " +
+                                    "'${MessengerWire.KEY_JSON}' string",
+                            ),
+                        )
                     } else {
                         pending.complete(json)
                     }
                 }
             }
             val request = Message.obtain(null, MessengerWire.WHAT_REQUEST).apply {
-                data = Bundle().apply { putString(MessengerWire.KEY_REQUEST, requestJson) }
+                data = Bundle().apply {
+                    // Hub peers read `request`; Flash FLEET_BRIDGE reads `json`.
+                    putString(MessengerWire.KEY_REQUEST, requestJson)
+                    putString(MessengerWire.KEY_JSON, requestJson)
+                }
                 replyTo = Messenger(handler)
             }
             try {

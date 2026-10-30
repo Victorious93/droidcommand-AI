@@ -20,6 +20,11 @@ data class ExternalNodeSpec(
     val statusOperation: String,
     /** Null when this product has no start/bring-up op (Keyboard, File Manager stub). */
     val upOperation: String? = null,
+    /**
+     * Intent action to bind when it is not `<package>.action.BRIDGE`.
+     * Passed through as [PairedNode.customAction] on pair. Null keeps the default.
+     */
+    val bridgeAction: String? = null,
     val notes: String = "",
 ) {
     init {
@@ -133,6 +138,7 @@ object ExternalNodeCatalog {
         packages = listOf("com.victorious.flash.android"),
         capabilitiesOperation = "capabilities.get",
         statusOperation = "status.get",
+        bridgeAction = "com.victorious.flash.android.FLEET_BRIDGE",
         notes = "EXTERNAL_NODE. Confirmed action com.victorious.flash.android.FLEET_BRIDGE " +
             "(exported service; Message what=1 json envelope + replyTo, reply what=2). " +
             "Node-id prefix ^vfa-[0-9a-f]{32}$. Read ops status.get / capabilities.get. " +

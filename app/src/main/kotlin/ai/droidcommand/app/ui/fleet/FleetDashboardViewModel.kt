@@ -2,7 +2,11 @@ package ai.droidcommand.app.ui.fleet
 
 import ai.droidcommand.app.fleet.FleetCatalog
 import ai.droidcommand.app.fleet.FleetMember
+import ai.droidcommand.app.fleet.FleetTrustedLivePublisher
+import ai.droidcommand.fleet.messenger.FleetMessengerController
 import ai.droidcommand.fleet.messenger.MutablePairedNodeStore
+import ai.droidcommand.fleet.messenger.PackageIdentityResolver
+import ai.droidcommand.fleet.messenger.PairedNodeGateway
 import ai.droidcommand.remotecontrol.FleetDashboardCatalog
 import ai.droidcommand.remotecontrol.FleetDashboardMember
 import ai.droidcommand.remotecontrol.FleetDashboardPairing
@@ -11,23 +15,32 @@ import ai.droidcommand.remotecontrol.FleetDashboardUi
 import ai.droidcommand.remotecontrol.RemoteControlStore
 import ai.droidcommand.remotecontrol.RemoteStatusTray
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Thin Hilt wrapper over [FleetDashboardPresenter]. Refresh only re-reads
- * saved pairings and republishes the in-memory status tray. It does not
- * bind Messenger or call live `node.status.get`.
+ * Thin Hilt wrapper over [FleetDashboardPresenter]. Refresh re-reads saved
+ * pairings, runs a live status/capabilities pass for TRUSTED EXTERNAL_NODEs
+ * through [FleetMessengerController] (off the main thread, with per-call
+ * timeouts), publishes into [RemoteStatusTray], and clears the "not wired"
+ * note once that pass completes.
  */
 @HiltViewModel
 class FleetDashboardViewModel @Inject constructor(
-    statusTray: RemoteStatusTray,
+    private val statusTray: RemoteStatusTray,
     pairedStore: MutablePairedNodeStore,
     remoteStore: RemoteControlStore,
+    resolver: PackageIdentityResolver,
+    gateway: PairedNodeGateway,
 ) : ViewModel() {
+    private val controller = FleetMessengerController(pairedStore, resolver, gateway)
+
     private val presenter = FleetDashboardPresenter(
         members = FleetCatalog.all.map(::toDashboardMember),
         statusTray = statusTray,
@@ -40,8 +53,19 @@ class FleetDashboardViewModel @Inject constructor(
     private val mutableState = MutableStateFlow(presenter.snapshot())
     val state: StateFlow<FleetDashboardUi> = mutableState.asStateFlow()
 
+    init {
+        refresh()
+    }
+
     fun refresh() {
-        mutableState.value = presenter.snapshot()
+        viewModelScope.launch(Dispatchers.IO) {
+            val baseReasons = FleetTrustedLivePublisher.reasonsFromSnapshot(controller)
+            presenter.setReasonOverrides(baseReasons)
+            val live = FleetTrustedLivePublisher.refresh(controller, statusTray)
+            presenter.setReasonOverrides(baseReasons + live.reasonByCatalogId)
+            presenter.markLiveBindReady(true)
+            mutableState.value = presenter.snapshot()
+        }
     }
 
     companion object {

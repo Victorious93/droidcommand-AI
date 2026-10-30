@@ -63,24 +63,33 @@ data class FleetDashboardRow(
     val statusLabel: String,
     val seenLabel: String,
     val snapshot: NodeStatusSnapshot? = null,
+    /** Short owner-facing why: Not paired / Peer control off / Bind refused / Bridge missing. */
+    val reason: String = "",
 )
 
 data class FleetDashboardUi(
     val rows: List<FleetDashboardRow>,
     val liveBindReady: Boolean = false,
     val liveBindNote: String = FleetDashboardRows.LIVE_BIND_PENDING_NOTE,
+    /** Shown when no catalogued member is paired — stronger CTA that links to pairing. */
+    val emptyStateCta: String? = null,
 )
 
 /**
  * Catalogue + pairings + in-memory tray → one row per catalogued member.
  *
- * Honest about the missing live `node.status.get` bind: [LIVE_BIND_PENDING_NOTE]
- * is the only live-status claim this mapper makes. Refresh only republishes
- * the in-memory tray (TTL expire) and re-reads pairings.
+ * When [FleetDashboardUi.liveBindReady] is false the note still warns that
+ * live bind has not run in this session. After a successful live pass the
+ * presenter clears that note. Refresh republishes the tray (TTL expire),
+ * re-reads pairings, and (in `:app`) triggers a live status/capabilities
+ * read for TRUSTED EXTERNAL_NODEs.
  */
 object FleetDashboardRows {
     const val LIVE_BIND_PENDING_NOTE =
-        "Live status from the phone is not wired yet. This list uses saved pairings and any snapshots already in memory."
+        "Live status from the phone has not run in this session yet. Refresh to pull status from paired TRUSTED nodes."
+
+    const val LIVE_BIND_READY_NOTE =
+        "Live status from the phone is on for TRUSTED paired nodes."
 
     const val STATUS_UNKNOWN = "Unknown"
     const val STATUS_NOT_PAIRED = "Not paired"
@@ -97,6 +106,7 @@ object FleetDashboardRows {
         pairings: List<FleetDashboardPairing>,
         snapshots: List<NodeStatusSnapshot>,
         nowMs: Long,
+        reasonOverrides: Map<String, String> = emptyMap(),
     ): List<FleetDashboardRow> = members.map { member ->
         val paired = pairings.any { matchesPairing(member, it) }
         val snapshot = if (paired) {
@@ -107,6 +117,8 @@ object FleetDashboardRows {
             null
         }
         val tone = toneOf(paired, snapshot, nowMs)
+        val reason = reasonOverrides[member.id]
+            ?: FleetLiveStatusMapping.reasonFor(paired = paired, snapshot = snapshot)
         FleetDashboardRow(
             member = member,
             paired = paired,
@@ -120,6 +132,7 @@ object FleetDashboardRows {
             ),
             seenLabel = seenLabel(snapshot, nowMs),
             snapshot = snapshot,
+            reason = reason,
         )
     }
 
@@ -285,31 +298,51 @@ object FleetDashboardCatalog {
 
 /**
  * JVM-testable home-dashboard state. The Compose ViewModel is a thin wrapper.
- * [refresh] only republishes the in-memory tray and re-reads [pairings].
- * It does not bind Messenger or claim a live node.status.get.
+ * [snapshot] republishes the in-memory tray and re-reads [pairings]. Live
+ * Messenger binds are supplied by the caller (via [markLiveBindReady] after a
+ * successful off-main-thread pass) — this class never opens a channel itself.
  */
 class FleetDashboardPresenter(
     private val members: List<FleetDashboardMember>,
     private val statusTray: RemoteStatusTray,
     private val pairings: () -> List<FleetDashboardPairing>,
     private val clock: () -> Long = { System.currentTimeMillis() },
-    private val liveBindReady: Boolean = false,
+    liveBindReady: Boolean = false,
 ) {
+    @Volatile
+    private var liveBindReadyFlag: Boolean = liveBindReady
+
+    @Volatile
+    private var reasonOverrides: Map<String, String> = emptyMap()
+
+    fun markLiveBindReady(ready: Boolean = true) {
+        liveBindReadyFlag = ready
+    }
+
+    fun setReasonOverrides(overrides: Map<String, String>) {
+        reasonOverrides = overrides
+    }
+
     fun snapshot(): FleetDashboardUi {
         val nowMs = clock()
+        val currentPairings = pairings()
+        val rows = FleetDashboardRows.build(
+            members = members,
+            pairings = currentPairings,
+            snapshots = statusTray.publish(nowMs),
+            nowMs = nowMs,
+            reasonOverrides = reasonOverrides,
+        )
+        val anyPaired = rows.any { it.paired }
         return FleetDashboardUi(
-            rows = FleetDashboardRows.build(
-                members = members,
-                pairings = pairings(),
-                snapshots = statusTray.publish(nowMs),
-                nowMs = nowMs,
-            ),
-            liveBindReady = liveBindReady,
-            liveBindNote = if (liveBindReady) {
-                "Live status from the phone is on."
+            rows = rows,
+            liveBindReady = liveBindReadyFlag,
+            liveBindNote = if (liveBindReadyFlag) {
+                FleetDashboardRows.LIVE_BIND_READY_NOTE
             } else {
                 FleetDashboardRows.LIVE_BIND_PENDING_NOTE
             },
+            emptyStateCta = if (!anyPaired) FleetLiveStatusMapping.EMPTY_STATE_CTA else null,
         )
     }
 }

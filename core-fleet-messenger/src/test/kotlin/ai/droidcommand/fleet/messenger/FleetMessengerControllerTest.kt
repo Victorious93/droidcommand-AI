@@ -96,6 +96,8 @@ class FleetMessengerControllerTest {
         assertTrue(ExternalNodeCatalog.VICTOR_SPOOF.notes.contains("fail-open"))
         assertEquals("capabilities.get", ExternalNodeCatalog.VICTORIOUS_FLASH.capabilitiesOperation)
         assertEquals("status.get", ExternalNodeCatalog.VICTORIOUS_FLASH.statusOperation)
+        assertEquals("com.victorious.flash.android.FLEET_BRIDGE", ExternalNodeCatalog.VICTORIOUS_FLASH.bridgeAction)
+        assertNull(ExternalNodeCatalog.ROOTFORGE.bridgeAction)
         assertTrue(ExternalNodeCatalog.VICTORIOUS_FLASH.notes.contains("FLEET_BRIDGE"))
         assertTrue(ExternalNodeCatalog.VICTORIOUS_FLASH.notes.contains("gadget.expose is DESTRUCTIVE"))
         assertTrue(ExternalNodeCatalog.VICTORIOUS_FLASH.notes.contains("enforced"))
@@ -360,5 +362,46 @@ class FleetMessengerControllerTest {
     @Test
     fun `colon-separated cert display is what the UI shows`() {
         assertEquals("ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab", PairedNode.displayCertSha256(CERT))
+    }
+
+    @Test
+    fun `pair stores Flash bridgeAction as customAction`() {
+        val flash = ExternalNodeCatalog.VICTORIOUS_FLASH
+        val id = identity()
+        val store = InMemoryPairedNodeStore()
+        val resolver = PackageIdentityResolver { pkg ->
+            if (pkg == flash.primaryPackage) id else null
+        }
+        val (c, _) = controller(
+            store = store,
+            identity = id,
+            catalog = listOf(flash),
+            resolver = resolver,
+        )
+        val result = c.pair("victorious-flash")
+        assertIs<PairingResult.Paired>(result)
+        assertEquals("com.victorious.flash.android.FLEET_BRIDGE", result.node.customAction)
+        assertEquals("com.victorious.flash.android.FLEET_BRIDGE", result.node.action)
+        assertEquals("com.victorious.flash.android.FLEET_BRIDGE", store.find(flash.nodeId)!!.action)
+    }
+
+    @Test
+    fun `refreshTrustedLive calls status and capabilities only for TRUSTED rows`() {
+        val (c, ch, _) = pairedController()
+        val outcomes = c.refreshTrustedLive()
+        assertEquals(1, outcomes.size)
+        assertEquals("mesh", outcomes.single().catalogId)
+        assertIs<LiveCallResult.Success>(outcomes.single().status)
+        assertIs<LiveCallResult.Success>(outcomes.single().capabilities)
+        assertEquals(2, ch.opens)
+        assertTrue(ch.sent.any { it.contains("mesh.status") })
+        assertTrue(ch.sent.any { it.contains("mesh.capabilities.get") })
+    }
+
+    @Test
+    fun `refreshTrustedLive skips unpaired catalog members`() {
+        val (c, ch) = controller()
+        assertTrue(c.refreshTrustedLive().isEmpty())
+        assertEquals(0, ch.opens)
     }
 }

@@ -4,6 +4,7 @@ import ai.droidcommand.companion.AndroidCompanionRegistry
 import ai.droidcommand.companion.CompanionCapabilityHealthChecker
 import ai.droidcommand.companion.CompanionDescriptor
 import ai.droidcommand.companion.ICompanionService
+import ai.droidcommand.companion.IHackerAIService
 import ai.droidcommand.companion.KnownCompanions
 import ai.droidcommand.security.CapabilityId
 import ai.droidcommand.security.CapabilityState
@@ -11,8 +12,9 @@ import android.content.Context
 
 /**
  * [CompanionLink] over `core-companion`'s [AndroidCompanionRegistry]. Binding is the registry's own bind (a
- * `BIND_AUTO_CREATE` service connection guarded by the companion's signature permission). Nothing here has run against
- * a real companion APK: none is available in CI, and the APK sources are not build-verified either.
+ * `BIND_AUTO_CREATE` service connection guarded by the companion's signature permission). HackerAI
+ * commands go through [IHackerAIService.executeEnvelope], matching [ai.droidcommand.companion.CompanionTool].
+ * Nothing here has run against a real companion APK: none is available in CI.
  */
 class AndroidCompanionLink(
     context: Context,
@@ -48,12 +50,28 @@ class AndroidCompanionLink(
     override fun exposesCompanionService(packageName: String): Boolean =
         runCatching { registry.getBinder(packageName)?.interfaceDescriptor == ICompanionService::class.java.name }.getOrDefault(false)
 
-    override fun ping(packageName: String): Boolean = service(packageName).ping()
+    override fun exposesHackerAiService(packageName: String): Boolean {
+        if (packageName != KnownCompanions.HACKERAI_PACKAGE) return false
+        return registry.getHackerAiService() != null
+    }
+
+    override fun ping(packageName: String): Boolean = companionService(packageName).ping()
 
     override fun executeCapability(packageName: String, capabilityId: String, inputJson: String): String =
-        service(packageName).executeCapability(capabilityId, inputJson)
+        companionService(packageName).executeCapability(capabilityId, inputJson)
 
-    private fun service(packageName: String): ICompanionService {
+    override fun executeHackerAiEnvelope(packageName: String, envelopeJson: String): String {
+        val service: IHackerAIService = registry.getHackerAiService()
+            ?: error("IHackerAIService not bound for $packageName")
+        return service.executeEnvelope(envelopeJson)
+    }
+
+    override fun lastSignatureRefusalDetail(packageName: String): String? {
+        val refused = registry.lastSignatureRefusal(packageName) ?: return null
+        return "${refused.kind}: ${refused.message}"
+    }
+
+    private fun companionService(packageName: String): ICompanionService {
         val binder = registry.getBinder(packageName) ?: error("not bound")
         return ICompanionService.Stub.asInterface(binder)
     }
