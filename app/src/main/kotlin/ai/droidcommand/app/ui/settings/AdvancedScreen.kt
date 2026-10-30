@@ -7,9 +7,11 @@ import ai.droidcommand.app.ui.components.SectionLabel
 import ai.droidcommand.app.ui.theme.AccentBlueBright
 import ai.droidcommand.app.ui.update.ApkDownloadBar
 import ai.droidcommand.app.update.ApkDownload
+import ai.droidcommand.app.ux.KaiCapabilityCopy
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,9 +19,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -96,6 +100,7 @@ private fun AdvancedContent(
         ModeNamesSection(viewModel)
         SectionLabel("Model and runtime")
         AdvancedSection(viewModel)
+        KaiCapabilityGatesSection()
         RemoteControlSettingsSection()
         ShizukuStatusSection()
         SectionLabel("Device tools")
@@ -109,6 +114,46 @@ private fun AdvancedContent(
         }
         SectionLabel("Developer info")
         DeveloperInfoCard(onCopiedLink = onCopiedLink)
+    }
+}
+
+@Composable
+private fun KaiCapabilityGatesSection() {
+    val rows = remember { KaiCapabilityCopy.rows() }
+    SectionLabel("Kai capabilities")
+    DroidCard(modifier = Modifier.testTag("advanced_kai_gates")) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Later assistant features", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "These stay off. They are not used for chat, models, or pairing. " +
+                    "Nothing here turns on remote control or skips a confirmation.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            rows.forEach { row ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("advanced_kai_gate_${row.capability.wireName}"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(row.label, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            row.detail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = row.enabled,
+                        onCheckedChange = null,
+                        enabled = false,
+                    )
+                }
+            }
+        }
     }
 }
 

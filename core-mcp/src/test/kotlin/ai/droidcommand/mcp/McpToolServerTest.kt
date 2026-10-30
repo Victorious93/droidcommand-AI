@@ -4,6 +4,9 @@ import ai.droidcommand.agent.AgentStateMachine
 import ai.droidcommand.agent.Initiator
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolExecutor
+import ai.droidcommand.agent.ToolJsonType
+import ai.droidcommand.agent.ToolParameter
+import ai.droidcommand.agent.ToolParameterSchema
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolSpec
@@ -244,5 +247,59 @@ class McpToolServerTest {
             assertEquals("object", schema.type)
             assertNull(schema.required)
         }
+    }
+
+    @Test
+    fun `a schema mismatch is an MCP error and does not invoke the tool`() {
+        val tool = RecordingTool(
+            ToolParameterSchema(
+                parameters = listOf(ToolParameter("text", ToolJsonType.STRING, required = true)),
+                additionalProperties = false,
+            ),
+        )
+        val registry = ToolRegistry().apply { register(tool) }
+        val executor = ToolExecutor(registry, AgentStateMachine())
+        val mcpServer = McpToolServer(registry, executor)
+
+        withMcpClient(mcpServer) { client ->
+            val result = client.callTool("echo", mapOf("count" to 3))
+            assertEquals(true, result.isError)
+            val content = assertIs<TextContent>(result.content.single())
+            assertTrue(content.text.startsWith("ERROR: tool call "))
+            assertTrue(content.text.contains("missing required argument 'text'"))
+        }
+        assertTrue(tool.calls.isEmpty())
+    }
+
+    @Test
+    fun `a schema-valid call still reaches the tool through the string-map adapter`() {
+        val tool = RecordingTool(
+            ToolParameterSchema(
+                parameters = listOf(ToolParameter("text", ToolJsonType.STRING, required = true)),
+            ),
+        )
+        val registry = ToolRegistry().apply { register(tool) }
+        val executor = ToolExecutor(registry, AgentStateMachine())
+        val mcpServer = McpToolServer(registry, executor)
+
+        withMcpClient(mcpServer) { client ->
+            val result = client.callTool("echo", mapOf("text" to "hi"))
+            assertEquals(false, result.isError)
+        }
+        assertEquals(listOf(mapOf("text" to "hi")), tool.calls)
+    }
+}
+
+private class RecordingTool(schema: ToolParameterSchema) : Tool {
+    val calls = mutableListOf<Map<String, String>>()
+    override val spec = ToolSpec(
+        name = "echo",
+        description = "records input",
+        parameterSchema = schema,
+    )
+
+    override fun execute(input: Map<String, String>): ToolResult {
+        calls += input
+        return ToolResult.Success("ran")
     }
 }

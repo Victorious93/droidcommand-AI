@@ -623,6 +623,11 @@ DroidCommand AI
 │                            secret is ever held as a plain field — an API
 │                            key is read from the source fresh on every
 │                            authToken() call, not captured at load time.
+│                            Updated 2026-10-30 (Kai Foundation): 
+│                            AssistantCapabilitySettings — nine
+│                            Kai-integration gates, all default OFF,
+│                            persisted fail-closed; never includes
+│                            externalControlEnabled.
 │
 ├── core-prompt-regen         Pure Kotlin/JVM, new capability (added
 │                            2026-09-13, requested directly by the project
@@ -1604,3 +1609,22 @@ are **later additions — Don to confirm**. Full table:
 |---|---|---|
 | `InboundEntryPointCatalog` / `CompanionAssist` | IMPLEMENTED — JVM-tested | Request parse, 60k cap, caller package+cert via `NodeSignatureVerifier` (fail-closed). Excluded apps refused. Pending-refused apps refused with a TODO naming the missing pin. |
 | `:app` `CompanionAssistActivity` | ON DISK — compiled, never run on a device | Exported Allow/Deny Activity. Model never called before Allow. `RESULT_CANCELED` on deny / bad caller / bad input. [Certain] no device run. |
+
+## 16. Kai integration Foundation (added 2026-10-30)
+
+Read `docs/KAI_INTEGRATION.md` (KAI-001..014) and
+`docs/KAI_INTEGRATION_PLAN.md`. Phase 1 (Foundation) only: capability
+map refresh, fail-closed per-capability settings, typed tool-argument
+adapter + optional schema on the existing MCP **server**, and a
+platform HTTP transport factory. No MCP client, no PRoot, no inbound
+catalogue edits. External control stays OFF by default; destructive
+stays `confirmation_required`.
+
+| Component | Status | Notes |
+|---|---|---|
+| `docs/KAI_INTEGRATION.md` / `docs/KAI_INTEGRATION_PLAN.md` | IMPLEMENTED (docs) | Map re-read against DCA `c9d9116` and Kai `3818b2fccc`. Plan uses owner phases 1–6. Phase 2+ NOT STARTED. |
+| `core-config.AssistantCapabilitySettings` + file/in-memory stores | IMPLEMENTED — JVM-tested | Nine gates default false. Corrupt file → all-off. Ignores `externalControlEnabled` if present in a file. `:app` Advanced tab shows them read-only (all Off); Settings only points at Advanced. |
+| `core-agent.ToolParameterSchema` / `ToolArgumentCodec` / `ToolCallEnvelope` | IMPLEMENTED — JVM-tested | Opt-in schema on `ToolSpec` (null = existing tools unchanged). JSON null omitted; arrays/objects kept as JSON text. New call id per MCP invocation. |
+| `core-mcp.McpToolServer` schema check | IMPLEMENTED — JVM-tested | Uses the codec; schema mismatch is an MCP error and does not call `ToolRunner`. Untyped tools unchanged. |
+| `core-remote.PlatformHttpTransport` | IMPLEMENTED — JVM-tested | Android → `HttpUrlConnectionTransport`; desktop JVM → `JdkHttpTransport`. `:app` still injects `HttpUrlConnectionTransport` directly. |
+| Inbound 13/4 + cert pins | UNCHANGED | `InboundEntryPointCatalog` / `KnownNodeSigningCatalog` not edited in this slice. |

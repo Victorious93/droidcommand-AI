@@ -136,7 +136,7 @@ fun SettingsScreen(
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "One-step commands, plans, memory, security tools, and remote control live on the Advanced tab.",
+                    "One-step commands, plans, memory, security tools, remote control, and later Kai capabilities live on the Advanced tab.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

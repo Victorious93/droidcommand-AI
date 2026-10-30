@@ -42,8 +42,9 @@ object ScreenHelpCatalog {
 
     val ADVANCED = ScreenHelp(
         title = "What is Advanced?",
-        body = "One-step commands, plans, memory, extra tools, the activity log, and remote-control " +
-            "toggles live here. Remote control stays off until you turn it on and confirm. " +
+        body = "One-step commands, plans, memory, extra tools, the activity log, remote-control " +
+            "toggles, and later Kai capabilities live here. Those capabilities stay off. " +
+            "Remote control stays off until you turn it on and confirm. " +
             "You do not need this tab to chat or to pair an app.",
     )
 
