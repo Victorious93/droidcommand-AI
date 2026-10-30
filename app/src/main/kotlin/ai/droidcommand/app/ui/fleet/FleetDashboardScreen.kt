@@ -46,8 +46,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 private val DashboardAmber = Color(0xFFFFB020)
 
 /**
- * Fleet home. One row per catalogued member. Live `node.status.get` is not
- * wired — Refresh only reloads saved pairings and the in-memory tray.
+ * Fleet home. One row per catalogued member. Refresh pulls live status and
+ * capabilities for TRUSTED paired EXTERNAL_NODEs (off the main thread) and
+ * publishes them into the status tray.
  */
 @Composable
 fun FleetDashboardScreen(
@@ -72,6 +73,20 @@ fun FleetDashboardScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        state.emptyStateCta?.let { cta ->
+            DroidCard(
+                modifier = Modifier
+                    .clickable(onClick = onOpenPairing)
+                    .testTag("fleet_dashboard_empty_cta"),
+                borderColor = AccentBlueBright.copy(alpha = 0.55f),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Pair a node to get live status", style = MaterialTheme.typography.titleMedium)
+                    Text(cta, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text("Tap to open pairing →", style = MaterialTheme.typography.labelMedium, color = AccentBlueBright)
+                }
+            }
+        }
         OutlinedButton(
             onClick = viewModel::refresh,
             modifier = Modifier.fillMaxWidth().testTag("fleet_dashboard_refresh"),
@@ -107,8 +122,15 @@ fun FleetDashboardScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(row.member.role)
                     Text("${row.statusLabel} · ${row.seenLabel}")
+                    if (row.reason.isNotBlank()) {
+                        Text(row.reason, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    }
                     Text(
-                        "This node has no pairing screen of its own. Live status from the phone is not wired yet.",
+                        if (row.member.opensPairing) {
+                            "Open pairing to connect or re-check this node."
+                        } else {
+                            "This node has no pairing screen of its own. Use Refresh list after installing and launching it."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -146,6 +168,14 @@ private fun FleetDashboardRowCard(row: FleetDashboardRow, onClick: () -> Unit) {
             }
             Text(row.member.role, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             Text(row.statusLabel, style = MaterialTheme.typography.bodySmall, color = toneColor(row.tone))
+            if (row.reason.isNotBlank()) {
+                Text(
+                    row.reason,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                    modifier = Modifier.testTag("fleet_dashboard_reason_${row.member.id}"),
+                )
+            }
             Text(row.seenLabel, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
         }
     }

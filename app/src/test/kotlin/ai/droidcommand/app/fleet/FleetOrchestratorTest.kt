@@ -40,10 +40,13 @@ private class FakeLink(
     var connects: Boolean = true,
     var domainHealthy: Boolean = true,
     var companionService: Boolean = false,
+    var hackerAiService: Boolean = false,
     var pings: Boolean = true,
     var response: String = """{"ok":true,"output":"hi"}""",
+    var signatureRefusal: String? = null,
 ) : CompanionLink {
     var executed = 0
+    var hackerAiExecuted = 0
 
     override fun isInstalled(packageName: String) = installed
 
@@ -53,6 +56,8 @@ private class FakeLink(
 
     override fun exposesCompanionService(packageName: String) = companionService
 
+    override fun exposesHackerAiService(packageName: String) = hackerAiService
+
     override fun ping(packageName: String) = pings
 
     override fun executeCapability(packageName: String, capabilityId: String, inputJson: String): String {
@@ -60,6 +65,14 @@ private class FakeLink(
         if (response == "throw") error("binder died")
         return response
     }
+
+    override fun executeHackerAiEnvelope(packageName: String, envelopeJson: String): String {
+        hackerAiExecuted++
+        if (response == "throw") error("binder died")
+        return response
+    }
+
+    override fun lastSignatureRefusalDetail(packageName: String): String? = signatureRefusal
 }
 
 private val HACKERAI_NODE = FleetNodes.nodes().single { it.id == "hackerai" }
@@ -211,6 +224,35 @@ class BoundCompanionTransportTest {
         val link = FakeLink(companionService = false)
         assertIs<ToolResult.Failure>(transport(link).sendCommand(HACKERAI_NODE, "x", "{}"))
         assertEquals(0, link.executed)
+    }
+
+    @Test
+    fun `HackerAI IHackerAIService probe reports a command channel`() {
+        val r = transport(FakeLink(hackerAiService = true, domainHealthy = true)).probe(HACKERAI_NODE)
+        assertEquals(FleetReachability.REACHABLE, r.reachability)
+        assertTrue(r.commandChannel)
+        assertTrue(r.detail.contains("IHackerAIService"))
+    }
+
+    @Test
+    fun `HackerAI sendCommand uses executeEnvelope`() {
+        val link = FakeLink(hackerAiService = true, response = """{"ok":true,"status":"queued"}""")
+        val ok = transport(link).sendCommand(HACKERAI_NODE, "ai.companion.hackerai.agent_task", """{"envelope":"{}"}""")
+        assertIs<ToolResult.Success>(ok)
+        assertEquals(1, link.hackerAiExecuted)
+        assertEquals(0, link.executed)
+    }
+
+    @Test
+    fun `signature refusal detail is surfaced on a failed bind`() {
+        val link = FakeLink(connects = false, signatureRefusal = "CERT_MISMATCH: observed cert is not catalogued")
+        val r = transport(link).probe(HACKERAI_NODE)
+        assertEquals(FleetReachability.OFFLINE, r.reachability)
+        assertTrue(r.detail.contains("Bind refused (signature)"))
+        assertTrue(r.detail.contains("CERT_MISMATCH"))
+        val cmd = transport(link).sendCommand(HACKERAI_NODE, "x", "{}")
+        assertIs<ToolResult.Failure>(cmd)
+        assertTrue(cmd.reason.contains("Bind refused (signature)"))
     }
 }
 

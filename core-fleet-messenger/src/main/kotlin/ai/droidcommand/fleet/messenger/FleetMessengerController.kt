@@ -90,6 +90,15 @@ sealed class LiveCallResult {
     }
 }
 
+/** One TRUSTED node after a live status + capabilities pass. */
+data class TrustedLiveOutcome(
+    val catalogId: String,
+    val nodeId: String,
+    val packageName: String?,
+    val status: LiveCallResult,
+    val capabilities: LiveCallResult,
+)
+
 /**
  * JVM-testable pairing + live-status controller. Android UI stays thin: it shows [snapshot]
  * and calls [pair] / [unpair] / the live-op methods. Nothing is contacted until the owner pairs
@@ -126,7 +135,7 @@ class FleetMessengerController(
         // whatever is installed *now* — never an older stored value, never a hardcoded one.
         store.unpair(spec.nodeId)
         store.findByPackage(packageName)?.let { store.unpair(it.nodeId) }
-        val node = PairedNode.of(packageName, spec.nodeId, cert)
+        val node = PairedNode.of(packageName, spec.nodeId, cert, customAction = spec.bridgeAction)
         return runCatching {
             store.pair(node)
             PairingResult.Paired(node)
@@ -144,6 +153,25 @@ class FleetMessengerController(
     fun refreshCapabilities(catalogId: String): LiveCallResult = runReadOnly(catalogId) { it.capabilitiesOperation }
 
     fun refreshStatus(catalogId: String): LiveCallResult = runReadOnly(catalogId) { it.statusOperation }
+
+    /**
+     * Live status + capabilities for every [NodePairingState.TRUSTED] catalog
+     * row. Used by the home dashboard refresh (and post-pair) to publish into
+     * the status tray. Off the main thread; each call already times out via
+     * [timeoutMs]. Never invents a REACHABLE answer for unpaired nodes.
+     */
+    fun refreshTrustedLive(): List<TrustedLiveOutcome> =
+        snapshot()
+            .filter { it.state == NodePairingState.TRUSTED }
+            .map { row ->
+                TrustedLiveOutcome(
+                    catalogId = row.spec.id,
+                    nodeId = row.paired!!.nodeId,
+                    packageName = row.installedPackage ?: row.paired.packageName,
+                    status = refreshStatus(row.spec.id),
+                    capabilities = refreshCapabilities(row.spec.id),
+                )
+            }
 
     /**
      * Fire-and-forget `*.up` (empty `{}`, ACK), then poll `*.status`. Refused when the catalog

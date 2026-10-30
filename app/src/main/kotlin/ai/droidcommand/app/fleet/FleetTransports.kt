@@ -33,28 +33,59 @@ interface CompanionLink {
     /** True only when the bound service really implements `ICompanionService` (the one with ping and executeCapability). */
     fun exposesCompanionService(packageName: String): Boolean
 
+    /**
+     * True when the bound binder is [ai.droidcommand.companion.IHackerAIService]
+     * (HackerAI's real AIDL). Same path [ai.droidcommand.companion.CompanionTool] uses.
+     */
+    fun exposesHackerAiService(packageName: String): Boolean = false
+
     fun ping(packageName: String): Boolean
 
     fun executeCapability(packageName: String, capabilityId: String, inputJson: String): String
+
+    /**
+     * HackerAI command path: [ai.droidcommand.companion.IHackerAIService.executeEnvelope].
+     * Default refuses so fakes that only cover ICompanionService stay honest.
+     */
+    fun executeHackerAiEnvelope(packageName: String, envelopeJson: String): String =
+        error("IHackerAIService.executeEnvelope is not available for $packageName")
+
+    /** Last controller-side signature refusal detail, if [connect] failed for that reason. */
+    fun lastSignatureRefusalDetail(packageName: String): String? = null
 }
 
 /**
- * BOUND_COMPANION: `ICompanionService.ping()` when the companion implements it, otherwise the existing health checker.
+ * BOUND_COMPANION probe/command path.
  *
- * The HackerAI and Pentest-Swarm APK sources implement only their own domain AIDL (`IHackerAIService`,
- * `IPentestSwarmService`), not `ICompanionService`. So today a reachable companion reports no command channel and
- * the screen keeps its command button disabled, saying why. The `executeCapability` path below is real code, covered by
- * fake-link tests, and has never run against a real companion.
+ * HackerAI uses [IHackerAIService] the same way [ai.droidcommand.companion.CompanionTool]
+ * does (`healthCheck` / `executeEnvelope`). Pentest-Swarm still only has domain AIDL
+ * (no command channel). Generic `ICompanionService` stays supported when a companion
+ * actually exposes it. Signature-refusal detail from the registry is surfaced on a
+ * failed bind. Never run against a real companion APK in CI.
  */
 class BoundCompanionTransport(private val link: CompanionLink) : FleetNodeTransport {
     override fun probe(node: FleetNode): FleetProbeResult {
         val pkg = node.packageName ?: return FleetProbeResult(FleetReachability.UNKNOWN, "No package to bind")
         if (!link.isInstalled(pkg)) return FleetProbeResult(FleetReachability.OFFLINE, "Companion APK not installed ($pkg)")
         if (!link.connect(pkg)) {
-            return FleetProbeResult(
-                FleetReachability.OFFLINE,
-                "Installed, but the service did not bind. It may not be running, or the signature permission was refused.",
-            )
+            val refusal = link.lastSignatureRefusalDetail(pkg)
+            val detail = if (!refusal.isNullOrBlank()) {
+                "Bind refused (signature): $refusal"
+            } else {
+                "Installed, but the service did not bind. It may not be running, or the signature permission was refused."
+            }
+            return FleetProbeResult(FleetReachability.OFFLINE, detail)
+        }
+        if (link.exposesHackerAiService(pkg)) {
+            return if (link.domainHealthy(pkg)) {
+                FleetProbeResult(
+                    FleetReachability.REACHABLE,
+                    "IHackerAIService healthCheck() answered (same path as CompanionTool)",
+                    commandChannel = true,
+                )
+            } else {
+                FleetProbeResult(FleetReachability.OFFLINE, "Bound IHackerAIService, but healthCheck() failed")
+            }
         }
         return if (link.exposesCompanionService(pkg)) {
             if (runCatching { link.ping(pkg) }.getOrDefault(false)) {
@@ -74,7 +105,26 @@ class BoundCompanionTransport(private val link: CompanionLink) : FleetNodeTransp
 
     override fun sendCommand(node: FleetNode, capabilityId: String, inputJson: String): ToolResult {
         val pkg = node.packageName ?: return ToolResult.Failure("No package to bind")
-        if (!link.connect(pkg)) return ToolResult.Failure("${node.displayName} is not bound")
+        if (!link.connect(pkg)) {
+            val refusal = link.lastSignatureRefusalDetail(pkg)
+            return if (!refusal.isNullOrBlank()) {
+                ToolResult.Failure("Bind refused (signature): $refusal")
+            } else {
+                ToolResult.Failure("${node.displayName} is not bound")
+            }
+        }
+        if (link.exposesHackerAiService(pkg)) {
+            val response = try {
+                link.executeHackerAiEnvelope(pkg, inputJson)
+            } catch (e: Exception) {
+                return ToolResult.Failure("IHackerAIService.executeEnvelope failed: ${e.message ?: e::class.simpleName}", e)
+            }
+            return when {
+                OK_TRUE.containsMatchIn(response) -> ToolResult.Success(response)
+                OK_FALSE.containsMatchIn(response) -> ToolResult.Failure(response)
+                else -> ToolResult.Success(response) // envelope replies are opaque JSON; treat non-false as delivered
+            }
+        }
         if (!link.exposesCompanionService(pkg)) {
             return ToolResult.Failure("${node.displayName} does not implement ICompanionService.executeCapability")
         }

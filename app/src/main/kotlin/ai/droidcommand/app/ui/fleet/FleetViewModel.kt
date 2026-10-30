@@ -10,6 +10,8 @@ import ai.droidcommand.fleet.messenger.LiveCallResult
 import ai.droidcommand.fleet.messenger.MutablePairedNodeStore
 import ai.droidcommand.fleet.messenger.PackageIdentityResolver
 import ai.droidcommand.fleet.messenger.PairedNodeGateway
+import ai.droidcommand.app.fleet.FleetTrustedLivePublisher
+import ai.droidcommand.remotecontrol.RemoteStatusTray
 import ai.droidcommand.fleet.messenger.PairingResult
 import android.content.Context
 import androidx.lifecycle.ViewModel
@@ -44,6 +46,7 @@ class FleetViewModel @Inject constructor(
     store: MutablePairedNodeStore,
     resolver: PackageIdentityResolver,
     gateway: PairedNodeGateway,
+    private val statusTray: RemoteStatusTray,
 ) : ViewModel() {
     private val probe = PackageFleetProbe(context)
     private val controller = FleetMessengerController(store, resolver, gateway)
@@ -71,8 +74,11 @@ class FleetViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             val result = controller.pair(catalogId)
             val message = when (result) {
-                is PairingResult.Paired ->
+                is PairingResult.Paired -> {
+                    // Right after pairing, pull live status/capabilities into the shared tray.
+                    FleetTrustedLivePublisher.refresh(controller, statusTray)
                     "Paired ${result.node.packageName} with cert ${result.node.expectedCertSha256}"
+                }
                 is PairingResult.Refused -> result.reason
             }
             publish(pairingMessage = message)

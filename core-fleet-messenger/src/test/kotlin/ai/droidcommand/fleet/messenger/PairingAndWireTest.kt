@@ -151,4 +151,11 @@ class PendingReplyTest {
         p.fail(java.io.IOException("service disconnected"))
         assertEquals("service disconnected", p.await(10).exceptionOrNull()?.message)
     }
+
+    @Test
+    fun `MessengerWire exposes hub request and Flash json Bundle keys`() {
+        assertEquals("request", MessengerWire.KEY_REQUEST)
+        assertEquals("response", MessengerWire.KEY_RESPONSE)
+        assertEquals("json", MessengerWire.KEY_JSON)
+    }
 }
