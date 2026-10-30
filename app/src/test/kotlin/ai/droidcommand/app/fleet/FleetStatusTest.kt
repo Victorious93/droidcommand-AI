@@ -92,6 +92,21 @@ class FleetStatusTest {
             FleetCatalog.all.map { it.id },
         )
         assertTrue(FleetCatalog.queryPackages.containsAll(FleetCatalog.all.mapNotNull { it.packageName }))
+        assertTrue(FleetCatalog.queryPackages.containsAll(FleetCatalog.INBOUND_VISIBILITY_PACKAGES))
+        assertFalse("com.victorious.victoryped" in FleetCatalog.queryPackages)
+        assertFalse("org.victoriousframework.victorlink64" in FleetCatalog.queryPackages)
+        assertFalse("com.victorious.match" in FleetCatalog.queryPackages)
+        assertFalse("com.victorious.zombie" in FleetCatalog.queryPackages)
+        assertEquals(
+            setOf(
+                "com.victorious.cam",
+                "com.victorious.trade",
+                "com.victorious.taskbar",
+                "com.victorious.mango",
+                "com.victorious.gps",
+            ),
+            FleetCatalog.INBOUND_VISIBILITY_PACKAGES,
+        )
     }
 
     @Test

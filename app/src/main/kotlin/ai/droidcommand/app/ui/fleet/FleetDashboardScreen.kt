@@ -45,6 +45,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 /** Amber for a snapshot that says the node is struggling. Not a theme-wide token. */
 private val DashboardAmber = Color(0xFFFFB020)
 
+/** Bound companions: tap opens the orchestrator bind path, not a dead dialog. */
+private val COMPANION_ORCHESTRATOR_IDS = setOf("hackerai", "pentestswarm")
+
 /**
  * Fleet home. One row per catalogued member. Refresh pulls live status and
  * capabilities for TRUSTED paired EXTERNAL_NODEs (off the main thread) and
@@ -104,10 +107,10 @@ fun FleetDashboardScreen(
             FleetDashboardRowCard(
                 row = row,
                 onClick = {
-                    if (row.member.opensPairing) {
-                        onOpenPairing()
-                    } else {
-                        sheetFor = row
+                    when {
+                        row.member.opensPairing -> onOpenPairing()
+                        row.member.id in COMPANION_ORCHESTRATOR_IDS -> onOpenOrchestrator()
+                        else -> sheetFor = row
                     }
                 },
             )
@@ -126,10 +129,13 @@ fun FleetDashboardScreen(
                         Text(row.reason, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                     }
                     Text(
-                        if (row.member.opensPairing) {
-                            "Open pairing to connect or re-check this node."
-                        } else {
-                            "This node has no pairing screen of its own. Use Refresh list after installing and launching it."
+                        when {
+                            row.member.opensPairing ->
+                                "Open pairing to connect or re-check this node."
+                            row.member.id in COMPANION_ORCHESTRATOR_IDS ->
+                                "Open fleet commands to bind this companion. Debug builds need the same signing key."
+                            else ->
+                                "This node has no pairing screen of its own. Use Refresh list after installing and launching it."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
