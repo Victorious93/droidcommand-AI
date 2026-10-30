@@ -81,11 +81,25 @@ fun CodeAssistConsentScreen(
                         )
                     }
                 }
+                // Show exactly what CodeAssist.buildPrompt will send (plus
+                // instruction). Logic lives in core-security.consentContent.
+                val consent = CodeAssist.consentContent(request)
+                if (consent.instruction.isNotBlank()) {
+                    DroidCard {
+                        SectionLabel("Instruction")
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = consent.instruction,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
                 DroidCard {
-                    SectionLabel("Code preview")
+                    SectionLabel("Prompt to send")
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = CodeAssist.preview(request.code),
+                        text = consent.promptPreview,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface,

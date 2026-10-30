@@ -21,6 +21,28 @@ class TrustPipelineTest {
         "1B:06:A8:9E:7F:F5:BA:21:C9:A4:F8:F1:F0:4F:95:E5:62:78:A1:22:18:AD:37:33:28:CE:E7:83:1D:4F:BA:CA"
 
     @Test
+    fun `null source package is refused when the pairing has a package`() {
+        assertEquals(
+            RemoteErrorCategory.UNAUTHORIZED,
+            TrustPipeline.pairingDecision(
+                SourceIdentity(
+                    sourceNodeRef = "launch-node",
+                    packageName = null,
+                    certSha256 = launchCert,
+                ),
+                launchConfig(certSha256 = launchCert),
+            ),
+        )
+        // Matching package still accepted.
+        assertNull(
+            TrustPipeline.pairingDecision(
+                launchSource(certSha256 = launchCert),
+                launchConfig(certSha256 = launchCert),
+            ),
+        )
+    }
+
+    @Test
     fun `known catalog cert plus matching source is accepted`() {
         assertNull(
             TrustPipeline.pairingDecision(

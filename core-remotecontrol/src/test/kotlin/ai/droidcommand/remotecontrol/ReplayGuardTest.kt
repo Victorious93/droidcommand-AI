@@ -109,4 +109,26 @@ class ReplayGuardTest {
         )
         assertTrue(guard.seenCount() <= 2)
     }
+
+    @Test
+    fun `refuses a new nonce when full instead of evicting an in-window entry`() {
+        val now = 1_000_000L
+        val guard = ReplayGuard(maxNonces = 2, nowMs = { now })
+        val n1 = "aa".repeat(16)
+        val n2 = "bb".repeat(16)
+        val n3 = "cc".repeat(16)
+        assertEquals(ReplayDecision.Accept, guard.check(envelope(nonce = n1, timestampMs = now), source()))
+        assertEquals(ReplayDecision.Accept, guard.check(envelope(nonce = n2, timestampMs = now), source()))
+        assertEquals(2, guard.seenCount())
+        val third = assertIs<ReplayDecision.Reject>(
+            guard.check(envelope(nonce = n3, timestampMs = now), source()),
+        )
+        assertEquals(RemoteErrorCategory.INTERNAL, third.category)
+        assertEquals(2, guard.seenCount())
+        // Original in-window nonces still block replay.
+        val replay = assertIs<ReplayDecision.Reject>(
+            guard.check(envelope(nonce = n1, timestampMs = now + 1), source()),
+        )
+        assertEquals(RemoteErrorCategory.REPLAY_DETECTED, replay.category)
+    }
 }

@@ -266,6 +266,43 @@ class SecureToolExecutorTest {
     }
 
     @Test
+    fun `a Partial invocation consumes a single-use grant`() {
+        val spec = ToolSpec(
+            name = "partial-tool",
+            description = "d",
+            securityLevel = SecurityLevel.SENSITIVE,
+            grantCapability = "root",
+        )
+        val registry = ToolRegistry().apply {
+            register(
+                object : Tool {
+                    override val spec = spec
+                    override fun execute(input: Map<String, String>) =
+                        ToolResult.Partial(output = "did some", reason = "stopped early")
+                },
+            )
+        }
+        val stateMachine = AgentStateMachine()
+        val delegate = ToolExecutor(registry, stateMachine, sleep = { })
+        val grantStore = InMemoryGrantStore().apply { issue(Grant(id = "g1", capability = "root")) }
+        val secure = SecureToolExecutor(
+            registry,
+            delegate,
+            stateMachine,
+            SecurityPolicyEnforcer(SecurityPolicy(autoApprove = setOf(SecurityLevel.SENSITIVE))),
+            ApprovalPrompt { true },
+            grantStore = grantStore,
+        )
+
+        val first = secure.run("partial-tool", emptyMap(), grantId = "g1")
+        assertIs<ToolResult.Partial>(first)
+        assertIs<GrantCheck.Denied>(grantStore.check("g1", "root"))
+
+        val second = secure.run("partial-tool", emptyMap(), grantId = "g1")
+        assertIs<ToolResult.Failure>(second)
+    }
+
+    @Test
     fun `a failed invocation does not consume a single-use grant`() {
         val spec = ToolSpec(
             name = "always-fails",

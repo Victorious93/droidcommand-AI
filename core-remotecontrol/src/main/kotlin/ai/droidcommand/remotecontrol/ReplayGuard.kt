@@ -10,6 +10,8 @@ package ai.droidcommand.remotecontrol
  * - `now > timestampMs + ttlMs` → [RemoteErrorCategory.EXPIRED]
  * - `timestampMs > now + 120000` → [RemoteErrorCategory.EXPIRED]
  *   (future-skew allowance only — not a two-sided cap)
+ * - cache at [maxNonces] after age eviction → [RemoteErrorCategory.INTERNAL]
+ *   (never drop an in-window nonce to make room; that would allow a replay)
  *
  * Past validity is TTL-only, so the full 300s max TTL is usable.
  */
@@ -46,11 +48,11 @@ class ReplayGuard(
             if (key in seen) {
                 return ReplayDecision.Reject(RemoteErrorCategory.REPLAY_DETECTED)
             }
-            seen[key] = now
-            while (seen.size > maxNonces) {
-                val oldest = seen.keys.first()
-                seen.remove(oldest)
+            // Full after age eviction: refuse rather than evict an in-window nonce.
+            if (seen.size >= maxNonces) {
+                return ReplayDecision.Reject(RemoteErrorCategory.INTERNAL)
             }
+            seen[key] = now
         }
         return ReplayDecision.Accept
     }
