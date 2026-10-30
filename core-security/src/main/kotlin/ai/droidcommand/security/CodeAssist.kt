@@ -31,7 +31,11 @@ object CodeAssist {
     const val FILE_MANAGER_PACKAGE = "ai.victorious.filemanager"
     const val FILE_MANAGER_DEBUG_PACKAGE = "ai.victorious.filemanager.debug"
 
-    /** Consent-screen snippet; the full [CodeAssistRequest.code] is still sent to the model. */
+    /**
+     * Consent-screen snippet length. Preview the exact text [buildPrompt] will
+     * send (not raw [CodeAssistRequest.code] alone), so Allow cannot approve a
+     * different prompt than the user saw.
+     */
     const val PREVIEW_CHARS = 1_200
 
     fun callerVerifier(): NodeSignatureVerifier = NodeSignatureVerifier(
@@ -176,6 +180,25 @@ object CodeAssist {
         return code.take(maxChars) + "\n… (${code.length - maxChars} more characters)"
     }
 
+    /**
+     * JVM-testable consent payload: [promptToSend] is exactly what
+     * [buildPrompt] returns (and what the Activity must send after Allow).
+     * [promptPreview] is that same text truncated for the Compose screen.
+     * [instruction] is surfaced separately so a ready-made [CodeAssistRequest.prompt]
+     * cannot hide the caller's instruction.
+     */
+    fun consentContent(
+        request: CodeAssistRequest,
+        previewMaxChars: Int = PREVIEW_CHARS,
+    ): CodeAssistConsentContent {
+        val promptToSend = buildPrompt(request)
+        return CodeAssistConsentContent(
+            promptToSend = promptToSend,
+            promptPreview = preview(promptToSend, previewMaxChars),
+            instruction = request.instruction.trim(),
+        )
+    }
+
     private fun versionOf(obj: JsonObject): Int? {
         val value = obj["v"] ?: return CONTRACT_VERSION
         val primitive = value as? JsonPrimitive ?: return null
@@ -231,3 +254,13 @@ sealed class CodeAssistParse {
 
     data class Invalid(val reason: String) : CodeAssistParse()
 }
+
+/**
+ * What the CODE_ASSIST consent screen must show, and the exact prompt the
+ * Activity sends after Allow. [promptToSend] == [CodeAssist.buildPrompt].
+ */
+data class CodeAssistConsentContent(
+    val promptToSend: String,
+    val promptPreview: String,
+    val instruction: String,
+)

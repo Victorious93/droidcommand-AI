@@ -47,7 +47,10 @@ object TrustPipeline {
     }
 
     private fun pairingMatches(pairing: DevicePairing, source: SourceIdentity): Boolean {
-        val packageOk = source.packageName == null || pairing.packageName == source.packageName
+        // DevicePairing always carries a package. A null source package used
+        // to match any pairing (fail-open); refuse instead.
+        val sourcePackage = source.packageName ?: return false
+        val packageOk = pairing.packageName == sourcePackage
         return packageOk && certMatches(pairing, source)
     }
 

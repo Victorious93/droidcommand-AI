@@ -149,9 +149,19 @@ class SecureToolExecutor(
                 ),
             )
 
-            if (capability != null && grantId != null && result is ToolResult.Success) {
+            // Partial still did real work under the grant — consume like Success.
+            // Failure / Unexpected leave the single-use grant reusable.
+            if (capability != null && grantId != null &&
+                (result is ToolResult.Success || result is ToolResult.Partial)
+            ) {
                 grantStore?.consume(grantId)
-                auditLog?.record(AuditEvent(AuditEventType.GRANT_CONSUMED, toolName, "grant '$grantId' consumed after successful execution"))
+                auditLog?.record(
+                    AuditEvent(
+                        AuditEventType.GRANT_CONSUMED,
+                        toolName,
+                        "grant '$grantId' consumed after ${result::class.simpleName} execution",
+                    ),
+                )
             }
 
             result

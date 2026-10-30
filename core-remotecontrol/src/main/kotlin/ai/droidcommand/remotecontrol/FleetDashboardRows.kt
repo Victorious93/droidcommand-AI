@@ -46,7 +46,7 @@ enum class FleetDashboardTone {
     /** Gray. Not paired, or paired with nothing useful to show. */
     UNKNOWN,
 
-    /** Green. A snapshot says this node is ok. */
+    /** Green. A *fresh* snapshot says this node is ok. Stale snapshots must not use this. */
     OK,
 
     /** Amber. A snapshot says this node is struggling. */
@@ -106,7 +106,7 @@ object FleetDashboardRows {
         } else {
             null
         }
-        val tone = toneOf(paired, snapshot)
+        val tone = toneOf(paired, snapshot, nowMs)
         FleetDashboardRow(
             member = member,
             paired = paired,
@@ -116,14 +116,17 @@ object FleetDashboardRows {
                 snapshot,
                 member.pendingDeviceTest,
                 member.pendingRepackage,
+                nowMs,
             ),
             seenLabel = seenLabel(snapshot, nowMs),
             snapshot = snapshot,
         )
     }
 
-    fun toneOf(paired: Boolean, snapshot: NodeStatusSnapshot?): FleetDashboardTone {
+    fun toneOf(paired: Boolean, snapshot: NodeStatusSnapshot?, nowMs: Long): FleetDashboardTone {
         if (!paired || snapshot == null) return FleetDashboardTone.UNKNOWN
+        // Stale (past FRESH_MS, still inside EXPIRE_MS) must not keep a green OK.
+        if (!snapshot.isFresh(nowMs)) return FleetDashboardTone.UNKNOWN
         val states = snapshot.domains.map { it.state }
         return when {
             states.any { it == StatusTrayState.DOWN } -> FleetDashboardTone.DOWN
@@ -138,12 +141,13 @@ object FleetDashboardRows {
         snapshot: NodeStatusSnapshot?,
         pendingDeviceTest: Boolean = false,
         pendingRepackage: Boolean = false,
+        nowMs: Long = 0L,
     ): String = when {
         pendingRepackage && snapshot == null -> STATUS_PENDING_REPACKAGE
         pendingDeviceTest && snapshot == null -> STATUS_PENDING
         !paired -> STATUS_NOT_PAIRED
         snapshot == null -> STATUS_AWAITING
-        else -> when (toneOf(true, snapshot)) {
+        else -> when (toneOf(true, snapshot, nowMs)) {
             FleetDashboardTone.OK -> STATUS_REACHABLE
             FleetDashboardTone.DEGRADED -> STATUS_TROUBLE
             FleetDashboardTone.DOWN -> STATUS_DOWN

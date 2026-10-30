@@ -122,20 +122,20 @@ class FleetDashboardRowsTest {
                 StatusTrayDomainStatus(StatusTrayDomain.VPN, StatusTrayState.DOWN),
             ),
         )
-        assertEquals(FleetDashboardTone.DOWN, FleetDashboardRows.toneOf(true, snapshot))
+        assertEquals(FleetDashboardTone.DOWN, FleetDashboardRows.toneOf(true, snapshot, now))
         assertEquals(false, snapshot.healthy)
     }
 
     @Test
-    fun `stale snapshot keeps its tone and marks last seen`() {
+    fun `stale snapshot drops OK tone and marks last seen`() {
         val members = listOf(member("rootforge", packages = listOf("ai.rootforge.os")))
         val pairings = listOf(FleetDashboardPairing("rootforge", "ai.rootforge.os"))
         val snapshots = listOf(
             snapshot("rootforge", packageName = "ai.rootforge.os", state = StatusTrayState.OK, updatedAtMs = now - 45_000L),
         )
         val row = FleetDashboardRows.build(members, pairings, snapshots, now).single()
-        assertEquals(FleetDashboardTone.OK, row.tone)
-        assertEquals(FleetDashboardRows.STATUS_REACHABLE, row.statusLabel)
+        assertEquals(FleetDashboardTone.UNKNOWN, row.tone)
+        assertEquals(FleetDashboardRows.STATUS_UNKNOWN, row.statusLabel)
         assertEquals("Last seen 45s ago · stale", row.seenLabel)
     }
 
