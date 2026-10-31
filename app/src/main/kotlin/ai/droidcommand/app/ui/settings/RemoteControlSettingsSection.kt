@@ -1,5 +1,6 @@
 package ai.droidcommand.app.ui.settings
 
+import ai.droidcommand.app.fleet.connectionClassLabel
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.SectionLabel
 import ai.droidcommand.remotecontrol.DevicePairing
@@ -45,12 +46,11 @@ fun RemoteControlSettingsSection(viewModel: RemoteControlViewModel = hiltViewMod
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Fleet remote commands and macros", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Inbound commands are untrusted requests. A VictorSMS whitelist + code word only " +
-                    "delivers the request — this controller is the sole authorizer. Frozen envelope " +
-                    "fields nonce, timestampMs, ttlMs are top-level. External-control is OFF by default on this inbound " +
-                    "surface. Destructive actions always prompt — YOLO cannot skip them, even if the " +
-                    "envelope says destructive=false. Live wipe, power-off, lock, and RustDesk are not " +
-                    "implemented; Run still opens the approval dialog, then a stub failure.",
+                "Commands that arrive from another app are untrusted. This phone is the only place " +
+                    "that can approve them. Remote control stays off until you turn it on below. " +
+                    "Anything that can wipe, power off, or lock a device always asks you first — " +
+                    "that prompt cannot be skipped. Wipe, power-off, lock, and remote desktop are " +
+                    "not implemented; Run still asks, then reports that those actions are not built.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -65,8 +65,8 @@ fun RemoteControlSettingsSection(viewModel: RemoteControlViewModel = hiltViewMod
     DroidCard {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "OFF by default. When off, inbound node commands and node macro ops are rejected as " +
-                    "external_control_disabled. Does not store VictorSMS whitelist or code word.",
+                "Off by default. When off, remote commands from other apps are ignored. " +
+                    "Text-message allow-lists live in that other app, not here.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -159,23 +159,23 @@ private fun PairingEditor(viewModel: RemoteControlViewModel) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Device pairings", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Caller-id for inbound commands: package + optional cert. Empty cert is fail-open / unpinned. " +
-                    "Known remote.command EXTERNAL_NODE rows (not live-paired):",
+                "Who may send a command here: the other app's package, plus an optional signing certificate. " +
+                    "Leave the certificate blank only if you accept any install of that package. Known inbound apps (not paired from here):",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             RemoteCommandTargetRegistry.ALL.forEach { target ->
-                val pin = if (target.enforcePin) "pin enforced" else "fail-open"
+                val cert = if (target.enforcePin) "certificate checked" else "certificate not required yet"
                 Text(
-                    "${target.displayName} · ${target.packageName} · ${target.status} · $pin · " +
+                    "${target.displayName} · ${target.packageName} · ${target.status} · $cert · " +
                         target.cataloguedOps.joinToString(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            OutlinedTextField(value = sourceNodeRef, onValueChange = { sourceNodeRef = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Source node id") })
+            OutlinedTextField(value = sourceNodeRef, onValueChange = { sourceNodeRef = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Source id") })
             OutlinedTextField(value = packageName, onValueChange = { packageName = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Package") })
-            OutlinedTextField(value = certSha256, onValueChange = { certSha256 = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Cert SHA-256 (optional)") })
+            OutlinedTextField(value = certSha256, onValueChange = { certSha256 = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Signing certificate (optional)") })
             Button(
                 onClick = { viewModel.savePairing(sourceNodeRef, packageName, certSha256) },
                 enabled = sourceNodeRef.isNotBlank() && packageName.isNotBlank(),
@@ -191,7 +191,7 @@ private fun PairingRow(pairing: DevicePairing, viewModel: RemoteControlViewModel
             Column {
                 Text(pairing.sourceNodeRef, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    pairing.packageName + (pairing.certSha256?.let { " · pinned" } ?: " · unpinned"),
+                    pairing.packageName + (pairing.certSha256?.let { " · certificate checked" } ?: " · no certificate stored"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -210,13 +210,13 @@ private fun TargetEditor(viewModel: RemoteControlViewModel) {
     DroidCard {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Target devices", style = MaterialTheme.typography.titleMedium)
-            OutlinedTextField(value = nodeId, onValueChange = { nodeId = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Node id") })
+            OutlinedTextField(value = nodeId, onValueChange = { nodeId = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("App id") })
             OutlinedTextField(value = displayName, onValueChange = { displayName = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Display name") })
             OutlinedTextField(value = packageName, onValueChange = { packageName = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Package (optional)") })
             FleetIntegrationClass.entries.filter { it != FleetIntegrationClass.HOST_PROCESS_TOOL }.forEach { candidate ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = integrationClass == candidate, onClick = { integrationClass = candidate })
-                    Text(candidate.name)
+                    Text(connectionClassLabel(candidate))
                 }
             }
             Button(
@@ -234,7 +234,7 @@ private fun TargetRow(device: TargetDevice, viewModel: RemoteControlViewModel) {
             Column {
                 Text(device.displayName, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "${device.nodeId} · ${device.integrationClass}" + (device.packageName?.let { " · $it" } ?: ""),
+                    "${device.nodeId} · ${connectionClassLabel(device.integrationClass)}" + (device.packageName?.let { " · $it" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -350,7 +350,7 @@ private fun MacroEditor(viewModel: RemoteControlViewModel) {
             FleetIntegrationClass.entries.filter { it != FleetIntegrationClass.HOST_PROCESS_TOOL }.forEach { candidate ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = integrationClass == candidate, onClick = { integrationClass = candidate })
-                    Text(candidate.name)
+                    Text(connectionClassLabel(candidate))
                 }
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

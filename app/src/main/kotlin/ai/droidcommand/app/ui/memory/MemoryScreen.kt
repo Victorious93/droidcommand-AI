@@ -4,9 +4,10 @@ import ai.droidcommand.agent.Entity
 import ai.droidcommand.agent.EntityType
 import ai.droidcommand.app.memory.MemoryController
 import ai.droidcommand.app.ui.components.DroidCard
-import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.theme.AccentCyan
 import ai.droidcommand.app.ui.theme.AccentRed
+import ai.droidcommand.app.ux.ScreenHelpCatalog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,7 +63,7 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel()) {
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ScreenTitle("Persistent Memory")
+        ScreenTitleWithHelp("Memory", ScreenHelpCatalog.MEMORY)
         Text(
             "What DroidCommand AI has remembered from your conversations. Edit or delete anything " +
                 "that is wrong or you don't want kept, or clear everything.",

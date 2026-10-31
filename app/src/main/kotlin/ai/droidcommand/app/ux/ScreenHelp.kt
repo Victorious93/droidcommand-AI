@@ -1,0 +1,97 @@
+package ai.droidcommand.app.ux
+
+/**
+ * Short "What is this?" copy for each screen the owner can open.
+ * Internal words (EXTERNAL_NODE, AIDL, envelope, pin) stay out.
+ */
+data class ScreenHelp(
+    val title: String,
+    val body: String,
+)
+
+object ScreenHelpCatalog {
+    val FLEET = ScreenHelp(
+        title = "What is Fleet?",
+        body = "This list is your other Victorious apps on this phone. " +
+            "Each card says whether that app is connected, installed and waiting to be paired, " +
+            "not installed yet, or blocked — and what to do next. " +
+            "Pairing only stores that you trust that install. It does not turn on remote control. " +
+            "Anything that can change the phone still asks you first.",
+    )
+
+    val CHAT = ScreenHelp(
+        title = "What is AI Chat?",
+        body = "Ask a question here. The reply can come from a model on this phone or from a cloud " +
+            "service you already have a key for. Nothing is sent to a cloud until you add a key " +
+            "and send a message. Pick a model on the Models tab if you want it to work without a key.",
+    )
+
+    val MODELS = ScreenHelp(
+        title = "What are Models?",
+        body = "A model is the on-phone brain Chat uses when you do not want a cloud key. " +
+            "Pick a .gguf file you already have, or download a free one from the catalog. " +
+            "The file stays on this device. Removing a copy in app storage deletes that copy only.",
+    )
+
+    val SETTINGS = ScreenHelp(
+        title = "What is Settings?",
+        body = "Keys, voice, and extra tools live here. Cloud keys are stored encrypted on this phone " +
+            "and are never shown again after you save them. Remote control stays off unless you turn it on. " +
+            "Pilot, plans, memory, logs, and security tools are extras — they are not required to chat or pair an app.",
+    )
+
+    val FIRST_RUN = ScreenHelp(
+        title = "What is this setup?",
+        body = "Four short steps so the app can work: what it is, pick a model, pair your other apps, " +
+            "and optional permissions. You can skip any step and come back from Settings.",
+    )
+
+    val PILOT = ScreenHelp(
+        title = "What is a one-step command?",
+        body = "Ask the app to run one approved action. It still shows you what it will do and waits " +
+            "for you to confirm. This is optional — everyday questions belong on AI Chat.",
+    )
+
+    val PLAN = ScreenHelp(
+        title = "What is a multi-step plan?",
+        body = "Give the app a goal and it breaks the work into steps. Each step that can change " +
+            "the phone still asks before it runs. This is optional.",
+    )
+
+    val MEMORY = ScreenHelp(
+        title = "What is Memory?",
+        body = "Facts the app can remember across chats, only if you turn that on. " +
+            "You can edit or delete anything stored here.",
+    )
+
+    val TOOLS = ScreenHelp(
+        title = "What are extra tools?",
+        body = "Security tools, notes, clipboards, and saved commands. " +
+            "Each run that can change something still asks you first. " +
+            "You do not need these to chat or to pair your other apps.",
+    )
+
+    val LOGS = ScreenHelp(
+        title = "What is the activity log?",
+        body = "A list of what this app already did on this phone — approvals, denials, and similar events. " +
+            "It is a record, not a control panel.",
+    )
+
+    val HELP = ScreenHelp(
+        title = "What is Help?",
+        body = "Longer reference notes. The short 'What is this?' button on each screen is the everyday version.",
+    )
+
+    val PAIRING = ScreenHelp(
+        title = "What is pairing?",
+        body = "Pairing means: this install of that app is the one you trust on this phone. " +
+            "If the other app is later replaced by a different install, the connection stops until you pair again. " +
+            "Pairing does not turn on remote control and does not run any command.",
+    )
+
+    val ORCHESTRATOR = ScreenHelp(
+        title = "What are approved commands?",
+        body = "A list of commands you can send to an app that is already connected. " +
+            "Read-only checks do not change the other app. Anything that can change it still asks you first.",
+    )
+}

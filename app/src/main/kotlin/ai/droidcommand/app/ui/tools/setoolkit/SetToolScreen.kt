@@ -55,7 +55,7 @@ fun SetToolScreen(viewModel: SetToolViewModel = hiltViewModel()) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            "No Social-Engineer Toolkit program is connected on this device. A launch is refused until one is.",
+            "No Social-Engineer Toolkit program is connected on this device. Install it before a run can start.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )

@@ -3,7 +3,8 @@ package ai.droidcommand.app.ui.tools
 import ai.droidcommand.app.navigation.Routes
 import ai.droidcommand.app.shizuku.ShizukuStatusSection
 import ai.droidcommand.app.ui.components.DroidCard
-import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
+import ai.droidcommand.app.ux.ScreenHelpCatalog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,7 +34,7 @@ fun ToolsScreen(navController: NavHostController) {
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        ScreenTitle("Tools")
+        ScreenTitleWithHelp("Extra tools", ScreenHelpCatalog.TOOLS)
 
         ShizukuStatusSection()
 
@@ -41,24 +42,19 @@ fun ToolsScreen(navController: NavHostController) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Fleet", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "DCA is the hub. Fleet home lists every catalogued node with saved pairing " +
-                        "and any status snapshot already in memory. Live status from the phone is not " +
-                        "wired yet. Companions stay install-probe only. External nodes " +
-                        "(RootForge first) can be paired on the pairing screen " +
-                        "(package + observed signing cert). Nothing is LIVE. " +
-                        "Fleet commands check reachability per node (read-only) and can send an approved " +
-                        "command to a bound companion.",
+                    "Your other Victorious apps live on the Fleet tab. Pairing only means you trust that install. " +
+                        "Approved commands still ask before they run.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Button(
                     onClick = { navController.navigate(Routes.FLEET) },
                     modifier = Modifier.fillMaxWidth().testTag("tools_open_fleet"),
-                ) { Text("Open fleet home") }
+                ) { Text("Open Fleet") }
                 Button(
                     onClick = { navController.navigate(Routes.FLEET_ORCHESTRATOR) },
                     modifier = Modifier.fillMaxWidth().testTag("tools_open_fleet_orchestrator"),
-                ) { Text("Open Fleet Orchestrator") }
+                ) { Text("Approved commands") }
                 Button(
                     onClick = { navController.navigate(Routes.HELP) },
                     modifier = Modifier.fillMaxWidth().testTag("tools_open_help"),

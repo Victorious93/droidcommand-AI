@@ -2,7 +2,7 @@ package ai.droidcommand.app.ui.chat
 
 import ai.droidcommand.app.localmodels.OpenGgufDocument
 import ai.droidcommand.app.ui.components.DroidCard
-import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.rememberDraft
 import ai.droidcommand.app.ui.theme.AccentBlue
 import ai.droidcommand.app.ui.theme.AccentBlueBright
@@ -14,6 +14,8 @@ import ai.droidcommand.app.ui.theme.OnAccent
 import ai.droidcommand.app.ui.theme.TextPrimary
 import ai.droidcommand.app.ui.theme.TextSecondary
 import ai.droidcommand.app.ui.theme.UserBubbleDark
+import ai.droidcommand.app.ux.FriendlyErrors
+import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.voice.SpeakMode
 import android.Manifest
@@ -156,7 +158,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (rows.isEmpty()) {
                 Text(
-                    emptyChatCopy(state),
+                    FriendlyErrors.emptyChat(state.activeLocalModelId != null || state.cloudKeyReady),
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.align(Alignment.Center).padding(32.dp),
@@ -173,18 +175,18 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
 
         if (state.activeLocalModelId == null && !state.cloudKeyReady) {
             Text(
-                "No API key for ${state.provider.label}. Add one in Settings, or import an on-device model. Send is refused until then.",
+                FriendlyErrors.missingChatSetup(state.provider.label),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(vertical = 4.dp),
             )
         }
         state.error?.let {
-            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+            Text(FriendlyErrors.forUser(it), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
 
         state.voice.error?.let {
-            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.clickable(onClick = viewModel::dismissVoiceError).padding(vertical = 4.dp))
+            Text(FriendlyErrors.forUser(it), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.clickable(onClick = viewModel::dismissVoiceError).padding(vertical = 4.dp))
         }
         state.wakeWord.error?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
@@ -252,15 +254,6 @@ private fun subtitleFor(state: ChatUiState): String {
     return "On device · " + (state.localModels.firstOrNull { it.id == state.activeLocalModelId }?.label ?: "model")
 }
 
-private fun emptyChatCopy(state: ChatUiState): String {
-    val base = "Ask anything. Library holds saved chats, templates, and skills. Turn on Memory in the options above to let it recall past chats."
-    return if (state.activeLocalModelId == null && !state.cloudKeyReady) {
-        "$base This provider has no API key yet — Chat will refuse a send until you add one in Settings or pick an on-device model."
-    } else {
-        base
-    }
-}
-
 @Composable
 private fun Header(
     subtitle: String,
@@ -278,7 +271,7 @@ private fun Header(
         verticalAlignment = Alignment.Top,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            ScreenTitle("DroidCommand")
+            ScreenTitleWithHelp("AI Chat", ScreenHelpCatalog.CHAT)
             Text(
                 text = subtitle + if (optionsOpen) "  ▴" else "  ▾",
                 color = if (active) AccentBlueBright else AccentCyan,

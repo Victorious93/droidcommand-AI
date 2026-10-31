@@ -6,7 +6,7 @@ import ai.droidcommand.agent.PlanStatus
 import ai.droidcommand.agent.PlanStep
 import ai.droidcommand.agent.PlanStepStatus
 import ai.droidcommand.app.ui.components.DroidCard
-import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
 import ai.droidcommand.app.ui.components.rememberDraft
 import ai.droidcommand.app.ui.theme.AccentBlueBright
@@ -18,6 +18,8 @@ import ai.droidcommand.app.ui.theme.AccentSuccess
 import ai.droidcommand.app.ui.theme.BorderDark
 import ai.droidcommand.app.ui.theme.TextPrimary
 import ai.droidcommand.app.ui.theme.TextSecondary
+import ai.droidcommand.app.ux.FriendlyErrors
+import ai.droidcommand.app.ux.ScreenHelpCatalog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -95,10 +97,10 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
     ) {
-        item { ScreenTitle(mode.label(AgentMode.FORGE), uppercase = false) }
+        item { ScreenTitleWithHelp(mode.label(AgentMode.FORGE), ScreenHelpCatalog.PLAN, uppercase = false) }
         item {
             Text(
-                "Forge engine: one objective. The model picks tools one step at a time. The title is the name from Settings.",
+                "Give the app a goal. It works one step at a time. The title is the name from Settings. Anything that can change the phone still asks first.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -123,7 +125,7 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
                     )
                     if (!keyReady) {
                         Text(
-                            "No API key for that provider. Add one in Settings — a run is refused until then, and no live model is called.",
+                            FriendlyErrors.missingChatSetup("that provider"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
