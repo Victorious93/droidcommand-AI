@@ -14,7 +14,7 @@ class NoteVaultTest {
     fun `a fresh vault has folders, notes, and no plugins`() {
         val vault = vault()
         assertEquals(emptyList(), vault.list())
-        assertEquals(emptyList(), PluginStore(vault.root).list())
+        assertEquals(emptyList(), PluginStore(checkNotNull(vault.root)).list())
         vault.createFolder("work")
         vault.write("work/a.md", "# Hello\n\n- one\n\n```\ncode\n```\n")
         assertEquals(listOf("work"), vault.list().map { it.name })
@@ -37,7 +37,7 @@ class NoteVaultTest {
     @Test
     fun `plugins install disabled and only enabled ones change text`() {
         val vault = vault()
-        val store = PluginStore(vault.root)
+        val store = PluginStore(checkNotNull(vault.root))
         val installed = store.install(
             """
             id: shout
@@ -72,7 +72,7 @@ class NoteVaultTest {
         vault.write("a.md", "first")
         vault.write("a.md", "second, and longer than the first")
         assertEquals("second, and longer than the first", vault.read("a.md"))
-        val names = Files.list(vault.root).use { stream -> stream.iterator().asSequence().map { it.fileName.toString() }.sorted().toList() }
+        val names = Files.list(checkNotNull(vault.root)).use { stream -> stream.iterator().asSequence().map { it.fileName.toString() }.sorted().toList() }
         assertEquals(listOf(".plugins", "a.md"), names)
     }
 
@@ -80,8 +80,18 @@ class NoteVaultTest {
     fun `a temporary file left by a crash is never listed as a note`() {
         val vault = vault()
         vault.write("a.md", "x")
-        Files.write(vault.root.resolve(".saving-123.tmp"), "half a note".toByteArray())
+        Files.write(checkNotNull(vault.root).resolve(".saving-123.tmp"), "half a note".toByteArray())
         assertEquals(listOf("a.md"), vault.list().map { it.name })
+    }
+
+    @Test
+    fun `listAllMarkdown walks nested notes and skips hidden files`() {
+        val vault = vault()
+        vault.createFolder("work")
+        vault.write("work/a.md", "a")
+        vault.write("root.md", "r")
+        Files.write(checkNotNull(vault.root).resolve(".hidden.md"), "no".toByteArray())
+        assertEquals(listOf("root.md", "work/a.md"), vault.listAllMarkdown())
     }
 
     @Test

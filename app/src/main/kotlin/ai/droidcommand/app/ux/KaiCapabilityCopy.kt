@@ -4,8 +4,8 @@ import ai.droidcommand.config.AssistantCapability
 import ai.droidcommand.config.AssistantCapabilitySettings
 
 /**
- * Owner-facing labels for the nine Kai-integration gates.
- * The gates themselves stay default OFF; this is display copy only.
+ * Owner-facing labels for the Kai-integration gates.
+ * The gates themselves stay default OFF. Brain is the one the owner can turn on.
  */
 data class KaiCapabilityRow(
     val capability: AssistantCapability,
@@ -20,7 +20,11 @@ object KaiCapabilityCopy {
             KaiCapabilityRow(
                 capability = capability,
                 label = label(capability),
-                detail = "Off until a later phase turns this on.",
+                detail = if (capability == AssistantCapability.BRAIN) {
+                    "Markdown notes the AI can search. Off until you turn it on."
+                } else {
+                    "Off until a later phase turns this on."
+                },
                 enabled = settings.isEnabled(capability),
             )
         }
@@ -35,5 +39,6 @@ object KaiCapabilityCopy {
         AssistantCapability.GENERATED_UI -> "Generated screens"
         AssistantCapability.SKILL_SCRIPTS -> "Skill scripts"
         AssistantCapability.KAI_BUILD -> "Kai Build"
+        AssistantCapability.BRAIN -> "Brain notes"
     }
 }

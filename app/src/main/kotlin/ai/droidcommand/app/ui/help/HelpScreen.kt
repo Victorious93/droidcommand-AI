@@ -38,9 +38,10 @@ fun HelpScreen() {
                 "Remote control stays off unless you turn it on in Settings. Anything that can change the phone still asks first.",
         )
         HelpCard(
-            title = "The four tabs",
+            title = "The five tabs",
             body = "Fleet is your other apps. AI Chat is where you ask questions. Models is where you pick or download " +
-                "an on-phone brain. Settings holds keys, voice, and extras (one-step commands, plans, memory, logs, security tools).",
+                "an on-phone model. Settings holds keys and voice. Advanced holds one-step commands, plans, memory, " +
+                "Brain notes, logs, and security tools.",
         )
         HelpCard(
             title = "Pairing",

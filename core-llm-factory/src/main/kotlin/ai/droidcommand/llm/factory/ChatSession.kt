@@ -104,6 +104,13 @@ sealed class MemoryResult {
  * runs on this device; document text is only sent onward as part of the prompt to the chat provider. If
  * retrieval throws, the turn proceeds without excerpts rather than failing.
  *
+ * [brain] (off when `null`, the default) adds markdown notes from the owner's Brain vault that match
+ * the message, using whatever search the caller wired (BM25 in `core-notes`). Same trust handling as
+ * [knowledge]: the block is framed by the caller as untrusted reference data, goes into the final user
+ * message only, per request, never saved into the conversation. If retrieval throws, the turn proceeds
+ * without notes. Reading only: this session never writes a Brain note. Saving a chat or fact is a
+ * separate, confirm-only path on the caller.
+ *
  * [history], [send] and [reset] block on storage and the network: call them off the main thread. Not safe for concurrent
  * sends (calls are serialized).
  */
@@ -130,6 +137,7 @@ class ChatSession(
     private val memoryWriter: MemoryWriter? = null,
     private val memoryWriteScope: String = "",
     private val autoRememberEveryTurns: Int = 0,
+    private val brain: ((String) -> String?)? = null,
 ) {
     // Successful cloud turns since the conversation was opened or last auto-remembered.
     private var turnsSinceRemember = 0
@@ -285,6 +293,11 @@ class ChatSession(
         } catch (e: Exception) {
             null
         }
+        val brainNotes = try {
+            brain?.invoke(text)
+        } catch (e: Exception) {
+            null
+        }
         var notice: String? = null
         val web = if (useWebSearch) {
             when {
@@ -297,7 +310,7 @@ class ChatSession(
         } else {
             null
         }
-        val outgoing = listOfNotNull(web, excerpts, memories, notes, text).joinToString("\n\n")
+        val outgoing = listOfNotNull(web, excerpts, memories, notes, brainNotes, text).joinToString("\n\n")
         val system = listOfNotNull(requestPrompt, context.systemPrompt).filter { it.isNotBlank() }.joinToString("\n\n").ifBlank { null }
         val request = LlmRequest(systemPrompt = system, messages = context.messages + Message(Role.USER, outgoing))
 

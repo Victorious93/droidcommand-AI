@@ -38,6 +38,7 @@ class AssistantCapabilitySettingsStoreTest {
         assertFalse(loaded.mcpClientEnabled)
         assertFalse(loaded.linuxEnvironmentEnabled)
         assertFalse(loaded.mailboxAccessEnabled)
+        assertFalse(loaded.brainEnabled)
         val encoded = Files.readString(file)
         assertFalse(encoded.contains("externalControlEnabled"))
         assertFalse(encoded.contains("password"))
@@ -64,5 +65,18 @@ class AssistantCapabilitySettingsStoreTest {
         )
         store.save(store.load().copy(backgroundAutomationEnabled = false))
         assertEquals(listOf(AssistantCapability.SMS_ACCESS), store.load().enabledCapabilities())
+    }
+
+    @Test
+    fun `brain stays off unless the owner enables it and that does not enable other gates`() {
+        val file = Files.createTempDirectory("kai-settings").resolve("assistant.settings")
+        val store = FileAssistantCapabilitySettingsStore(file)
+        store.save(AssistantCapabilitySettings(brainEnabled = true))
+        val loaded = FileAssistantCapabilitySettingsStore(file).load()
+        assertTrue(loaded.brainEnabled)
+        assertEquals(listOf(AssistantCapability.BRAIN), loaded.enabledCapabilities())
+        assertFalse(loaded.mcpClientEnabled)
+        assertFalse(loaded.mailboxAccessEnabled)
+        assertFalse(Files.readString(file).contains("externalControlEnabled"))
     }
 }
