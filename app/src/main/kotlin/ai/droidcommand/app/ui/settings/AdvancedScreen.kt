@@ -113,7 +113,7 @@ private fun AdvancedContent(
         AdvancedSection(viewModel)
         KaiCapabilityGatesSection(viewModel)
         RemoteControlSettingsSection()
-        ShizukuStatusSection()
+        ShizukuStatusSection(showEmbeddedControls = true)
         SectionLabel("Device tools")
         DroidCard {
             Text(

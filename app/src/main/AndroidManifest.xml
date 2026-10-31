@@ -26,6 +26,16 @@
          platform permission dialog). Same permission for Shizuku and Sui. -->
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
 
+    <!-- Built-in Shizuku start-on-boot. The receiver is exported=false. The toggle
+         stays off until the user turns it on. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Optional one-time grant from a computer (`adb shell pm grant … WRITE_SECURE_SETTINGS`).
+         Declaring it does not grant it. The app never asks the system dialog for this. -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+
     <!-- EDL-Commander defines this signature permission; the hub only holds it.
          Same-signing grants it. Do not invent ai.droidcommand.permission.BIND_EDLCOMMANDER. -->
     <uses-permission android:name="ai.edlcommander.companion.permission.BIND_COMPANION" />
@@ -218,5 +228,21 @@
             android:exported="true"
             android:multiprocess="false"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <!-- Built-in Shizuku. Not an inbound fleet entry point. exported=false so
+             only the system boot broadcast and this app can reach them. -->
+        <receiver
+            android:name=".shizuku.embedded.ShizukuBootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".shizuku.embedded.EmbeddedShizukuStartService"
+            android:exported="false" />
     </application>
 </manifest>

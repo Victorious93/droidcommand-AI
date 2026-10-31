@@ -105,6 +105,13 @@ class PrimaryScreensScreenshotTest {
             waitForText("These tools can change this phone")
             snap("advanced")
         }
+        step("advanced-shizuku") {
+            tapNav("nav_advanced")
+            waitForText("These tools can change this phone")
+            compose.onNodeWithText("Start on boot").performScrollTo()
+            waitForText("Start on boot")
+            snap("advanced-shizuku")
+        }
         // Stay on Brain for graph/today. Re-opening from Advanced after this
         // often loses clicks on the API 28 emulator.
         step("notes") {

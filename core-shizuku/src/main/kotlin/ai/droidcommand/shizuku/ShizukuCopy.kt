@@ -27,11 +27,13 @@ object ShizukuCopy {
                 "This does not skip Kali, Metasploit, SET, or Pentest-Swarm authorization."
         ShizukuState.DENIED -> REQUEST_PERMISSION
         ShizukuState.NOT_RUNNING ->
-            "Start Shizuku with wireless debugging, or start Sui if you use Magisk. " +
-                "The rest of the app still works without it."
+            "Start the built-in Shizuku server here with wireless debugging or root, " +
+                "or start official Shizuku/Sui if you already installed that. " +
+                "It stops after a reboot. The rest of the app still works without it."
         ShizukuState.NOT_INSTALLED ->
-            "Install Shizuku (wireless debugging) or Sui (Magisk) to run privileged " +
-                "commands without full root. The rest of the app still works without it."
+            "The built-in Shizuku files are missing. Install official Shizuku " +
+                "(wireless debugging) or Sui (Magisk), or reinstall this app. " +
+                "The rest of the app still works without it."
     }
 
     const val UNAVAILABLE_FAILURE =

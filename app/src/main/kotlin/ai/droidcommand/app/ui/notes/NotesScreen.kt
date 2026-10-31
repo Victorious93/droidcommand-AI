@@ -419,6 +419,36 @@ fun NotesScreen(viewModel: NotesViewModel = hiltViewModel()) {
                 }
             }
         }
+        if (!showPlugins && viewModel.openPath == null) {
+            item {
+                DroidCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = viewModel.query,
+                            onValueChange = viewModel::search,
+                            label = { Text("Search notes") },
+                            modifier = Modifier.fillMaxWidth().testTag("brain_search"),
+                            singleLine = true,
+                        )
+                        Text(
+                            if (viewModel.usingSaf) {
+                                "This is the folder you picked. The same files can be opened in Obsidian."
+                            } else {
+                                "Notes stay on this phone. You can point this at an Obsidian vault."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { pickFolder.launch(null) }) { Text("Use Obsidian folder") }
+                            if (viewModel.usingSaf) {
+                                OutlinedButton(onClick = viewModel::useAppFolder) { Text("Use app folder") }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         viewModel.error?.let { message ->
             item { Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
