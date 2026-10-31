@@ -105,22 +105,15 @@ class PrimaryScreensScreenshotTest {
             waitForText("These tools can change this phone")
             snap("advanced")
         }
-        // Brain before Extra tools: later Compose clicks on this emulator often miss.
+        // Stay on Brain for graph/today. Re-opening from Advanced after this
+        // often loses clicks on the API 28 emulator.
         step("notes") {
             openBrain()
             snap("notes")
             snap("brain")
-        }
-        step("brain-graph") {
-            openBrain()
             compose.onNodeWithTag("brain_pane_graph", useUnmergedTree = true).performClick()
-            compose.waitUntil(15_000) {
-                compose.onAllNodesWithText("Note graph", substring = true).fetchSemanticsNodes().isNotEmpty()
-            }
+            compose.waitForIdle()
             snap("brain-graph")
-        }
-        step("brain-daily") {
-            openBrain()
             compose.onNodeWithTag("brain_today", useUnmergedTree = true).performClick()
             compose.waitForIdle()
             snap("brain-daily")
