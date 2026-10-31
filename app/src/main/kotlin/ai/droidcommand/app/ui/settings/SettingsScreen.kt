@@ -4,7 +4,6 @@ import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.mode.ModeLabels
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prefs.CodingTunnelChoice
-import ai.droidcommand.app.shizuku.ShizukuStatusSection
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
@@ -50,11 +49,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onOpenHelp: () -> Unit = {},
     onOpenModels: () -> Unit = {},
-    onOpenPilot: () -> Unit = {},
-    onOpenPlan: () -> Unit = {},
-    onOpenMemory: () -> Unit = {},
-    onOpenTools: () -> Unit = {},
-    onOpenLogs: () -> Unit = {},
+    onOpenAdvanced: () -> Unit = {},
     onReplaySetup: () -> Unit = {},
 ) {
     val status by viewModel.status.collectAsState()
@@ -76,23 +71,6 @@ fun SettingsScreen(
                 Button(onClick = onReplaySetup, modifier = Modifier.fillMaxWidth()) { Text("Show setup guide again") }
             }
         }
-        SectionLabel("More")
-        DroidCard {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "These are extras. You do not need them to chat or to pair an app.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                OutlinedButton(onClick = onOpenPilot, modifier = Modifier.fillMaxWidth()) { Text("One-step command") }
-                OutlinedButton(onClick = onOpenPlan, modifier = Modifier.fillMaxWidth()) { Text("Multi-step plan") }
-                OutlinedButton(onClick = onOpenMemory, modifier = Modifier.fillMaxWidth()) { Text("Memory") }
-                OutlinedButton(onClick = onOpenTools, modifier = Modifier.fillMaxWidth()) { Text("Extra tools") }
-                OutlinedButton(onClick = onOpenLogs, modifier = Modifier.fillMaxWidth()) { Text("Activity log") }
-            }
-        }
-        SectionLabel("Mode names")
-        ModeNamesSection(viewModel)
         SectionLabel("API keys (stored encrypted on this device)")
         DroidCard {
             Text(
@@ -147,46 +125,29 @@ fun SettingsScreen(
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Longer notes about remote commands, backups, and what this app will never do without asking.",
+                    "What this app is, and what it will never do without asking.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Button(onClick = onOpenHelp, modifier = Modifier.fillMaxWidth()) { Text("Open Help") }
             }
         }
-        RemoteControlSettingsSection()
-        ShizukuStatusSection()
-        SectionLabel("Device tools")
-        DroidCard {
-            Text(
-                "Root, Termux, Shizuku, Metasploit, and the Social-Engineer Toolkit are on the Tools screens. Each run still asks before it executes. Shizuku is optional: without it the rest of the app still works.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        SectionLabel("Chat library")
-        DroidCard {
-            Text(
-                "Saved chats, skills, and prompt templates are under Library on the Chat screen. A skill is added to later requests and is not written into the transcript. A template fills the message box and is not sent until you send it.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        SectionLabel("Notes")
-        DroidCard {
-            Text(
-                "Notes are markdown files in a vault on this device. Plugins are text you install yourself. None are bundled, and a plugin cannot run code.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
         SectionLabel("Advanced")
-        AdvancedSection(viewModel)
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "One-step commands, plans, memory, security tools, and remote control live on the Advanced tab.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(onClick = onOpenAdvanced, modifier = Modifier.fillMaxWidth()) { Text("Open Advanced") }
+            }
+        }
     }
 }
 
 @Composable
-private fun ModeNamesSection(viewModel: SettingsViewModel) {
+internal fun ModeNamesSection(viewModel: SettingsViewModel) {
     val mode by viewModel.modeState.collectAsState()
     var pilotDraft by remember { mutableStateOf<String?>(null) }
     var forgeDraft by remember { mutableStateOf<String?>(null) }
@@ -231,7 +192,7 @@ private fun ModeNamesSection(viewModel: SettingsViewModel) {
 }
 
 @Composable
-private fun AdvancedSection(viewModel: SettingsViewModel) {
+internal fun AdvancedSection(viewModel: SettingsViewModel) {
     val toolbar by viewModel.toolbarToggles.collectAsState()
     val publicLimit by viewModel.publicClipLimit.collectAsState()
     val codingTunnel by viewModel.codingTunnel.collectAsState()

@@ -56,6 +56,11 @@
     <queries>
         <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
 
         <!-- Tools > Fleet reports whether each of these is installed (PackageFleetProbe). Keep this list in step with
              FleetCatalog; ManifestPolicyTest fails when a catalog package is missing. Named packages only: the broad

@@ -35,9 +35,22 @@ object ScreenHelpCatalog {
 
     val SETTINGS = ScreenHelp(
         title = "What is Settings?",
-        body = "Keys, voice, and extra tools live here. Cloud keys are stored encrypted on this phone " +
-            "and are never shown again after you save them. Remote control stays off unless you turn it on. " +
-            "Pilot, plans, memory, logs, and security tools are extras — they are not required to chat or pair an app.",
+        body = "Everyday setup lives here: cloud keys, voice, and a shortcut to Models. " +
+            "Cloud keys are stored encrypted on this phone and are never shown again after you save them. " +
+            "Power-user tools are on the Advanced tab.",
+    )
+
+    val ADVANCED = ScreenHelp(
+        title = "What is Advanced?",
+        body = "One-step commands, plans, memory, extra tools, the activity log, and remote-control " +
+            "toggles live here. Remote control stays off until you turn it on and confirm. " +
+            "You do not need this tab to chat or to pair an app.",
+    )
+
+    val APK_DOWNLOAD = ScreenHelp(
+        title = "What is Get latest APK?",
+        body = "Opens the GitHub Releases page for this app so you can download a newer debug build. " +
+            "Long-press copies the same link. The version next to the icon is this install, not the file on that page.",
     )
 
     val FIRST_RUN = ScreenHelp(
