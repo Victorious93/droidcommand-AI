@@ -101,10 +101,12 @@ not a second 2 000-char constant. New tools register through
 `ToolRegistry` / `SecureToolExecutor`.
 
 **Implementation status:** PARTIAL. Graph + budgeted retrieval already
-exist. The 2026-10-31 Brain slice adds an Obsidian-compatible markdown
-vault (`core-notes` parser/index/BM25 + confirm-to-save) gated by
-`AssistantCapability.BRAIN` (default OFF). Kai categories, hit-count,
-and promotion into Persona are still NOT STARTED.
+exist. The 2026-10-31 Brain slice (grown 2026-10-31e) adds a
+from-scratch markdown vault (`core-notes` parser/index/BM25 + file
+tree + graph + daily notes + confirm-to-save) gated by
+`AssistantCapability.BRAIN` (default OFF; Brain screen: "AI can read
+and write these notes"). Kai categories, hit-count, and promotion
+into Persona are still NOT STARTED.
 **Acceptance (Phase 2+):** restart-surviving memories; visible
 reinforcement; promotion into `Persona` is user-visible and reversible.
 
@@ -396,7 +398,7 @@ feature.
 | ID | Capability | Decision | Status (2026-10-30) |
 |---|---|---|---|
 | KAI-001 | Rich chat | extend existing + later attachments | PARTIAL (streaming exists) |
-| KAI-002 | Persistent memory | extend existing | PARTIAL (graph + Brain vault; no Kai categories yet) |
+| KAI-002 | Persistent memory | extend existing | PARTIAL (graph + Brain notes app; no Kai categories yet) |
 | KAI-003 | Personality | extend existing (UI) | NOT STARTED (model exists) |
 | KAI-004 | Providers / fallback | extend existing | PARTIAL |
 | KAI-005 | Local inference (LiteRT) | optional later; keep GGUF | GGUF PARTIAL; LiteRT NOT STARTED |

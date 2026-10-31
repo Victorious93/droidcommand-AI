@@ -4,6 +4,9 @@ import ai.droidcommand.notes.NoteVault
 import ai.droidcommand.notes.VaultEntry
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -135,5 +138,56 @@ class NotesViewModelTest {
         assertEquals("", viewModel.body)
         assertTrue(vault.exists("ideas.md"))
         assertFalse(viewModel.unsavedChanges)
+    }
+
+    @Test
+    fun `today creates a Daily note and does not overwrite an existing one`() {
+        val clock = Clock.fixed(Instant.parse("2026-10-30T15:00:00Z"), ZoneOffset.UTC)
+        vault.createFolder("Daily")
+        vault.write("Daily/2026-10-30.md", "already here")
+        val viewModel = NotesViewModel(root, clock = clock)
+
+        viewModel.openToday()
+
+        assertEquals("Daily/2026-10-30.md", viewModel.openPath)
+        assertEquals("already here", vault.read("Daily/2026-10-30.md"))
+    }
+
+    @Test
+    fun `today writes a tagged daily note when the day is new`() {
+        val clock = Clock.fixed(Instant.parse("2026-10-30T15:00:00Z"), ZoneOffset.UTC)
+        val viewModel = NotesViewModel(root, clock = clock)
+
+        viewModel.openToday()
+
+        assertEquals("Daily/2026-10-30.md", viewModel.openPath)
+        assertTrue(vault.read("Daily/2026-10-30.md").contains("daily"))
+        assertTrue(viewModel.tree.any { it.name == "Daily" && it.folder })
+        assertTrue(viewModel.graph.nodes.any { it.path == "Daily/2026-10-30.md" })
+    }
+
+    @Test
+    fun `file tree nests folders and the graph lists a wikilink as an edge`() {
+        vault.createFolder("work")
+        vault.write("work/a.md", "See [[ideas]].")
+        vault.write("ideas.md", "# ideas")
+        val viewModel = NotesViewModel(root)
+
+        val work = viewModel.tree.single { it.name == "work" }
+        assertEquals(listOf("a.md"), work.children.map { it.name })
+        assertEquals("ideas.md", viewModel.graph.edges.single().to)
+        viewModel.showPane(NotesPane.GRAPH)
+        assertEquals(NotesPane.GRAPH, viewModel.pane)
+        viewModel.openGraphNode("ideas.md")
+        assertEquals("ideas.md", viewModel.openPath)
+        assertTrue(viewModel.openBacklinks.isNotEmpty())
+    }
+
+    @Test
+    fun `AI read write stays off without a runtime`() {
+        val viewModel = NotesViewModel(root)
+        assertFalse(viewModel.aiCanReadWrite)
+        viewModel.enableAiReadWrite(true)
+        assertFalse(viewModel.aiCanReadWrite)
     }
 }

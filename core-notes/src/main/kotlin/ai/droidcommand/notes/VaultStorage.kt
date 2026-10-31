@@ -10,7 +10,7 @@ import kotlin.io.path.writeText
 /**
  * Bytes under a vault. Callers must already have refused paths that leave the vault.
  * [PathVaultStorage] is the default (app files and JVM tests). The app may pass a
- * Storage-Access-Framework implementation so the same notes can live in an Obsidian folder.
+ * Storage-Access-Framework implementation so the same notes can live in a user-picked folder.
  */
 interface VaultStorage {
     fun list(relativeFolder: String): List<VaultEntry>

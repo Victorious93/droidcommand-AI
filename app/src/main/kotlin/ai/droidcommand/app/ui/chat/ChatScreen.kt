@@ -369,7 +369,7 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
                 if (state.brainEnabled) {
                     "Brain notes are on. Matching notes are added to the next reply. Saving still asks first."
                 } else {
-                    "Brain notes are off. Turn them on under Advanced → Brain notes."
+                    "Brain notes are off. Turn them on with AI can read and write these notes on the Brain screen."
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary,

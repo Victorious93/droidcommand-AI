@@ -46,6 +46,13 @@ class BrainLibrarian(private val vault: NoteVault) {
 
     fun parse(relativePath: String): NoteDocument = NoteParser.parse(relativePath, vault.read(relativePath))
 
+    fun graph(): NoteGraph {
+        if (snapshot.notes.isEmpty()) refresh()
+        return NoteGraph.from(snapshot)
+    }
+
+    fun fileTree(): List<FileTreeNode> = FileTree.build(vault)
+
     fun draftChat(title: String, turns: List<Pair<String, String>>): NoteDraft {
         val cleanTitle = sanitizeTitle(title)
         val path = uniquePath("Chats/$cleanTitle.md")

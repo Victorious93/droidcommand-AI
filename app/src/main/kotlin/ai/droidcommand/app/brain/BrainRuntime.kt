@@ -16,6 +16,7 @@ import javax.inject.Singleton
  * One vault for the Brain screen and for chat retrieve/save. Default is app
  * storage (`notes-vault`). A persisted SAF tree replaces that until cleared.
  * The Kai [brainEnabled] flag is the only on-switch; it defaults off.
+ * The Brain screen labels that switch "AI can read and write these notes".
  */
 @Singleton
 class BrainRuntime @Inject constructor(

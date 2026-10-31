@@ -112,16 +112,23 @@ class PrimaryScreensScreenshotTest {
             waitForText("Start on boot")
             snap("advanced-shizuku")
         }
+        // Stay on Brain for graph/today. Re-opening from Advanced after this
+        // often loses clicks on the API 28 emulator.
+        step("notes") {
+            openBrain()
+            snap("notes")
+            snap("brain")
+            compose.onNodeWithTag("brain_pane_graph", useUnmergedTree = true).performClick()
+            compose.waitForIdle()
+            snap("brain-graph")
+            compose.onNodeWithTag("brain_today", useUnmergedTree = true).performClick()
+            compose.waitForIdle()
+            snap("brain-daily")
+        }
         step("tools") {
             openFromAdvanced("Extra tools")
             waitForText("Security Tools")
             snap("tools")
-        }
-        step("notes") {
-            openFromAdvanced("Brain")
-            waitForText("Vault")
-            snap("notes")
-            snap("brain")
         }
         step("tools-metasploit") {
             openFromAdvanced("Extra tools")
@@ -241,6 +248,16 @@ class PrimaryScreensScreenshotTest {
         waitForText("These tools can change this phone")
         compose.onNodeWithText(label).performScrollTo().performClick()
         compose.waitForIdle()
+    }
+
+    private fun openBrain() {
+        tapNav("nav_advanced")
+        waitForText("These tools can change this phone")
+        compose.onNodeWithTag("advanced_open_brain", useUnmergedTree = true).performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.waitUntil(15_000) {
+            compose.onAllNodesWithTag("brain_screen").fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     private fun tapNav(tag: String) {
