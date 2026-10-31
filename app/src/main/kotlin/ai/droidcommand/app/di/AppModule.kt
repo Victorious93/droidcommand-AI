@@ -22,6 +22,7 @@ import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.app.shizuku.AndroidShizukuHost
 import ai.droidcommand.app.shizuku.BoundPrivilegedShell
+import ai.droidcommand.app.shizuku.ToolboxRuntime
 import ai.droidcommand.app.shizuku.embedded.EmbeddedShizukuPayload
 import ai.droidcommand.app.shizuku.embedded.EmbeddedShizukuStarter
 import ai.droidcommand.app.shizuku.embedded.ShizukuStartNotifier
@@ -84,6 +85,7 @@ import ai.droidcommand.shizuku.PrivilegedShell
 import ai.droidcommand.shizuku.ShizukuHost
 import ai.droidcommand.shizuku.ShizukuManager
 import ai.droidcommand.shizuku.ShizukuTool
+import ai.droidcommand.shizuku.toolbox.SystemToolboxTool
 import ai.droidcommand.termux.ClientBackedTermuxExecutor
 import ai.droidcommand.termux.TermuxExecutor
 import ai.droidcommand.termux.TermuxTool
@@ -168,6 +170,8 @@ object AppModule {
         privilegedShell: PrivilegedShell,
         remoteControlStore: RemoteControlStore,
         remoteActionExecutor: RemoteActionExecutor,
+        toolboxRuntime: ToolboxRuntime,
+        approvalPrompt: ApprovalPrompt,
     ): ToolRegistry = ToolRegistry().apply {
         register(AutomationShellTool(AllowlistShellExecutor { advanced.shellAllowlist() }))
         register(AiPromptTool(CloudPromptClient(vault, transport)) { spec -> chatModelFor(context, spec) })
@@ -189,6 +193,9 @@ object AppModule {
         val n8n = N8nClient(transport) { vault.getSecret(N8nSecrets.API_KEY_ID) }
         register(N8nListWorkflowsTool(n8n, advanced::n8nServerUrl, advanced::n8nAiToolsEnabled))
         register(N8nRunWorkflowTool(n8n, advanced::n8nServerUrl, advanced::n8nAiToolsEnabled))
+        // System Toolbox for the assistant: refuses unless the owner turns its gate on (default off), and then still
+        // asks through ApprovalPrompt on every call with the exact command. No shell and no reboot for the assistant.
+        register(SystemToolboxTool(toolboxRuntime::preferred, advanced::systemToolboxAiEnabled, approvalPrompt))
     }
 
     @Provides

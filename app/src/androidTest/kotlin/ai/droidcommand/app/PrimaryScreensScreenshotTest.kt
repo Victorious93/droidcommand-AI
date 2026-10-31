@@ -166,6 +166,35 @@ class PrimaryScreensScreenshotTest {
             waitForText("Connect to your n8n server")
             snap("n8n")
         }
+        step("notes-studio") {
+            openFromAdvanced("Notes Studio")
+            waitForText("AI context file", timeoutMs = 20_000)
+            snap("notes-studio")
+        }
+        step("notes-studio-editor") {
+            openFromAdvanced("Notes Studio")
+            waitForText("AI context file", timeoutMs = 20_000)
+            compose.onNodeWithText("Editor").performClick()
+            compose.onNodeWithTag("studio_editor_mode_1").performClick()
+            compose.waitForIdle()
+            Thread.sleep(2_000)
+            snap("notes-studio-editor")
+        }
+        step("system-toolbox") {
+            openFromAdvanced("System Toolbox (Shizuku / root)")
+            waitForText("Let the assistant use the toolbox")
+            snap("system-toolbox")
+        }
+        step("system-toolbox-confirm") {
+            openFromAdvanced("System Toolbox (Shizuku / root)")
+            waitForText("Let the assistant use the toolbox")
+            compose.onNodeWithText("Reboot").performClick()
+            compose.onNodeWithText("Restart").performScrollTo().performClick()
+            waitForText("This exact command will run")
+            snap("system-toolbox-confirm")
+            compose.onNodeWithText("Cancel").performClick()
+            compose.waitForIdle()
+        }
         step("tools-setoolkit") {
             openFromAdvanced("Extra tools")
             waitForText("Social-Engineer Toolkit")
