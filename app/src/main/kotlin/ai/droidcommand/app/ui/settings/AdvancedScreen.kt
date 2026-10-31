@@ -9,6 +9,7 @@ import ai.droidcommand.app.ui.update.ApkDownloadBar
 import ai.droidcommand.app.update.ApkDownload
 import ai.droidcommand.app.ux.KaiCapabilityCopy
 import ai.droidcommand.app.ux.ScreenHelpCatalog
+import ai.droidcommand.config.AssistantCapability
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +23,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +40,7 @@ fun AdvancedScreen(
     onOpenPilot: () -> Unit = {},
     onOpenPlan: () -> Unit = {},
     onOpenMemory: () -> Unit = {},
+    onOpenBrain: () -> Unit = {},
     onOpenTools: () -> Unit = {},
     onOpenLogs: () -> Unit = {},
     onOpenN8n: () -> Unit = {},
@@ -47,6 +51,7 @@ fun AdvancedScreen(
         onOpenPilot = onOpenPilot,
         onOpenPlan = onOpenPlan,
         onOpenMemory = onOpenMemory,
+        onOpenBrain = onOpenBrain,
         onOpenTools = onOpenTools,
         onOpenLogs = onOpenLogs,
         onOpenN8n = onOpenN8n,
@@ -60,6 +65,7 @@ private fun AdvancedContent(
     onOpenPilot: () -> Unit,
     onOpenPlan: () -> Unit,
     onOpenMemory: () -> Unit,
+    onOpenBrain: () -> Unit,
     onOpenTools: () -> Unit,
     onOpenLogs: () -> Unit,
     onOpenN8n: () -> Unit,
@@ -95,6 +101,7 @@ private fun AdvancedContent(
                 OutlinedButton(onClick = onOpenPilot, modifier = Modifier.fillMaxWidth()) { Text("One-step command") }
                 OutlinedButton(onClick = onOpenPlan, modifier = Modifier.fillMaxWidth()) { Text("Multi-step plan") }
                 OutlinedButton(onClick = onOpenMemory, modifier = Modifier.fillMaxWidth()) { Text("Memory") }
+                OutlinedButton(onClick = onOpenBrain, modifier = Modifier.fillMaxWidth().testTag("advanced_open_brain")) { Text("Brain") }
                 OutlinedButton(onClick = onOpenTools, modifier = Modifier.fillMaxWidth()) { Text("Extra tools") }
                 OutlinedButton(onClick = onOpenLogs, modifier = Modifier.fillMaxWidth()) { Text("Activity log") }
                 OutlinedButton(onClick = onOpenN8n, modifier = Modifier.fillMaxWidth().testTag("advanced_n8n")) { Text("n8n (self-hosted)") }
@@ -104,7 +111,7 @@ private fun AdvancedContent(
         ModeNamesSection(viewModel)
         SectionLabel("Model and runtime")
         AdvancedSection(viewModel)
-        KaiCapabilityGatesSection()
+        KaiCapabilityGatesSection(viewModel)
         RemoteControlSettingsSection()
         ShizukuStatusSection(showEmbeddedControls = true)
         SectionLabel("Device tools")
@@ -122,19 +129,21 @@ private fun AdvancedContent(
 }
 
 @Composable
-private fun KaiCapabilityGatesSection() {
-    val rows = remember { KaiCapabilityCopy.rows() }
+private fun KaiCapabilityGatesSection(viewModel: SettingsViewModel) {
+    val settings by viewModel.capabilities.collectAsState()
+    val rows = remember(settings) { KaiCapabilityCopy.rows(settings) }
     SectionLabel("Kai capabilities")
     DroidCard(modifier = Modifier.testTag("advanced_kai_gates")) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Later assistant features", style = MaterialTheme.typography.titleMedium)
             Text(
-                "These stay off. They are not used for chat, models, or pairing. " +
+                "These stay off except Brain notes, which you can turn on. " +
                     "Nothing here turns on remote control or skips a confirmation.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             rows.forEach { row ->
+                val toggleable = row.capability == AssistantCapability.BRAIN
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -152,8 +161,8 @@ private fun KaiCapabilityGatesSection() {
                     }
                     Switch(
                         checked = row.enabled,
-                        onCheckedChange = null,
-                        enabled = false,
+                        onCheckedChange = if (toggleable) { on -> viewModel.setBrainEnabled(on) } else null,
+                        enabled = toggleable,
                     )
                 }
             }

@@ -115,6 +115,12 @@ persistence and tool-schema/security prerequisites."
 implement **Phase 2 — Core assistant** as scoped below. Do not treat
 this PR merge (if any) as that go-ahead.
 
+**2026-10-31 Brain note:** the owner separately asked for an Obsidian
+Brain (this repo: `docs/BRAIN_JARVIS_BOTMAKER_PLAN.md`). That slice
+adds the markdown-vault half of KAI-002 behind a new `BRAIN` gate.
+It is **not** Phase 2 and does not start MCP client, persona UI, or
+Kai category/promotion work.
+
 ---
 
 ## Phase 2 — Core assistant (NOT STARTED — needs approval)

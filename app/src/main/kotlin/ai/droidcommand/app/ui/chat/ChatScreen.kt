@@ -365,7 +365,56 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
                     state.memoryStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 }
             }
+            Text(
+                if (state.brainEnabled) {
+                    "Brain notes are on. Matching notes are added to the next reply. Saving still asks first."
+                } else {
+                    "Brain notes are off. Turn them on under Advanced → Brain notes."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
+            if (state.brainEnabled) {
+                var factTitle by remember { mutableStateOf("") }
+                var factBody by remember { mutableStateOf("") }
+                OutlinedButton(onClick = viewModel::askSaveChatToBrain, enabled = !state.sending) { Text("Save this chat to Brain") }
+                OutlinedTextField(
+                    value = factTitle,
+                    onValueChange = { factTitle = it },
+                    label = { Text("Fact title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = factBody,
+                    onValueChange = { factBody = it },
+                    label = { Text("Fact to save") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                )
+                OutlinedButton(
+                    onClick = {
+                        viewModel.askSaveFactToBrain(factTitle, factBody)
+                    },
+                    enabled = !state.sending && factBody.isNotBlank(),
+                ) { Text("Save this fact to Brain") }
+                state.brainStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            }
         }
+    }
+    if (state.pendingBrainSave != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissSaveToBrain,
+            title = { Text("Save this note?") },
+            text = {
+                Text(
+                    "This writes ${state.pendingBrainSave.relativePath} in your Brain vault. " +
+                        "Nothing is saved until you confirm.",
+                )
+            },
+            confirmButton = { TextButton(onClick = viewModel::confirmSaveToBrain) { Text("Save") } },
+            dismissButton = { TextButton(onClick = viewModel::dismissSaveToBrain) { Text("Cancel") } },
+        )
     }
     if (state.confirmDeleteLocalModel) {
         AlertDialog(

@@ -129,16 +129,16 @@ fun ToolsScreen(navController: NavHostController) {
 
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Notes", style = MaterialTheme.typography.titleMedium)
+                Text("Brain", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Folders and markdown on this device. No plugins are installed until you add one.",
+                    "The same markdown vault as Advanced → Brain. No plugins are installed until you add one.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Button(
                     onClick = { navController.navigate(Routes.NOTES) },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Open notes") }
+                ) { Text("Open Brain") }
             }
         }
     }

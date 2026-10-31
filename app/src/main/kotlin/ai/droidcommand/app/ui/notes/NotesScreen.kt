@@ -1,14 +1,22 @@
 package ai.droidcommand.app.ui.notes
 
+import ai.droidcommand.app.brain.BrainRuntime
 import ai.droidcommand.app.ui.components.DroidCard
+import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.rememberDraft
+import ai.droidcommand.app.ux.ScreenHelpCatalog
+import ai.droidcommand.notes.BrainLibrarian
 import ai.droidcommand.notes.MarkdownBlock
 import ai.droidcommand.notes.NotePlugin
 import ai.droidcommand.notes.NoteVault
 import ai.droidcommand.notes.PluginStore
+import ai.droidcommand.notes.SearchHit
 import ai.droidcommand.notes.VaultEntry
 import ai.droidcommand.notes.renderMarkdown
 import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -32,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,16 +53,24 @@ import java.nio.file.Path
 import javax.inject.Inject
 
 /**
- * State for the Notes screen. The notes live in a [NoteVault] under [root]; the internal constructor takes the path so the
- * save and navigation rules below run in a JVM test, and Hilt uses the [Context] constructor.
+ * State for the Brain screen (the same vault Notes already used). The notes live in a [NoteVault];
+ * the Path constructor keeps JVM tests free of Android types. Hilt uses [BrainRuntime] so a
+ * user-picked Obsidian folder can replace app storage.
  */
 @HiltViewModel
-class NotesViewModel internal constructor(root: Path) : ViewModel() {
+class NotesViewModel internal constructor(
+    root: Path,
+    private val runtime: BrainRuntime? = null,
+) : ViewModel() {
     @Inject
-    constructor(@ApplicationContext context: Context) : this(context.filesDir.toPath().resolve("notes-vault"))
+    constructor(runtime: BrainRuntime, @ApplicationContext context: Context) : this(
+        context.filesDir.toPath().resolve("notes-vault"),
+        runtime,
+    )
 
-    private val vault = NoteVault(root)
+    private var vault: NoteVault = runtime?.vault() ?: NoteVault(root)
     private val plugins = PluginStore(root)
+    private var librarian = BrainLibrarian(vault)
 
     var folder by mutableStateOf("")
         private set
@@ -69,6 +86,16 @@ class NotesViewModel internal constructor(root: Path) : ViewModel() {
     var installed by mutableStateOf(plugins.list())
         private set
     var error by mutableStateOf<String?>(null)
+        private set
+    var query by mutableStateOf("")
+        private set
+    var hits by mutableStateOf<List<SearchHit>>(emptyList())
+        private set
+    var openTags by mutableStateOf<List<String>>(emptyList())
+        private set
+    var openBacklinks by mutableStateOf<List<String>>(emptyList())
+        private set
+    var usingSaf by mutableStateOf(runtime?.usingSaf() == true)
         private set
 
     /** The open note's text as last read from or written to disk. [body] differing from it means the edits are not saved yet. */
@@ -96,6 +123,51 @@ class NotesViewModel internal constructor(root: Path) : ViewModel() {
         body = text
         savedBody = text
         preview = false
+        val parsed = runCatching { librarian.parse(entry.relativePath) }.getOrNull()
+        openTags = parsed?.tags?.sorted().orEmpty()
+        openBacklinks = librarian.backlinks(entry.relativePath).map { it.title }
+    }
+
+    fun search(text: String) {
+        query = text
+        hits = if (text.isBlank()) emptyList() else librarian.search(text)
+    }
+
+    fun openHit(hit: SearchHit) {
+        val name = hit.path.substringAfterLast('/')
+        val folders = hit.path.substringBeforeLast('/', "")
+        folder = folders
+        open(VaultEntry(name, hit.path, folder = false))
+    }
+
+    fun useSafFolder(uri: Uri) {
+        val host = runtime ?: return
+        try {
+            host.useSafFolder(uri)
+            vault = host.vault()
+            librarian = BrainLibrarian(vault)
+            usingSaf = true
+            folder = ""
+            openPath = null
+            entries = vault.list()
+            hits = emptyList()
+            error = null
+        } catch (e: Exception) {
+            error = "Could not open that folder: ${e.message ?: e.javaClass.simpleName}"
+        }
+    }
+
+    fun useAppFolder() {
+        val host = runtime ?: return
+        host.useAppFolder()
+        vault = host.vault()
+        librarian = BrainLibrarian(vault)
+        usingSaf = false
+        folder = ""
+        openPath = null
+        entries = vault.list()
+        hits = emptyList()
+        error = null
     }
 
     /**
@@ -156,6 +228,9 @@ class NotesViewModel internal constructor(root: Path) : ViewModel() {
         return try {
             vault.write(path, body)
             savedBody = body
+            librarian.refresh()
+            openTags = runCatching { librarian.parse(path).tags.sorted() }.getOrDefault(openTags)
+            openBacklinks = librarian.backlinks(path).map { it.title }
             error = null
             true
         } catch (e: IOException) {
@@ -195,22 +270,29 @@ class NotesViewModel internal constructor(root: Path) : ViewModel() {
 }
 
 /**
- * Folders and markdown notes on this device. Preview is headings, bullets, code fences, and paragraphs.
+ * Folders and markdown notes on this device (the Brain). Preview is headings, bullets, code fences, and paragraphs.
  * Plugins are user-written text manifests. None are installed until the user adds one, and none run as code.
  */
 @Composable
 fun NotesScreen(viewModel: NotesViewModel = hiltViewModel()) {
     var showPlugins by rememberSaveable { mutableStateOf(false) }
     var draftName by rememberDraft()
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) viewModel.useSafFolder(uri)
+    }
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("brain_screen"),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
     ) {
         item {
-            Text("Notes", color = MaterialTheme.colorScheme.primary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            ScreenTitleWithHelp("Brain", ScreenHelpCatalog.BRAIN)
             Text(
-                if (viewModel.folder.isEmpty()) "Vault" else viewModel.folder,
+                when {
+                    viewModel.openPath != null -> viewModel.openPath.orEmpty()
+                    viewModel.folder.isEmpty() -> if (viewModel.usingSaf) "Obsidian folder" else "Vault"
+                    else -> viewModel.folder
+                },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -221,6 +303,36 @@ fun NotesScreen(viewModel: NotesViewModel = hiltViewModel()) {
                     OutlinedButton(onClick = viewModel::up) { Text("Up") }
                 }
                 OutlinedButton(onClick = { showPlugins = !showPlugins }) { Text(if (showPlugins) "Notes" else "Plugins") }
+            }
+        }
+        if (!showPlugins && viewModel.openPath == null) {
+            item {
+                DroidCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = viewModel.query,
+                            onValueChange = viewModel::search,
+                            label = { Text("Search notes") },
+                            modifier = Modifier.fillMaxWidth().testTag("brain_search"),
+                            singleLine = true,
+                        )
+                        Text(
+                            if (viewModel.usingSaf) {
+                                "This is the folder you picked. The same files can be opened in Obsidian."
+                            } else {
+                                "Notes stay on this phone. You can point this at an Obsidian vault."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { pickFolder.launch(null) }) { Text("Use Obsidian folder") }
+                            if (viewModel.usingSaf) {
+                                OutlinedButton(onClick = viewModel::useAppFolder) { Text("Use app folder") }
+                            }
+                        }
+                    }
+                }
             }
         }
         viewModel.error?.let { message ->
@@ -261,6 +373,18 @@ fun NotesScreen(viewModel: NotesViewModel = hiltViewModel()) {
                     }
                 }
             }
+            if (viewModel.query.isNotBlank()) {
+                items(viewModel.hits, key = { "hit-${it.path}" }) { hit ->
+                    DroidCard {
+                        TextButton(onClick = { viewModel.openHit(hit) }, modifier = Modifier.fillMaxWidth()) {
+                            Column {
+                                Text(hit.title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                                Text(hit.snippet, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
             items(viewModel.entries, key = { it.relativePath }) { entry ->
                 DroidCard {
                     TextButton(onClick = { viewModel.open(entry) }, modifier = Modifier.fillMaxWidth()) {
@@ -280,6 +404,26 @@ private fun Editor(viewModel: NotesViewModel) {
     DroidCard {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(viewModel.openPath.orEmpty(), fontWeight = FontWeight.Bold)
+            if (viewModel.openTags.isNotEmpty()) {
+                Text(
+                    "Tags: ${viewModel.openTags.joinToString(", ")}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (viewModel.openBacklinks.isNotEmpty()) {
+                Text(
+                    "Linked from: ${viewModel.openBacklinks.joinToString(", ")}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                Text(
+                    "No other notes link here yet.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (viewModel.unsavedChanges) {
                 Text("Unsaved changes. Save, or go Up: leaving saves them.", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
             }

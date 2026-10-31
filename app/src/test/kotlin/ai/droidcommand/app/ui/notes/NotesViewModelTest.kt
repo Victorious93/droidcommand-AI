@@ -104,6 +104,27 @@ class NotesViewModelTest {
     }
 
     @Test
+    fun `search ranks a matching note and opening it shows backlinks`() {
+        vault.write(
+            "router.md",
+            """
+            ---
+            title: Home Router
+            ---
+            Living-room Wi-Fi.
+            """.trimIndent(),
+        )
+        vault.write("index.md", "See [[Home Router]].")
+        val viewModel = NotesViewModel(root)
+        viewModel.search("home router wifi")
+        assertEquals("router.md", viewModel.hits.first().path)
+
+        viewModel.openHit(viewModel.hits.first())
+        assertEquals("router.md", viewModel.openPath)
+        assertTrue(viewModel.openBacklinks.any { it.contains("index", ignoreCase = true) || it.contains("See") || it == "index" })
+    }
+
+    @Test
     fun `a new note is created empty and opened`() {
         val viewModel = NotesViewModel(root)
 
