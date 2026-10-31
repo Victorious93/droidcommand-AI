@@ -645,3 +645,13 @@ Victorious Keyboard.
 
 **Excluded (not controllable by droidcommand-AI):** VictoryPed,
 VictorLink64, MatchVictorious, VictorOps Zombies.
+
+## 2026-10-31 — Password pairing (does not weaken catalog pins)
+
+Pending-refused inbound apps and outbound catalog-pin mismatches can
+be linked with a user-set password after on-screen confirm
+(`docs/PASSWORD_PAIRING.md`). Pairing is OFF by default. The password
+is hashed in `EncryptedSecretsVault`. Later reconnects are TOFU on
+the observed cert. Excluded apps stay unlinkable. External control
+stays OFF. HackerAI / Pentest / EDL same-signer permissions are not
+bypassed. [Certain] JVM-tested. [Certain] no device run.

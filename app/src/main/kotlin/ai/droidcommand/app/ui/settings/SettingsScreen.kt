@@ -110,6 +110,7 @@ fun SettingsScreen(
             )
         }
         VoiceSettingsSection()
+        PasswordPairingSection()
         SectionLabel("Help")
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

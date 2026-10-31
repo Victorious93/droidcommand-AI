@@ -23,6 +23,7 @@ import ai.droidcommand.app.shizuku.AndroidShizukuHost
 import ai.droidcommand.app.shizuku.BoundPrivilegedShell
 import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
 import ai.droidcommand.config.EncryptedSecretsVault
+import ai.droidcommand.config.VaultPasswordPairingStore
 import ai.droidcommand.conversations.RoomConversationStore
 import ai.droidcommand.fleet.messenger.ExternalNodeTransport
 import ai.droidcommand.fleet.messenger.MessengerBridgeClient
@@ -61,6 +62,7 @@ import ai.droidcommand.security.ApprovalPrompt
 import ai.droidcommand.security.DefaultActionRisks
 import ai.droidcommand.security.FleetCommandTool
 import ai.droidcommand.security.JsonFileAuditLog
+import ai.droidcommand.security.PasswordPairingService
 import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
@@ -202,7 +204,18 @@ object AppModule {
         store: RemoteControlStore,
         replayGuard: ReplayGuard,
         statusTray: RemoteStatusTray,
-    ): RemoteCommandDispatcher = RemoteCommandDispatcher(store, replayGuard, statusTray)
+        passwordPairing: PasswordPairingService,
+    ): RemoteCommandDispatcher = RemoteCommandDispatcher(
+        store,
+        replayGuard,
+        statusTray,
+        passwordPairing = passwordPairing,
+    )
+
+    @Provides
+    @Singleton
+    fun providePasswordPairingService(vault: EncryptedSecretsVault): PasswordPairingService =
+        PasswordPairingService(VaultPasswordPairingStore(vault))
 
     @Provides
     @Singleton
