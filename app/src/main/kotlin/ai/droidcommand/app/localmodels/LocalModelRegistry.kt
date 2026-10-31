@@ -15,7 +15,13 @@ class LocalModelRegistry(private val dir: File) {
         if (!file.isFile) return emptyList()
         return file.readLines(Charsets.UTF_8)
             .mapNotNull(ImportedModelCodec::decode)
-            .filter { File(dir, it.metadata.fileName).isFile }
+            .filter(::filePresent)
+    }
+
+    /** A copied model lives under [dir]; a scanned one is the file at [ImportedModel.externalPath]. */
+    private fun filePresent(model: ImportedModel): Boolean {
+        val external = model.externalPath?.let(::File)
+        return if (external != null) external.isFile else File(dir, model.metadata.fileName).isFile
     }
 
     /** Writes through a temporary file, so an interrupted save leaves the previous registry in place. */

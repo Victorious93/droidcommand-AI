@@ -48,8 +48,8 @@ class ModelDownloadPolicyTest {
     }
 
     @Test
-    fun `the chat catalog ships empty and every entry it ever gets must be downloadable`() {
-        assertTrue(ChatModelCatalog.entries.isEmpty(), "no unverified model may ship; see ChatModelCatalog's KDoc")
+    fun `every chat catalog entry is downloadable`() {
+        assertTrue(ChatModelCatalog.entries.isNotEmpty(), "the catalog now ships pinned Apache-2.0 GGUF entries")
         ChatModelCatalog.entries.forEach { assertNull(ModelDownloadPolicy.problem(it), it.id) }
     }
 }

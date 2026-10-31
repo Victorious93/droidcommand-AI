@@ -48,9 +48,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onOpenHelp: () -> Unit = {},
+    onOpenModels: () -> Unit = {},
 ) {
     val status by viewModel.status.collectAsState()
     val searchStatus by viewModel.searchStatus.collectAsState()
+    val hfStatus by viewModel.hfStatus.collectAsState()
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -67,6 +69,17 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        SectionLabel("On-device GGUF models")
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Import a .gguf from this device, scan Download/models, or download a free Hugging Face catalog model. Chat uses the selected model on the device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = onOpenModels, modifier = Modifier.fillMaxWidth()) { Text("On-device models") }
+            }
+        }
         CloudProviderCatalog.all.forEach { provider ->
             ApiKeyRow(
                 label = provider.label,
@@ -76,6 +89,18 @@ fun SettingsScreen(
             )
         }
         SectionLabel("Web search keys (optional — used only when the chat Web search toggle is on)")
+        SectionLabel("Hugging Face (optional)")
+        ApiKeyRow(
+            label = "Hugging Face token",
+            status = hfStatus,
+            onSave = viewModel::saveHuggingFaceToken,
+            onClear = viewModel::clearHuggingFaceToken,
+        )
+        Text(
+            "Not required. Public GGUF search and download work without it. A token is stored encrypted like the provider keys and is only sent to huggingface.co.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         WebSearchCatalog.all.forEach { slot ->
             ApiKeyRow(
                 label = slot.label,

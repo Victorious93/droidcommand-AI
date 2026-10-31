@@ -16,6 +16,7 @@ import ai.droidcommand.llm.RegisteredProvider
 import ai.droidcommand.llm.anthropic.AnthropicLlmProvider
 import ai.droidcommand.llm.google.GeminiLlmProvider
 import ai.droidcommand.llm.groq.GroqLlmProvider
+import ai.droidcommand.llm.local.DeviceMemory
 import ai.droidcommand.llm.local.InferenceBackend
 import ai.droidcommand.llm.local.LocalLlmProvider
 import ai.droidcommand.llm.local.ModelRepository
@@ -48,6 +49,7 @@ class LocalProviderNotConfiguredException(message: String) : IllegalStateExcepti
  */
 class LocalProviderResources(
     val repository: ModelRepository,
+    val memory: DeviceMemory? = null,
     val backendFactory: () -> InferenceBackend,
 )
 
@@ -209,6 +211,6 @@ object LlmProviderFactory {
                 "Provider '$id' names model '$modelId', which is not registered in the ModelRepository",
             )
         }
-        return LocalLlmProvider(modelId, resources.repository, resources.backendFactory(), configured.config)
+        return LocalLlmProvider(modelId, resources.repository, resources.backendFactory(), configured.config, resources.memory)
     }
 }

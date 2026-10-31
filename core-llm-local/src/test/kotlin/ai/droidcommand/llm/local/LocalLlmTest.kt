@@ -88,6 +88,19 @@ class LocalLlmTest {
         assertEquals(1, backend.unloads)
     }
 
+    @Test fun `a model larger than device RAM is refused before native load`() {
+        val backend = FakeBackend()
+        val memory = DeviceMemory { MemorySnapshot(totalBytes = 512L * 1024 * 1024, availableBytes = 200L * 1024 * 1024) }
+        val repo = ModelRepository(dir).also {
+            File(dir, "m.gguf").writeBytes(content)
+            it.register(ModelMetadata("m", "M", "m.gguf", goodSha, 2048, sizeBytes = 4L * 1024 * 1024 * 1024))
+        }
+        val r = LocalLlmProvider("m", repo, backend, memory = memory).complete(req)
+        val err = assertIs<LlmError.ModelUnavailable>((r as LlmResponse.Error).error)
+        assertTrue(err.message.contains("RAM") || err.message.contains("quantization"))
+        assertEquals(0, backend.loads)
+    }
+
     @Test fun `tampered model is refused and never loaded`() {
         val backend = FakeBackend()
         val r = LocalLlmProvider("m", repo(sha = "0".repeat(64)), backend).complete(req)

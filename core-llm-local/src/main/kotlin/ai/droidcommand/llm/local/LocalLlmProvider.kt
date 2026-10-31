@@ -31,6 +31,7 @@ class LocalLlmProvider(
     private val repository: ModelRepository,
     private val backend: InferenceBackend,
     override val config: LlmConfig = LlmConfig(provider = "local", model = modelId),
+    private val memory: DeviceMemory? = null,
 ) : StreamingLlmProvider {
     private var loaded = false
 
@@ -58,6 +59,14 @@ class LocalLlmProvider(
         }
         try {
             if (!loaded) {
+                val size = meta.sizeBytes
+                if (memory != null && size != null) {
+                    val snap = memory.snapshot()
+                    val fit = RamFit.assess(size, meta.contextTokens, snap.totalBytes, snap.availableBytes)
+                    if (fit.verdict == RamFitVerdict.TOO_BIG) {
+                        return LlmResponse.Error(LlmError.ModelUnavailable(fit.reason))
+                    }
+                }
                 when (val check = repository.verify(modelId)) {
                     is ModelCheck.Missing -> return LlmResponse.Error(LlmError.ModelUnavailable("Model file not found: ${check.path}"))
                     is ModelCheck.Mismatch -> return LlmResponse.Error(

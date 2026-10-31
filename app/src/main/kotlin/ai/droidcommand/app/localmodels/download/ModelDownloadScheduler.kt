@@ -2,6 +2,7 @@ package ai.droidcommand.app.localmodels.download
 
 import ai.droidcommand.llm.local.ChatModelCatalog
 import ai.droidcommand.llm.local.ModelDownloadPolicy
+import ai.droidcommand.llm.local.ModelMetadata
 import android.content.Context
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
@@ -38,9 +39,23 @@ class ModelDownloadScheduler @Inject constructor(@ApplicationContext private val
 
     fun enqueue(modelId: String, allowMetered: Boolean = false): EnqueueResult {
         val model = ChatModelCatalog.find(modelId) ?: return EnqueueResult.Refused("This model is not in the download catalog.")
+        return enqueue(model, allowMetered)
+    }
+
+    fun enqueue(model: ModelMetadata, allowMetered: Boolean = false): EnqueueResult {
         ModelDownloadPolicy.problem(model)?.let { return EnqueueResult.Refused("This model cannot be downloaded in the app: $it.") }
         val request = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
-            .setInputData(workDataOf(ModelDownloadWorker.KEY_MODEL_ID to modelId))
+            .setInputData(
+                workDataOf(
+                    ModelDownloadWorker.KEY_MODEL_ID to model.id,
+                    ModelDownloadWorker.KEY_DISPLAY_NAME to model.displayName,
+                    ModelDownloadWorker.KEY_FILE_NAME to model.fileName,
+                    ModelDownloadWorker.KEY_SHA256 to model.sha256,
+                    ModelDownloadWorker.KEY_CONTEXT to model.contextTokens,
+                    ModelDownloadWorker.KEY_SIZE to (model.sizeBytes ?: -1L),
+                    ModelDownloadWorker.KEY_URL to (model.url ?: ""),
+                ),
+            )
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(if (allowMetered) NetworkType.CONNECTED else NetworkType.UNMETERED)
@@ -51,7 +66,7 @@ class ModelDownloadScheduler @Inject constructor(@ApplicationContext private val
             .build()
         // KEEP: an in-flight or queued download of this model continues; a finished or failed one is replaced, so a retry
         // after a failure starts a new run (which resumes any retained .part file).
-        workManager.enqueueUniqueWork(workName(modelId), ExistingWorkPolicy.KEEP, request)
+        workManager.enqueueUniqueWork(workName(model.id), ExistingWorkPolicy.KEEP, request)
         return EnqueueResult.Enqueued
     }
 

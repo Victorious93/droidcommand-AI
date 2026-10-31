@@ -67,11 +67,62 @@ class LocalModelImporterTest {
     }
 
     @Test
-    fun `a name that does not end in gguf is rejected before anything is copied`() {
+    fun `a GGUF whose picker name has no gguf suffix is still imported`() {
         val dir = newDir()
         try {
-            assertIs<ImportOutcome.Rejected>(LocalModelImporter(dir).importFrom("model.bin", ByteArrayInputStream(gguf), null, emptySet()))
+            // Storage Access Framework often reports DISPLAY_NAME as "msf:123" or "model.bin".
+            val imported = assertIs<ImportOutcome.Imported>(
+                LocalModelImporter(dir).importFrom("msf:123", ByteArrayInputStream(gguf), null, emptySet()),
+            ).model
+            assertEquals(gguf.size.toLong(), imported.metadata.sizeBytes)
+            assertEquals(listOf(imported.metadata.fileName), entries(dir))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `a non-GGUF whose name has no gguf suffix is rejected`() {
+        val dir = newDir()
+        try {
+            val rejected = assertIs<ImportOutcome.Rejected>(
+                LocalModelImporter(dir).importFrom("model.bin", ByteArrayInputStream("NOPE payload".toByteArray()), null, emptySet()),
+            )
+            assertEquals("Pick a file whose name ends in .gguf.", rejected.reason)
             assertEquals(emptyList(), entries(dir))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `importExisting registers a file in place without copying it`() {
+        val dir = newDir()
+        val outside = newDir()
+        try {
+            val source = File(outside, "tiny.Q4_K_M.gguf")
+            source.writeBytes(gguf)
+            val imported = assertIs<ImportOutcome.Imported>(
+                LocalModelImporter(dir, nowMillis = { 7L }).importExisting(source, emptySet()),
+            ).model
+            assertEquals(source.canonicalPath, imported.externalPath)
+            assertEquals("tiny.Q4_K_M", imported.label)
+            assertEquals(7L, imported.importedAtMillis)
+            assertEquals(emptyList(), entries(dir), "the file stays where it was")
+            assertContentEquals(gguf, source.readBytes())
+        } finally {
+            dir.deleteRecursively()
+            outside.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `importExisting rejects a missing GGUF header`() {
+        val dir = newDir()
+        try {
+            val source = File(dir, "fake.gguf")
+            source.writeBytes("NOPE".toByteArray())
+            assertIs<ImportOutcome.Rejected>(LocalModelImporter(dir).importExisting(source, emptySet()))
         } finally {
             dir.deleteRecursively()
         }

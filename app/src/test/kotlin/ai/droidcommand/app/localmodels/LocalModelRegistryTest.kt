@@ -78,4 +78,34 @@ class LocalModelRegistryTest {
             dir.deleteRecursively()
         }
     }
+
+    @Test
+    fun `a record that points at a shared-storage file loads without a copy under dir`() {
+        val dir = newDir()
+        val outside = newDir()
+        try {
+            val source = File(outside, "tiny.gguf")
+            source.writeBytes("GGUF".toByteArray())
+            val record = ImportedModel(
+                metadata = ModelMetadata(
+                    id = "user-cccccccccccccccc",
+                    displayName = "Tiny",
+                    fileName = "tiny.gguf",
+                    sha256 = "c".repeat(64),
+                    contextTokens = 2048,
+                    sizeBytes = 4L,
+                ),
+                importedAtMillis = 2L,
+                externalPath = source.canonicalPath,
+            )
+            LocalModelRegistry(dir).save(listOf(record))
+            assertEquals(listOf(record), LocalModelRegistry(dir).load())
+            assertFalse(File(dir, "tiny.gguf").exists())
+            source.delete()
+            assertEquals(emptyList(), LocalModelRegistry(dir).load())
+        } finally {
+            dir.deleteRecursively()
+            outside.deleteRecursively()
+        }
+    }
 }

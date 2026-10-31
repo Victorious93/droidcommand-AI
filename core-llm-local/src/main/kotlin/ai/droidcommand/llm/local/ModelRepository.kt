@@ -66,19 +66,27 @@ sealed class ModelInstallResult {
 class ModelRepository(private val modelsDir: File, requireGguf: Boolean = false) {
     private val integrity = ModelArtifactIntegrity(requireGguf = requireGguf)
     private val models = LinkedHashMap<String, ModelMetadata>()
+    private val locations = LinkedHashMap<String, File>()
 
-    fun register(metadata: ModelMetadata) {
+    fun register(metadata: ModelMetadata, file: File? = null) {
         require(metadata.id !in models) { "Model '${metadata.id}' already registered" }
         models[metadata.id] = metadata
+        if (file != null) locations[metadata.id] = file
     }
 
     fun list(): List<ModelMetadata> = models.values.toList()
 
     fun get(id: String): ModelMetadata? = models[id]
 
+    /** Where [verify] / load look for this id: an explicit path (user storage) or `[modelsDir]/fileName`. */
+    fun fileFor(id: String): File? {
+        val meta = models[id] ?: return null
+        return locations[id] ?: File(modelsDir, meta.fileName)
+    }
+
     fun verify(id: String): ModelCheck {
         val meta = models[id] ?: throw NoSuchElementException("Unknown model '$id'")
-        val file = File(modelsDir, meta.fileName)
+        val file = fileFor(id) ?: return ModelCheck.Missing(File(modelsDir, meta.fileName).path)
         if (!file.isFile) return ModelCheck.Missing(file.path)
         return when (val result = integrity.verify(file, meta.sizeBytes, meta.sha256)) {
             IntegrityResult.Valid -> ModelCheck.Verified(file.path)
