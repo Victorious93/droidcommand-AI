@@ -1600,5 +1600,6 @@ are **later additions — Don to confirm**. Full table:
 
 | Component | Status | Notes |
 |---|---|---|
-| `InboundEntryPointCatalog` / `CompanionAssist` | IMPLEMENTED — JVM-tested | Request parse, 60k cap, caller package+cert via `NodeSignatureVerifier` (fail-closed). Excluded apps refused. Pending-refused apps refused with a TODO naming the missing pin. |
-| `:app` `CompanionAssistActivity` | ON DISK — compiled, never run on a device | Exported Allow/Deny Activity. Model never called before Allow. `RESULT_CANCELED` on deny / bad caller / bad input. [Certain] no device run. |
+| `InboundEntryPointCatalog` / `CompanionAssist` | IMPLEMENTED — JVM-tested | Request parse, 60k cap, caller package+cert via `NodeSignatureVerifier` (fail-closed). Excluded apps refused. Pending-refused apps refused with a TODO naming the missing pin unless a password-pairing TOFU link already exists (`docs/PASSWORD_PAIRING.md`). |
+| `PasswordPairingService` | IMPLEMENTED — JVM-tested | HMAC-SHA256 challenge-response + hub-local confirm. PBKDF2 hash in `EncryptedSecretsVault`. OFF by default. Excluded apps never linkable. Same-signer companions are not unblocked by a password link. |
+| `:app` `CompanionAssistActivity` | ON DISK — compiled, never run on a device | Exported Allow/Deny Activity. Model never called before Allow. `RESULT_CANCELED` on deny / bad caller / excluded / unpaired pending-refused. Password-confirm path compiles only. [Certain] no device run. |

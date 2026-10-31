@@ -17,12 +17,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,6 +34,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
@@ -78,6 +82,7 @@ fun FleetScreen(viewModel: FleetViewModel = hiltViewModel()) {
                 live = state.liveById[row.spec.id],
                 busy = row.spec.id in state.busyIds,
                 onPair = { pending = PendingAction.Pair(row) },
+                onPairByPassword = { pending = PendingAction.PairByPassword(row) },
                 onUnpair = { pending = PendingAction.Unpair(row) },
                 onCapabilities = { viewModel.refreshCapabilities(row.spec.id) },
                 onStatus = { viewModel.refreshStatus(row.spec.id) },
@@ -108,6 +113,45 @@ fun FleetScreen(viewModel: FleetViewModel = hiltViewModel()) {
             },
             dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancel") } },
         )
+        is PendingAction.PairByPassword -> {
+            var password by remember { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = { pending = null },
+                title = { Text("Link ${action.row.spec.displayName} by password?") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "This stores package ${action.row.installedPackage} and the observed " +
+                                "signing-cert SHA-256 ${action.row.observedCertDisplay} after the " +
+                                "pairing password matches. Later reconnects refuse if that cert " +
+                                "changes. External control stays OFF. Excluded apps cannot be linked.",
+                        )
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            singleLine = true,
+                            label = { Text("Pairing password") },
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                autoCorrectEnabled = false,
+                            ),
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = password.isNotBlank(),
+                        onClick = {
+                            val typed = password
+                            pending = null
+                            viewModel.pairByPassword(action.row.spec.id, typed)
+                        },
+                    ) { Text("Link") }
+                },
+                dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancel") } },
+            )
+        }
         is PendingAction.Unpair -> AlertDialog(
             onDismissRequest = { pending = null },
             title = { Text("Unpair ${action.row.spec.displayName}?") },
@@ -144,6 +188,7 @@ fun FleetScreen(viewModel: FleetViewModel = hiltViewModel()) {
 
 private sealed class PendingAction {
     data class Pair(val row: ExternalNodeRow) : PendingAction()
+    data class PairByPassword(val row: ExternalNodeRow) : PendingAction()
     data class Unpair(val row: ExternalNodeRow) : PendingAction()
     data class BringUp(val row: ExternalNodeRow) : PendingAction()
 }
@@ -154,6 +199,7 @@ private fun ExternalNodeCard(
     live: LiveCallResult?,
     busy: Boolean,
     onPair: () -> Unit,
+    onPairByPassword: () -> Unit,
     onUnpair: () -> Unit,
     onCapabilities: () -> Unit,
     onStatus: () -> Unit,
@@ -185,6 +231,9 @@ private fun ExternalNodeCard(
                 if (row.canPair) {
                     Button(onClick = onPair, enabled = !busy, modifier = Modifier.weight(1f)) {
                         Text(if (row.canUnpair) "Re-pair" else "Pair")
+                    }
+                    OutlinedButton(onClick = onPairByPassword, enabled = !busy, modifier = Modifier.weight(1f)) {
+                        Text("Password")
                     }
                 }
                 if (row.canUnpair) {

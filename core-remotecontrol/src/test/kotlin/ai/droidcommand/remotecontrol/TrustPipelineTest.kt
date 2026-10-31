@@ -1,10 +1,12 @@
 package ai.droidcommand.remotecontrol
 
+import ai.droidcommand.security.InMemoryPasswordPairingStore
 import ai.droidcommand.security.KnownNodeSigningCatalog
 import ai.droidcommand.security.MissingExpectedCertPolicy
 import ai.droidcommand.security.NodeSignatureDecision
 import ai.droidcommand.security.NodeSignatureRefusal
 import ai.droidcommand.security.NodeSignatureVerifier
+import ai.droidcommand.security.PasswordPairingService
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -208,6 +210,28 @@ class TrustPipelineTest {
         assertTrue(cataloguedExpectedCerts(VictorSpoofRegistry.PACKAGE).isEmpty())
         assertNotNull(KnownNodeSigningCatalog.VICTOR_SMS_DEBUG_SHA256_UNENFORCED)
         assertNotNull(KnownNodeSigningCatalog.KYC_AUDITLAB_DEBUG_SHA256_UNENFORCED)
+    }
+
+    @Test
+    fun `password TOFU can override a catalog pin mismatch`() {
+        val pairing = PasswordPairingService(InMemoryPasswordPairingStore())
+        pairing.setPassword("correct-horse")
+        pairing.enable(true)
+        pairing.confirmWithPassword(launchPackage, attacker, "correct-horse", screenConfirmed = true)
+        assertNull(
+            TrustPipeline.pairingDecision(
+                launchSource(certSha256 = attacker),
+                launchConfig(certSha256 = launchCert),
+                pairing,
+            ),
+        )
+        assertEquals(
+            RemoteErrorCategory.UNAUTHORIZED,
+            TrustPipeline.pairingDecision(
+                launchSource(certSha256 = attacker),
+                launchConfig(certSha256 = launchCert),
+            ),
+        )
     }
 
     @Test

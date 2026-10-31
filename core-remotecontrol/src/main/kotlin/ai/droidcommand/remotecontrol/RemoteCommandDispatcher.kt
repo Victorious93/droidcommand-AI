@@ -1,6 +1,7 @@
 package ai.droidcommand.remotecontrol
 
 import ai.droidcommand.security.FleetIntegrationClass
+import ai.droidcommand.security.PasswordPairingService
 
 /**
  * Maps an inbound ratified envelope, a voice phrase, or a named macro onto a
@@ -20,6 +21,7 @@ class RemoteCommandDispatcher(
     private val statusTray: RemoteStatusTray? = null,
     private val advertisedOps: List<OpDescriptor> = ControllerCapabilityCatalog.OPS,
     private val fleetBackupAead: FleetBackupAead? = null,
+    private val passwordPairing: PasswordPairingService? = null,
 ) {
     private val nodeMacroRunner: NodeMacroRunner
         get() = NodeMacroRunner(
@@ -38,7 +40,7 @@ class RemoteCommandDispatcher(
         source: SourceIdentity,
         operation: String = FleetRemoteEnvelope.OP_REMOTE_COMMAND,
     ): RemoteDispatchResult {
-        TrustPipeline.evaluate(source, store.load(), envelope, replayGuard)?.let { return it }
+        TrustPipeline.evaluate(source, store.load(), envelope, replayGuard, passwordPairing)?.let { return it }
         TargetNodeRefValidator.classify(envelope.targetNodeRef, store.load())?.let { category ->
             return TrustPipeline.reject(
                 category,
