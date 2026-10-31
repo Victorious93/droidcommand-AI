@@ -187,7 +187,7 @@ class NotesViewModelTest {
     fun `AI read write stays off without a runtime`() {
         val viewModel = NotesViewModel(root)
         assertFalse(viewModel.aiCanReadWrite)
-        viewModel.setAiCanReadWrite(true)
+        viewModel.enableAiReadWrite(true)
         assertFalse(viewModel.aiCanReadWrite)
     }
 }

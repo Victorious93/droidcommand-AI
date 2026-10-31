@@ -186,7 +186,7 @@ class NotesViewModel internal constructor(
         }
     }
 
-    fun setAiCanReadWrite(enabled: Boolean) {
+    fun enableAiReadWrite(enabled: Boolean) {
         val host = runtime ?: return
         host.setEnabled(enabled)
         aiCanReadWrite = host.enabled()
@@ -496,7 +496,7 @@ private fun AiReadWriteRow(viewModel: NotesViewModel) {
             }
             Switch(
                 checked = viewModel.aiCanReadWrite,
-                onCheckedChange = viewModel::setAiCanReadWrite,
+                onCheckedChange = viewModel::enableAiReadWrite,
                 modifier = Modifier.testTag("brain_ai_toggle"),
             )
         }
