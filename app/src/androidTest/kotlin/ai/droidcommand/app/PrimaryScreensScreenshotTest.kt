@@ -105,6 +105,13 @@ class PrimaryScreensScreenshotTest {
             waitForText("These tools can change this phone")
             snap("advanced")
         }
+        step("advanced-shizuku") {
+            tapNav("nav_advanced")
+            waitForText("These tools can change this phone")
+            compose.onNodeWithText("Start on boot").performScrollTo()
+            waitForText("Start on boot")
+            snap("advanced-shizuku")
+        }
         step("tools") {
             openFromAdvanced("Extra tools")
             waitForText("Security Tools")

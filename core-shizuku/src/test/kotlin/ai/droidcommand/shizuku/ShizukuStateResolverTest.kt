@@ -68,6 +68,7 @@ class ShizukuStateResolverTest {
         }
         assertEquals(true, ShizukuCopy.statusBody(ShizukuState.DENIED).contains("Grant this app permission"))
         assertEquals(true, ShizukuCopy.statusBody(ShizukuState.NOT_RUNNING).contains("wireless debugging"))
+        assertEquals(true, ShizukuCopy.statusBody(ShizukuState.NOT_RUNNING).contains("reboot"))
         assertEquals(true, ShizukuCopy.statusBody(ShizukuState.NOT_INSTALLED).contains("still works"))
         assertEquals(true, ShizukuCopy.statusBody(ShizukuState.GRANTED).contains("Kali"))
     }

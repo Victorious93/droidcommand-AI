@@ -94,6 +94,26 @@ class ManifestPolicyTest {
     }
 
     @Test
+    fun `built-in Shizuku boot receiver is not exported and start-on-boot permissions are declared`() {
+        val permissions = manifest.children("uses-permission").map { it.androidAttr("name") }
+        assertTrue("android.permission.RECEIVE_BOOT_COMPLETED" in permissions)
+        assertTrue("android.permission.WRITE_SECURE_SETTINGS" in permissions)
+        val receiver = application.children("receiver").single {
+            it.androidAttr("name") == ".shizuku.embedded.ShizukuBootReceiver"
+        }
+        assertEquals("false", receiver.androidAttr("exported"))
+        val actions = receiver.children("intent-filter").single().children("action").map { it.androidAttr("name") }
+        assertEquals(
+            listOf("android.intent.action.BOOT_COMPLETED", "android.intent.action.QUICKBOOT_POWERON"),
+            actions,
+        )
+        val service = application.children("service").single {
+            it.androidAttr("name") == ".shizuku.embedded.EmbeddedShizukuStartService"
+        }
+        assertEquals("false", service.androidAttr("exported"))
+    }
+
+    @Test
     fun `Shizuku provider permission and queries are declared`() {
         val permissions = manifest.children("uses-permission").map { it.androidAttr("name") }
         assertTrue(ShizukuPackages.API_PERMISSION in permissions)

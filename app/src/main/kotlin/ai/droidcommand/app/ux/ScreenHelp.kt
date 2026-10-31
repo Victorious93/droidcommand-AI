@@ -43,8 +43,9 @@ object ScreenHelpCatalog {
     val ADVANCED = ScreenHelp(
         title = "What is Advanced?",
         body = "One-step commands, plans, memory, extra tools, the activity log, your own n8n server, " +
-            "remote-control toggles, and later Kai capabilities live here. Those capabilities stay off. " +
+            "remote-control toggles, built-in Shizuku, and later Kai capabilities live here. Those capabilities stay off. " +
             "Remote control stays off until you turn it on and confirm. " +
+            "Shizuku Start on boot stays off until you turn that on. " +
             "You do not need this tab to chat or to pair an app.",
     )
 

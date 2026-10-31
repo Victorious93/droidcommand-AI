@@ -130,6 +130,8 @@ dependencies {
     // Current stable Shizuku/Sui API (same artifacts for both). MIT.
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
+    // X.509 helper used by the vendored Shizuku AdbKey (Apache-2.0).
+    implementation("org.bouncycastle:bcpkix-jdk15to18:1.78.1")
     implementation(project(":core-tools-metasploit"))
     implementation(project(":core-tools-setoolkit"))
 
@@ -212,8 +214,25 @@ kotlin {
 // IPrivilegedShell.aidl created this task; CI then failed with
 // "Could not find :sherpa-onnx-1.13.8:" before fetchSherpaOnnx ran
 // (Actions 39336466435). Tie fetch to the tasks that resolve that classpath.
+val fetchShizukuPayload = tasks.register("fetchShizukuPayload", Exec::class) {
+    commandLine("bash", rootProject.file("app/scripts/fetch-shizuku-payload.sh").absolutePath)
+    inputs.files(
+        rootProject.file("app/scripts/fetch-shizuku-payload.sh"),
+        rootProject.file("third_party/shizuku/LICENSE"),
+        rootProject.file("third_party/shizuku/NOTICE"),
+    )
+    outputs.dir(layout.buildDirectory.dir("generated/shizuku/assets"))
+    outputs.dir(layout.buildDirectory.dir("generated/shizuku/jniLibs"))
+}
+
+android.sourceSets.getByName("main") {
+    assets.srcDir(layout.buildDirectory.dir("generated/shizuku/assets"))
+    jniLibs.srcDir(layout.buildDirectory.dir("generated/shizuku/jniLibs"))
+}
+
 tasks.named("preBuild") {
     dependsOn(":core-voice-neural-android:fetchSherpaOnnx")
+    dependsOn(fetchShizukuPayload)
 }
 tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Aidl") }.configureEach {
     dependsOn(":core-voice-neural-android:fetchSherpaOnnx")

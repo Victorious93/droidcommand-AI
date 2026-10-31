@@ -4,6 +4,7 @@ import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.automation.ShellAllowlist
 import ai.droidcommand.app.ui.chat.ToolbarLayout
 import ai.droidcommand.app.ui.chat.ToolbarToggle
+import ai.droidcommand.shizuku.EmbeddedShizukuPrefs
 import android.content.Context
 import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -76,6 +77,25 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
 
     fun setN8nAiToolsEnabled(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_N8N_AI_TOOLS, enabled) }
+    }
+
+    /** Off by default. Built-in Shizuku is not started after a reboot until the user turns this on. */
+    fun startShizukuOnBoot(): Boolean = prefs.getBoolean(EmbeddedShizukuPrefs.KEY_START_ON_BOOT, EmbeddedShizukuPrefs.DEFAULT_START_ON_BOOT)
+
+    fun setStartShizukuOnBoot(enabled: Boolean) {
+        prefs.edit { putBoolean(EmbeddedShizukuPrefs.KEY_START_ON_BOOT, enabled) }
+    }
+
+    fun shizukuWirelessPaired(): Boolean = prefs.getBoolean(EmbeddedShizukuPrefs.KEY_WADB_PAIRED, false)
+
+    fun setShizukuWirelessPaired(paired: Boolean) {
+        prefs.edit { putBoolean(EmbeddedShizukuPrefs.KEY_WADB_PAIRED, paired) }
+    }
+
+    fun shizukuLastConnectPort(): Int = prefs.getInt(EmbeddedShizukuPrefs.KEY_WADB_CONNECT_PORT, 0)
+
+    fun setShizukuLastConnectPort(port: Int) {
+        prefs.edit { putInt(EmbeddedShizukuPrefs.KEY_WADB_CONNECT_PORT, port) }
     }
 
     companion object {
