@@ -78,6 +78,13 @@ class PrimaryScreensScreenshotTest {
             waitForText("Refresh", timeoutMs = 20_000)
             snap("fleet")
         }
+        step("connect-device") {
+            tapNav("nav_fleet")
+            waitForText("Refresh", timeoutMs = 20_000)
+            compose.onNodeWithTag("fleet_connect_device").performScrollTo().performClick()
+            waitForText("Connect a device")
+            snap("connect-device")
+        }
         step("chat") {
             tapNav("nav_chat")
             waitForText("AI Chat")
@@ -90,7 +97,7 @@ class PrimaryScreensScreenshotTest {
         }
         step("settings") {
             tapNav("nav_settings")
-            waitForText("API keys")
+            waitForText("Look")
             snap("settings")
         }
         step("advanced") {

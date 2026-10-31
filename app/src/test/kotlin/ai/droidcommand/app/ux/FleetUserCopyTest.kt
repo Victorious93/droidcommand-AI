@@ -111,6 +111,7 @@ class FleetUserCopyTest {
             ScreenHelpCatalog.ADVANCED,
             ScreenHelpCatalog.APK_DOWNLOAD,
             ScreenHelpCatalog.FIRST_RUN,
+            ScreenHelpCatalog.CONNECT_DEVICE,
         )
         all.forEach { help ->
             val blob = help.title + " " + help.body

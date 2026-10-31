@@ -60,6 +60,7 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ScreenTitleWithHelp("Settings", ScreenHelpCatalog.SETTINGS)
+        ThemePickerSection()
         SectionLabel("Setup")
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

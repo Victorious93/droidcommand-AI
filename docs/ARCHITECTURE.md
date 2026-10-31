@@ -1628,3 +1628,18 @@ stays `confirmation_required`.
 | `core-mcp.McpToolServer` schema check | IMPLEMENTED — JVM-tested | Uses the codec; schema mismatch is an MCP error and does not call `ToolRunner`. Untyped tools unchanged. |
 | `core-remote.PlatformHttpTransport` | IMPLEMENTED — JVM-tested | Android → `HttpUrlConnectionTransport`; desktop JVM → `JdkHttpTransport`. `:app` still injects `HttpUrlConnectionTransport` directly. |
 | Inbound 13/4 + cert pins | UNCHANGED | `InboundEntryPointCatalog` / `KnownNodeSigningCatalog` not edited in this slice. |
+
+## 17. Device connect + theme picker (2026-10-31)
+
+Independent of open PR #262 (fleet HMAC password pairing). Rebased onto
+`main` after #264 (Advanced tab) and #259 (Kai Foundation) merged.
+Copies #262's lockout / PBKDF2 / TOFU / revoke / OFF-default rules
+only. Connect stays on Fleet; Look stays in Settings. Kai gates stay
+on Advanced, read-only and off.
+
+| Component | Status | Notes |
+|---|---|---|
+| `core-device-connect` | IMPLEMENTED — JVM-tested, no live LAN pair | SPAKE2-P-256 + PBKDF2, verification code, TOFU device key, per-device revoke, 5-failure / 15-min lockout. Listener off by default. After pairing: ping / status / chat note only. Control still gated on `externalControlEnabled`. |
+| `:pc-companion` (`tools/pc-companion`) | IMPLEMENTED — not run against a phone | Same pairing, then ping/status. `docs/DEVICE_CONNECT.md`. |
+| `:app` Connect a device screen | ON DISK — compiled, never run on a device | Fleet button. PC or another phone. Invite is text (`dca-connect:1\|host\|port\|id`); no camera QR, no mDNS. |
+| Theme picker | ON DISK — JVM persistence tested | Settings → Look. System/Light/Dark, five accents, Material You on API 31+. DataStore. Fleet theme overlay still applies. |

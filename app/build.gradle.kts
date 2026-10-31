@@ -113,6 +113,7 @@ dependencies {
     implementation(project(":core-llm"))
     implementation(project(":core-remote"))
     implementation(project(":core-remotecontrol"))
+    implementation(project(":core-device-connect"))
     implementation(project(":core-coding-session"))
     implementation(project(":core-llm-factory"))
     implementation(project(":core-templates"))
@@ -181,6 +182,8 @@ dependencies {
     // Background, resumable model downloads (localmodels/download). 2.10.5 is the newest 2.10.x; it builds against
     // compileSdk 35, within this project's compileSdk 36. 2.11.x was not tried.
     implementation("androidx.work:work-runtime-ktx:2.10.5")
+    // Theme picker persistence. 1.1.7 is the current stable line and builds against compileSdk 36.
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
 
     testImplementation(kotlin("test"))
 

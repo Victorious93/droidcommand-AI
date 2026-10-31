@@ -1,8 +1,5 @@
 package ai.droidcommand.app.ui.components
 
-import ai.droidcommand.app.ui.theme.AccentBlueBright
-import ai.droidcommand.app.ui.theme.BorderDark
-import ai.droidcommand.app.ui.theme.CardDark
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -25,7 +22,7 @@ fun ScreenTitle(text: String, modifier: Modifier = Modifier, uppercase: Boolean 
     Text(
         text = if (uppercase) text.uppercase() else text,
         modifier = modifier,
-        color = AccentBlueBright,
+        color = MaterialTheme.colorScheme.primary,
         fontSize = 24.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 3.sp,
@@ -49,13 +46,13 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 @Composable
 fun DroidCard(
     modifier: Modifier = Modifier,
-    borderColor: androidx.compose.ui.graphics.Color = BorderDark,
+    borderColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.outline,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CardDark),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         border = BorderStroke(1.dp, borderColor),
     ) {
         Column(modifier = Modifier.padding(16.dp), content = content)

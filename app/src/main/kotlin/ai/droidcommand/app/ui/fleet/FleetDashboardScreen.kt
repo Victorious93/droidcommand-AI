@@ -60,6 +60,7 @@ private sealed class FleetDialog {
 fun FleetDashboardScreen(
     onOpenPairing: () -> Unit,
     onOpenOrchestrator: () -> Unit,
+    onOpenConnectDevice: () -> Unit = {},
     viewModel: FleetDashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -71,6 +72,7 @@ fun FleetDashboardScreen(
         onTest = viewModel::testConnection,
         onOpenPairing = onOpenPairing,
         onOpenOrchestrator = onOpenOrchestrator,
+        onOpenConnectDevice = onOpenConnectDevice,
     )
 }
 
@@ -83,6 +85,7 @@ fun FleetDashboardContent(
     onTest: (String) -> Unit,
     onOpenPairing: () -> Unit,
     onOpenOrchestrator: () -> Unit,
+    onOpenConnectDevice: () -> Unit = {},
 ) {
     var dialog by remember { mutableStateOf<FleetDialog?>(null) }
 
@@ -118,6 +121,10 @@ fun FleetDashboardContent(
             onClick = onRefresh,
             modifier = Modifier.fillMaxWidth().testTag("fleet_dashboard_refresh"),
         ) { Text("Refresh") }
+        Button(
+            onClick = onOpenConnectDevice,
+            modifier = Modifier.fillMaxWidth().testTag("fleet_connect_device"),
+        ) { Text("Connect a computer or another phone") }
 
         state.cards.forEach { card ->
             FleetAppCard(
