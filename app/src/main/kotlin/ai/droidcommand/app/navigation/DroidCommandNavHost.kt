@@ -4,6 +4,7 @@ import ai.droidcommand.app.clipboard.ClipboardScreen
 import ai.droidcommand.app.ui.automation.AutomationScreen
 import ai.droidcommand.app.ui.chat.ChatScreen
 import ai.droidcommand.app.ui.coding.CodingScreen
+import ai.droidcommand.app.ui.fleet.ConnectDeviceScreen
 import ai.droidcommand.app.ui.fleet.FleetDashboardScreen
 import ai.droidcommand.app.ui.fleet.FleetOrchestratorScreen
 import ai.droidcommand.app.ui.fleet.FleetScreen
@@ -17,11 +18,6 @@ import ai.droidcommand.app.ui.onboarding.FirstRunScreen
 import ai.droidcommand.app.ui.plan.PlanScreen
 import ai.droidcommand.app.ui.settings.AdvancedScreen
 import ai.droidcommand.app.ui.settings.SettingsScreen
-import ai.droidcommand.app.ui.theme.AccentBlueBright
-import ai.droidcommand.app.ui.theme.BackgroundDark
-import ai.droidcommand.app.ui.theme.BorderDark
-import ai.droidcommand.app.ui.theme.NavBarDark
-import ai.droidcommand.app.ui.theme.TextSecondary
 import ai.droidcommand.app.ui.tools.ToolsScreen
 import ai.droidcommand.app.ui.tools.metasploit.MetasploitScreen
 import ai.droidcommand.app.ui.tools.setoolkit.SetToolScreen
@@ -45,6 +41,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -92,6 +89,7 @@ object Routes {
     const val FLEET = "fleet"
     const val FLEET_PAIRING = "fleet/pairing"
     const val FLEET_ORCHESTRATOR = "fleet/orchestrator"
+    const val CONNECT_DEVICE = "fleet/connect"
     const val HELP = "help"
     const val MODELS = "models"
 }
@@ -122,7 +120,7 @@ fun DroidCommandNavHost(
     val versionLabel = rememberInstalledVersionLabel()
 
     Scaffold(
-        containerColor = BackgroundDark,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Column(
                 modifier = Modifier.windowInsetsPadding(
@@ -184,10 +182,12 @@ fun DroidCommandNavHost(
                 FleetDashboardScreen(
                     onOpenPairing = { navController.navigate(Routes.FLEET_PAIRING) },
                     onOpenOrchestrator = { navController.navigate(Routes.FLEET_ORCHESTRATOR) },
+                    onOpenConnectDevice = { navController.navigate(Routes.CONNECT_DEVICE) },
                 )
             }
             composable(Routes.FLEET_PAIRING) { FleetScreen() }
             composable(Routes.FLEET_ORCHESTRATOR) { FleetOrchestratorScreen() }
+            composable(Routes.CONNECT_DEVICE) { ConnectDeviceScreen() }
         }
     }
 }
@@ -206,8 +206,8 @@ private fun DroidBottomBar(
     )
     val shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
     NavigationBar(
-        containerColor = NavBarDark,
-        modifier = Modifier.clip(shape).border(1.dp, BorderDark, shape),
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.clip(shape).border(1.dp, MaterialTheme.colorScheme.outline, shape),
     ) {
         tabs.forEach { tab ->
             val selected = currentRoute == tab.route ||
@@ -239,11 +239,11 @@ private fun DroidBottomBar(
                     )
                 },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = BackgroundDark,
-                    selectedTextColor = AccentBlueBright,
-                    indicatorColor = AccentBlueBright,
-                    unselectedIconColor = TextSecondary,
-                    unselectedTextColor = TextSecondary,
+                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = MaterialTheme.colorScheme.primary,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
             )
         }

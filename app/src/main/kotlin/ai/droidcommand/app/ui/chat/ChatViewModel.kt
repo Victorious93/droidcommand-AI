@@ -15,6 +15,7 @@ import ai.droidcommand.app.prompts.PromptLibrary
 import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.config.SecretState
+import ai.droidcommand.deviceconnect.DeviceConnectService
 import ai.droidcommand.llm.factory.AiSlashCommands
 import ai.droidcommand.llm.factory.ChatResult
 import ai.droidcommand.llm.factory.ChatSession
@@ -61,6 +62,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -153,6 +155,7 @@ class ChatViewModel @Inject constructor(
     private val documentRuntime: DocumentRuntime,
     private val advanced: AdvancedPrefs,
     private val onDeviceModels: LocalModelRuntime,
+    private val deviceConnect: DeviceConnectService,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
@@ -213,6 +216,20 @@ class ChatViewModel @Inject constructor(
 
     init {
         startWakeWordIfEnabled()
+        viewModelScope.launch {
+            while (true) {
+                delay(1_000)
+                val notes = deviceConnect.inbox().drain()
+                if (notes.isNotEmpty()) {
+                    mutableState.update { state ->
+                        state.copy(
+                            lines = state.lines + notes.map { ChatLine(fromUser = false, text = "From ${it.fromName}: ${it.text}") },
+                            notice = "A paired device sent a note.",
+                        )
+                    }
+                }
+            }
+        }
         // Imported models are read from disk: load them off the main thread, and drop a saved choice that no longer exists.
         viewModelScope.launch(Dispatchers.IO) {
             val models = onDeviceModels.list()

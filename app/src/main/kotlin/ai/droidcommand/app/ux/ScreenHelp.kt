@@ -35,9 +35,9 @@ object ScreenHelpCatalog {
 
     val SETTINGS = ScreenHelp(
         title = "What is Settings?",
-        body = "Everyday setup lives here: cloud keys, voice, and a shortcut to Models. " +
-            "Cloud keys are stored encrypted on this phone and are never shown again after you save them. " +
-            "Power-user tools are on the Advanced tab.",
+        body = "Everyday setup lives here: look (light, dark, or match the phone), cloud keys, voice, " +
+            "and a shortcut to Models. Cloud keys are stored encrypted on this phone and are never " +
+            "shown again after you save them. Power-user tools are on the Advanced tab.",
     )
 
     val ADVANCED = ScreenHelp(
@@ -101,6 +101,14 @@ object ScreenHelpCatalog {
         body = "Pairing means: this install of that app is the one you trust on this phone. " +
             "If the other app is later replaced by a different install, the connection stops until you pair again. " +
             "Pairing does not turn on remote control and does not run any command.",
+    )
+
+    val CONNECT_DEVICE = ScreenHelp(
+        title = "What is Connect a device?",
+        body = "Link this phone to a computer or another phone on the same Wi-Fi. " +
+            "You both type the same one-time password and check that a short code matches. " +
+            "After that you can only check that the other device is there, or send a note to Chat. " +
+            "Remote control stays off unless you turn it on under Advanced.",
     )
 
     val ORCHESTRATOR = ScreenHelp(

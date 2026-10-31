@@ -12,6 +12,7 @@ import ai.droidcommand.app.approval.VoiceApprovalPrompt
 import ai.droidcommand.app.automation.AiPromptTool
 import ai.droidcommand.app.automation.AllowlistShellExecutor
 import ai.droidcommand.app.automation.AutomationShellTool
+import ai.droidcommand.app.deviceconnect.VaultDeviceConnectStore
 import ai.droidcommand.app.fleet.AndroidMessengerChannel
 import ai.droidcommand.app.fleet.AndroidPackageIdentityResolver
 import ai.droidcommand.app.fleet.SharedPreferencesPairedNodeStore
@@ -22,8 +23,11 @@ import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.app.shizuku.AndroidShizukuHost
 import ai.droidcommand.app.shizuku.BoundPrivilegedShell
 import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
+import ai.droidcommand.app.theme.DataStoreThemePreferenceStore
 import ai.droidcommand.config.EncryptedSecretsVault
+import ai.droidcommand.config.ThemePreferenceStore
 import ai.droidcommand.conversations.RoomConversationStore
+import ai.droidcommand.deviceconnect.DeviceConnectService
 import ai.droidcommand.fleet.messenger.ExternalNodeTransport
 import ai.droidcommand.fleet.messenger.MessengerBridgeClient
 import ai.droidcommand.fleet.messenger.MessengerChannel
@@ -221,6 +225,15 @@ object AppModule {
     @Provides
     @Singleton
     fun provideSecretsVault(@ApplicationContext context: Context): EncryptedSecretsVault = createAndroidSecretsVault(context)
+
+    @Provides
+    @Singleton
+    fun provideThemePreferenceStore(store: DataStoreThemePreferenceStore): ThemePreferenceStore = store
+
+    @Provides
+    @Singleton
+    fun provideDeviceConnectService(vault: EncryptedSecretsVault): DeviceConnectService =
+        DeviceConnectService(VaultDeviceConnectStore(vault))
 
     @Provides
     @Singleton
