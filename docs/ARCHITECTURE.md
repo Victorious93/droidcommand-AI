@@ -1678,3 +1678,28 @@ Kai gates stay read-only and off. n8n is a separate Advanced screen.
 | `:app` Advanced → n8n | ON DISK | Server URL, encrypted API key, test connection, workflow list, confirm-then-run, AI-tools switch (OFF default, confirm to turn on). Screenshot walk includes this screen. Never run against Don's n8n from CI. |
 | API key storage | IMPLEMENTED (same vault as cloud keys) | `EncryptedSecretsVault` id `n8n.api.key`. The screen never shows a saved key again. |
 | Network policy | PARTIAL | OS cleartext permitted so `http://192.168.x.x` can be reached; the app refuses HTTP except LAN. System CAs only. Not pinned. |
+
+## 19. Notes Studio + System Toolbox (2026-10-31)
+
+- **Notes Studio** (Advanced → Notes Studio, `ui/notes/studio`). Pure logic lives in
+  `core-notes` `ai.droidcommand.notes.studio`: `ContextDocument`/`ContextTemplates`/`ContextLinter`
+  (CLAUDE.md, AGENTS.md, .cursorrules, .github/copilot-instructions.md), `PromptVault`,
+  `MarkdownFormatter` (toolbar), `MermaidPreview` (HTML page, strict CSP, mermaid
+  `securityLevel: 'strict'`) and `LanVaultServer`. mermaid.js 11.4.1 (MIT,
+  `third_party/mermaid/LICENSE`) is bundled at `app/src/main/assets/mermaid/` and loaded offline by
+  a WebView with network loads, file access and content access off.
+- **LAN viewer**: off by default, never auto-started, not persisted; needs an 8+ character
+  password (HTTP Basic, constant-time compare); binds only to a private/link-local IPv4 address
+  (never 0.0.0.0); refuses non-LAN peers; GET only; read-only routes `/`, `/note/<path>`,
+  `/raw/<path>`, `/mermaid.js`; stops when the screen's ViewModel is cleared.
+- **System Toolbox** (Advanced → System Toolbox, `ui/toolbox`). Commands are built in
+  `core-shizuku` `ai.droidcommand.shizuku.toolbox.ToolboxCommands` from validated parts (package,
+  permission, settings key, absolute path without `..`). `AppToolboxRunner` uses the existing
+  `PrivilegedShell` (Shizuku) or `su -c` for root-only parts. Every `changesSystem` command shows
+  the exact command (including `su -c '…'` when root is used) in a dialog before running; nothing
+  runs without a tap.
+- **AI access**: `SystemToolboxTool` (`shizuku_system_toolbox`, SENSITIVE, DEVICE_CONTROL) is
+  gated by `AdvancedPrefs.toolboxAiEnabled()` (default **off**). Its name contains `shizuku`, so
+  `ActionRiskClassifier` never auto-approves it — every call goes through the approval prompt. It
+  does not offer the free-form terminal or reboot. `externalControlEnabled`, cert gating and the
+  fleet entry-point list are unchanged.

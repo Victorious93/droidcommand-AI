@@ -79,6 +79,17 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         prefs.edit { putBoolean(KEY_N8N_AI_TOOLS, enabled) }
     }
 
+    /**
+     * When false (the default) the AI cannot use the System Toolbox tool at all. Even when true,
+     * every call still shows an approval prompt — the tool name contains `shizuku`, so it is never
+     * auto-approved.
+     */
+    fun toolboxAiEnabled(): Boolean = prefs.getBoolean(KEY_TOOLBOX_AI, false)
+
+    fun setToolboxAiEnabled(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_TOOLBOX_AI, enabled) }
+    }
+
     /** Off by default. Built-in Shizuku is not started after a reboot until the user turns this on. */
     fun startShizukuOnBoot(): Boolean = prefs.getBoolean(EmbeddedShizukuPrefs.KEY_START_ON_BOOT, EmbeddedShizukuPrefs.DEFAULT_START_ON_BOOT)
 
@@ -107,6 +118,7 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         private const val KEY_AGENT_MODE = "engine.mode"
         private const val KEY_N8N_URL = "n8n.server.url"
         private const val KEY_N8N_AI_TOOLS = "n8n.ai.tools"
+        private const val KEY_TOOLBOX_AI = "toolbox.ai.enabled"
 
         private fun labelKey(mode: AgentMode) = "engine.label.${mode.name}"
         val PUBLIC_LIMIT_CHOICES = listOf(10, 25, 50)

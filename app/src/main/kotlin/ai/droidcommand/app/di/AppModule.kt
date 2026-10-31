@@ -26,6 +26,7 @@ import ai.droidcommand.app.shizuku.embedded.EmbeddedShizukuPayload
 import ai.droidcommand.app.shizuku.embedded.EmbeddedShizukuStarter
 import ai.droidcommand.app.shizuku.embedded.ShizukuStartNotifier
 import ai.droidcommand.app.shizuku.embedded.WirelessAdbClient
+import ai.droidcommand.app.shizuku.toolbox.AppToolboxRunner
 import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
 import ai.droidcommand.app.theme.DataStoreThemePreferenceStore
 import ai.droidcommand.config.AssistantCapabilitySettingsStore
@@ -84,6 +85,7 @@ import ai.droidcommand.shizuku.PrivilegedShell
 import ai.droidcommand.shizuku.ShizukuHost
 import ai.droidcommand.shizuku.ShizukuManager
 import ai.droidcommand.shizuku.ShizukuTool
+import ai.droidcommand.shizuku.toolbox.SystemToolboxTool
 import ai.droidcommand.termux.ClientBackedTermuxExecutor
 import ai.droidcommand.termux.TermuxExecutor
 import ai.droidcommand.termux.TermuxTool
@@ -168,6 +170,7 @@ object AppModule {
         privilegedShell: PrivilegedShell,
         remoteControlStore: RemoteControlStore,
         remoteActionExecutor: RemoteActionExecutor,
+        toolboxRunner: AppToolboxRunner,
     ): ToolRegistry = ToolRegistry().apply {
         register(AutomationShellTool(AllowlistShellExecutor { advanced.shellAllowlist() }))
         register(AiPromptTool(CloudPromptClient(vault, transport)) { spec -> chatModelFor(context, spec) })
@@ -189,6 +192,8 @@ object AppModule {
         val n8n = N8nClient(transport) { vault.getSecret(N8nSecrets.API_KEY_ID) }
         register(N8nListWorkflowsTool(n8n, advanced::n8nServerUrl, advanced::n8nAiToolsEnabled))
         register(N8nRunWorkflowTool(n8n, advanced::n8nServerUrl, advanced::n8nAiToolsEnabled))
+        // System Toolbox: gate defaults OFF; name contains `shizuku`, so every call is confirmed.
+        register(SystemToolboxTool(toolboxRunner, advanced::toolboxAiEnabled))
     }
 
     @Provides
