@@ -164,13 +164,20 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * gate as every other tool here regardless of which client backs it.
  *
  * `pentest_swarm_status` / `edl_commander_status` / `kyc_auditlab_status` /
- * `filemanager_status` / `keyboard_status` / `mesh_status` / `browser_status` /
- * `victorsms_status` / `victorspoof_status` / `victorious_flash_status` /
- * `victorlaunch_status`
+ * `keyboard_status` / `browser_status` / `victorsms_status` / `victorspoof_status` /
+ * `victorious_flash_status` / `victorlaunch_status`
  * (`KnownFleet.plannedStubs`) are catalog stubs. Pentest and EDL are planned
- * bound companions; KYC is a host-process simulator; File Manager, Keyboard,
- * Mesh, Browser, VictorSMS, VictorSpoof, Victorious Flash, and VictorLaunch are planned
- * EXTERNAL_NODE members. All always fail without binding or spawning.
+ * bound companions; KYC is a host-process simulator; Keyboard, Browser, VictorSMS,
+ * VictorSpoof, Victorious Flash, and VictorLaunch are planned EXTERNAL_NODE members.
+ * All always fail without binding or spawning.
+ *
+ * `filemanager_status` / `mesh_status` are NOT `plannedStubs()` entries here: File Manager
+ * and Mesh are now `FleetHonestyStatus.PARTIAL` (`core-fleet-tools` has real tools calling
+ * the Messenger bridge — see `KnownFleet.FILE_MANAGER`/`MESH`'s own `nextStep`). But that
+ * live path only exists where `:app` builds a real `FleetMessengerController`; this
+ * device-free CLI has no Android bind path, same as RootForge's own Messenger tools stay
+ * SSH-only here. [messengerOnlyNodeTool] keeps both names registered with an honest refusal
+ * instead of silently dropping them from `list-tools`.
  * See `docs/FLEET_CONTROL.md`.
  *
  * No [ai.droidcommand.security.GrantStore]/[ai.droidcommand.security.AuditLog] is
@@ -178,6 +185,32 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * invocation with no persistence across runs, so an in-memory audit log nobody ever reads back
  * would be inert plumbing — a named follow-up, not silently added.
  */
+/**
+ * Honest device-free refusal for a fleet member whose only live transport is the Android
+ * Messenger bridge (`core-fleet-messenger` + `:app`). Unlike [ai.droidcommand.security.PlannedFleetTool]
+ * this does not require the member to be `FleetHonestyStatus.PLANNED` — File Manager and Mesh are
+ * `PARTIAL` (real tools exist in `core-fleet-tools`), but that path cannot run from this process.
+ * Never binds, never spawns, never claims to have tried.
+ */
+private fun messengerOnlyNodeTool(
+    toolName: String,
+    member: ai.droidcommand.security.FleetMemberDescriptor,
+): Tool = object : Tool {
+    override val spec = ai.droidcommand.agent.ToolSpec(
+        name = toolName,
+        description = "${member.displayName} is reachable only from the DroidCommand AI Android app, " +
+            "not from this device-free CLI: its live transport is Android Messenger IPC " +
+            "(core-fleet-tools has real tools for it), and that can only bind from inside :app.",
+        securityLevel = ai.droidcommand.agent.SecurityLevel.SENSITIVE,
+        requiresConfirmation = true,
+    )
+
+    override fun execute(input: Map<String, String>): ToolResult = ToolResult.Failure(
+        "${member.displayName} has no device-free path from this CLI (Android Messenger IPC only). " +
+            "Use the DroidCommand AI Android app's Tools -> Fleet screen to pair and call it.",
+    )
+}
+
 internal fun buildSession(
     approvalPrompt: ApprovalPrompt = ConsoleApprovalPrompt,
     device: AdbDeviceConfig? = AdbDeviceConfig.fromEnvironment(),
@@ -197,6 +230,8 @@ internal fun buildSession(
         register(SetTool(setExecutorFor()))
         register(WebSearchTool(webSearchClientFor(transport)))
         KnownFleet.plannedStubs().forEach { register(it) }
+        register(messengerOnlyNodeTool("filemanager_status", KnownFleet.FILE_MANAGER))
+        register(messengerOnlyNodeTool("mesh_status", KnownFleet.MESH))
         rootForge.forEach { register(it) }
         flashTools.forEach { register(it) }
     }
