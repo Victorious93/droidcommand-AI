@@ -44,6 +44,8 @@ fun AdvancedScreen(
     onOpenTools: () -> Unit = {},
     onOpenLogs: () -> Unit = {},
     onOpenN8n: () -> Unit = {},
+    onOpenToolbox: () -> Unit = {},
+    onOpenNotesStudio: () -> Unit = {},
     onCopiedLink: () -> Unit = {},
 ) {
     AdvancedContent(
@@ -55,6 +57,8 @@ fun AdvancedScreen(
         onOpenTools = onOpenTools,
         onOpenLogs = onOpenLogs,
         onOpenN8n = onOpenN8n,
+        onOpenToolbox = onOpenToolbox,
+        onOpenNotesStudio = onOpenNotesStudio,
         onCopiedLink = onCopiedLink,
     )
 }
@@ -69,6 +73,8 @@ private fun AdvancedContent(
     onOpenTools: () -> Unit,
     onOpenLogs: () -> Unit,
     onOpenN8n: () -> Unit,
+    onOpenToolbox: () -> Unit,
+    onOpenNotesStudio: () -> Unit,
     onCopiedLink: () -> Unit,
 ) {
     Column(
@@ -105,6 +111,8 @@ private fun AdvancedContent(
                 OutlinedButton(onClick = onOpenTools, modifier = Modifier.fillMaxWidth()) { Text("Extra tools") }
                 OutlinedButton(onClick = onOpenLogs, modifier = Modifier.fillMaxWidth()) { Text("Activity log") }
                 OutlinedButton(onClick = onOpenN8n, modifier = Modifier.fillMaxWidth().testTag("advanced_n8n")) { Text("n8n (self-hosted)") }
+                OutlinedButton(onClick = onOpenNotesStudio, modifier = Modifier.fillMaxWidth().testTag("advanced_notes_studio")) { Text("Notes Studio") }
+                OutlinedButton(onClick = onOpenToolbox, modifier = Modifier.fillMaxWidth().testTag("advanced_toolbox")) { Text("System Toolbox") }
             }
         }
         SectionLabel("Mode names")

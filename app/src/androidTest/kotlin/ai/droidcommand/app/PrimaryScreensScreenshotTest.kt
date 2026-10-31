@@ -166,6 +166,19 @@ class PrimaryScreensScreenshotTest {
             waitForText("Connect to your n8n server")
             snap("n8n")
         }
+        step("notes-studio") {
+            openFromAdvanced("Notes Studio")
+            waitForText("Save to vault")
+            snap("notes-studio")
+            compose.onNodeWithText("AI context files").performClick()
+            waitForText("Build and check the files AI coding tools read.")
+            snap("notes-studio-context")
+        }
+        step("system-toolbox") {
+            openFromAdvanced("System Toolbox")
+            waitForText("Let the AI use the toolbox")
+            snap("system-toolbox")
+        }
         step("tools-setoolkit") {
             openFromAdvanced("Extra tools")
             waitForText("Social-Engineer Toolkit")
