@@ -110,6 +110,7 @@ class FleetUserCopyTest {
             ScreenHelpCatalog.SETTINGS,
             ScreenHelpCatalog.ADVANCED,
             ScreenHelpCatalog.APK_DOWNLOAD,
+            ScreenHelpCatalog.N8N,
             ScreenHelpCatalog.FIRST_RUN,
             ScreenHelpCatalog.CONNECT_DEVICE,
         )

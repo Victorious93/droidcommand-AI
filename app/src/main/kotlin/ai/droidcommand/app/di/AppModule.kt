@@ -43,6 +43,10 @@ import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.metasploit.MetasploitExecutor
 import ai.droidcommand.metasploit.MetasploitTool
 import ai.droidcommand.metasploit.TermuxMetasploitExecutor
+import ai.droidcommand.n8n.N8nClient
+import ai.droidcommand.n8n.N8nListWorkflowsTool
+import ai.droidcommand.n8n.N8nRunWorkflowTool
+import ai.droidcommand.n8n.N8nSecrets
 import ai.droidcommand.pentestswarm.ApprovalPromptStepApprover
 import ai.droidcommand.pentestswarm.KaliAuthorizedScanTool
 import ai.droidcommand.pentestswarm.LocalKaliPlaybookRunner
@@ -176,6 +180,9 @@ object AppModule {
         // Remote Control skeleton. Names contain `remote`; destructive variants never YOLO-waive.
         // execute() is a stub — no live wipe / power-off / lock / RustDesk.
         RemoteControlTool.all(remoteActionExecutor, remoteControlStore).forEach { register(it) }
+        val n8n = N8nClient(transport) { vault.getSecret(N8nSecrets.API_KEY_ID) }
+        register(N8nListWorkflowsTool(n8n, advanced::n8nServerUrl, advanced::n8nAiToolsEnabled))
+        register(N8nRunWorkflowTool(n8n, advanced::n8nServerUrl, advanced::n8nAiToolsEnabled))
     }
 
     @Provides

@@ -184,15 +184,17 @@ class ManifestPolicyTest {
     }
 
     @Test
-    fun `cleartext HTTP is refused and only the system certificate store is trusted`() {
+    fun `cleartext is OS-permitted for LAN n8n and only the system certificate store is trusted`() {
         assertEquals("@xml/network_security_config", application.androidAttr("networkSecurityConfig"))
         assertTrue(application.androidAttr("usesCleartextTraffic") != "true")
         val config = xml("src/main/res/xml/network_security_config.xml")
         val base = config.children("base-config").single()
-        assertEquals("false", base.getAttribute("cleartextTrafficPermitted"))
+        // Android cannot express RFC1918 as domain-config CIDR. The app refuses HTTP except LAN
+        // (core-n8n N8nServerUrl). Keep system CAs only; do not add user CAs or a domain-config
+        // without review.
+        assertEquals("true", base.getAttribute("cleartextTrafficPermitted"))
         val sources = base.children("trust-anchors").single().children("certificates").map { it.getAttribute("src") }
         assertEquals(listOf("system"), sources)
-        // A narrow exception for one host would be a domain-config; make adding one a deliberate, reviewed change.
         assertTrue(config.children("domain-config").isEmpty(), "domain-config entries must be reviewed against docs/SECURITY.md")
     }
 }

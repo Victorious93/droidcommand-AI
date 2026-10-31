@@ -39,6 +39,7 @@ fun AdvancedScreen(
     onOpenMemory: () -> Unit = {},
     onOpenTools: () -> Unit = {},
     onOpenLogs: () -> Unit = {},
+    onOpenN8n: () -> Unit = {},
     onCopiedLink: () -> Unit = {},
 ) {
     AdvancedContent(
@@ -48,6 +49,7 @@ fun AdvancedScreen(
         onOpenMemory = onOpenMemory,
         onOpenTools = onOpenTools,
         onOpenLogs = onOpenLogs,
+        onOpenN8n = onOpenN8n,
         onCopiedLink = onCopiedLink,
     )
 }
@@ -60,6 +62,7 @@ private fun AdvancedContent(
     onOpenMemory: () -> Unit,
     onOpenTools: () -> Unit,
     onOpenLogs: () -> Unit,
+    onOpenN8n: () -> Unit,
     onCopiedLink: () -> Unit,
 ) {
     Column(
@@ -94,6 +97,7 @@ private fun AdvancedContent(
                 OutlinedButton(onClick = onOpenMemory, modifier = Modifier.fillMaxWidth()) { Text("Memory") }
                 OutlinedButton(onClick = onOpenTools, modifier = Modifier.fillMaxWidth()) { Text("Extra tools") }
                 OutlinedButton(onClick = onOpenLogs, modifier = Modifier.fillMaxWidth()) { Text("Activity log") }
+                OutlinedButton(onClick = onOpenN8n, modifier = Modifier.fillMaxWidth().testTag("advanced_n8n")) { Text("n8n (self-hosted)") }
             }
         }
         SectionLabel("Mode names")

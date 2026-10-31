@@ -116,9 +116,12 @@ JVM-only core modules now:
   all three. Before this, the merged manifest of the debug APK carried `allowBackup=true` with no rules.
 
 ### Networking
-- HTTPS by default; Network Security Configuration disabling cleartext
-  and restricting trust — no permissive trust managers/hostname
-  verifiers.
+- HTTPS by default for the public internet. Network Security Configuration
+  trusts only the system CA store — no permissive trust managers/hostname
+  verifiers. OS-level cleartext is permitted so a user-entered LAN n8n
+  URL (`http://192.168.x.x`) can be reached (Android cannot express RFC1918
+  as a domain-config CIDR). `core-n8n.N8nServerUrl` still refuses HTTP
+  except to LAN / loopback / `.local`, and blocks cloud-metadata addresses.
 - `INTERNET` permission only when required.
 - Certificate/hostname validation, bounded timeouts, cancellation
   propagation, response-size limits, no main-thread networking.
@@ -127,9 +130,10 @@ JVM-only core modules now:
   endpoint access.
 - Retry only safe/idempotent failures, bounded, with backoff; never retry
   auth or confirmation failures.
-- **`:app` network security config — IMPLEMENTED 2026-10-15.** `res/xml/network_security_config.xml` sets
-  `cleartextTrafficPermitted="false"` and trusts only the system certificate store; `ManifestPolicyTest` fails
-  if either changes or a `domain-config` exception is added without review. Not covered: certificate pinning
+- **`:app` network security config — UPDATED 2026-10-31 for LAN n8n.** `res/xml/network_security_config.xml` sets
+  `cleartextTrafficPermitted="true"` (OS layer only; the app still refuses HTTP except LAN) and trusts only the
+  system certificate store; `ManifestPolicyTest` fails if the system-CA rule changes or a `domain-config`
+  exception is added without review. Not covered: certificate pinning
   and mutual TLS (only `JdkHttpTransport` has them, and it cannot run on Android), response-size limits
   (`HttpUrlConnectionTransport` reads a whole body into memory), and cancellation of an in-flight request
   when a screen is left (it ends at the read timeout).
@@ -269,7 +273,7 @@ document.
       covered** by `ExecutionTarget`'s typed contract; no sandboxed
       subprocess implementation exists yet beyond `core-shell`'s
       fixed-executable model.
-- [x] `:app` backup exclusion, cleartext refusal and package-visibility policy
+- [x] `:app` backup exclusion, LAN-only HTTP (n8n) and package-visibility policy
       pinned by a JVM test — **covered 2026-10-15** (`ManifestPolicyTest`).
 - [x] `:app` unit tests and ktlint run in CI — **covered 2026-10-15**
       (`.github/workflows/android-checks.yml`; before that no workflow ran them).

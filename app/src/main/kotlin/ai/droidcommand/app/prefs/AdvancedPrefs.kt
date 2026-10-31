@@ -64,6 +64,20 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         }
     }
 
+    /** Base URL of the owner's n8n server. Not a secret; the API key lives in the vault. */
+    fun n8nServerUrl(): String = prefs.getString(KEY_N8N_URL, "") ?: ""
+
+    fun setN8nServerUrl(url: String) {
+        prefs.edit { putString(KEY_N8N_URL, url.trim()) }
+    }
+
+    /** When false (the default) the AI / Kai n8n tools refuse to run. */
+    fun n8nAiToolsEnabled(): Boolean = prefs.getBoolean(KEY_N8N_AI_TOOLS, false)
+
+    fun setN8nAiToolsEnabled(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_N8N_AI_TOOLS, enabled) }
+    }
+
     companion object {
         const val FILE = "advanced_prefs"
         private const val KEY_TOOLBAR = "chat.toolbar"
@@ -71,6 +85,8 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         private const val KEY_SHELL_ALLOWLIST = "automation.shell.allowlist"
         private const val KEY_CODING_TUNNEL = "coding.tunnel"
         private const val KEY_AGENT_MODE = "engine.mode"
+        private const val KEY_N8N_URL = "n8n.server.url"
+        private const val KEY_N8N_AI_TOOLS = "n8n.ai.tools"
 
         private fun labelKey(mode: AgentMode) = "engine.label.${mode.name}"
         val PUBLIC_LIMIT_CHOICES = listOf(10, 25, 50)
