@@ -66,6 +66,16 @@ data class ToolSpec(
      * [requiresRoot] does for [PermissionCategory.ROOT] itself.
      */
     val permissionCategory: PermissionCategory? = null,
+    /**
+     * Optional JSON-typed parameter schema (Kai integration Foundation).
+     * Null (the default) means the tool keeps today's untyped
+     * `Map<String, String>` contract and is not schema-validated before
+     * [Tool.execute] — every existing tool is unaffected. When set,
+     * MCP and other typed callers validate [ToolArgumentValue]s against
+     * this schema, then pass a compatibility string map through
+     * [ToolArgumentCodec.toStringMap].
+     */
+    val parameterSchema: ToolParameterSchema? = null,
 )
 
 sealed class ToolResult {
