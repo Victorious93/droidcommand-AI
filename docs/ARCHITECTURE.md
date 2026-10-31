@@ -1535,14 +1535,17 @@ speaks the SSH fallback. The on-device Messenger client is `core-fleet-messenger
 
 ## 11. On-device markdown vault (added 2026-10-12)
 
-`core-notes` is a JVM module. The app keeps one vault under its files directory (`notes-vault`). Tools → Notes opens it. Settings states that plugins are user text and that none are bundled.
+`core-notes` is a JVM module. The app keeps one vault under its files directory (`notes-vault`) or a user-picked SAF folder. Advanced → Brain (and Extra tools → Brain) opens it. Chat can retrieve matching notes and save a chat or fact only when the Kai `brainEnabled` gate is on, and only after a confirm.
 
 | Component | Status | Notes |
 |---|---|---|
-| `NoteVault` | IMPLEMENTED (JVM) | Folders and `.md` notes. Paths that leave the vault, absolute paths, and names starting with `.` are refused. `.plugins` is created and hidden from the folder list. Read/write uses `Path.readText`/`writeText` (API 26 streams), not `Files.readString`/`writeString` (Java 11 / Android API 33) — those crash Notes on minSdk 28. |
+| `NoteVault` / `VaultStorage` | IMPLEMENTED (JVM) | Folders and `.md` notes. Paths that leave the vault, absolute paths, and names starting with `.` are refused. `.plugins` is created and hidden from the folder list. Read/write uses `Path.readText`/`writeText` (API 26 streams), not `Files.readString`/`writeString` (Java 11 / Android API 33) — those crash Notes on minSdk 28. `PathVaultStorage` is the tested backend; `SafVaultStorage` (`:app`) is ON DISK for a picked Obsidian folder. |
+| `NoteParser` / `NoteIndex` / `Bm25Search` / `BrainLibrarian` | IMPLEMENTED (JVM) | Frontmatter, `#tags`, `[[wikilinks]]`, backlinks, BM25 search, retrieve-as-context, draft-then-commit save. Drafts do not write. Embeddings are not in this slice. |
 | Markdown preview | IMPLEMENTED (JVM) | Headings, bullets, fenced code, and paragraphs. Tables, images, links, and HTML stay as text. |
 | `PluginStore` | IMPLEMENTED (JVM, data only) | A plugin is a text manifest (`id`, `name`, `prefix`, `suffix`, literal `replace` lines). Install always stores it disabled. Enable, disable, and remove are explicit. Enabled plugins run in id order as `String.replace`, then prefix and suffix. No classes, dex, or JavaScript are loaded. A fresh vault has zero plugins. Nothing from Obsidian is bundled. |
-| `:app` Notes screen | ON DISK | Edit, save, preview, install, enable, disable, and remove. Preview applies enabled plugins; save writes the editor text unchanged. Not assembled in the session that added it (no Android SDK). |
+| `:app` Brain screen | ON DISK | Same vault as Notes, now labelled Brain on Advanced. List, search, editor, tags, backlinks, SAF folder picker. Not launched on a device in the session that added it. |
+| Chat retrieve / confirm-save | IMPLEMENTED (JVM session) / ON DISK (UI) | `ChatSession.brain` injects librarian context on the user turn when the gate is on. Save is a confirm dialog; cancel writes nothing. |
+| `AssistantCapability.BRAIN` | IMPLEMENTED — JVM-tested | Tenth Kai gate, default OFF. The Advanced switch can turn only this one on. The other nine stay read-only off. |
 | Executable plugin code | PLANNED | Absent. The current sandbox is that a plugin is data, not code. |
 
 ## 12. App shell gaps closed on disk (2026-10-13)
@@ -1636,7 +1639,7 @@ stays `confirmation_required`.
 | Component | Status | Notes |
 |---|---|---|
 | `docs/KAI_INTEGRATION.md` / `docs/KAI_INTEGRATION_PLAN.md` | IMPLEMENTED (docs) | Map re-read against DCA `c9d9116` and Kai `3818b2fccc`. Plan uses owner phases 1–6. Phase 2+ NOT STARTED. |
-| `core-config.AssistantCapabilitySettings` + file/in-memory stores | IMPLEMENTED — JVM-tested | Nine gates default false. Corrupt file → all-off. Ignores `externalControlEnabled` if present in a file. `:app` Advanced tab shows them read-only (all Off); Settings only points at Advanced. |
+| `core-config.AssistantCapabilitySettings` + file/in-memory stores | IMPLEMENTED — JVM-tested | Ten gates default false (ninth Kai set plus Brain). Corrupt file → all-off. Ignores `externalControlEnabled` if present in a file. `:app` Advanced tab shows the original nine read-only Off; Brain is the one switch the owner can turn on. |
 | `core-agent.ToolParameterSchema` / `ToolArgumentCodec` / `ToolCallEnvelope` | IMPLEMENTED — JVM-tested | Opt-in schema on `ToolSpec` (null = existing tools unchanged). JSON null omitted; arrays/objects kept as JSON text. New call id per MCP invocation. |
 | `core-mcp.McpToolServer` schema check | IMPLEMENTED — JVM-tested | Uses the codec; schema mismatch is an MCP error and does not call `ToolRunner`. Untyped tools unchanged. |
 | `core-remote.PlatformHttpTransport` | IMPLEMENTED — JVM-tested | Android → `HttpUrlConnectionTransport`; desktop JVM → `JdkHttpTransport`. `:app` still injects `HttpUrlConnectionTransport` directly. |

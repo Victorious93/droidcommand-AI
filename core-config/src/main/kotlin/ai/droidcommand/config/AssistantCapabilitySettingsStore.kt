@@ -4,7 +4,8 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
-import java.nio.file.StandardOpenOption
+import kotlin.io.path.readText
+import kotlin.io.path.writeText
 
 interface AssistantCapabilitySettingsStore {
     fun load(): AssistantCapabilitySettings
@@ -29,13 +30,14 @@ class InMemoryAssistantCapabilitySettingsStore(
  * One properties-style file. Missing, unreadable, or unrecognized content
  * fails closed to [AssistantCapabilitySettings.DISABLED] (every capability
  * off) rather than throwing — a corrupt file must not enable Linux, MCP
- * client, mailbox, or cloud transfer. Keys other than the nine capability
- * flags — including `externalControlEnabled` — are ignored.
+ * client, mailbox, or cloud transfer. Keys other than the capability
+ * flags — including `externalControlEnabled` — are ignored. Brain is the
+ * tenth flag and still defaults off.
  */
 class FileAssistantCapabilitySettingsStore(private val file: Path) : AssistantCapabilitySettingsStore {
     override fun load(): AssistantCapabilitySettings {
         if (!Files.isRegularFile(file)) return AssistantCapabilitySettings.DISABLED
-        val text = runCatching { Files.readString(file) }.getOrElse { return AssistantCapabilitySettings.DISABLED }
+        val text = runCatching { file.readText() }.getOrElse { return AssistantCapabilitySettings.DISABLED }
         return decode(text)
     }
 
@@ -43,13 +45,7 @@ class FileAssistantCapabilitySettingsStore(private val file: Path) : AssistantCa
         val parent = file.parent
         if (parent != null) Files.createDirectories(parent)
         val tmp = file.resolveSibling("${file.fileName}.tmp")
-        Files.writeString(
-            tmp,
-            encode(settings),
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE,
-        )
+        tmp.writeText(encode(settings))
         try {
             Files.move(tmp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         } catch (_: AtomicMoveNotSupportedException) {
@@ -72,6 +68,7 @@ class FileAssistantCapabilitySettingsStore(private val file: Path) : AssistantCa
             appendLine("${AssistantCapability.GENERATED_UI.wireName}=${settings.generatedUiEnabled}")
             appendLine("${AssistantCapability.SKILL_SCRIPTS.wireName}=${settings.skillScriptsEnabled}")
             appendLine("${AssistantCapability.KAI_BUILD.wireName}=${settings.kaiBuildEnabled}")
+            appendLine("${AssistantCapability.BRAIN.wireName}=${settings.brainEnabled}")
         }
 
         fun decode(text: String): AssistantCapabilitySettings {
@@ -96,6 +93,7 @@ class FileAssistantCapabilitySettingsStore(private val file: Path) : AssistantCa
                 generatedUiEnabled = flag(AssistantCapability.GENERATED_UI.wireName),
                 skillScriptsEnabled = flag(AssistantCapability.SKILL_SCRIPTS.wireName),
                 kaiBuildEnabled = flag(AssistantCapability.KAI_BUILD.wireName),
+                brainEnabled = flag(AssistantCapability.BRAIN.wireName),
             )
         }
     }

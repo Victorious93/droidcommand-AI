@@ -24,7 +24,9 @@ import ai.droidcommand.app.shizuku.AndroidShizukuHost
 import ai.droidcommand.app.shizuku.BoundPrivilegedShell
 import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
 import ai.droidcommand.app.theme.DataStoreThemePreferenceStore
+import ai.droidcommand.config.AssistantCapabilitySettingsStore
 import ai.droidcommand.config.EncryptedSecretsVault
+import ai.droidcommand.config.FileAssistantCapabilitySettingsStore
 import ai.droidcommand.config.ThemePreferenceStore
 import ai.droidcommand.conversations.RoomConversationStore
 import ai.droidcommand.deviceconnect.DeviceConnectService
@@ -229,6 +231,11 @@ object AppModule {
         context.getSharedPreferences(CHAT_PREFS, Context.MODE_PRIVATE).getString("model.${spec.id}", null) ?: spec.defaultModel
 
     /** Phase 1: Keystore-backed secrets (API keys). UNBUILT — see security/AndroidSecretsVault.kt. */
+    @Provides
+    @Singleton
+    fun provideAssistantCapabilitySettingsStore(@ApplicationContext context: Context): AssistantCapabilitySettingsStore =
+        FileAssistantCapabilitySettingsStore(context.filesDir.toPath().resolve("assistant-capabilities.settings"))
+
     @Provides
     @Singleton
     fun provideSecretsVault(@ApplicationContext context: Context): EncryptedSecretsVault = createAndroidSecretsVault(context)

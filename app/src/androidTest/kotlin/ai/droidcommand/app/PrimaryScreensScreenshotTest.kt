@@ -111,11 +111,10 @@ class PrimaryScreensScreenshotTest {
             snap("tools")
         }
         step("notes") {
-            openFromAdvanced("Extra tools")
-            waitForText("Security Tools")
-            compose.onNodeWithText("Open notes").performScrollTo().performClick()
+            openFromAdvanced("Brain")
             waitForText("Vault")
             snap("notes")
+            snap("brain")
         }
         step("tools-metasploit") {
             openFromAdvanced("Extra tools")

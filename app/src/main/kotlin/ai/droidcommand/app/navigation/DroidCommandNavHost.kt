@@ -168,6 +168,7 @@ fun DroidCommandNavHost(
                     onOpenPilot = { navController.navigate(Routes.PILOT) },
                     onOpenPlan = { navController.navigate(Routes.PLAN) },
                     onOpenMemory = { navController.navigate(Routes.MEMORY) },
+                    onOpenBrain = { navController.navigate(Routes.NOTES) },
                     onOpenTools = { navController.navigate(Routes.TOOLS) },
                     onOpenLogs = { navController.navigate(Routes.LOGS) },
                     onOpenN8n = { navController.navigate(Routes.N8N) },

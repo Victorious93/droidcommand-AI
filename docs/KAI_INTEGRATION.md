@@ -100,8 +100,11 @@ tools. Do not add a second KV store.
 not a second 2 000-char constant. New tools register through
 `ToolRegistry` / `SecureToolExecutor`.
 
-**Implementation status:** NOT STARTED (logic extensions). Graph +
-budgeted retrieval already exist.
+**Implementation status:** PARTIAL. Graph + budgeted retrieval already
+exist. The 2026-10-31 Brain slice adds an Obsidian-compatible markdown
+vault (`core-notes` parser/index/BM25 + confirm-to-save) gated by
+`AssistantCapability.BRAIN` (default OFF). Kai categories, hit-count,
+and promotion into Persona are still NOT STARTED.
 **Acceptance (Phase 2+):** restart-surviving memories; visible
 reinforcement; promotion into `Persona` is user-visible and reversible.
 
@@ -393,7 +396,7 @@ feature.
 | ID | Capability | Decision | Status (2026-10-30) |
 |---|---|---|---|
 | KAI-001 | Rich chat | extend existing + later attachments | PARTIAL (streaming exists) |
-| KAI-002 | Persistent memory | extend existing | NOT STARTED (graph exists) |
+| KAI-002 | Persistent memory | extend existing | PARTIAL (graph + Brain vault; no Kai categories yet) |
 | KAI-003 | Personality | extend existing (UI) | NOT STARTED (model exists) |
 | KAI-004 | Providers / fallback | extend existing | PARTIAL |
 | KAI-005 | Local inference (LiteRT) | optional later; keep GGUF | GGUF PARTIAL; LiteRT NOT STARTED |

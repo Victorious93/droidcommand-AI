@@ -42,8 +42,8 @@ object ScreenHelpCatalog {
 
     val ADVANCED = ScreenHelp(
         title = "What is Advanced?",
-        body = "One-step commands, plans, memory, extra tools, the activity log, your own n8n server, " +
-            "remote-control toggles, and later Kai capabilities live here. Those capabilities stay off. " +
+        body = "One-step commands, plans, memory, Brain notes, extra tools, the activity log, your own n8n server, " +
+            "remote-control toggles, and later Kai capabilities live here. Those capabilities stay off except Brain, which you can turn on. " +
             "Remote control stays off until you turn it on and confirm. " +
             "You do not need this tab to chat or to pair an app.",
     )
@@ -86,9 +86,16 @@ object ScreenHelpCatalog {
             "You can edit or delete anything stored here.",
     )
 
+    val BRAIN = ScreenHelp(
+        title = "What is Brain?",
+        body = "Your markdown notes, with links and tags the same way Obsidian uses them. " +
+            "Search and open a note here. Chat can use matching notes only after you turn Brain on " +
+            "under Advanced, and it will not save a note until you confirm.",
+    )
+
     val TOOLS = ScreenHelp(
         title = "What are extra tools?",
-        body = "Security tools, notes, clipboards, and saved commands. " +
+        body = "Security tools, Brain notes, clipboards, and saved commands. " +
             "Each run that can change something still asks you first. " +
             "You do not need these to chat or to pair your other apps.",
     )
