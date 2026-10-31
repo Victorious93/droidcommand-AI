@@ -14,8 +14,8 @@ import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prompts.PromptLibrary
 import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.config.EncryptedSecretsVault
-import ai.droidcommand.deviceconnect.DeviceConnectService
 import ai.droidcommand.config.SecretState
+import ai.droidcommand.deviceconnect.DeviceConnectService
 import ai.droidcommand.llm.factory.AiSlashCommands
 import ai.droidcommand.llm.factory.ChatResult
 import ai.droidcommand.llm.factory.ChatSession

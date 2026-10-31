@@ -149,7 +149,7 @@ fun ConnectDeviceContent(
                 )
                 if (state.status.listening) {
                     state.status.localAddresses.forEach { host ->
-                        Text("${host}:${state.status.port}", style = MaterialTheme.typography.titleMedium)
+                        Text("$host:${state.status.port}", style = MaterialTheme.typography.titleMedium)
                     }
                     state.status.invite?.let {
                         Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("connect_invite"))
