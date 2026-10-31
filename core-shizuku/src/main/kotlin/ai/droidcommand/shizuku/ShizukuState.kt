@@ -17,10 +17,10 @@ enum class ShizukuState {
     /** Binder alive, permission not granted (denied or not yet requested). */
     DENIED,
 
-    /** Neither the Shizuku manager nor Sui is installed, and no binder is alive. */
+    /** Neither the built-in payload, the Shizuku manager, nor Sui is present, and no binder is alive. */
     NOT_INSTALLED,
 
-    /** Shizuku or Sui is installed, but `pingBinder()` is false (not started). */
+    /** Built-in Shizuku, the official manager, or Sui is present, but `pingBinder()` is false (not started). */
     NOT_RUNNING,
 }
 
@@ -35,6 +35,8 @@ data class ShizukuSignals(
     val binderAlive: Boolean,
     /** True if `Shizuku.checkSelfPermission()` is granted. Ignored unless [binderAlive]. */
     val permissionGranted: Boolean,
+    /** True if this app's embedded server/starter payload is on disk. */
+    val embeddedAvailable: Boolean = false,
 )
 
 object ShizukuPackages {
@@ -56,8 +58,10 @@ object ShizukuPackages {
 object ShizukuStateResolver {
     fun resolve(signals: ShizukuSignals): ShizukuState {
         // A live binder means Shizuku or Sui is present even if PackageManager
-        // cannot see a manager APK (the usual Sui topology).
-        val present = signals.managerInstalled || signals.binderAlive
+        // cannot see a manager APK (the usual Sui topology). The built-in
+        // payload also counts as present so NOT_INSTALLED is only the
+        // "nothing to start" case.
+        val present = signals.managerInstalled || signals.binderAlive || signals.embeddedAvailable
         if (!present) return ShizukuState.NOT_INSTALLED
         if (!signals.binderAlive) return ShizukuState.NOT_RUNNING
         return if (signals.permissionGranted) ShizukuState.GRANTED else ShizukuState.DENIED

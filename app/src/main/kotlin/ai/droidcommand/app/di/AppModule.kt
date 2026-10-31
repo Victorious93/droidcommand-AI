@@ -22,6 +22,10 @@ import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.app.shizuku.AndroidShizukuHost
 import ai.droidcommand.app.shizuku.BoundPrivilegedShell
+import ai.droidcommand.app.shizuku.embedded.EmbeddedShizukuPayload
+import ai.droidcommand.app.shizuku.embedded.EmbeddedShizukuStarter
+import ai.droidcommand.app.shizuku.embedded.ShizukuStartNotifier
+import ai.droidcommand.app.shizuku.embedded.WirelessAdbClient
 import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
 import ai.droidcommand.app.theme.DataStoreThemePreferenceStore
 import ai.droidcommand.config.EncryptedSecretsVault
@@ -350,7 +354,34 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideShizukuHost(@ApplicationContext context: Context): ShizukuHost = AndroidShizukuHost(context)
+    fun provideEmbeddedShizukuPayload(@ApplicationContext context: Context): EmbeddedShizukuPayload =
+        EmbeddedShizukuPayload(context)
+
+    @Provides
+    @Singleton
+    fun provideWirelessAdbClient(@ApplicationContext context: Context): WirelessAdbClient = WirelessAdbClient(context)
+
+    @Provides
+    @Singleton
+    fun provideShizukuStartNotifier(@ApplicationContext context: Context): ShizukuStartNotifier =
+        ShizukuStartNotifier(context)
+
+    @Provides
+    @Singleton
+    fun provideEmbeddedShizukuStarter(
+        @ApplicationContext context: Context,
+        prefs: AdvancedPrefs,
+        payload: EmbeddedShizukuPayload,
+        wireless: WirelessAdbClient,
+        manager: ShizukuManager,
+    ): EmbeddedShizukuStarter = EmbeddedShizukuStarter(context, prefs, payload, wireless, manager)
+
+    @Provides
+    @Singleton
+    fun provideShizukuHost(
+        @ApplicationContext context: Context,
+        payload: EmbeddedShizukuPayload,
+    ): ShizukuHost = AndroidShizukuHost(context, payload)
 
     @Provides
     @Singleton

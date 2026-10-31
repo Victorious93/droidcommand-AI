@@ -1,0 +1,23 @@
+Shizuku
+Copyright 2023 RikkaW / RikkaApps
+
+This product includes software developed by RikkaApps
+(https://github.com/RikkaApps/Shizuku), licensed under the
+Apache License, Version 2.0.
+
+Pinned release used as the embedded server + native starter payload:
+  https://github.com/RikkaApps/Shizuku/releases/tag/v13.6.0
+  Asset: shizuku-v13.6.0.r1086.2650830c-release.apk
+  SHA-256: 6e273ab0e991c4e79bc8b1bbb9b9dd739ccac1a8712a541a214078886b7b790f
+
+DroidCommand AI embeds that official APK (server + libshizuku.so starter)
+and starts it from inside ai.droidcommand.app. The separate Shizuku
+manager app is not required. An already-installed Shizuku or Sui
+install remains a fallback.
+
+The Shizuku client API already used by this app
+(dev.rikka.shizuku:api / provider) is MIT-licensed and is a separate
+artifact (Shizuku-API).
+
+This NOTICE and the Apache-2.0 LICENSE in this directory must stay
+with any distribution of the embedded payload.
