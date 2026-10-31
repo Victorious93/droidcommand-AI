@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -22,6 +23,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -62,27 +64,7 @@ fun RemoteControlSettingsSection(viewModel: RemoteControlViewModel = hiltViewMod
         }
     }
     SectionLabel("External control")
-    DroidCard {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                "Off by default. When off, remote commands from other apps are ignored. " +
-                    "Text-message allow-lists live in that other app, not here.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Allow inbound remote commands")
-                Switch(
-                    checked = ui.config.externalControlEnabled,
-                    onCheckedChange = { viewModel.setExternalControlEnabled(it) },
-                )
-            }
-        }
-    }
+    ExternalControlCard(enabled = ui.config.externalControlEnabled, onSet = viewModel::setExternalControlEnabled)
     PairingEditor(viewModel)
     ui.config.pairings.forEach { PairingRow(it, viewModel) }
     TargetEditor(viewModel)
@@ -147,6 +129,64 @@ fun RemoteControlSettingsSection(viewModel: RemoteControlViewModel = hiltViewMod
                 OutlinedButton(onClick = { viewModel.importBackup() }) { Text("Restore local backup") }
             }
         }
+    }
+}
+
+@Composable
+private fun ExternalControlCard(enabled: Boolean, onSet: (Boolean) -> Unit) {
+    var confirmOn by remember { mutableStateOf(false) }
+    DroidCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "Off by default. When off, remote commands from other apps are ignored. " +
+                    "Text-message allow-lists live in that other app, not here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Allow inbound remote commands")
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = { wantOn ->
+                        if (wantOn && !enabled) {
+                            confirmOn = true
+                        } else {
+                            onSet(false)
+                        }
+                    },
+                    modifier = Modifier.testTag("external_control_switch"),
+                )
+            }
+        }
+    }
+    if (confirmOn) {
+        AlertDialog(
+            onDismissRequest = { confirmOn = false },
+            title = { Text("Turn on remote control?") },
+            text = {
+                Text(
+                    "Other apps you have paired will be able to send commands here. " +
+                        "Anything that can wipe, power off, or lock a device still asks first. " +
+                        "Leave this off unless you need it.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmOn = false
+                        onSet(true)
+                    },
+                    modifier = Modifier.testTag("external_control_confirm"),
+                ) { Text("Turn on") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmOn = false }) { Text("Keep off") }
+            },
+        )
     }
 }
 

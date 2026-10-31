@@ -108,6 +108,8 @@ class FleetUserCopyTest {
             ScreenHelpCatalog.CHAT,
             ScreenHelpCatalog.MODELS,
             ScreenHelpCatalog.SETTINGS,
+            ScreenHelpCatalog.ADVANCED,
+            ScreenHelpCatalog.APK_DOWNLOAD,
             ScreenHelpCatalog.FIRST_RUN,
         )
         all.forEach { help ->

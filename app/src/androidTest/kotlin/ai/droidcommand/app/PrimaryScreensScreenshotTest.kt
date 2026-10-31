@@ -22,13 +22,13 @@ import java.io.File
 import java.io.FileOutputStream
 
 /**
- * Walks the production [MainActivity] four-tab chrome and writes one PNG
+ * Walks the production [MainActivity] five-tab chrome and writes one PNG
  * per primary screen under the app's external-files `screenshots/` directory
  * (override with the `screenshotDir` instrumentation argument).
  *
  * A fresh install shows first-run; this walk captures that, then skips it
- * and visits Fleet, AI Chat, Models, Settings, plus the extra screens still
- * reached from Settings.
+ * and visits Fleet, AI Chat, Models, Settings, Advanced, plus the extra
+ * screens still reached from Advanced.
  */
 @RunWith(AndroidJUnit4::class)
 class PrimaryScreensScreenshotTest {
@@ -74,6 +74,7 @@ class PrimaryScreensScreenshotTest {
         }
         step("fleet") {
             tapNav("nav_fleet")
+            waitForText("Get latest APK")
             waitForText("Refresh", timeoutMs = 20_000)
             snap("fleet")
         }
@@ -92,20 +93,25 @@ class PrimaryScreensScreenshotTest {
             waitForText("API keys")
             snap("settings")
         }
+        step("advanced") {
+            tapNav("nav_advanced")
+            waitForText("These tools can change this phone")
+            snap("advanced")
+        }
         step("tools") {
-            openFromSettings("Extra tools")
+            openFromAdvanced("Extra tools")
             waitForText("Security Tools")
             snap("tools")
         }
         step("notes") {
-            openFromSettings("Extra tools")
+            openFromAdvanced("Extra tools")
             waitForText("Security Tools")
             compose.onNodeWithText("Open notes").performScrollTo().performClick()
             waitForText("Vault")
             snap("notes")
         }
         step("tools-metasploit") {
-            openFromSettings("Extra tools")
+            openFromAdvanced("Extra tools")
             waitForText("Metasploit")
             compose.onNodeWithText("Metasploit").performScrollTo().performClick()
             waitForText("VictorSuite (Termux + proot Kali)")
@@ -123,27 +129,27 @@ class PrimaryScreensScreenshotTest {
             compose.waitForIdle()
         }
         step("memory") {
-            openFromSettings("Memory")
+            openFromAdvanced("Memory")
             waitForText("What DroidCommand AI has remembered")
             snap("memory")
         }
         step("pilot") {
-            openFromSettings("One-step command")
+            openFromAdvanced("One-step command")
             waitForText("Runs one approved action")
             snap("pilot")
         }
         step("forge") {
-            openFromSettings("Multi-step plan")
+            openFromAdvanced("Multi-step plan")
             waitForText("Give the app a goal")
             snap("forge")
         }
         step("logs") {
-            openFromSettings("Activity log")
+            openFromAdvanced("Activity log")
             waitForText("All events")
             snap("logs")
         }
         step("tools-setoolkit") {
-            openFromSettings("Extra tools")
+            openFromAdvanced("Extra tools")
             waitForText("Social-Engineer Toolkit")
             compose.onNodeWithText("Social-Engineer Toolkit").performScrollTo().performClick()
             waitForText("No Social-Engineer Toolkit program is connected")
@@ -168,7 +174,7 @@ class PrimaryScreensScreenshotTest {
         }
         skipSetupIfShown()
         step("tools-metasploit") {
-            openFromSettings("Extra tools")
+            openFromAdvanced("Extra tools")
             waitForText("Metasploit")
             compose.onNodeWithText("Metasploit").performScrollTo().performClick()
             waitForText("VictorSuite (Termux + proot Kali)")
@@ -185,7 +191,7 @@ class PrimaryScreensScreenshotTest {
             compose.waitForIdle()
         }
         step("tools-setoolkit") {
-            openFromSettings("Extra tools")
+            openFromAdvanced("Extra tools")
             waitForText("Social-Engineer Toolkit")
             compose.onNodeWithText("Social-Engineer Toolkit").performScrollTo().performClick()
             waitForText("No Social-Engineer Toolkit program is connected")
@@ -212,9 +218,9 @@ class PrimaryScreensScreenshotTest {
         }
     }
 
-    private fun openFromSettings(label: String) {
-        tapNav("nav_settings")
-        waitForText("API keys")
+    private fun openFromAdvanced(label: String) {
+        tapNav("nav_advanced")
+        waitForText("These tools can change this phone")
         compose.onNodeWithText(label).performScrollTo().performClick()
         compose.waitForIdle()
     }
