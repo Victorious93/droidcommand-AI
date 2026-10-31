@@ -278,3 +278,6 @@ document.
 - [x] `:app` unit tests and ktlint run in CI — **covered 2026-10-15**
       (`.github/workflows/android-checks.yml`; before that no workflow ran them).
       Android Lint is not gated: it needs the native build for every module.
+
+## Notes Studio LAN viewer and System Toolbox (2026-10-31)
+See `docs/NOTES_STUDIO_SYSTEM_TOOLBOX.md`. The LAN viewer is off by default, needs a password, is LAN-only and read-only. Toolbox actions that change anything need a confirmation that shows the exact command. The AI toolbox gate is off by default and asks on every call.

@@ -64,6 +64,22 @@ object ScreenHelpCatalog {
             "and this phone still asks before every run.",
     )
 
+    val SYSTEM_TOOLBOX = ScreenHelp(
+        title = "What is the System Toolbox?",
+        body = "Power tools that run through built-in Shizuku or root: a shell, app manager, permissions, logcat, " +
+            "APK backup, settings, a read-only root file browser, device info and reboot. Nothing runs on its own. " +
+            "Anything that changes the phone shows the exact command and waits for you. The assistant cannot use it " +
+            "unless you turn that on here, and it still asks every time.",
+    )
+
+    val NOTES_STUDIO = ScreenHelp(
+        title = "What is Notes Studio?",
+        body = "Tools for markdown in your Brain vault: write and check AI context files (CLAUDE.md, AGENTS.md, " +
+            ".cursorrules, copilot-instructions.md), keep a Prompt Vault, edit with a formatting toolbar and live " +
+            "preview with offline Mermaid diagrams, and optionally share the vault read-only on your Wi-Fi with a password. " +
+            "Sharing is off until you start it.",
+    )
+
     val FIRST_RUN = ScreenHelp(
         title = "What is this setup?",
         body = "Four short steps so the app can work: what it is, pick a model, pair your other apps, " +

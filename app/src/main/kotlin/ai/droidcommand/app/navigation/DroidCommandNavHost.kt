@@ -19,6 +19,8 @@ import ai.droidcommand.app.ui.onboarding.FirstRunScreen
 import ai.droidcommand.app.ui.plan.PlanScreen
 import ai.droidcommand.app.ui.settings.AdvancedScreen
 import ai.droidcommand.app.ui.settings.SettingsScreen
+import ai.droidcommand.app.ui.studio.NotesStudioScreen
+import ai.droidcommand.app.ui.toolbox.SystemToolboxScreen
 import ai.droidcommand.app.ui.tools.ToolsScreen
 import ai.droidcommand.app.ui.tools.metasploit.MetasploitScreen
 import ai.droidcommand.app.ui.tools.setoolkit.SetToolScreen
@@ -94,6 +96,8 @@ object Routes {
     const val HELP = "help"
     const val MODELS = "models"
     const val N8N = "advanced/n8n"
+    const val SYSTEM_TOOLBOX = "advanced/toolbox"
+    const val NOTES_STUDIO = "advanced/notes-studio"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -172,10 +176,14 @@ fun DroidCommandNavHost(
                     onOpenTools = { navController.navigate(Routes.TOOLS) },
                     onOpenLogs = { navController.navigate(Routes.LOGS) },
                     onOpenN8n = { navController.navigate(Routes.N8N) },
+                    onOpenToolbox = { navController.navigate(Routes.SYSTEM_TOOLBOX) },
+                    onOpenStudio = { navController.navigate(Routes.NOTES_STUDIO) },
                     onCopiedLink = { scope.launch { snackbar.showSnackbar("Link copied") } },
                 )
             }
             composable(Routes.N8N) { N8nScreen() }
+            composable(Routes.SYSTEM_TOOLBOX) { SystemToolboxScreen() }
+            composable(Routes.NOTES_STUDIO) { NotesStudioScreen() }
             composable(Routes.HELP) { HelpScreen() }
             composable(Routes.MODELS) { ModelsScreen() }
             composable(Routes.MEMORY) { MemoryScreen() }
@@ -268,4 +276,6 @@ private val advancedChildRoutes = setOf(
     Routes.CODING,
     Routes.NOTES,
     Routes.N8N,
+    Routes.SYSTEM_TOOLBOX,
+    Routes.NOTES_STUDIO,
 )
