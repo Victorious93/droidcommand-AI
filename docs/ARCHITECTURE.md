@@ -1681,3 +1681,20 @@ Kai gates stay read-only and off. n8n is a separate Advanced screen.
 | `:app` Advanced → n8n | ON DISK | Server URL, encrypted API key, test connection, workflow list, confirm-then-run, AI-tools switch (OFF default, confirm to turn on). Screenshot walk includes this screen. Never run against Don's n8n from CI. |
 | API key storage | IMPLEMENTED (same vault as cloud keys) | `EncryptedSecretsVault` id `n8n.api.key`. The screen never shows a saved key again. |
 | Network policy | PARTIAL | OS cleartext permitted so `http://192.168.x.x` can be reached; the app refuses HTTP except LAN. System CAs only. Not pinned. |
+
+## 19. Bot Maker, Phase B1 (2026-10-31)
+
+`docs/BRAIN_JARVIS_BOTMAKER_PLAN.md` §3's recipe shape, B1 (manual
+create/run/delete) only — B2 (pause/resume + log), B3 (phrase trigger),
+B4 (time trigger) and B5 stay on paper. New JVM-only `core-bots` module.
+
+| Component | Status | Notes |
+|---|---|---|
+| `core-bots.BotRecipe` | IMPLEMENTED — JVM-tested | id, name, `personaId` (references `core-agent.PersonaStore`, no duplicate soul string), `instructions`, `providerType` (opaque string), `allowedTools` (empty = chat-only), `memoryFolder`, `enabled`. |
+| `core-bots.JsonFileBotStore` / `InMemoryBotStore` | IMPLEMENTED — JVM-tested | Same id-validation + path-containment pattern as `core-agent.JsonFilePersonaStore`; one JSON file per bot. |
+| `core-bots.ScopedToolRunner` | IMPLEMENTED — JVM-tested | `ToolRunner` decorator: denies anything outside a recipe's `allowedTools` before ever calling the delegate (typically `core-security.SecureToolExecutor`); every call that is allowed still passes that delegate's own policy/approval/grant/audit checks unchanged. |
+| `core-bots.BotRunner` | IMPLEMENTED — JVM-tested | Produces the scoped `ToolRunner` plus the composed system prompt (persona `contextContribution` + bot `instructions`) for an existing `ChatSession`/`DroidCommandSession` call site to consume. Deliberately has no dependency on `core-llm-factory`. |
+| `AssistantCapability.BOT_MAKER` / `botMakerEnabled` | IMPLEMENTED — default OFF | Eleventh Kai gate, same pattern as `BRAIN`. The other ten gates are unchanged. |
+| `:app` Bot Maker screen | NOT STARTED | No Android SDK in this session's container; documented follow-up, not attempted blind. Storing a recipe as `Brain/Bots/<id>/recipe.md` (vs. the JSON file built here) is also a documented future step, not built now. |
+
+**Verified this session (no Android SDK, no live LLM):** `./gradlew :core-bots:test :core-config:test` and `./gradlew :core-bots:ktlintCheck :core-config:ktlintCheck` — **BUILD SUCCESSFUL**, 18 new `core-bots` tests, 0 failures. Full `./gradlew test ktlintCheck --continue` (no `-PincludeAndroid`) run for regressions; see `docs/AUDIT_2026-09-05.md`'s matching addendum for the exact pass/fail counts.
