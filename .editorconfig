@@ -30,3 +30,7 @@ ktlint_standard_annotation = disabled
 # Jetpack Compose names @Composable functions in PascalCase by convention (Kotlin API guidelines allow it for
 # functions that act like constructors); ktlint's function-naming rule must not flag them.
 ktlint_function_naming_ignore_when_annotated_with = Composable
+
+# Vendored Shizuku Adb client (Apache-2.0). Package name is load-bearing for JNI.
+[app/src/main/kotlin/moe/shizuku/manager/adb/**.kt]
+ktlint_standard = disabled

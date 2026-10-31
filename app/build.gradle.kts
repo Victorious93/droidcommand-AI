@@ -247,3 +247,12 @@ tasks.matching { it.name.contains("AarMetadata") }.configureEach {
 configurations.all {
     resolutionStrategy.force("org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.10")
 }
+
+// Official Shizuku Adb sources keep upstream 8-space continuation indent so
+// libadb.so JNI symbols stay in package moe.shizuku.manager.adb. Do not
+// restyle them to this repo's 4-space ktlint indent.
+ktlint {
+    filter {
+        exclude("**/moe/shizuku/manager/adb/**")
+    }
+}

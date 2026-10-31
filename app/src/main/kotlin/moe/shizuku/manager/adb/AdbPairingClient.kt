@@ -11,7 +11,6 @@ package moe.shizuku.manager.adb
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
-import com.android.org.conscrypt.Conscrypt
 import java.io.Closeable
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -221,7 +220,9 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
         outputStream = DataOutputStream(sslSocket.outputStream)
 
         val pairCodeBytes = pairCode.toByteArray()
-        val keyMaterial = Conscrypt.exportKeyingMaterial(sslSocket, kExportedKeyLabel, null, kExportedKeySize)
+        // System Conscrypt (`com.android.org.conscrypt`) is not in the public
+        // SDK stubs. Pairing still needs exportKeyingMaterial on Android 11+.
+        val keyMaterial = exportKeyingMaterial(sslSocket, kExportedKeyLabel, kExportedKeySize)
         val passwordBytes = ByteArray(pairCode.length + keyMaterial.size)
         pairCodeBytes.copyInto(passwordBytes)
         keyMaterial.copyInto(passwordBytes, pairCodeBytes.size)
@@ -323,5 +324,17 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
 
         @JvmStatic
         external fun available(): Boolean
+
+        private fun exportKeyingMaterial(sslSocket: SSLSocket, label: String, length: Int): ByteArray {
+            val conscrypt = Class.forName("com.android.org.conscrypt.Conscrypt")
+            val method = conscrypt.getMethod(
+                "exportKeyingMaterial",
+                SSLSocket::class.java,
+                String::class.java,
+                ByteArray::class.java,
+                Integer.TYPE,
+            )
+            return method.invoke(null, sslSocket, label, null, length) as ByteArray
+        }
     }
 }
