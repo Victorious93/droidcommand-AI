@@ -51,4 +51,13 @@ class FleetDashboardMembersTest {
             .toSet()
         assertEquals(FleetDashboardCatalog.PAIRING_FLOW_IDS, pairingIds)
     }
+
+    @Test
+    fun `companion rows stay off the pairing flow`() {
+        val members = FleetCatalog.all.map(FleetDashboardViewModel::toDashboardMember)
+        assertTrue(members.none { it.id == "hackerai" && it.opensPairing })
+        assertTrue(members.none { it.id == "pentestswarm" && it.opensPairing })
+        assertTrue(members.none { it.id == "edl-commander" && it.opensPairing })
+        assertTrue(members.none { it.id == "termux" && it.opensPairing })
+    }
 }

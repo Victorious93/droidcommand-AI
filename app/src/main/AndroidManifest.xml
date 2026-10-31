@@ -96,6 +96,15 @@
         <package android:name="ai.rootforge.os" />
         <package android:name="ai.rootforge.os.debug" />
 
+        <!-- Included inbound-only packages (COMPANION_ASSIST callers that are not
+             Fleet-screen rows). Named so Android 11+ PackageManager can see them.
+             Excluded inbound apps are deliberately not listed. -->
+        <package android:name="com.victorious.cam" />
+        <package android:name="com.victorious.trade" />
+        <package android:name="com.victorious.taskbar" />
+        <package android:name="com.victorious.mango" />
+        <package android:name="com.victorious.gps" />
+
         <!-- Shizuku manager + Sui. Without these, Android 11+ reports them as not installed. -->
         <package android:name="moe.shizuku.privileged.api" />
         <package android:name="rikka.sui" />

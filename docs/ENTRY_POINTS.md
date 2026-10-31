@@ -77,6 +77,13 @@ flash / bootloader.
 
 `InboundEntryPointTest` refuses all four even when a cert is supplied.
 
+Hub `<queries>` names every included inbound package (Fleet-screen
+rows plus cam / trade / taskbar / mango / gps). The four excluded
+packages are **not** listed. Inbound callers do not need our
+`<queries>` to start `COMPANION_ASSIST`; the entries exist so
+Android 11+ PackageManager can see those packages if the hub later
+probes them. This is not a second inbound allow-list.
+
 ## Pattern row (not one of the 13)
 
 | App | Package id | Cert status | Capability |

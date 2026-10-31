@@ -1,8 +1,12 @@
 package ai.droidcommand.app.ui.fleet
 
+import ai.droidcommand.app.fleet.AndroidCompanionLink
 import ai.droidcommand.app.fleet.FleetCatalog
+import ai.droidcommand.app.fleet.FleetCompanionLivePublisher
 import ai.droidcommand.app.fleet.FleetMember
 import ai.droidcommand.app.fleet.FleetTrustedLivePublisher
+import ai.droidcommand.app.fleet.PackageFleetProbe
+import ai.droidcommand.companion.KnownCompanions
 import ai.droidcommand.fleet.messenger.FleetMessengerController
 import ai.droidcommand.fleet.messenger.MutablePairedNodeStore
 import ai.droidcommand.fleet.messenger.PackageIdentityResolver
@@ -14,9 +18,11 @@ import ai.droidcommand.remotecontrol.FleetDashboardPresenter
 import ai.droidcommand.remotecontrol.FleetDashboardUi
 import ai.droidcommand.remotecontrol.RemoteControlStore
 import ai.droidcommand.remotecontrol.RemoteStatusTray
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,13 +32,18 @@ import javax.inject.Inject
 
 /**
  * Thin Hilt wrapper over [FleetDashboardPresenter]. Refresh re-reads saved
- * pairings, runs a live status/capabilities pass for TRUSTED EXTERNAL_NODEs
- * through [FleetMessengerController] (off the main thread, with per-call
- * timeouts), publishes into [RemoteStatusTray], and clears the "not wired"
- * note once that pass completes.
+ * pairings, probes bound companions (HackerAI / Pentest-Swarm) through
+ * [AndroidCompanionLink], runs a live status/capabilities pass for TRUSTED
+ * EXTERNAL_NODEs through [FleetMessengerController] (off the main thread,
+ * with per-call timeouts), publishes into [RemoteStatusTray], and clears
+ * the "not wired" note once that pass completes.
+ *
+ * Companion binds stay same-signing. This does not turn external control
+ * on and does not auto-bind EDL.
  */
 @HiltViewModel
 class FleetDashboardViewModel @Inject constructor(
+    @ApplicationContext context: Context,
     private val statusTray: RemoteStatusTray,
     pairedStore: MutablePairedNodeStore,
     remoteStore: RemoteControlStore,
@@ -40,6 +51,8 @@ class FleetDashboardViewModel @Inject constructor(
     gateway: PairedNodeGateway,
 ) : ViewModel() {
     private val controller = FleetMessengerController(pairedStore, resolver, gateway)
+    private val companionLink = AndroidCompanionLink(context)
+    private val packageProbe = PackageFleetProbe(context)
 
     private val presenter = FleetDashboardPresenter(
         members = FleetCatalog.all.map(::toDashboardMember),
@@ -60,9 +73,19 @@ class FleetDashboardViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch(Dispatchers.IO) {
             val baseReasons = FleetTrustedLivePublisher.reasonsFromSnapshot(controller)
-            presenter.setReasonOverrides(baseReasons)
+            val companionReasons = FleetCompanionLivePublisher.reasons(
+                companionByPackage = mapOf(
+                    KnownCompanions.HACKERAI_PACKAGE to
+                        FleetCompanionLivePublisher.probeLink(companionLink, KnownCompanions.HACKERAI_PACKAGE),
+                    KnownCompanions.PENTESTSWARM_PACKAGE to
+                        FleetCompanionLivePublisher.probeLink(companionLink, KnownCompanions.PENTESTSWARM_PACKAGE),
+                ),
+                termuxInstalled = packageProbe.isInstalled(FleetCatalog.TERMUX_PACKAGE),
+                edlInstalled = packageProbe.isInstalled(FleetCatalog.EDLCOMMANDER_PACKAGE),
+            )
+            presenter.setReasonOverrides(companionReasons + baseReasons)
             val live = FleetTrustedLivePublisher.refresh(controller, statusTray)
-            presenter.setReasonOverrides(baseReasons + live.reasonByCatalogId)
+            presenter.setReasonOverrides(companionReasons + baseReasons + live.reasonByCatalogId)
             presenter.markLiveBindReady(true)
             mutableState.value = presenter.snapshot()
         }

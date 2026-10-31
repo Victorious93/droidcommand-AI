@@ -15,6 +15,10 @@ class FleetLiveStatusMappingTest {
         assertEquals("Bind refused (signature)", FleetLiveStatusMapping.REASON_BIND_REFUSED_SIGNATURE)
         assertEquals("Bind refused (cert)", FleetLiveStatusMapping.REASON_BIND_REFUSED_CERT)
         assertEquals("Bridge missing on this APK build", FleetLiveStatusMapping.REASON_BRIDGE_MISSING)
+        assertEquals("Not installed (or not visible)", FleetLiveStatusMapping.REASON_NOT_INSTALLED)
+        assertEquals("Installed — pair to connect", FleetLiveStatusMapping.REASON_INSTALLED_UNPAIRED)
+        assertEquals("Bind refused (same-signing)", FleetLiveStatusMapping.REASON_SAME_SIGNING)
+        assertEquals("Planned bind — not auto-connected", FleetLiveStatusMapping.REASON_PLANNED_NO_AUTOBIND)
         assertTrue(FleetLiveStatusMapping.EMPTY_STATE_CTA.contains("Pair and manage"))
     }
 
@@ -43,6 +47,22 @@ class FleetLiveStatusMappingTest {
         assertEquals(
             FleetLiveStatusMapping.REASON_BRIDGE_MISSING,
             FleetLiveStatusMapping.classifyLiveDetail("pkg exposes no service for action"),
+        )
+        assertEquals(
+            FleetLiveStatusMapping.REASON_SAME_SIGNING,
+            FleetLiveStatusMapping.classifyLiveDetail("same-signing permission was refused"),
+        )
+        assertEquals(
+            FleetLiveStatusMapping.REASON_NOT_INSTALLED,
+            FleetLiveStatusMapping.classifyLiveDetail("package not installed"),
+        )
+        assertEquals(
+            FleetLiveStatusMapping.REASON_BIND_REFUSED_SIGNATURE,
+            FleetLiveStatusMapping.reasonFor(
+                paired = true,
+                snapshot = null,
+                liveDetail = "signature permission was refused",
+            ),
         )
     }
 

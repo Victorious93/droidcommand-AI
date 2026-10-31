@@ -2,6 +2,7 @@ package ai.droidcommand.app
 
 import ai.droidcommand.app.fleet.FleetCatalog
 import ai.droidcommand.app.fleet.FleetNodes
+import ai.droidcommand.security.InboundEntryPointCatalog
 import ai.droidcommand.shizuku.ShizukuPackages
 import org.w3c.dom.Element
 import java.io.File
@@ -46,6 +47,18 @@ class ManifestPolicyTest {
         val declared = manifest.children("queries").single().children("package").map { it.androidAttr("name") }.toSet()
         val used = FleetNodes.nodes().mapNotNull { it.packageName }.toSet() + FleetNodes.BOUND_COMPANION_PACKAGES
         assertTrue(declared.containsAll(used), "Missing from <queries>: ${used - declared}")
+    }
+
+    @Test
+    fun `queries cover included inbound packages and omit the four excluded apps`() {
+        val declared = manifest.children("queries").single().children("package").map { it.androidAttr("name") }.toSet()
+        val included = InboundEntryPointCatalog.INCLUDED.flatMap { it.packages }.toSet()
+        val excluded = InboundEntryPointCatalog.EXCLUDED.flatMap { it.packages }.toSet()
+        assertTrue(declared.containsAll(included), "Missing inbound <queries>: ${included - declared}")
+        assertTrue(declared.containsAll(FleetCatalog.INBOUND_VISIBILITY_PACKAGES))
+        assertTrue(excluded.none { it in declared }, "Excluded inbound packages must stay out of <queries>: ${excluded.intersect(declared)}")
+        assertEquals(13, InboundEntryPointCatalog.INCLUDED.size)
+        assertEquals(4, InboundEntryPointCatalog.EXCLUDED.size)
     }
 
     @Test
