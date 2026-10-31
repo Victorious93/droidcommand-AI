@@ -3,8 +3,9 @@ package ai.droidcommand.app.ui.mode
 import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.mode.ToolBackendNotes
 import ai.droidcommand.app.ui.components.DroidCard
-import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.rememberDraft
+import ai.droidcommand.app.ux.ScreenHelpCatalog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,9 +49,9 @@ fun PilotScreen(viewModel: PilotViewModel = hiltViewModel()) {
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ScreenTitle(mode.label(AgentMode.PILOT), uppercase = false)
+        ScreenTitleWithHelp(mode.label(AgentMode.PILOT), ScreenHelpCatalog.PILOT, uppercase = false)
         Text(
-            "Pilot engine: runs one registered tool, then stops. The title is the name from Settings. Sensitive tools still ask for approval, and a tool with no backend configured is denied.",
+            "Runs one approved action, then stops. The title is the name from Settings. Anything that can change the phone still asks first.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

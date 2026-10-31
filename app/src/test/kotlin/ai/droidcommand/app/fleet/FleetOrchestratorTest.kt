@@ -162,9 +162,12 @@ class FleetRowsTest {
     @Test
     fun `class labels cover every connection class`() {
         assertEquals(
-            setOf("Bound companion (AIDL)", "External node (Messenger)", "Termux IPC", "Host process tool"),
+            setOf("Signed companion app", "Separate app", "Linux tools on this phone", "Built-in tool"),
             FleetIntegrationClass.entries.map(::connectionClassLabel).toSet(),
         )
+        assertEquals("Separate app", friendlyControlLabel("external node"))
+        assertEquals("Signed companion app", friendlyControlLabel("bound companion"))
+        assertEquals("Not connected yet", friendlyControlLabel("no runner yet"))
     }
 }
 

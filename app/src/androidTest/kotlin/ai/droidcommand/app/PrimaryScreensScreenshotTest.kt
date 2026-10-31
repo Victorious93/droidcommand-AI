@@ -2,6 +2,7 @@ package ai.droidcommand.app
 
 import android.graphics.Bitmap
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -21,18 +22,13 @@ import java.io.File
 import java.io.FileOutputStream
 
 /**
- * Walks the production [MainActivity] bottom bar / mode switcher and writes one PNG
+ * Walks the production [MainActivity] four-tab chrome and writes one PNG
  * per primary screen under the app's external-files `screenshots/` directory
- * (override with the `screenshotDir` instrumentation argument). `/data/local/tmp`
- * is not writable from the app UID on API 28.
+ * (override with the `screenshotDir` instrumentation argument).
  *
- * This is a real composition check, not a capture-only dump: each step asserts a
- * screen-specific string before taking the shot. Tool backends stay the existing
- * Termux/VictorSuite wiring — Metasploit is opened only far enough to raise the real
- * [ai.droidcommand.app.approval.ApprovalHost] "Confirm action" dialog, then Denied.
- *
- * Host pull (see `scripts/capture-app-screenshots.sh`):
- * `adb pull /sdcard/Android/data/ai.droidcommand.app/files/screenshots docs/images/`
+ * A fresh install shows first-run; this walk captures that, then skips it
+ * and visits Fleet, AI Chat, Models, Settings, plus the extra screens still
+ * reached from Settings.
  */
 @RunWith(AndroidJUnit4::class)
 class PrimaryScreensScreenshotTest {
@@ -66,30 +62,50 @@ class PrimaryScreensScreenshotTest {
             } catch (t: Throwable) {
                 failures.add("$name: ${t.javaClass.simpleName}: ${t.message}")
                 try {
+                    skipSetupIfShown()
                     tapNav("nav_chat")
                 } catch (_: Throwable) {
                 }
             }
         }
 
+        step("first-run") {
+            skipSetupIfShown(capture = true)
+        }
+        step("fleet") {
+            tapNav("nav_fleet")
+            waitForText("Refresh", timeoutMs = 20_000)
+            snap("fleet")
+        }
         step("chat") {
-            waitForText("DroidCommand")
+            tapNav("nav_chat")
+            waitForText("AI Chat")
             snap("chat")
         }
+        step("models") {
+            tapNav("nav_models")
+            waitForText("Current model")
+            snap("models")
+        }
+        step("settings") {
+            tapNav("nav_settings")
+            waitForText("API keys")
+            snap("settings")
+        }
         step("tools") {
-            tapNav("nav_tools")
+            openFromSettings("Extra tools")
             waitForText("Security Tools")
             snap("tools")
         }
         step("notes") {
-            tapNav("nav_tools")
+            openFromSettings("Extra tools")
             waitForText("Security Tools")
             compose.onNodeWithText("Open notes").performScrollTo().performClick()
             waitForText("Vault")
             snap("notes")
         }
         step("tools-metasploit") {
-            tapNav("nav_tools")
+            openFromSettings("Extra tools")
             waitForText("Metasploit")
             compose.onNodeWithText("Metasploit").performScrollTo().performClick()
             waitForText("VictorSuite (Termux + proot Kali)")
@@ -107,32 +123,27 @@ class PrimaryScreensScreenshotTest {
             compose.waitForIdle()
         }
         step("memory") {
-            tapNav("nav_memory")
-            waitForText("Persistent Memory")
+            openFromSettings("Memory")
+            waitForText("What DroidCommand AI has remembered")
             snap("memory")
         }
-        step("settings") {
-            tapNav("nav_settings")
-            waitForText("API keys")
-            snap("settings")
-        }
         step("pilot") {
-            compose.onNodeWithTag("mode_pilot").performClick()
-            waitForText("Pilot engine")
+            openFromSettings("One-step command")
+            waitForText("Runs one approved action")
             snap("pilot")
         }
         step("forge") {
-            compose.onNodeWithTag("mode_forge").performClick()
-            waitForText("Forge engine")
+            openFromSettings("Multi-step plan")
+            waitForText("Give the app a goal")
             snap("forge")
         }
         step("logs") {
-            tapNav("nav_logs")
-            waitForText("System Logs")
+            openFromSettings("Activity log")
+            waitForText("All events")
             snap("logs")
         }
         step("tools-setoolkit") {
-            tapNav("nav_tools")
+            openFromSettings("Extra tools")
             waitForText("Social-Engineer Toolkit")
             compose.onNodeWithText("Social-Engineer Toolkit").performScrollTo().performClick()
             waitForText("No Social-Engineer Toolkit program is connected")
@@ -144,12 +155,6 @@ class PrimaryScreensScreenshotTest {
         }
     }
 
-    /**
-     * Narrower walk for the two screens the full [capturePrimaryScreens] walk
-     * often loses on a TCG emulator (ANR / click timeout after Notes). Same
-     * Termux/VictorSuite backends — Metasploit is opened only far enough to raise
-     * [ai.droidcommand.app.approval.ApprovalHost], then Denied.
-     */
     @Test
     fun captureToolApprovalAndSet() {
         val failures = mutableListOf<String>()
@@ -161,8 +166,9 @@ class PrimaryScreensScreenshotTest {
                 failures.add("$name: ${t.javaClass.simpleName}: ${t.message}")
             }
         }
+        skipSetupIfShown()
         step("tools-metasploit") {
-            tapNav("nav_tools")
+            openFromSettings("Extra tools")
             waitForText("Metasploit")
             compose.onNodeWithText("Metasploit").performScrollTo().performClick()
             waitForText("VictorSuite (Termux + proot Kali)")
@@ -179,7 +185,7 @@ class PrimaryScreensScreenshotTest {
             compose.waitForIdle()
         }
         step("tools-setoolkit") {
-            tapNav("nav_tools")
+            openFromSettings("Extra tools")
             waitForText("Social-Engineer Toolkit")
             compose.onNodeWithText("Social-Engineer Toolkit").performScrollTo().performClick()
             waitForText("No Social-Engineer Toolkit program is connected")
@@ -190,6 +196,29 @@ class PrimaryScreensScreenshotTest {
         }
     }
 
+    private fun skipSetupIfShown(capture: Boolean = false) {
+        dismissAnr()
+        compose.waitUntil(15_000) {
+            compose.onAllNodesWithTag("first_run").fetchSemanticsNodes().isNotEmpty() ||
+                compose.onAllNodesWithTag("fleet_dashboard").fetchSemanticsNodes().isNotEmpty() ||
+                compose.onAllNodesWithText("AI Chat", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        if (compose.onAllNodesWithTag("first_run").fetchSemanticsNodes().isNotEmpty()) {
+            waitForText("This app does two things")
+            if (capture) snap("first-run")
+            compose.onNodeWithTag("first_run_skip").performClick()
+            compose.waitForIdle()
+            dismissAnr()
+        }
+    }
+
+    private fun openFromSettings(label: String) {
+        tapNav("nav_settings")
+        waitForText("API keys")
+        compose.onNodeWithText(label).performScrollTo().performClick()
+        compose.waitForIdle()
+    }
+
     private fun tapNav(tag: String) {
         dismissAnr()
         compose.onNodeWithTag(tag, useUnmergedTree = true).performClick()
@@ -197,10 +226,6 @@ class PrimaryScreensScreenshotTest {
         dismissAnr()
     }
 
-    /**
-     * TCG emulators on this host often raise "System UI isn't responding" while
-     * Hilt/Room first-compose. Click Wait, never Close app.
-     */
     private fun dismissAnr() {
         val anr = device.findObject(UiSelector().textContains("isn't responding"))
         if (anr.exists()) {

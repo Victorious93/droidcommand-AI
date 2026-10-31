@@ -7,8 +7,9 @@ import ai.droidcommand.app.prefs.CodingTunnelChoice
 import ai.droidcommand.app.shizuku.ShizukuStatusSection
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.app.ui.components.DroidCard
-import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.WebSearchCatalog
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +50,12 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onOpenHelp: () -> Unit = {},
     onOpenModels: () -> Unit = {},
+    onOpenPilot: () -> Unit = {},
+    onOpenPlan: () -> Unit = {},
+    onOpenMemory: () -> Unit = {},
+    onOpenTools: () -> Unit = {},
+    onOpenLogs: () -> Unit = {},
+    onReplaySetup: () -> Unit = {},
 ) {
     val status by viewModel.status.collectAsState()
     val searchStatus by viewModel.searchStatus.collectAsState()
@@ -57,14 +64,40 @@ fun SettingsScreen(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ScreenTitle("Settings")
+        ScreenTitleWithHelp("Settings", ScreenHelpCatalog.SETTINGS)
+        SectionLabel("Setup")
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "See the first-run guide again: what this app is, pick a model, pair your other apps, and optional permissions.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = onReplaySetup, modifier = Modifier.fillMaxWidth()) { Text("Show setup guide again") }
+            }
+        }
+        SectionLabel("More")
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "These are extras. You do not need them to chat or to pair an app.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(onClick = onOpenPilot, modifier = Modifier.fillMaxWidth()) { Text("One-step command") }
+                OutlinedButton(onClick = onOpenPlan, modifier = Modifier.fillMaxWidth()) { Text("Multi-step plan") }
+                OutlinedButton(onClick = onOpenMemory, modifier = Modifier.fillMaxWidth()) { Text("Memory") }
+                OutlinedButton(onClick = onOpenTools, modifier = Modifier.fillMaxWidth()) { Text("Extra tools") }
+                OutlinedButton(onClick = onOpenLogs, modifier = Modifier.fillMaxWidth()) { Text("Activity log") }
+            }
+        }
         SectionLabel("Mode names")
         ModeNamesSection(viewModel)
         SectionLabel("API keys (stored encrypted on this device)")
         DroidCard {
             Text(
-                "Chat and Forge use the provider last chosen on the Chat screen. " +
-                    "Without a key for that provider — and without an on-device model — those screens refuse the request. A key is never shown again after you save it.",
+                "Chat uses the provider last chosen on the Chat screen. " +
+                    "Without a key for that provider — and without an on-device model — Chat cannot send. A key is never shown again after you save it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -114,7 +147,7 @@ fun SettingsScreen(
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Remote Control envelope, triggers, destructive gating, local backup, and VictorSpoof isolation.",
+                    "Longer notes about remote commands, backups, and what this app will never do without asking.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -1,6 +1,5 @@
 package ai.droidcommand.app.navigation
 
-import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.clipboard.ClipboardScreen
 import ai.droidcommand.app.ui.automation.AutomationScreen
 import ai.droidcommand.app.ui.chat.ChatScreen
@@ -11,10 +10,10 @@ import ai.droidcommand.app.ui.fleet.FleetScreen
 import ai.droidcommand.app.ui.help.HelpScreen
 import ai.droidcommand.app.ui.logs.LogsScreen
 import ai.droidcommand.app.ui.memory.MemoryScreen
-import ai.droidcommand.app.ui.mode.EngineModeViewModel
 import ai.droidcommand.app.ui.mode.PilotScreen
 import ai.droidcommand.app.ui.models.ModelsScreen
 import ai.droidcommand.app.ui.notes.NotesScreen
+import ai.droidcommand.app.ui.onboarding.FirstRunScreen
 import ai.droidcommand.app.ui.plan.PlanScreen
 import ai.droidcommand.app.ui.settings.SettingsScreen
 import ai.droidcommand.app.ui.theme.AccentBlueBright
@@ -26,13 +25,10 @@ import ai.droidcommand.app.ui.tools.ToolsScreen
 import ai.droidcommand.app.ui.tools.metasploit.MetasploitScreen
 import ai.droidcommand.app.ui.tools.setoolkit.SetToolScreen
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -41,22 +37,17 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -88,9 +79,9 @@ object Routes {
     const val AUTOMATION = "tools/automation"
     const val CODING = "tools/coding"
     const val NOTES = "tools/notes"
-    const val FLEET = "tools/fleet"
-    const val FLEET_PAIRING = "tools/fleet/pairing"
-    const val FLEET_ORCHESTRATOR = "tools/fleet/orchestrator"
+    const val FLEET = "fleet"
+    const val FLEET_PAIRING = "fleet/pairing"
+    const val FLEET_ORCHESTRATOR = "fleet/orchestrator"
     const val HELP = "help"
     const val MODELS = "models"
 }
@@ -98,46 +89,44 @@ object Routes {
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
 
 /**
- * App shell. The top bar selects Pilot (Mode 1 by default) or Forge (Mode 2 by default) and opens
- * that engine's screen. The labels are the user's names from Settings. The bottom bar's second tab
- * follows the selected mode so it opens the same screen.
+ * App shell. Four owner-facing tabs: Fleet, AI Chat, Models, Settings.
+ * First-run setup covers the whole window until it is finished or skipped.
+ * Pilot, plans, memory, logs, and extra tools stay reachable from Settings.
  */
 @Composable
 fun DroidCommandNavHost(
     navController: NavHostController = rememberNavController(),
-    modeViewModel: EngineModeViewModel = hiltViewModel(),
+    shell: AppShellViewModel = hiltViewModel(),
 ) {
+    val showFirstRun by shell.showFirstRun.collectAsState()
+    if (showFirstRun) {
+        FirstRunScreen(onFinished = shell::onFirstRunFinished)
+        return
+    }
+
     val backStack by navController.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
-    val mode by modeViewModel.state.collectAsState()
 
     Scaffold(
         containerColor = BackgroundDark,
         topBar = {
-            ModeSwitcher(
-                pilotLabel = mode.pilotLabel,
-                forgeLabel = mode.forgeLabel,
-                selected = mode.selected,
-                switchError = mode.switchError,
-                onSelect = { chosen ->
-                    if (modeViewModel.select(chosen)) {
-                        navController.navigate(routeFor(chosen)) {
-                            popUpTo(Routes.CHAT) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                },
+            // Status-bar inset only. The old Mode 1 / Mode 2 switcher is gone from chrome.
+            Spacer(
+                modifier = Modifier.windowInsetsPadding(
+                    WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
+                ),
             )
         },
-        bottomBar = { DroidBottomBar(route, mode.selected, mode.label(mode.selected), navController) },
+        bottomBar = { DroidBottomBar(route, navController) },
     ) { innerPadding ->
+        LaunchedEffect(Unit) {
+            if (shell.consumeOpenModels()) {
+                navController.navigate(Routes.MODELS) { launchSingleTop = true }
+            }
+        }
         NavHost(
             navController = navController,
-            startDestination = Routes.CHAT,
-            // The window is edge to edge. consumeWindowInsets tells imePadding that the bottom bar already covers the lowest
-            // part of the screen, so it adds only the keyboard height that reaches above the bar; without it the bar's height
-            // would be counted twice. Every screen's text fields therefore stay above the keyboard.
+            startDestination = Routes.FLEET,
             modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding).imePadding(),
         ) {
             composable(Routes.CHAT) { ChatScreen(onOpenModels = { navController.navigate(Routes.MODELS) }) }
@@ -151,6 +140,12 @@ fun DroidCommandNavHost(
                 SettingsScreen(
                     onOpenHelp = { navController.navigate(Routes.HELP) },
                     onOpenModels = { navController.navigate(Routes.MODELS) },
+                    onOpenPilot = { navController.navigate(Routes.PILOT) },
+                    onOpenPlan = { navController.navigate(Routes.PLAN) },
+                    onOpenMemory = { navController.navigate(Routes.MEMORY) },
+                    onOpenTools = { navController.navigate(Routes.TOOLS) },
+                    onOpenLogs = { navController.navigate(Routes.LOGS) },
+                    onReplaySetup = shell::replayFirstRun,
                 )
             }
             composable(Routes.HELP) { HelpScreen() }
@@ -172,66 +167,15 @@ fun DroidCommandNavHost(
     }
 }
 
-private fun routeFor(mode: AgentMode): String = when (mode) {
-    AgentMode.PILOT -> Routes.PILOT
-    AgentMode.FORGE -> Routes.PLAN
-}
-
-@Composable
-private fun ModeSwitcher(
-    pilotLabel: String,
-    forgeLabel: String,
-    selected: AgentMode,
-    switchError: String?,
-    onSelect: (AgentMode) -> Unit,
-) {
-    Column(
-        // Not a Material top app bar, so it does not pad for the status bar by itself. Edge to edge, without this the
-        // buttons sit under the clock and the notification icons.
-        modifier = Modifier
-            .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ModeButton(pilotLabel, selected == AgentMode.PILOT, Modifier.weight(1f).testTag("mode_pilot")) { onSelect(AgentMode.PILOT) }
-            ModeButton(forgeLabel, selected == AgentMode.FORGE, Modifier.weight(1f).testTag("mode_forge")) { onSelect(AgentMode.FORGE) }
-        }
-        switchError?.let {
-            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        }
-    }
-}
-
-@Composable
-private fun ModeButton(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    if (selected) {
-        Button(onClick = onClick, modifier = modifier) {
-            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    } else {
-        OutlinedButton(onClick = onClick, modifier = modifier) {
-            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
 @Composable
 private fun DroidBottomBar(
     currentRoute: String?,
-    selectedMode: AgentMode,
-    selectedModeLabel: String,
     navController: NavHostController,
 ) {
-    val engineRoute = routeFor(selectedMode)
-    val engineIcon = if (selectedMode == AgentMode.PILOT) Icons.Filled.PlayArrow else Icons.AutoMirrored.Filled.List
     val tabs = listOf(
-        Tab(Routes.CHAT, "Chat", Icons.AutoMirrored.Filled.Chat),
-        Tab(engineRoute, selectedModeLabel, engineIcon),
-        Tab(Routes.MEMORY, "Memory", Icons.Filled.Star),
-        Tab(Routes.TOOLS, "Tools", Icons.Filled.Build),
-        Tab(Routes.LOGS, "Logs", Icons.Filled.History),
+        Tab(Routes.FLEET, "Fleet", Icons.Filled.Apps),
+        Tab(Routes.CHAT, "AI Chat", Icons.AutoMirrored.Filled.Chat),
+        Tab(Routes.MODELS, "Models", Icons.Filled.Storage),
         Tab(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
     )
     val shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
@@ -240,16 +184,14 @@ private fun DroidBottomBar(
         modifier = Modifier.clip(shape).border(1.dp, BorderDark, shape),
     ) {
         tabs.forEach { tab ->
-            val selected = if (tab.route == engineRoute) {
-                currentRoute == Routes.PILOT || currentRoute == Routes.PLAN
-            } else {
-                currentRoute == tab.route || currentRoute?.startsWith(tab.route + "/") == true
-            }
+            val selected = currentRoute == tab.route ||
+                (tab.route == Routes.FLEET && currentRoute?.startsWith("fleet") == true) ||
+                (tab.route == Routes.SETTINGS && currentRoute in settingsChildRoutes)
             NavigationBarItem(
                 selected = selected,
                 onClick = {
                     navController.navigate(tab.route) {
-                        popUpTo(Routes.CHAT) { saveState = true }
+                        popUpTo(Routes.FLEET) { saveState = true }
                         launchSingleTop = true
                         restoreState = true
                     }
@@ -257,7 +199,6 @@ private fun DroidBottomBar(
                 icon = {
                     Icon(
                         tab.icon,
-                        // The label under the icon already names the tab. A description here made a screen reader say each name twice.
                         contentDescription = null,
                         modifier = Modifier.testTag("nav_${tab.route.substringBefore('/')}"),
                     )
@@ -282,3 +223,18 @@ private fun DroidBottomBar(
         }
     }
 }
+
+private val settingsChildRoutes = setOf(
+    Routes.HELP,
+    Routes.PILOT,
+    Routes.PLAN,
+    Routes.MEMORY,
+    Routes.LOGS,
+    Routes.TOOLS,
+    Routes.METASPLOIT,
+    Routes.SETOOLKIT,
+    Routes.CLIPBOARDS,
+    Routes.AUTOMATION,
+    Routes.CODING,
+    Routes.NOTES,
+)

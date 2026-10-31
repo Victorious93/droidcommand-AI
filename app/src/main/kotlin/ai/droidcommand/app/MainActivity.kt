@@ -33,8 +33,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Before super.onCreate, as the API asks. With targetSdk 36 Android 15+ draws every app edge to edge whether it
-        // asks or not, so the app must ask and handle the insets itself: DroidCommandNavHost pads the mode switcher for
-        // the status bar and the content for the keyboard, and the bottom bar pads for the navigation bar. The UI is
+        // asks or not, so the app must ask and handle the insets itself: DroidCommandNavHost pads the status bar and
+        // the content for the keyboard, and the bottom bar pads for the navigation bar. The UI is
         // dark-only, so both bars are transparent with light icons.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
