@@ -1535,17 +1535,20 @@ speaks the SSH fallback. The on-device Messenger client is `core-fleet-messenger
 
 ## 11. On-device markdown vault (added 2026-10-12)
 
-`core-notes` is a JVM module. The app keeps one vault under its files directory (`notes-vault`) or a user-picked SAF folder. Advanced → Brain (and Extra tools → Brain) opens it. Chat can retrieve matching notes and save a chat or fact only when the Kai `brainEnabled` gate is on, and only after a confirm.
+`core-notes` is a JVM module. The app keeps one vault under its files directory (`notes-vault`) or a user-picked SAF folder of plain `.md` files. Advanced → Brain (and Extra tools → Brain) opens it. Chat can retrieve matching notes and save a chat or fact only when the Kai `brainEnabled` gate is on (Brain screen: "AI can read and write these notes", default OFF), and only after a confirm. Built from scratch — no third-party notes-app code or branding in the UI.
 
 | Component | Status | Notes |
 |---|---|---|
-| `NoteVault` / `VaultStorage` | IMPLEMENTED (JVM) | Folders and `.md` notes. Paths that leave the vault, absolute paths, and names starting with `.` are refused. `.plugins` is created and hidden from the folder list. Read/write uses `Path.readText`/`writeText` (API 26 streams), not `Files.readString`/`writeString` (Java 11 / Android API 33) — those crash Notes on minSdk 28. `PathVaultStorage` is the tested backend; `SafVaultStorage` (`:app`) is ON DISK for a picked Obsidian folder. |
+| `NoteVault` / `VaultStorage` | IMPLEMENTED (JVM) | Folders and `.md` notes. Paths that leave the vault, absolute paths, and names starting with `.` are refused. `.plugins` is created and hidden from the folder list. Read/write uses `Path.readText`/`writeText` (API 26 streams), not `Files.readString`/`writeString` (Java 11 / Android API 33) — those crash Notes on minSdk 28. `PathVaultStorage` is the tested backend; `SafVaultStorage` (`:app`) is ON DISK for a picked folder. |
 | `NoteParser` / `NoteIndex` / `Bm25Search` / `BrainLibrarian` | IMPLEMENTED (JVM) | Frontmatter, `#tags`, `[[wikilinks]]`, backlinks, BM25 search, retrieve-as-context, draft-then-commit save. Drafts do not write. Embeddings are not in this slice. |
-| Markdown preview | IMPLEMENTED (JVM) | Headings, bullets, fenced code, and paragraphs. Tables, images, links, and HTML stay as text. |
-| `PluginStore` | IMPLEMENTED (JVM, data only) | A plugin is a text manifest (`id`, `name`, `prefix`, `suffix`, literal `replace` lines). Install always stores it disabled. Enable, disable, and remove are explicit. Enabled plugins run in id order as `String.replace`, then prefix and suffix. No classes, dex, or JavaScript are loaded. A fresh vault has zero plugins. Nothing from Obsidian is bundled. |
-| `:app` Brain screen | ON DISK | Same vault as Notes, now labelled Brain on Advanced. List, search, editor, tags, backlinks, SAF folder picker. Not launched on a device in the session that added it. |
+| `FileTree` | IMPLEMENTED (JVM) | Recursive vault listing. Folders expand/collapse; hidden names stay omitted. |
+| `NoteGraph` | IMPLEMENTED (JVM) | Nodes + directed `[[wikilink]]` edges from `NoteIndexSnapshot`. Circular layout + hit-test; no force simulation. |
+| `DailyNotes` | IMPLEMENTED (JVM) | `Daily/yyyy-MM-dd.md` with title + `daily` tag. Clock is injectable. |
+| Markdown preview | IMPLEMENTED (JVM) | Headings, bullets, fenced code, and paragraphs. `[[wikilinks]]` in preview show the alias/target. Tables, images, and HTML stay as text. |
+| `PluginStore` | IMPLEMENTED (JVM, data only) | A plugin is a text manifest (`id`, `name`, `prefix`, `suffix`, literal `replace` lines). Install always stores it disabled. Enable, disable, and remove are explicit. Enabled plugins run in id order as `String.replace`, then prefix and suffix. No classes, dex, or JavaScript are loaded. A fresh vault has zero plugins. No third-party plugin runtime is bundled. |
+| `:app` Brain screen | ON DISK | File tree, search, editor + preview, tags, backlinks, simple graph, Today, SAF folder picker, AI read/write switch (OFF). Not launched on a device in the session that added it. |
 | Chat retrieve / confirm-save | IMPLEMENTED (JVM session) / ON DISK (UI) | `ChatSession.brain` injects librarian context on the user turn when the gate is on. Save is a confirm dialog; cancel writes nothing. |
-| `AssistantCapability.BRAIN` | IMPLEMENTED — JVM-tested | Tenth Kai gate, default OFF. The Advanced switch can turn only this one on. The other nine stay read-only off. |
+| `AssistantCapability.BRAIN` | IMPLEMENTED — JVM-tested | Tenth Kai gate, default OFF. The Brain-screen switch and the Advanced Brain row both set this one flag. The other nine stay read-only off. |
 | Executable plugin code | PLANNED | Absent. The current sandbox is that a plugin is data, not code. |
 
 ## 12. App shell gaps closed on disk (2026-10-13)

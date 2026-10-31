@@ -291,3 +291,25 @@ B3/B4 (triggers) → Jarvis J4 (spoken tools).
 - `./gradlew test` green. Emulator screenshots from CI (or a local
   emulator if one is here). **No claim of a real-phone run.**
 - PR open, not merged.
+
+---
+
+## 2026-10-31e — notes-app growth (this follow-up)
+
+Owner asked to grow the Brain into a full notes app. Built from
+scratch; no third-party notes-app code or branding.
+
+Shipped here:
+
+- Vault of plain `.md` files (unchanged format; a desktop notes app
+  can open the same folder).
+- File tree (`FileTree` / Tree pane).
+- Markdown editor with preview (`[[wikilinks]]` show as the label).
+- `[[wikilinks]]` + backlinks (already in 2026-10-31d; still here).
+- Tags and search (already in 2026-10-31d; Search pane).
+- Simple graph view (`NoteGraph`, circular layout + edge list).
+- Daily notes (`Daily/yyyy-MM-dd.md`, Today button).
+- **"AI can read and write these notes"** on the Brain screen, OFF
+  by default (same `brainEnabled` gate).
+
+Jarvis and Bot Maker stay unbuilt.

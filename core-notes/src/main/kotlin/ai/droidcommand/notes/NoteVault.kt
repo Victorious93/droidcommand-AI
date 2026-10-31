@@ -7,7 +7,7 @@ data class VaultEntry(val name: String, val relativePath: String, val folder: Bo
 
 /**
  * Folders and markdown notes under one directory on disk, or under a
- * [VaultStorage] the app supplies (a user-picked Obsidian folder).
+ * [VaultStorage] the app supplies (a user-picked folder of plain `.md` files).
  * Names that start with a dot are reserved and never listed: `.plugins` belongs to [PluginStore], and `.saving-*.tmp`
  * is a note being written (see [write]).
  * A path that escapes the vault is refused.

@@ -113,8 +113,23 @@ class PrimaryScreensScreenshotTest {
         step("notes") {
             openFromAdvanced("Brain")
             waitForText("Vault")
+            waitForText("AI can read and write these notes")
             snap("notes")
             snap("brain")
+        }
+        step("brain-graph") {
+            openFromAdvanced("Brain")
+            waitForText("Vault")
+            compose.onNodeWithTag("brain_pane_graph").performClick()
+            waitForText("Note graph")
+            snap("brain-graph")
+        }
+        step("brain-daily") {
+            openFromAdvanced("Brain")
+            waitForText("Vault")
+            compose.onNodeWithTag("brain_today").performClick()
+            waitForText("Daily/")
+            snap("brain-daily")
         }
         step("tools-metasploit") {
             openFromAdvanced("Extra tools")

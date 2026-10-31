@@ -9,8 +9,8 @@ import androidx.documentfile.provider.DocumentFile
 
 /**
  * Vault IO against a folder the owner picked (Storage Access Framework).
- * Used so the same markdown can live in a real Obsidian vault. Never run on a
- * device in the session that added it — Path vaults are the JVM-tested path.
+ * Used so the same markdown can live in a folder a desktop notes app can open.
+ * Never run on a device in the session that added it — Path vaults are the JVM-tested path.
  */
 class SafVaultStorage(
     private val resolver: ContentResolver,

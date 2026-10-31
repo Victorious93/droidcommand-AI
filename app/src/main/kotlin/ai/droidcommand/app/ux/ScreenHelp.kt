@@ -88,9 +88,10 @@ object ScreenHelpCatalog {
 
     val BRAIN = ScreenHelp(
         title = "What is Brain?",
-        body = "Your markdown notes, with links and tags the same way Obsidian uses them. " +
-            "Search and open a note here. Chat can use matching notes only after you turn Brain on " +
-            "under Advanced, and it will not save a note until you confirm.",
+        body = "Your markdown notes: a folder of plain .md files, a file tree, an editor with preview, " +
+            "[[wikilinks]] and backlinks, tags, search, a simple graph, and a daily note. " +
+            "Chat can read and write these notes only after you turn on AI can read and write these notes, " +
+            "and it will not save a note until you confirm.",
     )
 
     val TOOLS = ScreenHelp(
