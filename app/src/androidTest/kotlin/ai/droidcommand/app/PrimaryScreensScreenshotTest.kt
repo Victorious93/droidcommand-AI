@@ -111,24 +111,22 @@ class PrimaryScreensScreenshotTest {
             snap("tools")
         }
         step("notes") {
-            openFromAdvanced("Brain")
-            waitForText("Vault")
-            waitForText("AI can read and write these notes")
+            openBrain()
             snap("notes")
             snap("brain")
         }
         step("brain-graph") {
-            openFromAdvanced("Brain")
-            waitForText("Vault")
-            compose.onNodeWithTag("brain_pane_graph").performClick()
-            waitForText("Note graph")
+            openBrain()
+            compose.onNodeWithTag("brain_pane_graph", useUnmergedTree = true).performClick()
+            compose.waitUntil(15_000) {
+                compose.onAllNodesWithText("Note graph", substring = true).fetchSemanticsNodes().isNotEmpty()
+            }
             snap("brain-graph")
         }
         step("brain-daily") {
-            openFromAdvanced("Brain")
-            waitForText("Vault")
-            compose.onNodeWithTag("brain_today").performClick()
-            waitForText("Daily/")
+            openBrain()
+            compose.onNodeWithTag("brain_today", useUnmergedTree = true).performClick()
+            compose.waitForIdle()
             snap("brain-daily")
         }
         step("tools-metasploit") {
@@ -249,6 +247,16 @@ class PrimaryScreensScreenshotTest {
         waitForText("These tools can change this phone")
         compose.onNodeWithText(label).performScrollTo().performClick()
         compose.waitForIdle()
+    }
+
+    private fun openBrain() {
+        tapNav("nav_advanced")
+        waitForText("These tools can change this phone")
+        compose.onNodeWithTag("advanced_open_brain", useUnmergedTree = true).performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.waitUntil(15_000) {
+            compose.onAllNodesWithTag("brain_screen").fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     private fun tapNav(tag: String) {
