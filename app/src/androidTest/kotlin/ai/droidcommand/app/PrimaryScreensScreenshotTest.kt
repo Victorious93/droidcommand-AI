@@ -105,11 +105,7 @@ class PrimaryScreensScreenshotTest {
             waitForText("These tools can change this phone")
             snap("advanced")
         }
-        step("tools") {
-            openFromAdvanced("Extra tools")
-            waitForText("Security Tools")
-            snap("tools")
-        }
+        // Brain before Extra tools: later Compose clicks on this emulator often miss.
         step("notes") {
             openBrain()
             snap("notes")
@@ -128,6 +124,11 @@ class PrimaryScreensScreenshotTest {
             compose.onNodeWithTag("brain_today", useUnmergedTree = true).performClick()
             compose.waitForIdle()
             snap("brain-daily")
+        }
+        step("tools") {
+            openFromAdvanced("Extra tools")
+            waitForText("Security Tools")
+            snap("tools")
         }
         step("tools-metasploit") {
             openFromAdvanced("Extra tools")
