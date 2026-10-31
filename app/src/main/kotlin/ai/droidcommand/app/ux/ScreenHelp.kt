@@ -42,8 +42,8 @@ object ScreenHelpCatalog {
 
     val ADVANCED = ScreenHelp(
         title = "What is Advanced?",
-        body = "One-step commands, plans, memory, extra tools, the activity log, remote-control " +
-            "toggles, and later Kai capabilities live here. Those capabilities stay off. " +
+        body = "One-step commands, plans, memory, extra tools, the activity log, your own n8n server, " +
+            "remote-control toggles, and later Kai capabilities live here. Those capabilities stay off. " +
             "Remote control stays off until you turn it on and confirm. " +
             "You do not need this tab to chat or to pair an app.",
     )
@@ -52,6 +52,14 @@ object ScreenHelpCatalog {
         title = "What is Get latest APK?",
         body = "Opens the GitHub Releases page for this app so you can download a newer debug build. " +
             "Long-press copies the same link. The version next to the icon is this install, not the file on that page.",
+    )
+
+    val N8N = ScreenHelp(
+        title = "What is n8n?",
+        body = "n8n is a workflow tool you run on a computer you own. This screen saves its address " +
+            "and an API key (encrypted on this phone), tests the connection, lists workflows, and " +
+            "can start a webhook workflow after you confirm. The AI cannot use n8n until you turn that on, " +
+            "and this phone still asks before every run.",
     )
 
     val FIRST_RUN = ScreenHelp(

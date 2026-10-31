@@ -119,6 +119,7 @@ dependencies {
     implementation(project(":core-templates"))
     implementation(project(":core-templates-android"))
     implementation(project(":core-websearch"))
+    implementation(project(":core-n8n"))
     implementation(project(":core-notes"))
     implementation(project(":core-voice-android"))
     implementation(project(":core-voice-neural-android"))

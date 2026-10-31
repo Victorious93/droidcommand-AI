@@ -130,8 +130,9 @@
 
     <!-- allowBackup is off and the extraction rules exclude everything: chats, the memory graph, notes, clipboards, the
          audit log and imported models stay on this device (docs/SECURITY.md). dataExtractionRules is read on Android 12+,
-         fullBackupContent="false" on Android 9 to 11 (the minSdk is 28). The network security config refuses cleartext
-         HTTP and trusts only the system CA store. enableOnBackInvokedCallback opts in to predictive back. -->
+         fullBackupContent="false" on Android 9 to 11 (the minSdk is 28). The network security config trusts only the
+         system CA store. OS-level cleartext is permitted so a LAN n8n URL can be reached; the app still refuses HTTP
+         except to LAN / loopback / .local. enableOnBackInvokedCallback opts in to predictive back. -->
     <application
         android:name=".DroidCommandApplication"
         android:allowBackup="false"

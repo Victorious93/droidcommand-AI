@@ -13,6 +13,7 @@ import ai.droidcommand.app.ui.logs.LogsScreen
 import ai.droidcommand.app.ui.memory.MemoryScreen
 import ai.droidcommand.app.ui.mode.PilotScreen
 import ai.droidcommand.app.ui.models.ModelsScreen
+import ai.droidcommand.app.ui.n8n.N8nScreen
 import ai.droidcommand.app.ui.notes.NotesScreen
 import ai.droidcommand.app.ui.onboarding.FirstRunScreen
 import ai.droidcommand.app.ui.plan.PlanScreen
@@ -92,6 +93,7 @@ object Routes {
     const val CONNECT_DEVICE = "fleet/connect"
     const val HELP = "help"
     const val MODELS = "models"
+    const val N8N = "advanced/n8n"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -168,9 +170,11 @@ fun DroidCommandNavHost(
                     onOpenMemory = { navController.navigate(Routes.MEMORY) },
                     onOpenTools = { navController.navigate(Routes.TOOLS) },
                     onOpenLogs = { navController.navigate(Routes.LOGS) },
+                    onOpenN8n = { navController.navigate(Routes.N8N) },
                     onCopiedLink = { scope.launch { snackbar.showSnackbar("Link copied") } },
                 )
             }
+            composable(Routes.N8N) { N8nScreen() }
             composable(Routes.HELP) { HelpScreen() }
             composable(Routes.MODELS) { ModelsScreen() }
             composable(Routes.MEMORY) { MemoryScreen() }
@@ -262,4 +266,5 @@ private val advancedChildRoutes = setOf(
     Routes.AUTOMATION,
     Routes.CODING,
     Routes.NOTES,
+    Routes.N8N,
 )

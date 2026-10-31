@@ -155,6 +155,11 @@ class PrimaryScreensScreenshotTest {
             waitForText("All events")
             snap("logs")
         }
+        step("n8n") {
+            openFromAdvanced("n8n (self-hosted)")
+            waitForText("Connect to your n8n server")
+            snap("n8n")
+        }
         step("tools-setoolkit") {
             openFromAdvanced("Extra tools")
             waitForText("Social-Engineer Toolkit")

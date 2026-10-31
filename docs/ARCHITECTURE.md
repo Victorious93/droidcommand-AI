@@ -186,6 +186,18 @@ DroidCommand AI
 │                            persistence, NO :app attach UI yet — see the
 │                            2026-10-09i/j/k/l/n addenda.
 │
+├── core-n8n                 Self-hosted n8n client (2026-10-31). N8nServerUrl
+│                            (HTTPS always; HTTP only for LAN / loopback /
+│                            .local, with a warning; cloud-metadata blocked),
+│                            N8nClient (GET /api/v1/workflows with
+│                            X-N8N-API-KEY; webhook POST without the key),
+│                            N8nResultWords, n8n_list_workflows /
+│                            n8n_run_workflow tools (SENSITIVE / NETWORK,
+│                            always confirm; AI gate OFF by default).
+│                            Mock-server unit tests only — never a live n8n
+│                            or a real key. :app Advanced → n8n screen
+│                            stores the key in EncryptedSecretsVault.
+│
 ├── core-websearch           WebSearchClient / WebSearchResult / WebSearchOutcome
 │                            (2026-10-08, Phase 4 web-search half only) —
 │                            BraveWebSearchClient (X-Subscription-Token header)
@@ -1367,6 +1379,7 @@ there is still no asynchronous/polling variant of the protocol.
 | Root capabilities | PARTIAL | `core-root`'s Tool/gate/policy wiring is implemented and tested end-to-end against `core-security`; no real root command has ever executed, since that requires a rooted test device this environment does not have |
 | LLM integration | PARTIAL | The abstraction, the planner adapter, and two real HTTP-backed `LlmProvider`s (Anthropic-shaped and OpenAI-shaped) are all implemented and tested (each provider against a real local server, not a fake); neither has ever made a live call to a real provider endpoint, since this environment has no LLM credentials |
 | APK build/install/test pipeline | PARTIAL | `core-build.BuildPipeline` now has real executors for JVM/NATIVE/GENERIC builds (`core-build-local.LocalProcessBuildExecutor`, proven against real `javac`) and for delegating to a remote build server (`core-build-remote.RemoteBuildExecutor`, proven against a real local test server) — the latter never refuses `ProjectType.ANDROID`, but has never been run against an actual build service, so no real Android APK has been produced by either executor; `core-apk-lifecycle.ApkLifecyclePipeline` still only has `NullApkLifecycleExecutor`, and installing/launching still needs a connected/emulated device this environment does not have |
+| core-n8n: N8nServerUrl / N8nClient / N8nTool / N8nResultWords | IMPLEMENTED (JVM-tested; never run against a live n8n) | Added 2026-10-31. Self-hosted n8n only. HTTPS always; HTTP only for LAN / loopback / `.local` (warning). API key vault id `n8n.api.key` — never logged, never committed. List: `GET /api/v1/workflows` + `X-N8N-API-KEY`. Trigger: webhook POST, no API key on that call. AI tools `n8n_list_workflows` / `n8n_run_workflow` are SENSITIVE / NETWORK, always confirm, refuse while the Advanced gate is off (default). `:app` Advanced → n8n screen. See `docs/N8N.md`. |
 | MCP integration (ROADMAP-123 / DP-001) | IMPLEMENTED | Added 2026-09-09 — `core-mcp.McpToolServer` wraps a `core-agent.ToolRegistry`/`ToolExecutor` and exposes every tool available to a fixed `mode`/`initiator` (default `Initiator.REMOTE`, the existing initiator-scoping category for an external caller) as a real MCP tool, using the official `io.modelcontextprotocol:kotlin-sdk-server` SDK rather than a hand-rolled protocol implementation. `runStdio()` runs it over real process stdin/stdout via `StdioServerTransport`. Proven end to end by `McpToolServerTest`, which drives a real `Client`/`Server` handshake over that same `StdioServerTransport`/`StdioClientTransport` pair wired through in-process pipes (not a mock, and deliberately not the SDK's own `ChannelTransport` test helper — that class is `@ExperimentalMcpApi` and was verified, directly, to race on a `tools/call` round trip under this SDK version): `tools/list` correctness (name/description/permissive input schema, and that an `Initiator.DEVICE_OWNER`-scoped tool is invisible to a `REMOTE`-scoped server), `tools/call` for all four `ToolResult` variants mapped through the same `describe()` this codebase already uses for `ObjectiveEngine`'s conversation context, and argument mapping. Adding this dependency required bumping the whole repository's Kotlin toolchain from 2.0.21 to 2.4.10 (Section 7b) — every other module's own status above is unaffected, confirmed by the full suite passing unchanged after the bump. **Updated 2026-10-07 (Kai integration, Foundation phase — see Section 9):** `executor` is now typed as `core-agent.ToolRunner` rather than the concrete `ToolExecutor` (a pure widening — `ToolExecutor` already implemented `ToolRunner`), so a caller can pass a `core-security.SecureToolExecutor` and get MCP-originated calls gated by its full policy/approval/grant/audit pipeline instead of only the bare mode/initiator checks. A JSON array/object argument is no longer dropped; it is re-serialized to its compact JSON text form and passed through (a compatibility adapter — the `Tool.execute(Map<String,String>)` contract itself is unchanged). `McpToolServerTest` grew from 8 to 10 tests covering both changes, including a real `SecureToolExecutor` driven end to end over the same stdio transport. |
 
 ## 7. Environment constraints recorded for this implementation pass
@@ -1643,3 +1656,17 @@ on Advanced, read-only and off.
 | `:pc-companion` (`tools/pc-companion`) | IMPLEMENTED — not run against a phone | Same pairing, then ping/status. `docs/DEVICE_CONNECT.md`. |
 | `:app` Connect a device screen | ON DISK — compiled, never run on a device | Fleet button. PC or another phone. Invite is text (`dca-connect:1\|host\|port\|id`); no camera QR, no mDNS. |
 | Theme picker | ON DISK — JVM persistence tested | Settings → Look. System/Light/Dark, five accents, Material You on API 31+. DataStore. Fleet theme overlay still applies. |
+
+## 18. Self-hosted n8n (2026-10-31)
+
+Don's own n8n server — a PC, a Raspberry Pi, or another machine on the
+home network. Not a cloud n8n account this app provisions. Rebased onto
+`main` after #259 (Kai Foundation) and #265 (device connect + theme).
+Kai gates stay read-only and off. n8n is a separate Advanced screen.
+
+| Component | Status | Notes |
+|---|---|---|
+| `core-n8n` | IMPLEMENTED — JVM-tested against a local mock server | URL rules, REST list, webhook trigger, plain-language results, gated AI tools. Never a live n8n in the session that added it. |
+| `:app` Advanced → n8n | ON DISK | Server URL, encrypted API key, test connection, workflow list, confirm-then-run, AI-tools switch (OFF default, confirm to turn on). Screenshot walk includes this screen. Never run against Don's n8n from CI. |
+| API key storage | IMPLEMENTED (same vault as cloud keys) | `EncryptedSecretsVault` id `n8n.api.key`. The screen never shows a saved key again. |
+| Network policy | PARTIAL | OS cleartext permitted so `http://192.168.x.x` can be reached; the app refuses HTTP except LAN. System CAs only. Not pinned. |
