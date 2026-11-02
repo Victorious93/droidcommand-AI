@@ -112,6 +112,32 @@ fun main(args: Array<String>) {
 class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
 
 /**
+ * Honest device-free refusal for a fleet member whose only live transport is the Android
+ * Messenger bridge (`core-fleet-messenger` + `:app`). Unlike [ai.droidcommand.security.PlannedFleetTool]
+ * this does not require the member to be `FleetHonestyStatus.PLANNED` — File Manager and Mesh are
+ * `PARTIAL` (real tools exist in `core-fleet-tools`), but that path cannot run from this process.
+ * Never binds, never spawns, never claims to have tried.
+ */
+private fun messengerOnlyNodeTool(
+    toolName: String,
+    member: ai.droidcommand.security.FleetMemberDescriptor,
+): Tool = object : Tool {
+    override val spec = ai.droidcommand.agent.ToolSpec(
+        name = toolName,
+        description = "${member.displayName} is reachable only from the DroidCommand AI Android app, " +
+            "not from this device-free CLI: its live transport is Android Messenger IPC " +
+            "(core-fleet-tools has real tools for it), and that can only bind from inside :app.",
+        securityLevel = ai.droidcommand.agent.SecurityLevel.SENSITIVE,
+        requiresConfirmation = true,
+    )
+
+    override fun execute(input: Map<String, String>): ToolResult = ToolResult.Failure(
+        "${member.displayName} has no device-free path from this CLI (Android Messenger IPC only). " +
+            "Use the DroidCommand AI Android app's Tools -> Fleet screen to pair and call it.",
+    )
+}
+
+/**
  * [approvalPrompt] defaults to the real, interactive [ConsoleApprovalPrompt] but is
  * caller-injectable, mirroring [runForge]'s `configSource`/`transport` parameters, so tests can
  * supply a scripted prompt instead of blocking on real stdin.
@@ -185,32 +211,6 @@ class CliSession(val session: DroidCommandSession, val registry: ToolRegistry)
  * invocation with no persistence across runs, so an in-memory audit log nobody ever reads back
  * would be inert plumbing — a named follow-up, not silently added.
  */
-/**
- * Honest device-free refusal for a fleet member whose only live transport is the Android
- * Messenger bridge (`core-fleet-messenger` + `:app`). Unlike [ai.droidcommand.security.PlannedFleetTool]
- * this does not require the member to be `FleetHonestyStatus.PLANNED` — File Manager and Mesh are
- * `PARTIAL` (real tools exist in `core-fleet-tools`), but that path cannot run from this process.
- * Never binds, never spawns, never claims to have tried.
- */
-private fun messengerOnlyNodeTool(
-    toolName: String,
-    member: ai.droidcommand.security.FleetMemberDescriptor,
-): Tool = object : Tool {
-    override val spec = ai.droidcommand.agent.ToolSpec(
-        name = toolName,
-        description = "${member.displayName} is reachable only from the DroidCommand AI Android app, " +
-            "not from this device-free CLI: its live transport is Android Messenger IPC " +
-            "(core-fleet-tools has real tools for it), and that can only bind from inside :app.",
-        securityLevel = ai.droidcommand.agent.SecurityLevel.SENSITIVE,
-        requiresConfirmation = true,
-    )
-
-    override fun execute(input: Map<String, String>): ToolResult = ToolResult.Failure(
-        "${member.displayName} has no device-free path from this CLI (Android Messenger IPC only). " +
-            "Use the DroidCommand AI Android app's Tools -> Fleet screen to pair and call it.",
-    )
-}
-
 internal fun buildSession(
     approvalPrompt: ApprovalPrompt = ConsoleApprovalPrompt,
     device: AdbDeviceConfig? = AdbDeviceConfig.fromEnvironment(),

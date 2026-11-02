@@ -203,8 +203,8 @@ object KnownFleet {
             "No DependencyGuard and no shared signing key. SSH stays CLI/ISO fallback. Owns target-phone " +
             "control (USB OTG, later LAN/Tailscale). Does not own Termux/proot or Sahara — RootForge UI " +
             "may call the EDL companion later. File Manager stays PARTIAL on the same basis as RootForge " +
-                "(real Messenger tools exist in core-fleet-tools, no device run yet) and must not be used as " +
-                "the P1 proof in RootForge's place — RootForge remains the first P1 candidate.",
+            "(real Messenger tools exist in core-fleet-tools, no device run yet) and must not be used as " +
+            "the P1 proof in RootForge's place — RootForge remains the first P1 candidate.",
         refusalMessage = "RootForge is an independent node. Pair it (Messenger / localhost API / SSH fallback); " +
             "this catalog does not claim a live session. Hardware proof pending.",
         notes = "First P1 candidate. Hub Messenger client is live (MessengerFleetTransport); hardware proof " +
