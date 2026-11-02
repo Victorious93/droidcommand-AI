@@ -7,6 +7,7 @@ import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolRunner
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 private class RecordingToolRunner : ToolRunner {
@@ -47,8 +48,8 @@ class ScopedToolRunnerTest {
         val result = runner.run("shell_tool", emptyMap())
 
         assertTrue(delegate.calls.isEmpty())
-        assertTrue(result is ToolResult.Failure)
-        assertTrue((result as ToolResult.Failure).reason.contains("shell_tool"))
+        val failure = assertIs<ToolResult.Failure>(result)
+        assertTrue(failure.reason.contains("shell_tool"))
     }
 
     @Test
