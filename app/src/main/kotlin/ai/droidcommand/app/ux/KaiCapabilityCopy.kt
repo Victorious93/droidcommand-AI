@@ -40,5 +40,6 @@ object KaiCapabilityCopy {
         AssistantCapability.SKILL_SCRIPTS -> "Skill scripts"
         AssistantCapability.KAI_BUILD -> "Kai Build"
         AssistantCapability.BRAIN -> "Brain notes"
+        AssistantCapability.BOT_MAKER -> "Bot Maker"
     }
 }
