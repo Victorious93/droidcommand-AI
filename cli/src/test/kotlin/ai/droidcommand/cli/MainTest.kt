@@ -51,14 +51,18 @@ class MainTest {
                 "pentest_swarm_status",
                 "edl_commander_status",
                 "kyc_auditlab_status",
-                "filemanager_status",
                 "keyboard_status",
-                "mesh_status",
                 "browser_status",
                 "victorsms_status",
                 "victorspoof_status",
                 "victorious_flash_status",
                 "victorlaunch_status",
+                // File Manager and Mesh are PARTIAL now, not PLANNED, so they're no longer
+                // KnownFleet.plannedStubs() entries; buildSession registers them explicitly, right
+                // after the stubs, as honest device-free refusals (messengerOnlyNodeTool) — the
+                // real tools live in core-fleet-tools, reachable only from :app.
+                "filemanager_status",
+                "mesh_status",
             ),
             specs.map { it.name },
         )
