@@ -9,12 +9,14 @@ Contract (COMPANION_ASSIST v1):
 
 - Exported Activity, `DEFAULT` category, `startActivityForResult`.
 - Request extra `ai.droidcommand.extra.REQUEST_JSON`: `v`, `task`
-  (`assist` only), `prompt` (max 60 000 chars), optional `context`,
-  `instruction`, `capability`, `destructive`.
+  (`assist` or `pair`), `prompt` (max 60 000 chars; required for
+  `assist`), optional `context`, `instruction`, `capability`,
+  `destructive`, `pairing` (see `docs/PASSWORD_PAIRING.md`).
 - Result extra `ai.droidcommand.extra.RESULT_JSON` with `RESULT_OK`:
   `{v:1, ok:true, text}` or `{v:1, ok:false, error}`.
 - `RESULT_CANCELED` on deny, missing/mismatched caller, excluded app,
-  pending-refused cert, or bad input.
+  pending-refused cert (unless a password-pairing TOFU link already
+  exists, or pairing is ON and the owner confirms), or bad input.
 - Consent is a real Allow/Deny tap. The model is never called before
   Allow. Never auto-approves. Never runs tools or `remote.command`.
 - A `destructive: true` flag is **confirmation_required** (the Allow

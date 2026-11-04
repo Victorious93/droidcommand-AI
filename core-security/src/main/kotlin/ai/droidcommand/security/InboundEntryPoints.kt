@@ -401,12 +401,16 @@ object InboundEntryPointCatalog {
 
     /**
      * Fail-closed caller check. Missing identity, excluded package,
-     * unknown package, pending-refused cert, or cert mismatch all refuse.
+     * unknown package, pending-refused cert, or cert mismatch all refuse
+     * unless [pairing] already has a TOFU link for this package+cert.
+     * Excluded apps stay refused. [pairing] null (the default) keeps the
+     * original pending-refused / pin-mismatch refusals.
      */
     fun verifyCaller(
         packageName: String?,
         observedFingerprints: Collection<String>,
         capability: String? = CompanionAssist.SHARED_CAPABILITY,
+        pairing: PasswordPairingService? = null,
     ): NodeSignatureDecision {
         if (packageName.isNullOrBlank()) {
             return NodeSignatureDecision.Refused(
@@ -448,6 +452,7 @@ object InboundEntryPointCatalog {
             )
         }
         if (included.certStatus == InboundCertStatus.PENDING_REFUSED) {
+            passwordLinkOverride(packageName, observedFingerprints, pairing)?.let { return it }
             return NodeSignatureDecision.Refused(
                 packageName = packageName,
                 kind = NodeSignatureRefusal.EXPECTED_CERT_MISSING,
@@ -458,6 +463,7 @@ object InboundEntryPointCatalog {
         }
         val pins = resolvedPins(included, packageName)
         if (pins.isEmpty()) {
+            passwordLinkOverride(packageName, observedFingerprints, pairing)?.let { return it }
             return NodeSignatureDecision.Refused(
                 packageName = packageName,
                 kind = NodeSignatureRefusal.EXPECTED_CERT_MISSING,
@@ -466,8 +472,34 @@ object InboundEntryPointCatalog {
                     "for this package. ${included.certTodo ?: ""}".trim(),
             )
         }
-        return callerVerifier(CompanionAssist.SHARED_CAPABILITY)
+        val catalogued = callerVerifier(CompanionAssist.SHARED_CAPABILITY)
             .verify(packageName, observedFingerprints)
+        if (catalogued is NodeSignatureDecision.Allowed) return catalogued
+        passwordLinkOverride(packageName, observedFingerprints, pairing)?.let { return it }
+        return catalogued
+    }
+
+    /**
+     * Already-linked TOFU override. Does not create a link. Excluded
+     * packages never match. A changed cert stays refused.
+     */
+    fun passwordLinkOverride(
+        packageName: String,
+        observedFingerprints: Collection<String>,
+        pairing: PasswordPairingService?,
+    ): NodeSignatureDecision? {
+        if (pairing == null) return null
+        if (isExcluded(packageName)) return null
+        val cert = observedFingerprints.mapNotNull { PasswordPairing.normalizeCert(it) }.firstOrNull()
+            ?: return null
+        return when (val decision = pairing.acceptLinked(packageName, cert)) {
+            is PasswordPairingDecision.Allowed -> NodeSignatureDecision.Allowed(
+                packageName = packageName,
+                matchedFingerprint = SigningCertSha256.parse(cert)?.canonical ?: cert,
+                message = decision.message,
+            )
+            is PasswordPairingDecision.Refused -> null
+        }
     }
 
     /**
@@ -511,6 +543,7 @@ object CompanionAssist {
     const val MAX_PROMPT_CHARS = 60_000
     const val CONTRACT_VERSION = 1
     const val TASK_ASSIST = "assist"
+    const val TASK_PAIR = "pair"
     const val SHARED_CAPABILITY = "companion.assist"
     const val CODE_ASSIST_CAPABILITY = "code-assist"
     const val PREVIEW_CHARS = 1_200
@@ -521,8 +554,14 @@ object CompanionAssist {
     fun verifyCaller(
         packageName: String?,
         observedFingerprints: Collection<String>,
+        pairing: PasswordPairingService? = null,
     ): NodeSignatureDecision =
-        InboundEntryPointCatalog.verifyCaller(packageName, observedFingerprints, SHARED_CAPABILITY)
+        InboundEntryPointCatalog.verifyCaller(
+            packageName,
+            observedFingerprints,
+            SHARED_CAPABILITY,
+            pairing,
+        )
 
     fun parseRequest(raw: String?): CompanionAssistParse {
         if (raw.isNullOrBlank()) {
@@ -543,10 +582,33 @@ object CompanionAssist {
         }
 
         val task = obj.string("task") ?: TASK_ASSIST
-        if (task != TASK_ASSIST) {
+        if (task != TASK_ASSIST && task != TASK_PAIR) {
             return CompanionAssistParse.Invalid(
-                "REQUEST_JSON field 'task' must be '$TASK_ASSIST' " +
+                "REQUEST_JSON field 'task' must be '$TASK_ASSIST' or '$TASK_PAIR' " +
                     "(refusing '$task' — this path never runs tools or remote.command).",
+            )
+        }
+        val pairingObj = obj["pairing"] as? JsonObject
+        val pairing = pairingObj?.let {
+            PairingProof(
+                challengeId = it.string("challengeId"),
+                nonceHex = it.string("nonce") ?: it.string("nonceHex"),
+                macHex = it.string("mac") ?: it.string("macHex"),
+            )
+        }
+        val needChallenge = pairingObj?.boolean("needChallenge") ?: false
+        if (task == TASK_PAIR) {
+            return CompanionAssistParse.Valid(
+                CompanionAssistRequest(
+                    capability = obj.string("capability").orEmpty(),
+                    prompt = obj.string("prompt").orEmpty(),
+                    context = obj.string("context").orEmpty(),
+                    instruction = obj.string("instruction").orEmpty(),
+                    destructive = false,
+                    pairing = pairing,
+                    needChallenge = needChallenge,
+                    task = TASK_PAIR,
+                ),
             )
         }
         val prompt = obj.string("prompt")
@@ -568,6 +630,8 @@ object CompanionAssist {
                 context = obj.string("context").orEmpty(),
                 instruction = obj.string("instruction").orEmpty(),
                 destructive = destructive,
+                pairing = pairing,
+                needChallenge = needChallenge,
             ),
         )
     }
@@ -580,20 +644,30 @@ object CompanionAssist {
     fun bindToCaller(
         request: CompanionAssistRequest,
         packageName: String,
+        pairing: PasswordPairingService? = null,
+        observedCerts: Collection<String> = emptyList(),
     ): CompanionAssistParse {
         val entry = InboundEntryPointCatalog.includedByPackage(packageName)
             ?: return CompanionAssistParse.Invalid(
                 "Caller '$packageName' is not an included COMPANION_ASSIST app.",
             )
+        val linked = pairing != null &&
+            observedCerts.any { pairing.isLinked(packageName, it) }
+        val canOfferLink = pairing != null &&
+            pairing.isEnabled() &&
+            pairing.hasPassword() &&
+            !InboundEntryPointCatalog.isExcluded(packageName)
         if (InboundEntryPointCatalog.resolvedPins(entry, packageName).isEmpty() &&
-            entry.certStatus == InboundCertStatus.ENFORCED
+            entry.certStatus == InboundCertStatus.ENFORCED &&
+            !linked &&
+            !canOfferLink
         ) {
             return CompanionAssistParse.Invalid(
                 "Caller '$packageName' has no catalogued inbound pin. " +
                     (entry.certTodo ?: ""),
             )
         }
-        if (entry.certStatus == InboundCertStatus.PENDING_REFUSED) {
+        if (entry.certStatus == InboundCertStatus.PENDING_REFUSED && !linked && !canOfferLink) {
             return CompanionAssistParse.Invalid(
                 "Caller '${entry.displayName}' is pending-refused. " +
                     (entry.certTodo ?: ""),
@@ -632,6 +706,18 @@ object CompanionAssist {
                 "v" to JsonPrimitive(CONTRACT_VERSION),
                 "ok" to JsonPrimitive(true),
                 "text" to JsonPrimitive(text),
+            ),
+        ),
+    )
+
+    fun pairingChallengeJson(challengeId: String, nonceHex: String): String = JSON.encodeToString(
+        JsonObject(
+            mapOf(
+                "v" to JsonPrimitive(CONTRACT_VERSION),
+                "ok" to JsonPrimitive(true),
+                "protocol" to JsonPrimitive(PasswordPairing.PROTOCOL),
+                "challengeId" to JsonPrimitive(challengeId),
+                "nonce" to JsonPrimitive(nonceHex),
             ),
         ),
     )
@@ -686,6 +772,9 @@ data class CompanionAssistRequest(
     val instruction: String,
     val destructive: Boolean,
     val callerId: String = "",
+    val pairing: PairingProof? = null,
+    val needChallenge: Boolean = false,
+    val task: String = CompanionAssist.TASK_ASSIST,
 )
 
 sealed class CompanionAssistParse {

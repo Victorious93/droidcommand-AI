@@ -16,7 +16,10 @@ import ai.droidcommand.security.CompanionAssistRequest
 import ai.droidcommand.security.InboundCertStatus
 import ai.droidcommand.security.InboundEntryPointCatalog
 import ai.droidcommand.security.NodeSignatureDecision
-import ai.droidcommand.security.NodeSignatureGuard
+import ai.droidcommand.security.PasswordPairing
+import ai.droidcommand.security.PasswordPairingDecision
+import ai.droidcommand.security.PasswordPairingService
+import ai.droidcommand.security.SigningCertSha256
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
@@ -39,16 +42,17 @@ import javax.inject.Inject
  * Inbound COMPANION_ASSIST entry point for the 13 included fleet apps.
  * Thin Android shell: request parse / 60k cap / result JSON live in
  * [CompanionAssist] (JVM-tested); caller package+cert uses
- * [NodeSignatureGuard] with [InboundEntryPointCatalog.callerVerifier].
- * This Activity shows a real Allow/Deny consent screen and, only after
- * Allow, runs the configured [CloudPromptClient] or
- * [ChatSession.sendLocal] path.
+ * [CompanionAssist.verifyCaller] (catalog pin, then optional
+ * password-pairing TOFU). This Activity shows a real Allow/Deny
+ * consent screen and, only after Allow, runs the configured
+ * [CloudPromptClient] or [ChatSession.sendLocal] path.
  *
  * Never auto-approves. Never runs the model before Allow. Never runs
  * tools or remote.command. Fail-closed (`RESULT_CANCELED`) on missing
- * caller identity, excluded app, pending-refused cert, cert mismatch,
- * deny, or bad input. [Certain] compiles. [Certain] never run on a
- * device in this environment.
+ * caller identity, excluded app, pending-refused cert (unless a
+ * password link already exists or pairing is ON and the owner
+ * confirms), cert mismatch, deny, or bad input. [Certain] compiles.
+ * [Certain] never run on a device in this environment.
  */
 @AndroidEntryPoint
 class CompanionAssistActivity : ComponentActivity() {
@@ -60,6 +64,9 @@ class CompanionAssistActivity : ComponentActivity() {
 
     @Inject
     lateinit var localModels: LocalModelRuntime
+
+    @Inject
+    lateinit var pairing: PasswordPairingService
 
     private var running by mutableStateOf(false)
     private var finished = false
@@ -77,19 +84,26 @@ class CompanionAssistActivity : ComponentActivity() {
             return
         }
         val included = InboundEntryPointCatalog.includedByPackage(caller)
-        if (included == null ||
-            InboundEntryPointCatalog.isExcluded(caller) ||
-            included.certStatus != InboundCertStatus.ENFORCED ||
-            InboundEntryPointCatalog.resolvedPins(included, caller).isEmpty()
-        ) {
+        if (included == null || InboundEntryPointCatalog.isExcluded(caller)) {
             cancelAndFinish()
             return
         }
-        val guard = NodeSignatureGuard(
-            observer = AndroidSigningCertObserver(this),
-            verifier = CompanionAssist.callerVerifier(),
-        )
-        if (guard.check(caller) is NodeSignatureDecision.Refused) {
+        val observed = AndroidSigningCertObserver(this).certificateBytes(caller).map { bytes ->
+            SigningCertSha256.fromCertificateBytes(bytes).canonical
+        }
+        val verified = CompanionAssist.verifyCaller(caller, observed, pairing)
+        val canOfferLink = pairing.isEnabled() &&
+            pairing.hasPassword() &&
+            !PasswordPairing.isExcluded(caller) &&
+            observed.isNotEmpty()
+        if (verified is NodeSignatureDecision.Refused && !canOfferLink) {
+            cancelAndFinish()
+            return
+        }
+        if (included.certStatus != InboundCertStatus.ENFORCED &&
+            verified !is NodeSignatureDecision.Allowed &&
+            !canOfferLink
+        ) {
             cancelAndFinish()
             return
         }
@@ -97,7 +111,7 @@ class CompanionAssistActivity : ComponentActivity() {
         val parsed = CompanionAssist.parseRequest(intent.getStringExtra(CompanionAssist.EXTRA_REQUEST_JSON))
         val request = when (parsed) {
             is CompanionAssistParse.Valid -> {
-                when (val bound = CompanionAssist.bindToCaller(parsed.request, caller)) {
+                when (val bound = CompanionAssist.bindToCaller(parsed.request, caller, pairing, observed)) {
                     is CompanionAssistParse.Valid -> bound.request
                     is CompanionAssistParse.Invalid -> {
                         cancelAndFinish()
@@ -110,6 +124,22 @@ class CompanionAssistActivity : ComponentActivity() {
                 return
             }
         }
+        if (request.needChallenge) {
+            when (val issued = pairing.issueChallenge(caller)) {
+                is PasswordPairingDecision.Allowed -> {
+                    val challengeId = issued.message.substringBefore(":")
+                    val nonce = issued.message.substringAfter(":")
+                    succeedAndFinish(CompanionAssist.pairingChallengeJson(challengeId, nonce))
+                }
+                is PasswordPairingDecision.Refused -> {
+                    succeedAndFinish(CompanionAssist.errorJson(issued.reason))
+                }
+            }
+            return
+        }
+        val proof = request.pairing
+        val needsPassword = verified !is NodeSignatureDecision.Allowed &&
+            (proof == null || proof.isBlank())
 
         onBackPressedDispatcher.addCallback(
             this,
@@ -127,8 +157,16 @@ class CompanionAssistActivity : ComponentActivity() {
                     displayName = included.displayName,
                     request = request,
                     running = running,
-                    onAllow = { onAllow(request) },
+                    onAllow = { typed -> onAllow(request, caller, observed, typed) },
                     onDeny = { cancelAndFinish() },
+                    needsPassword = needsPassword,
+                    observedCert = observed.firstOrNull(),
+                    pairingNote = if (verified is NodeSignatureDecision.Allowed) {
+                        null
+                    } else {
+                        "Catalog pin is missing or does not match. Allow after the pairing " +
+                            "password binds this package to the observed cert (TOFU)."
+                    },
                 )
             }
         }
@@ -149,12 +187,39 @@ class CompanionAssistActivity : ComponentActivity() {
         }
     }
 
-    private fun onAllow(request: CompanionAssistRequest) {
+    private fun onAllow(
+        request: CompanionAssistRequest,
+        caller: String,
+        observed: List<String>,
+        typedPassword: String?,
+    ) {
         if (running || finished) return
         running = true
         lifecycleScope.launch(Dispatchers.IO) {
             val json = try {
-                complete(request)
+                val already = CompanionAssist.verifyCaller(caller, observed, pairing)
+                if (already !is NodeSignatureDecision.Allowed) {
+                    val decision = pairing.evaluateInbound(
+                        caller,
+                        observed,
+                        request.pairing,
+                        typedPassword,
+                        screenConfirmed = true,
+                    )
+                    if (decision is PasswordPairingDecision.Refused) {
+                        CompanionAssist.errorJson(decision.reason)
+                    } else if (request.task == CompanionAssist.TASK_PAIR) {
+                        CompanionAssist.successJson(
+                            (decision as PasswordPairingDecision.Allowed).message,
+                        )
+                    } else {
+                        complete(request)
+                    }
+                } else if (request.task == CompanionAssist.TASK_PAIR) {
+                    CompanionAssist.successJson(already.message)
+                } else {
+                    complete(request)
+                }
             } catch (e: Exception) {
                 CompanionAssist.errorJson("Request failed: ${e.message ?: e.javaClass.simpleName}")
             }
