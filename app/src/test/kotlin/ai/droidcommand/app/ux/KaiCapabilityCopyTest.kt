@@ -9,10 +9,10 @@ import kotlin.test.assertTrue
 
 class KaiCapabilityCopyTest {
     @Test
-    fun `lists all ten gates and they default off`() {
+    fun `lists all eleven gates and they default off`() {
         val rows = KaiCapabilityCopy.rows()
         assertEquals(AssistantCapability.entries.toList(), rows.map { it.capability })
-        assertEquals(10, rows.size)
+        assertEquals(11, rows.size)
         rows.forEach { row ->
             assertFalse(row.enabled, row.label)
             assertTrue(row.label.isNotBlank(), row.capability.wireName)

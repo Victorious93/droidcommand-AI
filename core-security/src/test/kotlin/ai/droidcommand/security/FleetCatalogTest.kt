@@ -55,11 +55,14 @@ class FleetCatalogTest {
         assertEquals(FleetHonestyStatus.PLANNED, KnownFleet.EDL_COMMANDER.status)
         assertEquals(FleetIntegrationClass.HOST_PROCESS_TOOL, KnownFleet.KYC_AUDITLAB.integrationClass)
         assertEquals(FleetIntegrationClass.EXTERNAL_NODE, KnownFleet.FILE_MANAGER.integrationClass)
-        assertEquals(FleetHonestyStatus.PLANNED, KnownFleet.FILE_MANAGER.status)
+        // PARTIAL, not PLANNED: their main ships a real Messenger bridge and core-fleet-tools now
+        // has real tools calling it — see FILE_MANAGER's nextStep/notes for exactly what's still unverified.
+        assertEquals(FleetHonestyStatus.PARTIAL, KnownFleet.FILE_MANAGER.status)
         assertEquals(FleetIntegrationClass.EXTERNAL_NODE, KnownFleet.KEYBOARD.integrationClass)
         assertEquals(FleetHonestyStatus.PLANNED, KnownFleet.KEYBOARD.status)
         assertEquals(FleetIntegrationClass.EXTERNAL_NODE, KnownFleet.MESH.integrationClass)
-        assertEquals(FleetHonestyStatus.PLANNED, KnownFleet.MESH.status)
+        // PARTIAL, not PLANNED: same reasoning as FILE_MANAGER above (mesh_down/mesh_get_ip excepted).
+        assertEquals(FleetHonestyStatus.PARTIAL, KnownFleet.MESH.status)
         assertEquals(FleetIntegrationClass.EXTERNAL_NODE, KnownFleet.BROWSER.integrationClass)
         assertEquals(FleetHonestyStatus.PLANNED, KnownFleet.BROWSER.status)
         assertEquals(FleetIntegrationClass.EXTERNAL_NODE, KnownFleet.VICTOR_SMS.integrationClass)
@@ -159,9 +162,11 @@ class FleetCatalogTest {
         assertEquals(CapabilityState.REQUIRES_TERMUX, checker.verify(KnownFleet.VICTORSUITE.capabilityId, "termux").state)
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.EDL_COMMANDER.capabilityId, "edl-commander").state)
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.KYC_AUDITLAB.capabilityId, "kyc-auditlab").state)
-        assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.FILE_MANAGER.capabilityId, "file-manager").state)
+        // PARTIAL EXTERNAL_NODE -> REQUIRES_CONFIGURATION (not REQUIRES_EXTERNAL_SERVICE): the real
+        // Messenger path exists now; the owner still has to pair the node.
+        assertEquals(CapabilityState.REQUIRES_CONFIGURATION, checker.verify(KnownFleet.FILE_MANAGER.capabilityId, "file-manager").state)
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.KEYBOARD.capabilityId, "keyboard").state)
-        assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.MESH.capabilityId, "mesh").state)
+        assertEquals(CapabilityState.REQUIRES_CONFIGURATION, checker.verify(KnownFleet.MESH.capabilityId, "mesh").state)
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.BROWSER.capabilityId, "browser").state)
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.VICTOR_SMS.capabilityId, "victorsms").state)
         assertEquals(CapabilityState.REQUIRES_EXTERNAL_SERVICE, checker.verify(KnownFleet.VICTOR_SPOOF.capabilityId, "victorspoof").state)
@@ -183,16 +188,17 @@ class FleetCatalogTest {
     }
 
     @Test
-    fun `planned stubs are Pentest EDL KYC File Manager Keyboard Mesh Browser VictorSMS VictorSpoof Flash and VictorLaunch and never succeed`() {
+    fun `planned stubs are Pentest EDL KYC Keyboard Browser VictorSMS VictorSpoof Flash and VictorLaunch and never succeed`() {
+        // File Manager and Mesh are no longer here: their status flipped PLANNED -> PARTIAL once
+        // core-fleet-tools gave them real Tool implementations (see FleetMessengerNodeToolWiringTest
+        // in core-fleet-tools, and FILE_MANAGER/MESH's own nextStep/notes above).
         val tools = KnownFleet.plannedStubs()
         assertEquals(
             listOf(
                 "pentest_swarm_status",
                 "edl_commander_status",
                 "kyc_auditlab_status",
-                "filemanager_status",
                 "keyboard_status",
-                "mesh_status",
                 "browser_status",
                 "victorsms_status",
                 "victorspoof_status",
@@ -214,17 +220,10 @@ class FleetCatalogTest {
         assertTrue(kyc.reason.contains("remoteAllowed:false"))
         val pentest = tools.first { it.spec.name == "pentest_swarm_status" }.execute(emptyMap()) as ToolResult.Failure
         assertTrue(pentest.reason.contains("awaiting the base companion repo"))
-        val fileManager = tools.first { it.spec.name == "filemanager_status" }.execute(emptyMap()) as ToolResult.Failure
-        assertTrue(fileManager.reason.contains("does not bind Messenger"))
-        assertTrue(fileManager.reason.contains("ai.victorious.filemanager.action.BRIDGE"))
         val keyboard = tools.first { it.spec.name == "keyboard_status" }.execute(emptyMap()) as ToolResult.Failure
         assertTrue(keyboard.reason.contains("does not bind Messenger"))
         assertTrue(keyboard.reason.contains("com.victorious.keyboard.action.BRIDGE"))
         assertTrue(keyboard.reason.contains("Never forwards typed text"))
-        val mesh = tools.first { it.spec.name == "mesh_status" }.execute(emptyMap()) as ToolResult.Failure
-        assertTrue(mesh.reason.contains("does not bind Messenger"))
-        assertTrue(mesh.reason.contains("com.victorious.mesh.action.BRIDGE"))
-        assertTrue(mesh.reason.contains("mesh.capabilities.get"))
         val browser = tools.first { it.spec.name == "browser_status" }.execute(emptyMap()) as ToolResult.Failure
         assertTrue(browser.reason.contains("does not bind Messenger"))
         assertTrue(browser.reason.contains("com.victorious.browser.action.BRIDGE"))
@@ -278,6 +277,14 @@ class FleetCatalogTest {
         assertFailsWith<IllegalArgumentException> {
             PlannedFleetTool(KnownFleet.KYC_AUDITLAB.copy(status = FleetHonestyStatus.LIVE))
         }
+        // File Manager and Mesh are PARTIAL now (core-fleet-tools gave them real tools) — the
+        // catalog-stub machinery must refuse to wrap them, same as it already refuses RootForge.
+        assertFailsWith<IllegalArgumentException> {
+            PlannedFleetTool(KnownFleet.FILE_MANAGER)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            PlannedFleetTool(KnownFleet.MESH)
+        }
     }
 
     @Test
@@ -290,7 +297,7 @@ class FleetCatalogTest {
         assertTrue(KnownFleet.ROOTFORGE.notes.contains("First P1 candidate"))
         assertTrue(KnownFleet.ROOTFORGE.notes.contains("hardware proof pending"))
         assertTrue(KnownFleet.ROOTFORGE.nextStep.contains("Hardware proof pending"))
-        assertTrue(KnownFleet.ROOTFORGE.nextStep.contains("File Manager stays PLANNED"))
+        assertTrue(KnownFleet.ROOTFORGE.nextStep.contains("File Manager stays"))
         assertEquals("com.termux", KnownFleet.VICTORSUITE.packageOrBinary)
         assertEquals(listOf("com.termux"), KnownFleet.VICTORSUITE.androidPackages)
         assertEquals(FleetIntegrationClass.TERMUX_IPC, KnownFleet.VICTORSUITE.integrationClass)
@@ -330,7 +337,7 @@ class FleetCatalogTest {
         assertTrue(KnownFleet.FILE_MANAGER.transports.any { it.contains("ai.victorious.filemanager.action.BRIDGE") })
         assertTrue(KnownFleet.FILE_MANAGER.notes.contains("Never DependencyGuard"))
         assertTrue(KnownFleet.FILE_MANAGER.notes.contains("never KnownCompanions"))
-        assertTrue(KnownFleet.FILE_MANAGER.notes.contains("dca_required:false"))
+        assertTrue(KnownFleet.FILE_MANAGER.notes.contains("ships a real Messenger bridge"))
         assertEquals("Victorious93/Victorious-Keyboard", KnownFleet.KEYBOARD.repo)
         assertTrue(KnownFleet.KEYBOARD.packageOrBinary.contains("com.victorious.keyboard"))
         assertTrue(KnownFleet.KEYBOARD.packageOrBinary.contains("com.victorious.keyboard.debug"))
