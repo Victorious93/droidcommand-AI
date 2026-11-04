@@ -25,6 +25,7 @@ enum class AssistantCapability(val wireName: String) {
     SKILL_SCRIPTS("skillScriptsEnabled"),
     KAI_BUILD("kaiBuildEnabled"),
     BRAIN("brainEnabled"),
+    BOT_MAKER("botMakerEnabled"),
 }
 
 data class AssistantCapabilitySettings(
@@ -38,6 +39,7 @@ data class AssistantCapabilitySettings(
     val skillScriptsEnabled: Boolean = false,
     val kaiBuildEnabled: Boolean = false,
     val brainEnabled: Boolean = false,
+    val botMakerEnabled: Boolean = false,
 ) {
     fun isEnabled(capability: AssistantCapability): Boolean = when (capability) {
         AssistantCapability.MCP_CLIENT -> mcpClientEnabled
@@ -50,6 +52,7 @@ data class AssistantCapabilitySettings(
         AssistantCapability.SKILL_SCRIPTS -> skillScriptsEnabled
         AssistantCapability.KAI_BUILD -> kaiBuildEnabled
         AssistantCapability.BRAIN -> brainEnabled
+        AssistantCapability.BOT_MAKER -> botMakerEnabled
     }
 
     fun disabledReason(capability: AssistantCapability): String =
@@ -74,6 +77,7 @@ data class AssistantCapabilitySettings(
                 skillScriptsEnabled = reader.optionalBoolean(ConfigKeys.SKILL_SCRIPTS_ENABLED),
                 kaiBuildEnabled = reader.optionalBoolean(ConfigKeys.KAI_BUILD_ENABLED),
                 brainEnabled = reader.optionalBoolean(ConfigKeys.BRAIN_ENABLED),
+                botMakerEnabled = reader.optionalBoolean(ConfigKeys.BOT_MAKER_ENABLED),
             )
         }
     }

@@ -313,3 +313,38 @@ Shipped here:
   by default (same `brainEnabled` gate).
 
 Jarvis and Bot Maker stay unbuilt.
+
+## 2026-10-31f — Bot Maker, Phase B1 (JVM slice)
+
+Owner go-ahead for B1 only (manual create/run/delete), given while
+scoping Operit-feature-parity work more broadly. B2 (pause/resume + log),
+B3 (phrase trigger), B4 (time trigger), and B5 remain on paper, per the
+phase table above — not started.
+
+New JVM-only `core-bots` module: `BotRecipe` (id, name, `personaId`
+referencing the existing `core-agent.PersonaStore` — not a second soul
+string, per this doc's own requirement — `instructions`, `providerType`,
+`allowedTools`, `memoryFolder`, `enabled`), `JsonFileBotStore` /
+`InMemoryBotStore` (same id-validation + path-containment pattern as
+`JsonFilePersonaStore`), `ScopedToolRunner` (a `ToolRunner` decorator
+that denies any tool call outside a recipe's `allowedTools` before ever
+reaching the delegate — "a bot cannot see another bot's folder [or]
+enable a Kai gate you left off" extended to "cannot call a tool its
+recipe didn't list"), and `BotRunner` (composes the scoped executor plus
+the persona-style + instructions system prompt for an existing
+`ChatSession`/`DroidCommandSession` call site to consume). New eleventh
+Kai gate `AssistantCapability.BOT_MAKER` / `botMakerEnabled`, default
+OFF, same pattern as `BRAIN`; the other ten gates are unchanged.
+
+**Not built in this slice:** any `:app` screen/ViewModel/Compose UI (no
+Android SDK in this session's container — a documented follow-up, not
+attempted blind); storing a recipe as `Brain/Bots/<id>/recipe.md` inside
+the vault (this doc's own "later" data-model note) — `JsonFileBotStore`
+is the B1-sufficient persistence for now.
+
+**Verified this session (no Android SDK, no live LLM):**
+`./gradlew :core-bots:test :core-config:test` and
+`./gradlew :core-bots:ktlintCheck :core-config:ktlintCheck` —
+**BUILD SUCCESSFUL**, 18 new `core-bots` tests, 0 failures. See
+`docs/AUDIT_2026-09-05.md`'s matching addendum for the full
+`./gradlew test ktlintCheck --continue` regression-run counts.
