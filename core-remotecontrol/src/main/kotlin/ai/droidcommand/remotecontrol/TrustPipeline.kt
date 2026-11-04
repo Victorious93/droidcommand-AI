@@ -1,6 +1,8 @@
 package ai.droidcommand.remotecontrol
 
 import ai.droidcommand.security.KnownNodeSigningCatalog
+import ai.droidcommand.security.PasswordPairingDecision
+import ai.droidcommand.security.PasswordPairingService
 import ai.droidcommand.security.SigningCertSha256
 
 /**
@@ -28,8 +30,9 @@ object TrustPipeline {
         config: RemoteControlConfig,
         envelope: FleetRemoteEnvelope,
         replayGuard: ReplayGuard,
+        passwordPairing: PasswordPairingService? = null,
     ): RemoteDispatchResult.Rejected? {
-        pairingDecision(source, config)?.let { return reject(it) }
+        pairingDecision(source, config, passwordPairing)?.let { return reject(it) }
         if (!config.externalControlEnabled) {
             return reject(RemoteErrorCategory.EXTERNAL_CONTROL_DISABLED)
         }
@@ -39,22 +42,34 @@ object TrustPipeline {
         }
     }
 
-    fun pairingDecision(source: SourceIdentity, config: RemoteControlConfig): RemoteErrorCategory? {
+    fun pairingDecision(
+        source: SourceIdentity,
+        config: RemoteControlConfig,
+        passwordPairing: PasswordPairingService? = null,
+    ): RemoteErrorCategory? {
         val candidates = config.pairings.filter { it.sourceNodeRef == source.sourceNodeRef }
         if (candidates.isEmpty()) return RemoteErrorCategory.NOT_PAIRED
-        val matched = candidates.any { pairingMatches(it, source) }
+        val matched = candidates.any { pairingMatches(it, source, passwordPairing) }
         return if (matched) null else RemoteErrorCategory.UNAUTHORIZED
     }
 
-    private fun pairingMatches(pairing: DevicePairing, source: SourceIdentity): Boolean {
+    private fun pairingMatches(
+        pairing: DevicePairing,
+        source: SourceIdentity,
+        passwordPairing: PasswordPairingService?,
+    ): Boolean {
         // DevicePairing always carries a package. A null source package used
         // to match any pairing (fail-open); refuse instead.
         val sourcePackage = source.packageName ?: return false
         val packageOk = pairing.packageName == sourcePackage
-        return packageOk && certMatches(pairing, source)
+        return packageOk && certMatches(pairing, source, passwordPairing)
     }
 
-    private fun certMatches(pairing: DevicePairing, source: SourceIdentity): Boolean {
+    private fun certMatches(
+        pairing: DevicePairing,
+        source: SourceIdentity,
+        passwordPairing: PasswordPairingService? = null,
+    ): Boolean {
         val packageName = source.packageName ?: pairing.packageName
         val catalogExpected = cataloguedExpectedCerts(packageName)
         val pairingRaw = pairing.certSha256?.takeIf { it.isNotBlank() }
@@ -75,7 +90,9 @@ object TrustPipeline {
         }
 
         val observed = source.certSha256?.let { SigningCertSha256.parse(it) } ?: return false
-        return expected.any { it.canonical == observed.canonical }
+        if (expected.any { it.canonical == observed.canonical }) return true
+        val linked = passwordPairing?.acceptLinked(packageName, observed.canonical)
+        return linked is PasswordPairingDecision.Allowed
     }
 
     fun reject(category: RemoteErrorCategory, reason: String = category.wire): RemoteDispatchResult.Rejected =

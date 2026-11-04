@@ -307,6 +307,72 @@ class InboundEntryPointTest {
     }
 
     @Test
+    fun `password link can admit a pending-refused caller and never an excluded app`() {
+        val pairing = PasswordPairingService(InMemoryPasswordPairingStore())
+        pairing.setPassword("correct-horse")
+        pairing.enable(true)
+        pairing.confirmWithPassword("com.victorious.sms", attacker, "correct-horse", screenConfirmed = true)
+        val allowed = assertIs<NodeSignatureDecision.Allowed>(
+            CompanionAssist.verifyCaller("com.victorious.sms", listOf(attacker), pairing),
+        )
+        assertTrue(allowed.message.contains("TOFU") || allowed.message.contains("Password-linked"))
+        assertIs<NodeSignatureDecision.Refused>(
+            CompanionAssist.verifyCaller("com.victorious.sms", listOf(attacker)),
+        )
+        pairing.confirmWithPassword("com.victorious.zombie", attacker, "correct-horse", screenConfirmed = true)
+        assertIs<NodeSignatureDecision.Refused>(
+            CompanionAssist.verifyCaller("com.victorious.zombie", listOf(attacker), pairing),
+        )
+        val bound = CompanionAssist.bindToCaller(
+            assertIs<CompanionAssistParse.Valid>(
+                CompanionAssist.parseRequest("""{"v":1,"prompt":"help"}"""),
+            ).request,
+            "com.victorious.sms",
+            pairing,
+            listOf(attacker),
+        )
+        assertIs<CompanionAssistParse.Valid>(bound)
+        val pending = CompanionAssist.bindToCaller(
+            assertIs<CompanionAssistParse.Valid>(
+                CompanionAssist.parseRequest("""{"v":1,"prompt":"help"}"""),
+            ).request,
+            "com.victorious.sms",
+        )
+        assertTrue(assertIs<CompanionAssistParse.Invalid>(pending).reason.contains("pending-refused"))
+        pairing.confirmWithPassword(
+            "com.victorious.launch",
+            attacker,
+            "correct-horse",
+            screenConfirmed = true,
+        )
+        assertIs<NodeSignatureDecision.Allowed>(
+            CompanionAssist.verifyCaller("com.victorious.launch", listOf(attacker), pairing),
+        )
+        assertIs<NodeSignatureDecision.Refused>(
+            CompanionAssist.verifyCaller("com.victorious.launch", listOf(attacker)),
+        )
+    }
+
+    @Test
+    fun `pair task and pairing fields parse without running a tool task`() {
+        val parsed = CompanionAssist.parseRequest(
+            """{"v":1,"task":"pair","pairing":{"needChallenge":true,"protocol":"password-pairing"}}""",
+        )
+        val request = assertIs<CompanionAssistParse.Valid>(parsed).request
+        assertEquals(CompanionAssist.TASK_PAIR, request.task)
+        assertTrue(request.needChallenge)
+        val hmac = CompanionAssist.parseRequest(
+            """{"v":1,"task":"assist","prompt":"hi","pairing":{"challengeId":"ab","nonce":"cd","mac":"ef"}}""",
+        )
+        val proof = assertIs<CompanionAssistParse.Valid>(hmac).request.pairing
+        assertNotNull(proof)
+        assertEquals("ab", proof.challengeId)
+        assertEquals("cd", proof.nonceHex)
+        assertEquals("ef", proof.macHex)
+        assertTrue(CompanionAssist.pairingChallengeJson("id", "nonce").contains("challengeId"))
+    }
+
+    @Test
     fun `CODE_ASSIST pattern row is not an included COMPANION_ASSIST caller`() {
         assertNull(InboundEntryPointCatalog.includedByPackage("ai.victorious.filemanager"))
         assertEquals(InboundEntryKind.PATTERN, InboundEntryPointCatalog.FILE_MANAGER_CODE_ASSIST.kind)

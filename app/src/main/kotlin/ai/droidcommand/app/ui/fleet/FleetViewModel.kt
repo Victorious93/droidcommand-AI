@@ -13,6 +13,8 @@ import ai.droidcommand.fleet.messenger.PackageIdentityResolver
 import ai.droidcommand.fleet.messenger.PairedNodeGateway
 import ai.droidcommand.fleet.messenger.PairingResult
 import ai.droidcommand.remotecontrol.RemoteStatusTray
+import ai.droidcommand.security.PasswordPairingDecision
+import ai.droidcommand.security.PasswordPairingService
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -47,6 +49,7 @@ class FleetViewModel @Inject constructor(
     resolver: PackageIdentityResolver,
     gateway: PairedNodeGateway,
     private val statusTray: RemoteStatusTray,
+    private val pairing: PasswordPairingService,
 ) : ViewModel() {
     private val probe = PackageFleetProbe(context)
     private val controller = FleetMessengerController(store, resolver, gateway)
@@ -80,6 +83,37 @@ class FleetViewModel @Inject constructor(
                     "Paired ${result.node.packageName} with cert ${result.node.expectedCertSha256}"
                 }
                 is PairingResult.Refused -> result.reason
+            }
+            publish(pairingMessage = message)
+        }
+    }
+
+    fun pairByPassword(catalogId: String, password: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val row = controller.row(catalogId)
+            val packageName = row?.installedPackage
+            val cert = row?.observedCertSha256
+            if (row == null || packageName == null || cert == null) {
+                publish(pairingMessage = "$catalogId: not installed or no single observed cert")
+                return@launch
+            }
+            val decision = pairing.confirmWithPassword(
+                packageName,
+                cert,
+                password,
+                screenConfirmed = true,
+            )
+            val message = when (decision) {
+                is PasswordPairingDecision.Refused -> decision.reason
+                is PasswordPairingDecision.Allowed -> {
+                    when (val result = controller.pair(catalogId)) {
+                        is PairingResult.Paired -> {
+                            FleetTrustedLivePublisher.refresh(controller, statusTray)
+                            decision.message + " Paired ${result.node.packageName}."
+                        }
+                        is PairingResult.Refused -> decision.message + " Messenger pair refused: ${result.reason}"
+                    }
+                }
             }
             publish(pairingMessage = message)
         }
