@@ -88,6 +88,7 @@ class ChatSessionTest {
         memoryWriter: MemoryWriter? = null,
         memoryWriteScope: String = "",
         autoRemember: Int = 0,
+        brain: ((String) -> String?)? = null,
     ): Triple<ChatSession, InMemoryConversationStore, InMemorySecretsVault> {
         val vault = InMemorySecretsVault()
         vaultKey?.let {
@@ -99,7 +100,7 @@ class ChatSessionTest {
             val p: LlmProvider = if (spec.id == "google") GeminiLlmProvider(c, JdkHttpTransport(), requireHttps = false) else GroqLlmProvider(c, JdkHttpTransport(), requireHttps = false)
             p
         }
-        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge, knowledgeGraph = graph, webSearch = search, documents = documents, memory = memory, memoryScopes = memoryScopes, memoryWriter = memoryWriter, memoryWriteScope = memoryWriteScope, autoRememberEveryTurns = autoRemember), store, vault)
+        return Triple(ChatSession(vault, store, transport = JdkHttpTransport(), providerFor = factory, knowledge = knowledge, knowledgeGraph = graph, webSearch = search, documents = documents, memory = memory, memoryScopes = memoryScopes, memoryWriter = memoryWriter, memoryWriteScope = memoryWriteScope, autoRememberEveryTurns = autoRemember, brain = brain), store, vault)
     }
 
     @Test
@@ -240,6 +241,27 @@ class ChatSessionTest {
         }
         val base = start { sse("""{"choices":[{"delta":{"content":"fine"}}]}""") }
         val (chat, _, _) = session(base, knowledge = GraphRetriever(broken))
+        assertEquals(ChatResult.Reply("fine"), chat.send(groq, "", "router?"))
+    }
+
+    @Test
+    fun `brain notes reach the request but are never saved into history`() {
+        val captured = AtomicReference<String>()
+        val base = start(captured = captured) { sse("""{"choices":[{"delta":{"content":"ok"}}]}""") }
+        val (chat, store, _) = session(base, brain = { "BRAIN-BLOCK: living-room router\n\n" })
+
+        assertEquals(ChatResult.Reply("ok"), chat.send(groq, "", "how is the wifi?"))
+
+        val body = captured.get()
+        assertTrue(body.contains("BRAIN-BLOCK: living-room router"), "brain notes missing from the request: $body")
+        assertEquals(listOf(Role.USER to "how is the wifi?", Role.ASSISTANT to "ok"), chat.history().map { it.role to it.content })
+        assertFalse(store.load("default")!!.messages.any { it.content.contains("BRAIN-BLOCK") })
+    }
+
+    @Test
+    fun `a failing brain search does not fail the turn`() {
+        val base = start { sse("""{"choices":[{"delta":{"content":"fine"}}]}""") }
+        val (chat, _, _) = session(base, brain = { error("index closed") })
         assertEquals(ChatResult.Reply("fine"), chat.send(groq, "", "router?"))
     }
 

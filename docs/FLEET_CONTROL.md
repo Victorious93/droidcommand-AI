@@ -6,6 +6,14 @@ host tool. It does not invent a third protocol.
 
 Honesty: **LIVE** is reserved for runtime-verified control. Nothing here is LIVE.
 
+2026-10-30 hub-side connection audit (does not rewrite the table
+below): peer `main` now exports Messenger bridges for Keyboard,
+Mesh, Browser, VictorSMS, VictorSpoof, and VictorLaunch. The hub
+still does not start those clients until the owner pairs package +
+cert, and peer external control stays OFF by default. KYC companion
+still has no BRIDGE. HackerAI / Pentest-Swarm debug binds stay
+same-signing. EDL is not auto-bound. Cert gating is not weakened.
+
 Code: `core-security.KnownFleet`. Bound companions also appear in
 `core-companion.KnownCompanions`. RootForge, File Manager, Keyboard,
 Mesh, Browser, VictorSuite, VictorLaunch, and KYC must not be added there.

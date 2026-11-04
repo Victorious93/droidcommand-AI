@@ -12,6 +12,7 @@ import ai.droidcommand.app.approval.VoiceApprovalPrompt
 import ai.droidcommand.app.automation.AiPromptTool
 import ai.droidcommand.app.automation.AllowlistShellExecutor
 import ai.droidcommand.app.automation.AutomationShellTool
+import ai.droidcommand.app.deviceconnect.VaultDeviceConnectStore
 import ai.droidcommand.app.fleet.AndroidMessengerChannel
 import ai.droidcommand.app.fleet.AndroidPackageIdentityResolver
 import ai.droidcommand.app.fleet.SharedPreferencesPairedNodeStore
@@ -21,10 +22,20 @@ import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.app.shizuku.AndroidShizukuHost
 import ai.droidcommand.app.shizuku.BoundPrivilegedShell
+import ai.droidcommand.app.shizuku.ToolboxRuntime
+import ai.droidcommand.app.shizuku.embedded.EmbeddedShizukuPayload
+import ai.droidcommand.app.shizuku.embedded.EmbeddedShizukuStarter
+import ai.droidcommand.app.shizuku.embedded.ShizukuStartNotifier
+import ai.droidcommand.app.shizuku.embedded.WirelessAdbClient
 import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
+import ai.droidcommand.app.theme.DataStoreThemePreferenceStore
+import ai.droidcommand.config.AssistantCapabilitySettingsStore
 import ai.droidcommand.config.EncryptedSecretsVault
+import ai.droidcommand.config.FileAssistantCapabilitySettingsStore
+import ai.droidcommand.config.ThemePreferenceStore
 import ai.droidcommand.config.VaultPasswordPairingStore
 import ai.droidcommand.conversations.RoomConversationStore
+import ai.droidcommand.deviceconnect.DeviceConnectService
 import ai.droidcommand.fleet.messenger.ExternalNodeTransport
 import ai.droidcommand.fleet.messenger.MessengerBridgeClient
 import ai.droidcommand.fleet.messenger.MessengerChannel
@@ -40,6 +51,10 @@ import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.metasploit.MetasploitExecutor
 import ai.droidcommand.metasploit.MetasploitTool
 import ai.droidcommand.metasploit.TermuxMetasploitExecutor
+import ai.droidcommand.n8n.N8nClient
+import ai.droidcommand.n8n.N8nListWorkflowsTool
+import ai.droidcommand.n8n.N8nRunWorkflowTool
+import ai.droidcommand.n8n.N8nSecrets
 import ai.droidcommand.pentestswarm.ApprovalPromptStepApprover
 import ai.droidcommand.pentestswarm.KaliAuthorizedScanTool
 import ai.droidcommand.pentestswarm.LocalKaliPlaybookRunner
@@ -72,6 +87,7 @@ import ai.droidcommand.shizuku.PrivilegedShell
 import ai.droidcommand.shizuku.ShizukuHost
 import ai.droidcommand.shizuku.ShizukuManager
 import ai.droidcommand.shizuku.ShizukuTool
+import ai.droidcommand.shizuku.toolbox.SystemToolboxTool
 import ai.droidcommand.termux.ClientBackedTermuxExecutor
 import ai.droidcommand.termux.TermuxExecutor
 import ai.droidcommand.termux.TermuxTool
@@ -156,6 +172,8 @@ object AppModule {
         privilegedShell: PrivilegedShell,
         remoteControlStore: RemoteControlStore,
         remoteActionExecutor: RemoteActionExecutor,
+        toolboxRuntime: ToolboxRuntime,
+        approvalPrompt: ApprovalPrompt,
     ): ToolRegistry = ToolRegistry().apply {
         register(AutomationShellTool(AllowlistShellExecutor { advanced.shellAllowlist() }))
         register(AiPromptTool(CloudPromptClient(vault, transport)) { spec -> chatModelFor(context, spec) })
@@ -174,6 +192,12 @@ object AppModule {
         // Remote Control skeleton. Names contain `remote`; destructive variants never YOLO-waive.
         // execute() is a stub — no live wipe / power-off / lock / RustDesk.
         RemoteControlTool.all(remoteActionExecutor, remoteControlStore).forEach { register(it) }
+        val n8n = N8nClient(transport) { vault.getSecret(N8nSecrets.API_KEY_ID) }
+        register(N8nListWorkflowsTool(n8n, advanced::n8nServerUrl, advanced::n8nAiToolsEnabled))
+        register(N8nRunWorkflowTool(n8n, advanced::n8nServerUrl, advanced::n8nAiToolsEnabled))
+        // System Toolbox for the assistant: refuses unless the owner turns its gate on (default off), and then still
+        // asks through ApprovalPrompt on every call with the exact command. No shell and no reboot for the assistant.
+        register(SystemToolboxTool(toolboxRuntime::preferred, advanced::systemToolboxAiEnabled, approvalPrompt))
     }
 
     @Provides
@@ -233,7 +257,21 @@ object AppModule {
     /** Phase 1: Keystore-backed secrets (API keys). UNBUILT — see security/AndroidSecretsVault.kt. */
     @Provides
     @Singleton
+    fun provideAssistantCapabilitySettingsStore(@ApplicationContext context: Context): AssistantCapabilitySettingsStore =
+        FileAssistantCapabilitySettingsStore(context.filesDir.toPath().resolve("assistant-capabilities.settings"))
+
+    @Provides
+    @Singleton
     fun provideSecretsVault(@ApplicationContext context: Context): EncryptedSecretsVault = createAndroidSecretsVault(context)
+
+    @Provides
+    @Singleton
+    fun provideThemePreferenceStore(store: DataStoreThemePreferenceStore): ThemePreferenceStore = store
+
+    @Provides
+    @Singleton
+    fun provideDeviceConnectService(vault: EncryptedSecretsVault): DeviceConnectService =
+        DeviceConnectService(VaultDeviceConnectStore(vault))
 
     @Provides
     @Singleton
@@ -343,7 +381,34 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideShizukuHost(@ApplicationContext context: Context): ShizukuHost = AndroidShizukuHost(context)
+    fun provideEmbeddedShizukuPayload(@ApplicationContext context: Context): EmbeddedShizukuPayload =
+        EmbeddedShizukuPayload(context)
+
+    @Provides
+    @Singleton
+    fun provideWirelessAdbClient(@ApplicationContext context: Context): WirelessAdbClient = WirelessAdbClient(context)
+
+    @Provides
+    @Singleton
+    fun provideShizukuStartNotifier(@ApplicationContext context: Context): ShizukuStartNotifier =
+        ShizukuStartNotifier(context)
+
+    @Provides
+    @Singleton
+    fun provideEmbeddedShizukuStarter(
+        @ApplicationContext context: Context,
+        prefs: AdvancedPrefs,
+        payload: EmbeddedShizukuPayload,
+        wireless: WirelessAdbClient,
+        manager: ShizukuManager,
+    ): EmbeddedShizukuStarter = EmbeddedShizukuStarter(context, prefs, payload, wireless, manager)
+
+    @Provides
+    @Singleton
+    fun provideShizukuHost(
+        @ApplicationContext context: Context,
+        payload: EmbeddedShizukuPayload,
+    ): ShizukuHost = AndroidShizukuHost(context, payload)
 
     @Provides
     @Singleton

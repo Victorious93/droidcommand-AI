@@ -22,14 +22,22 @@ data class FleetRowUi(
     val canCheckStatus: Boolean get() = control.canCheckStatus && !busy
     val canSend: Boolean get() = sendDisabledReason == null && !busy
     val classLabel: String get() = connectionClassLabel(node.integrationClass)
+    val controlLabel: String get() = friendlyControlLabel(control.label)
     val reachabilityLabel: String get() = reachabilityLabel(state.reachability)
 }
 
 fun connectionClassLabel(integrationClass: FleetIntegrationClass): String = when (integrationClass) {
-    FleetIntegrationClass.BOUND_COMPANION -> "Bound companion (AIDL)"
-    FleetIntegrationClass.EXTERNAL_NODE -> "External node (Messenger)"
-    FleetIntegrationClass.TERMUX_IPC -> "Termux IPC"
-    FleetIntegrationClass.HOST_PROCESS_TOOL -> "Host process tool"
+    FleetIntegrationClass.BOUND_COMPANION -> "Signed companion app"
+    FleetIntegrationClass.EXTERNAL_NODE -> "Separate app"
+    FleetIntegrationClass.TERMUX_IPC -> "Linux tools on this phone"
+    FleetIntegrationClass.HOST_PROCESS_TOOL -> "Built-in tool"
+}
+
+fun friendlyControlLabel(raw: String): String = when (raw) {
+    "bound companion" -> "Signed companion app"
+    "external node" -> "Separate app"
+    "no runner yet" -> "Not connected yet"
+    else -> raw
 }
 
 fun reachabilityLabel(reachability: FleetReachability): String = when (reachability) {

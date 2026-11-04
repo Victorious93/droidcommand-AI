@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- docs/SECURITY.md, "Networking": HTTPS only, trust the system CA store only. targetSdk 36 already defaults to this;
-     stating it here keeps it true if a dependency's manifest ever asks for cleartext, and makes it reviewable.
-     A feature that must reach a loopback or LAN HTTP service (e.g. a local server) has to add a narrow
-     <domain-config> for that one host deliberately; do not loosen base-config. -->
+<!-- HTTPS is the default for the public internet. Cleartext is permitted at the OS layer so a
+     user-entered LAN n8n URL (http://192.168.x.x:5678) can be reached — Android cannot express
+     RFC1918 as a domain-config CIDR. The app still refuses HTTP except to LAN / loopback / .local
+     (N8nServerUrl). Cloud-metadata addresses stay blocked. Trust the system CA store only. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false">
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

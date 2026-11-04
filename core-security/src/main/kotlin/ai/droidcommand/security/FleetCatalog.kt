@@ -202,7 +202,9 @@ object KnownFleet {
             "`cli`'s rootforge_* tools remain SSH-only (device-free CLI has no Android bind path). " +
             "No DependencyGuard and no shared signing key. SSH stays CLI/ISO fallback. Owns target-phone " +
             "control (USB OTG, later LAN/Tailscale). Does not own Termux/proot or Sahara — RootForge UI " +
-            "may call the EDL companion later. File Manager stays PLANNED; do not use it as the P1 proof.",
+            "may call the EDL companion later. File Manager stays PARTIAL on the same basis as RootForge " +
+            "(real Messenger tools exist in core-fleet-tools, no device run yet) and must not be used as " +
+            "the P1 proof in RootForge's place — RootForge remains the first P1 candidate.",
         refusalMessage = "RootForge is an independent node. Pair it (Messenger / localhost API / SSH fallback); " +
             "this catalog does not claim a live session. Hardware proof pending.",
         notes = "First P1 candidate. Hub Messenger client is live (MessengerFleetTransport); hardware proof " +
@@ -372,10 +374,10 @@ object KnownFleet {
         repo = "Victorious93/File-Manager",
         packageOrBinary = "ai.victorious.filemanager (debug: ai.victorious.filemanager.debug)",
         integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
-        status = FleetHonestyStatus.PLANNED,
+        status = FleetHonestyStatus.PARTIAL,
         capabilityId = CapabilityId("fleet.file-manager.node"),
         providerId = "file-manager",
-        existingToolNames = listOf("filemanager_status"),
+        existingToolNames = listOf("filemanager_status", "filemanager_capabilities"),
         catalogStubName = "filemanager_status",
         wiringOrder = 6,
         transports = listOf(
@@ -386,20 +388,28 @@ object KnownFleet {
         usesAidl = false,
         usesDependencyGuard = false,
         riskTier = RiskTier.READ_ONLY,
-        nextStep = "Generic Messenger client exists (core-fleet-messenger + :app) but File Manager is not " +
-            "paired and the catalog stub still does not bind. When their identity/default-off PR lands " +
-            "(external control default OFF; caller identity = UID package + SHA-256 cert, allow only " +
-            "ai.droidcommand.app and its .debug build), pair the node to call it. Never DependencyGuard, " +
-            "never shared signing key.",
-        refusalMessage = "VictorFiles is PLANNED EXTERNAL_NODE — this stub does not bind Messenger. " +
-            "Their main already exposes action ai.victorious.filemanager.action.BRIDGE (protocol_major 1, " +
-            "dca_required:false, live:false stub ops). Identity/default-off PR is still landing. " +
-            "Capability state is REQUIRES_EXTERNAL_SERVICE.",
+        nextStep = "2026-10-31 re-verify against their actual main (not the stale 'PR still landing' claim " +
+            "this note used to carry): File-Manager's own repo already ships FileManagerBridgeService + " +
+            "BridgeExecutor with a real external-control-off-by-default gate and Message.sendingUid caller " +
+            "identity (core/.../fleet/BridgeExecutor.kt). filemanager_status / filemanager_capabilities are " +
+            "now real tools (core-fleet-tools.FileManagerStatusTool/FileManagerCapabilitiesTool) calling the " +
+            "already-tested FleetMessengerController — written for :app's DI, not build-verified in this " +
+            "JVM-only environment (no Android SDK here). Still needed: pair the node on a real phone " +
+            "(Tools -> Fleet) and have the owner confirm a live call; cli has no device-free path to this " +
+            "node at all (Android Messenger only) and explicitly says so rather than silently omitting it. " +
+            "Never DependencyGuard, never shared signing key.",
+        refusalMessage = "VictorFiles is PARTIAL EXTERNAL_NODE — core-fleet-tools now calls " +
+            "ai.victorious.filemanager.action.BRIDGE (protocol_major 1) through the real Messenger client, " +
+            "but only from inside :app; this binding has not run on a device yet (no device/emulator in " +
+            "this environment, and no owner device test recorded). From the device-free cli, this node has " +
+            "no reachable path at all. Capability state is REQUIRES_CONFIGURATION until the owner pairs it.",
         notes = "EXTERNAL_NODE like RootForge. Never DependencyGuard, never shared signing key, never " +
-            "KnownCompanions, never BIND_* signature permission, never AIDL. Their main already has " +
-            "Messenger + JSON stub ops (filemanager.capabilities.get / status / list). Every reply currently " +
-            "live:false, mode:stub, dca_required:false. Default-off + caller allowlist still landing in their PR. " +
-            "Controller-side DEBUG cert is [unstable/CI-secrets] " +
+            "KnownCompanions, never BIND_* signature permission, never AIDL. Their main ships a real " +
+            "Messenger bridge (FileManagerBridgeService/BridgeExecutor), not a stub — confirmed by reading " +
+            "their source directly on 2026-10-31, correcting this file's earlier stale 'PR still landing' " +
+            "claim. filemanager_status / filemanager_capabilities are real tools in the new core-fleet-tools " +
+            "module (FleetMessengerController-backed, unit-tested with fakes); :app wiring is written but " +
+            "unbuildable/unverified here (no Android SDK). Controller-side DEBUG cert is [unstable/CI-secrets] " +
             "(KnownNodeSigningCatalog.FILE_MANAGER_DEBUG_UNSTABLE_CI_SECRETS) — documented, " +
             "not enforced on outbound Messenger (expectedSigningCertSha256 empty / fail-open) " +
             "because CI may fall back to the generic Android debug key. Inbound CODE_ASSIST " +
@@ -465,7 +475,7 @@ object KnownFleet {
         repo = "Victorious93/victorious-mesh",
         packageOrBinary = "com.victorious.mesh (debug==release; no applicationIdSuffix)",
         integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
-        status = FleetHonestyStatus.PLANNED,
+        status = FleetHonestyStatus.PARTIAL,
         capabilityId = CapabilityId("fleet.mesh.node"),
         providerId = "mesh",
         existingToolNames = listOf(
@@ -478,7 +488,8 @@ object KnownFleet {
         catalogStubName = "mesh_status",
         wiringOrder = 8,
         transports = listOf(
-            "messenger+json envelope (planned: action com.victorious.mesh.action.BRIDGE, protocol_major 1, " +
+            "messenger+json envelope (confirmed on their main, android/.../fleet/FleetBridgeService.kt: " +
+                "action com.victorious.mesh.action.BRIDGE, protocol_major 1, " +
                 "dca_required:false, fleet_class external_node; " +
                 "Message what=1 Bundle key request, reply what=2 Bundle key response; " +
                 "node-id prefix ^mesh-[0-9a-f]{32}$)",
@@ -486,26 +497,40 @@ object KnownFleet {
         usesAidl = false,
         usesDependencyGuard = false,
         riskTier = RiskTier.READ_ONLY,
-        nextStep = "Generic Messenger client exists (core-fleet-messenger + :app) but Mesh is not " +
-            "paired and the catalog stub still does not bind. Pair the node to call it. External " +
-            "control default OFF. Never DependencyGuard, never a shared signing key. Mesh keeps its own " +
-            "release key; do not assume the shared fleet key.",
-        refusalMessage = "Victorious Mesh is PLANNED EXTERNAL_NODE — this stub does not bind Messenger. " +
-            "Planned action com.victorious.mesh.action.BRIDGE (protocol_major 1, dca_required:false, " +
-            "fleet_class external_node). Planned ops mesh.capabilities.get / mesh.status / mesh.up / " +
-            "mesh.down / mesh.ip.get. LLM tools mesh_capabilities / mesh_status / mesh_up / mesh_down / " +
-            "mesh_get_ip. External control default OFF; allowlist ai.droidcommand.app and " +
-            "ai.droidcommand.app.debug. Node-id prefix ^mesh-[0-9a-f]{32}$. Mesh keeps its own " +
-            "release key (debug SHA-256 F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:" +
+        nextStep = "2026-10-31 re-verify against their actual main: Mesh already ships a real " +
+            "FleetBridgeService + caller-identity check, not a stub. mesh_capabilities / mesh_status / " +
+            "mesh_up are now real tools (core-fleet-tools.MeshCapabilitiesTool/MeshStatusTool/MeshUpTool) " +
+            "calling the already-tested FleetMessengerController — written for :app's DI, not build-verified " +
+            "in this JVM-only environment (no Android SDK here). mesh_down / mesh_get_ip remain NOT " +
+            "implemented: ExternalNodeCatalog.MESH only models a capabilities op, a status op, and one " +
+            "*.up op, and FleetMessengerController.isLiveAllowed refuses anything else by design (write/ " +
+            "control ops other than the documented *.up stay behind the normal approval gates) — adding " +
+            "them needs the catalog model widened first, a separate explicit follow-up. Still needed: pair " +
+            "the node on a real phone (Tools -> Fleet) and have the owner confirm a live call; cli has no " +
+            "device-free path to this node at all and explicitly says so rather than silently omitting it. " +
+            "Never DependencyGuard, never a shared signing key. Mesh keeps its own release key; do not " +
+            "assume the shared fleet key.",
+        refusalMessage = "Victorious Mesh is PARTIAL EXTERNAL_NODE — core-fleet-tools now calls " +
+            "com.victorious.mesh.action.BRIDGE (protocol_major 1) through the real Messenger client for " +
+            "mesh.capabilities.get / mesh.status / mesh.up, but only from inside :app; this binding has not " +
+            "run on a device yet (no device/emulator in this environment, and no owner device test " +
+            "recorded). mesh_down / mesh_get_ip are still NOT implemented (catalog model only supports " +
+            "capabilities/status/one *.up op). From the device-free cli, this node has no reachable path at " +
+            "all. Node-id prefix ^mesh-[0-9a-f]{32}$. Mesh keeps its own release key (debug SHA-256 " +
+            "F4:C9:25:B8:E8:0B:55:AB:83:E6:04:13:EE:49:86:57:DF:85:03:BB:" +
             "30:D8:1F:9F:17:43:F2:2B:F5:36:B9:F4; own RELEASE SHA-256 76:E9:15:83:31:40:DA:96:69:D3:CC:" +
             "5D:54:F6:66:A9:01:51:51:FC:F6:4C:59:B6:3D:DA:6E:D2:8F:83:A4:0D). Capability state is " +
-            "REQUIRES_EXTERNAL_SERVICE.",
+            "REQUIRES_CONFIGURATION until the owner pairs it.",
         notes = "EXTERNAL_NODE like RootForge, File Manager, and Keyboard. Never DependencyGuard, never " +
             "shared signing key, never KnownCompanions, never BIND_* signature permission, never AIDL. " +
             "debug==release package com.victorious.mesh (no applicationIdSuffix). Mesh keeps its own " +
-            "release key; do not assume the shared fleet key. Planned Messenger + JSON ops " +
-            "mesh.capabilities.get / mesh.status / mesh.up / mesh.down / mesh.ip.get. External control " +
-            "default OFF. Node-id prefix ^mesh-[0-9a-f]{32}$. Controller-side DEBUG + Mesh-own RELEASE " +
+            "release key; do not assume the shared fleet key. Their main ships a real Messenger bridge " +
+            "(FleetBridgeService), not a stub — confirmed by reading their source directly on 2026-10-31, " +
+            "correcting this file's earlier stale 'catalog only' claim. mesh_capabilities / mesh_status / " +
+            "mesh_up are real tools in the new core-fleet-tools module (FleetMessengerController-backed, " +
+            "unit-tested with fakes); mesh_down / mesh_get_ip are intentionally not implemented yet (see " +
+            "nextStep). :app wiring is written but unbuildable/unverified here (no Android SDK). Node-id " +
+            "prefix ^mesh-[0-9a-f]{32}$. Controller-side DEBUG + Mesh-own RELEASE " +
             "certs are catalogued (KnownNodeSigningCatalog.VICTORIOUS_MESH_DEBUG_SHA256 / " +
             "VICTORIOUS_MESH_RELEASE_SHA256, enforceable).",
         androidPackages = listOf("com.victorious.mesh"),
@@ -869,7 +894,7 @@ object KnownFleet {
 
     fun formatListing(): String = buildString {
         appendLine("DroidCommand AI room fleet — 13 members. None is LIVE.")
-        appendLine("Wiring order: Pentest (when repo exists) → RootForge Messenger → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager (when their identity/default-off PR lands) → Keyboard (catalog only; direction open) → Mesh (catalog only; own signing keys) → Browser (catalog only; own signing keys) → VictorSMS (EXTERNAL_NODE, SMS remote-command source; debug cert documented [planned/pending-merge] unenforced; release TBD) → VictorSpoof (EXTERNAL_NODE, novelty/prank caller-ID; isolated from destructive; certs TBD) → Flash (EXTERNAL_NODE, Messenger FLEET_BRIDGE; gadget.expose destructive always confirmation_required + on-phone ERASE; debug cert enforced; release TBD) → VictorLaunch (EXTERNAL_NODE, status-tray consumer + bridge node; config.export/import; envelope v1.1; ACTION OPS OFF BY DEFAULT; debug cert enforced; release TBD). KYC companion APK is a remote.command EXTERNAL_NODE [provisional/pending-stable-cert] (fail-open; remote.command OFF-by-default; all PII ops remoteAllowed:false).")
+        appendLine("Wiring order: Pentest (when repo exists) → RootForge Messenger → VictorSuite RUN_COMMAND → EDL companion → KYC last → File Manager (PARTIAL: their identity/default-off PR already landed; core-fleet-tools has real filemanager_status/filemanager_capabilities tools; no device run yet) → Keyboard (catalog only; direction open) → Mesh (PARTIAL: real mesh_status/mesh_capabilities/mesh_up tools in core-fleet-tools; mesh_down/mesh_get_ip still not implemented; no device run yet) → Browser (catalog only; own signing keys) → VictorSMS (EXTERNAL_NODE, SMS remote-command source; debug cert documented [planned/pending-merge] unenforced; release TBD) → VictorSpoof (EXTERNAL_NODE, novelty/prank caller-ID; isolated from destructive; certs TBD) → Flash (EXTERNAL_NODE, Messenger FLEET_BRIDGE; gadget.expose destructive always confirmation_required + on-phone ERASE; debug cert enforced; release TBD) → VictorLaunch (EXTERNAL_NODE, status-tray consumer + bridge node; config.export/import; envelope v1.1; ACTION OPS OFF BY DEFAULT; debug cert enforced; release TBD). KYC companion APK is a remote.command EXTERNAL_NODE [provisional/pending-stable-cert] (fail-open; remote.command OFF-by-default; all PII ops remoteAllowed:false).")
         appendLine("AIDL + DependencyGuard apply only to BOUND_COMPANION (Pentest, EDL). RootForge/File Manager/Keyboard/Mesh/Browser/VictorSMS/VictorSpoof/Flash/VictorLaunch/KYC companion Messenger is not that.")
         appendLine()
         for (member in ALL) {

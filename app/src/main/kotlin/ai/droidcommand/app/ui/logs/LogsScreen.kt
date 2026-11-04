@@ -1,7 +1,7 @@
 package ai.droidcommand.app.ui.logs
 
 import ai.droidcommand.app.ui.components.DroidCard
-import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.theme.AccentBlueBright
 import ai.droidcommand.app.ui.theme.AccentCyan
 import ai.droidcommand.app.ui.theme.AccentRed
@@ -10,6 +10,7 @@ import ai.droidcommand.app.ui.theme.BackgroundDark
 import ai.droidcommand.app.ui.theme.BorderDark
 import ai.droidcommand.app.ui.theme.TextPrimary
 import ai.droidcommand.app.ui.theme.TextSecondary
+import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.security.AuditEvent
 import ai.droidcommand.security.AuditEventType
 import androidx.compose.foundation.layout.Arrangement
@@ -97,7 +98,7 @@ fun LogsScreen(viewModel: LogsViewModel = hiltViewModel()) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ScreenTitle("System Logs")
+            ScreenTitleWithHelp("Activity log", ScreenHelpCatalog.LOGS)
             IconButton(onClick = viewModel::refresh) { Icon(Icons.Filled.Refresh, contentDescription = "Refresh", tint = TextSecondary) }
         }
 

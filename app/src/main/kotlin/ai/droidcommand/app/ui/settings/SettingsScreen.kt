@@ -4,11 +4,11 @@ import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.mode.ModeLabels
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prefs.CodingTunnelChoice
-import ai.droidcommand.app.shizuku.ShizukuStatusSection
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.app.ui.components.DroidCard
-import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.WebSearchCatalog
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +49,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onOpenHelp: () -> Unit = {},
     onOpenModels: () -> Unit = {},
+    onOpenAdvanced: () -> Unit = {},
+    onReplaySetup: () -> Unit = {},
 ) {
     val status by viewModel.status.collectAsState()
     val searchStatus by viewModel.searchStatus.collectAsState()
@@ -57,14 +59,24 @@ fun SettingsScreen(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ScreenTitle("Settings")
-        SectionLabel("Mode names")
-        ModeNamesSection(viewModel)
+        ScreenTitleWithHelp("Settings", ScreenHelpCatalog.SETTINGS)
+        ThemePickerSection()
+        SectionLabel("Setup")
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "See the first-run guide again: what this app is, pick a model, pair your other apps, and optional permissions.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = onReplaySetup, modifier = Modifier.fillMaxWidth()) { Text("Show setup guide again") }
+            }
+        }
         SectionLabel("API keys (stored encrypted on this device)")
         DroidCard {
             Text(
-                "Chat and Forge use the provider last chosen on the Chat screen. " +
-                    "Without a key for that provider — and without an on-device model — those screens refuse the request. A key is never shown again after you save it.",
+                "Chat uses the provider last chosen on the Chat screen. " +
+                    "Without a key for that provider — and without an on-device model — Chat cannot send. A key is never shown again after you save it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -115,46 +127,29 @@ fun SettingsScreen(
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Remote Control envelope, triggers, destructive gating, local backup, and VictorSpoof isolation.",
+                    "What this app is, and what it will never do without asking.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Button(onClick = onOpenHelp, modifier = Modifier.fillMaxWidth()) { Text("Open Help") }
             }
         }
-        RemoteControlSettingsSection()
-        ShizukuStatusSection()
-        SectionLabel("Device tools")
-        DroidCard {
-            Text(
-                "Root, Termux, Shizuku, Metasploit, and the Social-Engineer Toolkit are on the Tools screens. Each run still asks before it executes. Shizuku is optional: without it the rest of the app still works.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        SectionLabel("Chat library")
-        DroidCard {
-            Text(
-                "Saved chats, skills, and prompt templates are under Library on the Chat screen. A skill is added to later requests and is not written into the transcript. A template fills the message box and is not sent until you send it.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        SectionLabel("Notes")
-        DroidCard {
-            Text(
-                "Notes are markdown files in a vault on this device. Plugins are text you install yourself. None are bundled, and a plugin cannot run code.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
         SectionLabel("Advanced")
-        AdvancedSection(viewModel)
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "One-step commands, plans, memory, security tools, remote control, and later Kai capabilities live on the Advanced tab.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(onClick = onOpenAdvanced, modifier = Modifier.fillMaxWidth()) { Text("Open Advanced") }
+            }
+        }
     }
 }
 
 @Composable
-private fun ModeNamesSection(viewModel: SettingsViewModel) {
+internal fun ModeNamesSection(viewModel: SettingsViewModel) {
     val mode by viewModel.modeState.collectAsState()
     var pilotDraft by remember { mutableStateOf<String?>(null) }
     var forgeDraft by remember { mutableStateOf<String?>(null) }
@@ -199,7 +194,7 @@ private fun ModeNamesSection(viewModel: SettingsViewModel) {
 }
 
 @Composable
-private fun AdvancedSection(viewModel: SettingsViewModel) {
+internal fun AdvancedSection(viewModel: SettingsViewModel) {
     val toolbar by viewModel.toolbarToggles.collectAsState()
     val publicLimit by viewModel.publicClipLimit.collectAsState()
     val codingTunnel by viewModel.codingTunnel.collectAsState()

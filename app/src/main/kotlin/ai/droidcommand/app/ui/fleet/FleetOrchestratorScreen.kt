@@ -3,10 +3,11 @@ package ai.droidcommand.app.ui.fleet
 import ai.droidcommand.app.fleet.FleetRowUi
 import ai.droidcommand.app.fleet.lastCommandLine
 import ai.droidcommand.app.ui.components.DroidCard
-import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.theme.AccentRed
 import ai.droidcommand.app.ui.theme.AccentSuccess
 import ai.droidcommand.app.ui.theme.TextSecondary
+import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.security.FleetReachability
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -60,11 +61,10 @@ fun FleetOrchestratorScreen(viewModel: FleetOrchestratorViewModel = hiltViewMode
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ScreenTitle("Fleet Orchestrator")
+        ScreenTitleWithHelp("Approved commands", ScreenHelpCatalog.ORCHESTRATOR)
         Text(
-            "Check status is read-only and never asks for approval. Send command always asks first. " +
-                "External nodes are read-only until their Messenger transport is wired. Status lives in memory only " +
-                "and starts from \"Not checked yet\" after a restart.",
+            "Check status only asks whether the other app is there. Send command always asks you first. " +
+                "Status is remembered only until this app restarts.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -104,7 +104,7 @@ private fun FleetNodeCard(row: FleetRowUi, formatTime: (Long) -> String, onCheck
                 Text(row.reachabilityLabel, style = MaterialTheme.typography.labelLarge, color = reachabilityColor(row.state.reachability))
             }
             Text(row.classLabel, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-            Text(row.control.label, style = MaterialTheme.typography.bodySmall)
+            Text(row.controlLabel, style = MaterialTheme.typography.bodySmall)
             Text(row.state.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(lastCommandLine(row.state.lastCommand, formatTime), style = MaterialTheme.typography.bodySmall)
             row.state.lastCommand?.let { last ->

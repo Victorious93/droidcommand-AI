@@ -61,9 +61,14 @@ object FleetTrustedLivePublisher {
         val out = linkedMapOf<String, String>()
         for (row in controller.snapshot()) {
             val reason = when (row.state) {
-                ai.droidcommand.fleet.messenger.NodePairingState.NOT_PAIRED,
-                ai.droidcommand.fleet.messenger.NodePairingState.NOT_INSTALLED,
-                -> FleetLiveStatusMapping.REASON_NOT_PAIRED
+                ai.droidcommand.fleet.messenger.NodePairingState.NOT_INSTALLED ->
+                    FleetLiveStatusMapping.REASON_NOT_INSTALLED
+                ai.droidcommand.fleet.messenger.NodePairingState.NOT_PAIRED ->
+                    if (row.installedPackage != null) {
+                        FleetLiveStatusMapping.REASON_INSTALLED_UNPAIRED
+                    } else {
+                        FleetLiveStatusMapping.REASON_NOT_PAIRED
+                    }
                 ai.droidcommand.fleet.messenger.NodePairingState.CERT_MISMATCH ->
                     FleetLiveStatusMapping.REASON_BIND_REFUSED_CERT
                 ai.droidcommand.fleet.messenger.NodePairingState.UNTRUSTED ->

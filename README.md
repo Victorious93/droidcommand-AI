@@ -58,7 +58,10 @@ need the Android SDK and Android Gradle Plugin (AGP).
 
 Authoritative status: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
 [`docs/AUDIT_2026-09-05.md`](docs/AUDIT_2026-09-05.md). Session orientation /
-roadmap: [`CLAUDE.md`](CLAUDE.md).
+roadmap: [`CLAUDE.md`](CLAUDE.md). Kai capability map / phased plan:
+[`docs/KAI_INTEGRATION.md`](docs/KAI_INTEGRATION.md),
+[`docs/KAI_INTEGRATION_PLAN.md`](docs/KAI_INTEGRATION_PLAN.md)
+(Phase 1 Foundation landed; Phase 2 needs owner approval).
 
 ## Fleet controller
 

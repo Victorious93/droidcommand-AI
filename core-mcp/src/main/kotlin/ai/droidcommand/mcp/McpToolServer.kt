@@ -2,9 +2,12 @@ package ai.droidcommand.mcp
 
 import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.Initiator
+import ai.droidcommand.agent.ToolArgumentCodec
+import ai.droidcommand.agent.ToolCallEnvelope
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolRunner
+import ai.droidcommand.agent.ToolSchemaValidation
 import ai.droidcommand.agent.describe
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
@@ -18,8 +21,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.io.asSink
 import kotlinx.io.asSource
 import kotlinx.io.buffered
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Exposes a [ToolRegistry]'s tools to any MCP client (Claude Desktop/Code,
@@ -48,26 +49,19 @@ import kotlinx.serialization.json.JsonPrimitive
  * with the SDK's permissive default `ToolSchema()` (`{"type":"object"}`,
  * no declared properties) rather than a fabricated one.
  *
- * **Argument mapping:** [ai.droidcommand.agent.Tool.execute] takes a
- * `Map<String, String>`, but MCP arguments arrive as a JSON object whose
- * values can be any JSON type. A JSON primitive is converted via its raw
- * text form (e.g. `42` -> `"42"`, matching how existing tools like
- * `set_volume` already parse a numeric string themselves). A JSON `null` is
- * dropped, exactly as if the client had omitted the argument: an explicit
- * `null` for an optional parameter is routine and must not reach a tool as the
- * four-character text `null`. A JSON array or
- * nested object is **no longer dropped**: it is re-serialized to its
- * compact JSON text form (e.g. `["a","b"]` -> the string `["a","b"]`) and
- * passed through unchanged, so a tool that wants structured data can parse
- * that string itself (with `kotlinx.serialization.json.Json.parseToJsonElement`
- * or similar) instead of silently losing the argument. This is a
- * compatibility adapter, not first-class structured-argument support: the
- * `Map<String, String>` contract every existing [ai.droidcommand.agent.Tool]
- * implements is unchanged, and [ai.droidcommand.agent.ToolSpec] still has no
- * schema to validate a nested value's shape before a tool parses it. Full
- * first-class support would mean widening [ai.droidcommand.agent.Tool.execute]
- * itself to a typed argument map across all 24 existing modules — a much
- * larger, separately-scoped change, not done here.
+ * **Argument mapping:** MCP arguments arrive as JSON of any type and are
+ * decoded through [ai.droidcommand.agent.ToolArgumentCodec] into a
+ * [ai.droidcommand.agent.ToolCallEnvelope] (new call id per invocation,
+ * never reused by this server). JSON primitives become their raw text
+ * (`42` → `"42"`); JSON `null` is omitted; arrays/objects become compact
+ * JSON text rather than being dropped. The envelope's values are then
+ * flattened with [ai.droidcommand.agent.ToolArgumentCodec.toStringMap]
+ * into the `Map<String, String>` every existing [ai.droidcommand.agent.Tool]
+ * already implements. When [ai.droidcommand.agent.ToolSpec.parameterSchema]
+ * is set, the typed arguments are validated before the executor runs; a
+ * mismatch is returned as an MCP error and does not invoke the tool.
+ * Widening [ai.droidcommand.agent.Tool.execute] itself remains separately
+ * scoped.
  */
 class McpToolServer(
     private val registry: ToolRegistry,
@@ -94,10 +88,25 @@ class McpToolServer(
 
         for (spec in registry.list(mode, initiator)) {
             server.addTool(name = spec.name, description = spec.description) { request ->
-                val input = request.arguments
-                    ?.filterValues { it !is JsonNull }
-                    ?.mapValues { (_, value) -> (value as? JsonPrimitive)?.content ?: value.toString() }
-                    .orEmpty()
+                val envelope = ToolCallEnvelope(
+                    callId = ToolCallEnvelope.newId(),
+                    toolName = spec.name,
+                    arguments = ToolArgumentCodec.fromJsonMap(request.arguments),
+                )
+                val schema = spec.parameterSchema
+                if (schema != null) {
+                    when (val check = schema.validate(envelope.arguments)) {
+                        is ToolSchemaValidation.Invalid -> {
+                            val message = "ERROR: tool call ${envelope.callId}: ${check.reason}"
+                            return@addTool CallToolResult(
+                                content = listOf(TextContent(message)),
+                                isError = true,
+                            )
+                        }
+                        ToolSchemaValidation.Valid -> Unit
+                    }
+                }
+                val input = ToolArgumentCodec.toStringMap(envelope.arguments)
                 val result = executor.run(spec.name, input, mode = mode, initiator = initiator)
                 CallToolResult(content = listOf(TextContent(result.describe())), isError = result is ToolResult.Failure)
             }

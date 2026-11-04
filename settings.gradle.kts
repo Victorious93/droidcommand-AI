@@ -62,11 +62,16 @@ include(":core-pentest-swarm")
 include(":core-rootforge")
 include(":core-flash")
 include(":core-fleet-messenger")
+include(":core-fleet-tools")
 include(":core-billing")
 include(":core-websearch")
+include(":core-n8n")
 include(":core-voice")
 include(":core-rag")
 include(":core-notes")
+include(":core-device-connect")
+include(":pc-companion")
+project(":pc-companion").projectDir = file("tools/pc-companion")
 
 // Android modules are opt-in: they need an Android SDK, which JVM-only environments (CI, cloud
 // sessions) do not have. In Android Studio, add `includeAndroid=true` to your USER-level

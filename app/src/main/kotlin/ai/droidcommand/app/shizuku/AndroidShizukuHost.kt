@@ -1,5 +1,6 @@
 package ai.droidcommand.app.shizuku
 
+import ai.droidcommand.app.shizuku.embedded.EmbeddedShizukuPayload
 import ai.droidcommand.shizuku.ShizukuHost
 import ai.droidcommand.shizuku.ShizukuHostListener
 import ai.droidcommand.shizuku.ShizukuPackages
@@ -11,8 +12,13 @@ import rikka.shizuku.Shizuku
 /**
  * Real Shizuku/Sui binder. Every Shizuku API call is try/caught so a missing
  * or dead service never crashes the app. Sui uses the same `Shizuku.*` API.
+ * Built-in payload presence is a separate signal so Settings can offer Start
+ * without the official manager APK.
  */
-class AndroidShizukuHost(private val context: Context) : ShizukuHost {
+class AndroidShizukuHost(
+    private val context: Context,
+    private val payload: EmbeddedShizukuPayload = EmbeddedShizukuPayload(context),
+) : ShizukuHost {
     @Volatile
     private var hostListener: ShizukuHostListener? = null
 
@@ -38,7 +44,7 @@ class AndroidShizukuHost(private val context: Context) : ShizukuHost {
                 false
             }
         }
-        return ShizukuSignals(installed, binderAlive, permissionGranted)
+        return ShizukuSignals(installed, binderAlive, permissionGranted, payload.isAvailable())
     }
 
     override fun requestPermission(requestCode: Int) {

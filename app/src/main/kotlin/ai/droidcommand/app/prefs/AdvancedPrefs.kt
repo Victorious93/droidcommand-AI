@@ -4,6 +4,7 @@ import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.app.automation.ShellAllowlist
 import ai.droidcommand.app.ui.chat.ToolbarLayout
 import ai.droidcommand.app.ui.chat.ToolbarToggle
+import ai.droidcommand.shizuku.EmbeddedShizukuPrefs
 import android.content.Context
 import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -64,6 +65,49 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         }
     }
 
+    /** Base URL of the owner's n8n server. Not a secret; the API key lives in the vault. */
+    fun n8nServerUrl(): String = prefs.getString(KEY_N8N_URL, "") ?: ""
+
+    fun setN8nServerUrl(url: String) {
+        prefs.edit { putString(KEY_N8N_URL, url.trim()) }
+    }
+
+    /** When false (the default) the AI / Kai n8n tools refuse to run. */
+    fun n8nAiToolsEnabled(): Boolean = prefs.getBoolean(KEY_N8N_AI_TOOLS, false)
+
+    fun setN8nAiToolsEnabled(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_N8N_AI_TOOLS, enabled) }
+    }
+
+    /**
+     * Off by default. When false the assistant's System Toolbox tool refuses to run; when true it still asks before
+     * every single call and shows the exact command.
+     */
+    fun systemToolboxAiEnabled(): Boolean = prefs.getBoolean(KEY_TOOLBOX_AI, false)
+
+    fun setSystemToolboxAiEnabled(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_TOOLBOX_AI, enabled) }
+    }
+
+    /** Off by default. Built-in Shizuku is not started after a reboot until the user turns this on. */
+    fun startShizukuOnBoot(): Boolean = prefs.getBoolean(EmbeddedShizukuPrefs.KEY_START_ON_BOOT, EmbeddedShizukuPrefs.DEFAULT_START_ON_BOOT)
+
+    fun setStartShizukuOnBoot(enabled: Boolean) {
+        prefs.edit { putBoolean(EmbeddedShizukuPrefs.KEY_START_ON_BOOT, enabled) }
+    }
+
+    fun shizukuWirelessPaired(): Boolean = prefs.getBoolean(EmbeddedShizukuPrefs.KEY_WADB_PAIRED, false)
+
+    fun setShizukuWirelessPaired(paired: Boolean) {
+        prefs.edit { putBoolean(EmbeddedShizukuPrefs.KEY_WADB_PAIRED, paired) }
+    }
+
+    fun shizukuLastConnectPort(): Int = prefs.getInt(EmbeddedShizukuPrefs.KEY_WADB_CONNECT_PORT, 0)
+
+    fun setShizukuLastConnectPort(port: Int) {
+        prefs.edit { putInt(EmbeddedShizukuPrefs.KEY_WADB_CONNECT_PORT, port) }
+    }
+
     companion object {
         const val FILE = "advanced_prefs"
         private const val KEY_TOOLBAR = "chat.toolbar"
@@ -71,6 +115,9 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         private const val KEY_SHELL_ALLOWLIST = "automation.shell.allowlist"
         private const val KEY_CODING_TUNNEL = "coding.tunnel"
         private const val KEY_AGENT_MODE = "engine.mode"
+        private const val KEY_N8N_URL = "n8n.server.url"
+        private const val KEY_N8N_AI_TOOLS = "n8n.ai.tools"
+        private const val KEY_TOOLBOX_AI = "toolbox.ai.enabled"
 
         private fun labelKey(mode: AgentMode) = "engine.label.${mode.name}"
         val PUBLIC_LIMIT_CHOICES = listOf(10, 25, 50)

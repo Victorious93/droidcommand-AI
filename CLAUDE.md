@@ -107,16 +107,19 @@ re-verifying something.
   read directly; adaptation is tracked with attribution instead — see
   that document's own Licensing section for why the distinction matters).
   The plan document maps the capability map onto 6 dependency-ordered
-  phases, all NOT STARTED except Phase 0's one concrete, tested item: `core-mcp.McpToolServer`'s
-  executor is now typed as `core-agent.ToolRunner` (so it accepts
-  `core-security.SecureToolExecutor`, not only the bare `ToolExecutor`),
-  and a JSON array/object MCP tool-call argument is now preserved as its
-  JSON text form instead of silently dropped. The repair-audit document
-  is a self-audit against the corrected intent, written in the same
-  session as the map/plan (there was no prior commit to recover) — it
-  found and fixed one real defect (the clean-room mischaracterization
-  above) and no others. Same governance gate as the Consumer Product
-  Roadmap below applies: Phase 1 onward needs the owner's go-ahead before
+  phases using the owner's numbering (1 Foundation → 6 Hardening; a
+  2026-10-07 draft called Foundation "Phase 0"). **Phase 1 Foundation
+  is done** for the device-free slice (2026-10-30): map/plan refreshed
+  against current `main` and Kai `3818b2fccc`; `AssistantCapabilitySettings`
+  (all gates default OFF); `ToolParameterSchema` / `ToolArgumentCodec` /
+  `ToolCallEnvelope` on the MCP server path; `PlatformHttpTransport`.
+  Pre-existing Foundation pieces still count: `McpToolServer` as
+  `ToolRunner` with nested JSON args, `HttpUrlConnectionTransport`,
+  `EncryptedSecretsVault`. The inbound 13/4 catalogue, cert gating,
+  `externalControlEnabled` default OFF, and destructive
+  `confirmation_required` were not changed. The repair-audit document
+  is a 2026-10-07 self-audit of the original map's provenance wording.
+  **Phase 2 (Core assistant) needs explicit owner go-ahead** before
   implementation starts.
 
 ## What's already been verified (don't re-derive)

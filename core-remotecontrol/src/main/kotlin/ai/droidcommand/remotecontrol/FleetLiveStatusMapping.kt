@@ -12,10 +12,14 @@ import ai.droidcommand.security.FleetIntegrationClass
  */
 object FleetLiveStatusMapping {
     const val REASON_NOT_PAIRED = "Not paired"
+    const val REASON_NOT_INSTALLED = "Not installed (or not visible)"
+    const val REASON_INSTALLED_UNPAIRED = "Installed — pair to connect"
+    const val REASON_SAME_SIGNING = "Bind refused (same-signing)"
     const val REASON_PEER_CONTROL_OFF = "Peer control off"
     const val REASON_BIND_REFUSED_SIGNATURE = "Bind refused (signature)"
     const val REASON_BIND_REFUSED_CERT = "Bind refused (cert)"
     const val REASON_BRIDGE_MISSING = "Bridge missing on this APK build"
+    const val REASON_PLANNED_NO_AUTOBIND = "Planned bind — not auto-connected"
     const val REASON_AWAITING = "Awaiting live status"
     const val REASON_LIVE = "Live"
 
@@ -35,6 +39,9 @@ object FleetLiveStatusMapping {
         if (!paired) return REASON_NOT_PAIRED
         if (peerControlOff || looksLikePeerControlOff(liveDetail) || looksLikePeerControlOff(snapshot?.domains?.firstOrNull()?.detail)) {
             return REASON_PEER_CONTROL_OFF
+        }
+        if (looksLikeSameSigning(trustDetail) || looksLikeSameSigning(liveDetail)) {
+            return REASON_SAME_SIGNING
         }
         if (signatureRefused || looksLikeSignatureRefusal(trustDetail) || looksLikeSignatureRefusal(liveDetail)) {
             return REASON_BIND_REFUSED_SIGNATURE
@@ -58,9 +65,11 @@ object FleetLiveStatusMapping {
         if (detail.isNullOrBlank()) return null
         return when {
             looksLikePeerControlOff(detail) -> REASON_PEER_CONTROL_OFF
+            looksLikeSameSigning(detail) -> REASON_SAME_SIGNING
             looksLikeSignatureRefusal(detail) -> REASON_BIND_REFUSED_SIGNATURE
             looksLikeCertRefusal(detail) -> REASON_BIND_REFUSED_CERT
             looksLikeBridgeMissing(detail) -> REASON_BRIDGE_MISSING
+            looksLikeNotInstalled(detail) -> REASON_NOT_INSTALLED
             else -> null
         }
     }
@@ -73,6 +82,18 @@ object FleetLiveStatusMapping {
                 t.contains("remote command") || t.contains("action ops")
         ) &&
             (t.contains("off") || t.contains("disabled") || t.contains("not enabled") || t.contains("default"))
+    }
+
+    fun looksLikeSameSigning(text: String?): Boolean {
+        if (text.isNullOrBlank()) return false
+        val t = text.lowercase()
+        return t.contains("same-signing") || t.contains("same signing")
+    }
+
+    fun looksLikeNotInstalled(text: String?): Boolean {
+        if (text.isNullOrBlank()) return false
+        val t = text.lowercase()
+        return t.contains("not installed") || t.contains("not visible")
     }
 
     fun looksLikeSignatureRefusal(text: String?): Boolean {

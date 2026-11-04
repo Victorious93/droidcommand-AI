@@ -4,6 +4,7 @@ import ai.droidcommand.agent.ConversationStore
 import ai.droidcommand.agent.GraphRetriever
 import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.agent.Role
+import ai.droidcommand.app.brain.BrainRuntime
 import ai.droidcommand.app.documents.DocumentRuntime
 import ai.droidcommand.app.documents.DownloadOutcome
 import ai.droidcommand.app.documents.EmbedderDownloadSupervisor
@@ -15,6 +16,7 @@ import ai.droidcommand.app.prompts.PromptLibrary
 import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.config.SecretState
+import ai.droidcommand.deviceconnect.DeviceConnectService
 import ai.droidcommand.llm.factory.AiSlashCommands
 import ai.droidcommand.llm.factory.ChatResult
 import ai.droidcommand.llm.factory.ChatSession
@@ -29,6 +31,7 @@ import ai.droidcommand.llm.local.GgufFileName
 import ai.droidcommand.llm.local.ModelInstallResult
 import ai.droidcommand.llm.local.RamFit
 import ai.droidcommand.llm.local.RamFitVerdict
+import ai.droidcommand.notes.NoteDraft
 import ai.droidcommand.rag.AttachResult
 import ai.droidcommand.rag.DocumentInfo
 import ai.droidcommand.remote.HttpTransport
@@ -61,6 +64,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -82,6 +86,10 @@ data class ChatUiState(
     val memoryEnabled: Boolean = false,
     val autoRemember: Boolean = false,
     val memoryStatus: String? = null,
+    /** Kai Brain gate, read when Chat opens. Off means no note retrieve and no save. */
+    val brainEnabled: Boolean = false,
+    val brainStatus: String? = null,
+    val pendingBrainSave: NoteDraft? = null,
     /** Chat-toolbar toggle; off by default because turning it on sends the message text to the search provider. */
     val webSearchEnabled: Boolean = false,
     /** Non-fatal note from the last turn (e.g. web search failed and the reply is ungrounded). */
@@ -153,11 +161,14 @@ class ChatViewModel @Inject constructor(
     private val documentRuntime: DocumentRuntime,
     private val advanced: AdvancedPrefs,
     private val onDeviceModels: LocalModelRuntime,
+    private val deviceConnect: DeviceConnectService,
+    private val brainRuntime: BrainRuntime,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
     private val memoryEnabled = prefs.getBoolean(KEY_MEMORY, false)
     private val autoRemember = memoryEnabled && prefs.getBoolean(KEY_AUTO_REMEMBER, false)
+    private val brainEnabled = brainRuntime.enabled()
     private val session = ChatSession(
         vault,
         store,
@@ -168,6 +179,7 @@ class ChatViewModel @Inject constructor(
         documents = documentRuntime.retriever,
         local = onDeviceModels.resources,
         autoRememberEveryTurns = if (autoRemember) AUTO_REMEMBER_TURNS else 0,
+        brain = if (brainEnabled) { query -> brainRuntime.librarian().retrieveContext(query) } else null,
     )
 
     private val tts = AndroidTextToSpeech(context)
@@ -201,6 +213,7 @@ class ChatViewModel @Inject constructor(
             provider = provider,
             model = model,
             memoryEnabled = memoryEnabled,
+            brainEnabled = brainEnabled,
             autoRemember = prefs.getBoolean(KEY_AUTO_REMEMBER, false),
             webSearchEnabled = prefs.getBoolean(KEY_WEB_SEARCH, false),
             speakMode = speakModeFromPrefs(),
@@ -213,6 +226,20 @@ class ChatViewModel @Inject constructor(
 
     init {
         startWakeWordIfEnabled()
+        viewModelScope.launch {
+            while (true) {
+                delay(1_000)
+                val notes = deviceConnect.inbox().drain()
+                if (notes.isNotEmpty()) {
+                    mutableState.update { state ->
+                        state.copy(
+                            lines = state.lines + notes.map { ChatLine(fromUser = false, text = "From ${it.fromName}: ${it.text}") },
+                            notice = "A paired device sent a note.",
+                        )
+                    }
+                }
+            }
+        }
         // Imported models are read from disk: load them off the main thread, and drop a saved choice that no longer exists.
         viewModelScope.launch(Dispatchers.IO) {
             val models = onDeviceModels.list()
@@ -647,6 +674,58 @@ class ChatViewModel @Inject constructor(
     fun setAutoRemember(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_AUTO_REMEMBER, enabled) }
         mutableState.update { it.copy(autoRemember = enabled) }
+    }
+
+    fun askSaveChatToBrain() {
+        if (!brainRuntime.enabled()) {
+            mutableState.update { it.copy(brainStatus = "Turn Brain on in Advanced first.") }
+            return
+        }
+        if (mutableState.value.sending) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val turns = runCatching { session.history() }.getOrDefault(emptyList())
+            if (turns.isEmpty()) {
+                mutableState.update { it.copy(brainStatus = "Nothing to save yet.") }
+                return@launch
+            }
+            val title = turns.firstOrNull { it.role == Role.USER }?.content?.take(40) ?: "Chat"
+            val draft = brainRuntime.librarian().draftChat(
+                title,
+                turns.map { if (it.role == Role.USER) "User" to it.content else "Assistant" to it.content },
+            )
+            mutableState.update { it.copy(pendingBrainSave = draft, brainStatus = null) }
+        }
+    }
+
+    fun askSaveFactToBrain(title: String, fact: String) {
+        if (!brainRuntime.enabled()) {
+            mutableState.update { it.copy(brainStatus = "Turn Brain on in Advanced first.") }
+            return
+        }
+        if (fact.isBlank()) {
+            mutableState.update { it.copy(brainStatus = "Type a fact first.") }
+            return
+        }
+        val draft = brainRuntime.librarian().draftFact(title.ifBlank { "Fact" }, fact)
+        mutableState.update { it.copy(pendingBrainSave = draft, brainStatus = null) }
+    }
+
+    fun confirmSaveToBrain() {
+        val draft = mutableState.value.pendingBrainSave ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val path = runCatching { brainRuntime.librarian().commit(draft) }
+                .getOrElse { err ->
+                    mutableState.update {
+                        it.copy(brainStatus = "Could not save: ${err.message ?: err.javaClass.simpleName}", pendingBrainSave = null)
+                    }
+                    return@launch
+                }
+            mutableState.update { it.copy(pendingBrainSave = null, brainStatus = "Saved $path") }
+        }
+    }
+
+    fun dismissSaveToBrain() {
+        mutableState.update { it.copy(pendingBrainSave = null) }
     }
 
     /** K3: extracts and saves the current conversation to the knowledge graph, using the last-used provider. */

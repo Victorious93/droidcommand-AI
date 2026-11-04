@@ -1,11 +1,13 @@
 package ai.droidcommand.app.ui.settings
 
 import ai.droidcommand.agent.AgentMode
+import ai.droidcommand.app.brain.BrainRuntime
 import ai.droidcommand.app.mode.EngineModeState
 import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prefs.CodingTunnelChoice
 import ai.droidcommand.app.ui.chat.ToolbarToggle
+import ai.droidcommand.config.AssistantCapabilitySettings
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.config.SecretState
 import ai.droidcommand.config.SecretStorageException
@@ -30,6 +32,7 @@ class SettingsViewModel @Inject constructor(
     private val vault: EncryptedSecretsVault,
     private val advanced: AdvancedPrefs,
     private val modes: EngineModes,
+    private val brain: BrainRuntime,
 ) : ViewModel() {
     val modeState: StateFlow<EngineModeState> = modes.state
     private val mutableStatus = MutableStateFlow(CloudProviderCatalog.all.associateWith { statusOf(it.secretId) })
@@ -49,6 +52,16 @@ class SettingsViewModel @Inject constructor(
 
     private val mutableCodingTunnel = MutableStateFlow(advanced.codingTunnel())
     val codingTunnel: StateFlow<CodingTunnelChoice> = mutableCodingTunnel.asStateFlow()
+
+    private val mutableCapabilities = MutableStateFlow(
+        AssistantCapabilitySettings.DISABLED.copy(brainEnabled = brain.enabled()),
+    )
+    val capabilities: StateFlow<AssistantCapabilitySettings> = mutableCapabilities.asStateFlow()
+
+    fun setBrainEnabled(enabled: Boolean) {
+        brain.setEnabled(enabled)
+        mutableCapabilities.value = AssistantCapabilitySettings.DISABLED.copy(brainEnabled = brain.enabled())
+    }
 
     fun setToolbarToggle(toggle: ToolbarToggle, visible: Boolean) {
         advanced.setToolbarToggle(toggle, visible)

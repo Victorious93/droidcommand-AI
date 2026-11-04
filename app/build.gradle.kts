@@ -113,11 +113,13 @@ dependencies {
     implementation(project(":core-llm"))
     implementation(project(":core-remote"))
     implementation(project(":core-remotecontrol"))
+    implementation(project(":core-device-connect"))
     implementation(project(":core-coding-session"))
     implementation(project(":core-llm-factory"))
     implementation(project(":core-templates"))
     implementation(project(":core-templates-android"))
     implementation(project(":core-websearch"))
+    implementation(project(":core-n8n"))
     implementation(project(":core-notes"))
     implementation(project(":core-voice-android"))
     implementation(project(":core-voice-neural-android"))
@@ -128,6 +130,8 @@ dependencies {
     // Current stable Shizuku/Sui API (same artifacts for both). MIT.
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
+    // X.509 helper used by the vendored Shizuku AdbKey (Apache-2.0).
+    implementation("org.bouncycastle:bcpkix-jdk15to18:1.78.1")
     implementation(project(":core-tools-metasploit"))
     implementation(project(":core-tools-setoolkit"))
 
@@ -161,6 +165,7 @@ dependencies {
     // Chat tab icon (Icons.Filled.Chat) is not in the core icon set; version managed by the Compose BOM.
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("androidx.navigation:navigation-compose:2.9.8")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
     implementation("androidx.core:core-ktx:1.18.0")
@@ -181,6 +186,8 @@ dependencies {
     // Background, resumable model downloads (localmodels/download). 2.10.5 is the newest 2.10.x; it builds against
     // compileSdk 35, within this project's compileSdk 36. 2.11.x was not tried.
     implementation("androidx.work:work-runtime-ktx:2.10.5")
+    // Theme picker persistence. 1.1.7 is the current stable line and builds against compileSdk 36.
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
 
     testImplementation(kotlin("test"))
 
@@ -208,8 +215,25 @@ kotlin {
 // IPrivilegedShell.aidl created this task; CI then failed with
 // "Could not find :sherpa-onnx-1.13.8:" before fetchSherpaOnnx ran
 // (Actions 39336466435). Tie fetch to the tasks that resolve that classpath.
+val fetchShizukuPayload = tasks.register("fetchShizukuPayload", Exec::class) {
+    commandLine("bash", rootProject.file("app/scripts/fetch-shizuku-payload.sh").absolutePath)
+    inputs.files(
+        rootProject.file("app/scripts/fetch-shizuku-payload.sh"),
+        rootProject.file("third_party/shizuku/LICENSE"),
+        rootProject.file("third_party/shizuku/NOTICE"),
+    )
+    outputs.dir(layout.buildDirectory.dir("generated/shizuku/assets"))
+    outputs.dir(layout.buildDirectory.dir("generated/shizuku/jniLibs"))
+}
+
+android.sourceSets.getByName("main") {
+    assets.srcDir(layout.buildDirectory.dir("generated/shizuku/assets"))
+    jniLibs.srcDir(layout.buildDirectory.dir("generated/shizuku/jniLibs"))
+}
+
 tasks.named("preBuild") {
     dependsOn(":core-voice-neural-android:fetchSherpaOnnx")
+    dependsOn(fetchShizukuPayload)
 }
 tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Aidl") }.configureEach {
     dependsOn(":core-voice-neural-android:fetchSherpaOnnx")
@@ -223,4 +247,13 @@ tasks.matching { it.name.contains("AarMetadata") }.configureEach {
 // message names. Still required with Hilt 2.60.1 (verified 2026-10-08).
 configurations.all {
     resolutionStrategy.force("org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.10")
+}
+
+// Official Shizuku Adb sources keep upstream 8-space continuation indent so
+// libadb.so JNI symbols stay in package moe.shizuku.manager.adb. Do not
+// restyle them to this repo's 4-space ktlint indent.
+ktlint {
+    filter {
+        exclude("**/moe/shizuku/manager/adb/**")
+    }
 }

@@ -101,7 +101,7 @@ object FleetCatalog {
         name = "HackerAI",
         packageName = HACKERAI_PACKAGE,
         kind = FleetKind.COMPANION_APK,
-        summary = "Bound companion (already mapped). Subagent orchestration stays in core-hackerai; this build does not bind IHackerAIService.",
+        summary = "Bound companion (already mapped). Dashboard refresh probes IHackerAIService (same-signing). Subagent orchestration stays in core-hackerai.",
     )
 
     val PENTEST_SWARM = FleetMember(
@@ -109,7 +109,7 @@ object FleetCatalog {
         name = "Pentest-Swarm",
         packageName = PENTESTSWARM_PACKAGE,
         kind = FleetKind.COMPANION_APK,
-        summary = "BOUND_COMPANION, PLANNED. Awaiting the base repo / one command-envelope service. Older REST/AIDL copies in this repo are not LIVE.",
+        summary = "BOUND_COMPANION, PLANNED. Dashboard refresh probes IPentestSwarmService (same-signing). Awaiting the base repo / one command-envelope service. Older REST/AIDL copies in this repo are not LIVE.",
     )
 
     val ROOTFORGE = FleetMember(
@@ -171,8 +171,8 @@ object FleetCatalog {
         name = "Victorious Keyboard",
         packageName = KEYBOARD_PACKAGE,
         kind = FleetKind.EXTERNAL_NODE,
-        summary = "EXTERNAL_NODE, PLANNED. Planned Messenger action com.victorious.keyboard.action.BRIDGE " +
-            "(protocol_major 1). Generic client exists but is not started unless this node is paired " +
+        summary = "EXTERNAL_NODE, PLANNED. Messenger action com.victorious.keyboard.action.BRIDGE " +
+            "(protocol_major 1; KeyboardBridgeService is on peer main). Generic client exists but is not started unless this node is paired " +
             "(package + signing cert). Never DependencyGuard, never a shared signing key. Never forwards " +
             "typed text or keystrokes. Direction (hub query vs keyboard slash-commands) is open.",
         extraPackages = listOf(KEYBOARD_DEBUG_PACKAGE, KEYBOARD_BENCH_PACKAGE),
@@ -183,8 +183,8 @@ object FleetCatalog {
         name = "Victorious Mesh",
         packageName = MESH_PACKAGE,
         kind = FleetKind.EXTERNAL_NODE,
-        summary = "EXTERNAL_NODE, PLANNED. Planned Messenger action com.victorious.mesh.action.BRIDGE " +
-            "(protocol_major 1). Generic client exists but is not started unless this node is paired " +
+        summary = "EXTERNAL_NODE, PLANNED. Messenger action com.victorious.mesh.action.BRIDGE " +
+            "(protocol_major 1; peer main exports the bridge). Generic client exists but is not started unless this node is paired " +
             "(package + signing cert). debug==release package com.victorious.mesh (no applicationIdSuffix). " +
             "Never DependencyGuard, never a shared signing key. Mesh keeps its own release key. " +
             "External control default OFF.",
@@ -195,8 +195,8 @@ object FleetCatalog {
         name = "Victorious Browser",
         packageName = BROWSER_PACKAGE,
         kind = FleetKind.EXTERNAL_NODE,
-        summary = "EXTERNAL_NODE, PLANNED. Planned Messenger action com.victorious.browser.action.BRIDGE " +
-            "(Message what=1 request / what=2 response); this app does not bind it. " +
+        summary = "EXTERNAL_NODE, PLANNED. Messenger action com.victorious.browser.action.BRIDGE " +
+            "(Message what=1 request / what=2 response; peer main exports the bridge). Generic client exists but is not started unless this node is paired. " +
             "Never DependencyGuard, never a shared signing key. Browser keeps its own release key " +
             "(CI-only; [planned/unverified]). External control default OFF.",
     )
@@ -220,8 +220,8 @@ object FleetCatalog {
         name = "VictorSpoof",
         packageName = VICTORSPOOF_PACKAGE,
         kind = FleetKind.EXTERNAL_NODE,
-        summary = "EXTERNAL_NODE, PLANNED. Novelty/prank caller-ID. Planned Messenger action " +
-            "com.victorious.spoof.action.BRIDGE. Isolated from wipe/power-off/lock/flash/bootloader. " +
+        summary = "EXTERNAL_NODE, PLANNED. Novelty/prank caller-ID. Messenger action " +
+            "com.victorious.spoof.action.BRIDGE (peer main exports the bridge). Isolated from wipe/power-off/lock/flash/bootloader. " +
             "Signing certs TBD — catalogue fail-open/unpinned. TODO pin debug+release SHA-256. " +
             "Never DependencyGuard, never a shared signing key.",
     )
@@ -247,8 +247,8 @@ object FleetCatalog {
         packageName = VICTORLAUNCH_PACKAGE,
         kind = FleetKind.EXTERNAL_NODE,
         summary = "EXTERNAL_NODE, PLANNED. Status-tray consumer AND " +
-            "bridge node. Planned Messenger action com.victorious.launch.action.BRIDGE " +
-            "(Message what=1 request / what=2 reply, protocol_major 1). Node-id prefix " +
+            "bridge node. Messenger action com.victorious.launch.action.BRIDGE " +
+            "(Message what=1 request / what=2 reply, protocol_major 1; peer main exports the bridge). Node-id prefix " +
             "^victorlaunch-[0-9a-f]{32}$. config.export/import supported. Envelope v1.1; " +
             "ACTION OPS OFF BY DEFAULT (external control default OFF). MANUAL + in-app Help. " +
             "Debug cert enforced (KnownNodeSigningCatalog.VICTOR_LAUNCH_DEBUG_SHA256; " +
@@ -274,12 +274,27 @@ object FleetCatalog {
     )
 
     /**
+     * Included inbound-only packages that are not Fleet-screen rows.
+     * Named in `<queries>` so Android 11+ can see them if a later probe
+     * or inbound caller-identity check needs PackageManager. Excluded
+     * inbound apps stay off this list.
+     */
+    val INBOUND_VISIBILITY_PACKAGES: Set<String> = setOf(
+        "com.victorious.cam",
+        "com.victorious.trade",
+        "com.victorious.taskbar",
+        "com.victorious.mango",
+        "com.victorious.gps",
+    )
+
+    /**
      * Every Android package the catalog names: Fleet-screen probes plus
-     * Messenger EXTERNAL_NODE debug/bench aliases. Must match the
-     * `<queries>` package list exactly (`ManifestPolicyTest`).
+     * Messenger EXTERNAL_NODE debug/bench aliases plus inbound-only
+     * included packages. Must match the `<queries>` package list exactly
+     * (`ManifestPolicyTest`).
      */
     val queryPackages: Set<String>
-        get() = all.flatMap { it.androidPackages }.toSet()
+        get() = all.flatMap { it.androidPackages }.toSet() + INBOUND_VISIBILITY_PACKAGES
 }
 
 enum class FleetInstallState {

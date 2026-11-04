@@ -2,6 +2,7 @@ package ai.droidcommand.app
 
 import ai.droidcommand.app.fleet.FleetCatalog
 import ai.droidcommand.app.fleet.FleetNodes
+import ai.droidcommand.security.InboundEntryPointCatalog
 import ai.droidcommand.shizuku.ShizukuPackages
 import org.w3c.dom.Element
 import java.io.File
@@ -49,6 +50,18 @@ class ManifestPolicyTest {
     }
 
     @Test
+    fun `queries cover included inbound packages and omit the four excluded apps`() {
+        val declared = manifest.children("queries").single().children("package").map { it.androidAttr("name") }.toSet()
+        val included = InboundEntryPointCatalog.INCLUDED.flatMap { it.packages }.toSet()
+        val excluded = InboundEntryPointCatalog.EXCLUDED.flatMap { it.packages }.toSet()
+        assertTrue(declared.containsAll(included), "Missing inbound <queries>: ${included - declared}")
+        assertTrue(declared.containsAll(FleetCatalog.INBOUND_VISIBILITY_PACKAGES))
+        assertTrue(excluded.none { it in declared }, "Excluded inbound packages must stay out of <queries>: ${excluded.intersect(declared)}")
+        assertEquals(13, InboundEntryPointCatalog.INCLUDED.size)
+        assertEquals(4, InboundEntryPointCatalog.EXCLUDED.size)
+    }
+
+    @Test
     fun `queries name only catalogued fleet packages besides the speech and TTS intents and Shizuku`() {
         val declared = manifest.children("queries").single().children("package").map { it.androidAttr("name") }.toSet()
         val catalogued = FleetCatalog.queryPackages + ShizukuPackages.queryPackages
@@ -78,6 +91,26 @@ class ManifestPolicyTest {
         assertFalse("ai.droidcommand.permission.BIND_EDLCOMMANDER" in uses)
         assertFalse("ai.droidcommand.permission.BIND_EDLCOMMANDER" in defined)
         assertFalse(defined.any { it?.contains("edl", ignoreCase = true) == true })
+    }
+
+    @Test
+    fun `built-in Shizuku boot receiver is not exported and start-on-boot permissions are declared`() {
+        val permissions = manifest.children("uses-permission").map { it.androidAttr("name") }
+        assertTrue("android.permission.RECEIVE_BOOT_COMPLETED" in permissions)
+        assertTrue("android.permission.WRITE_SECURE_SETTINGS" in permissions)
+        val receiver = application.children("receiver").single {
+            it.androidAttr("name") == ".shizuku.embedded.ShizukuBootReceiver"
+        }
+        assertEquals("false", receiver.androidAttr("exported"))
+        val actions = receiver.children("intent-filter").single().children("action").map { it.androidAttr("name") }
+        assertEquals(
+            listOf("android.intent.action.BOOT_COMPLETED", "android.intent.action.QUICKBOOT_POWERON"),
+            actions,
+        )
+        val service = application.children("service").single {
+            it.androidAttr("name") == ".shizuku.embedded.EmbeddedShizukuStartService"
+        }
+        assertEquals("false", service.androidAttr("exported"))
     }
 
     @Test
@@ -171,15 +204,17 @@ class ManifestPolicyTest {
     }
 
     @Test
-    fun `cleartext HTTP is refused and only the system certificate store is trusted`() {
+    fun `cleartext is OS-permitted for LAN n8n and only the system certificate store is trusted`() {
         assertEquals("@xml/network_security_config", application.androidAttr("networkSecurityConfig"))
         assertTrue(application.androidAttr("usesCleartextTraffic") != "true")
         val config = xml("src/main/res/xml/network_security_config.xml")
         val base = config.children("base-config").single()
-        assertEquals("false", base.getAttribute("cleartextTrafficPermitted"))
+        // Android cannot express RFC1918 as domain-config CIDR. The app refuses HTTP except LAN
+        // (core-n8n N8nServerUrl). Keep system CAs only; do not add user CAs or a domain-config
+        // without review.
+        assertEquals("true", base.getAttribute("cleartextTrafficPermitted"))
         val sources = base.children("trust-anchors").single().children("certificates").map { it.getAttribute("src") }
         assertEquals(listOf("system"), sources)
-        // A narrow exception for one host would be a domain-config; make adding one a deliberate, reviewed change.
         assertTrue(config.children("domain-config").isEmpty(), "domain-config entries must be reviewed against docs/SECURITY.md")
     }
 }
