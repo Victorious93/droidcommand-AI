@@ -348,3 +348,23 @@ is the B1-sufficient persistence for now.
 **BUILD SUCCESSFUL**, 18 new `core-bots` tests, 0 failures. See
 `docs/AUDIT_2026-09-05.md`'s matching addendum for the full
 `./gradlew test ktlintCheck --continue` regression-run counts.
+
+## 2026-11-08 — Bot Maker, Phase B2 (pause/resume + last-run log)
+
+B2 from the phase table above: `core-bots.BotLifecycle` wires the
+previously-inert `BotRecipe.enabled` into real `pause`/`resume`
+functions (idempotent, persisted via the existing `BotStore`) and a
+`startRun` entry point that refuses a paused bot before touching
+anything else. "The Activity log" named in B2's own "Needs" column is
+the existing `:app` Logs screen over `core-security.AuditLog` — not a
+new log — so pause/resume/run-start now write `BOT_PAUSED`/
+`BOT_RESUMED`/`BOT_RUN_STARTED` into that same trail. No run-completion
+event yet: there is still no run-executor loop inside `core-bots` to
+observe one from. B3, B4, B5, and Jarvis remain unbuilt.
+
+**Verified this session (no Android SDK, no live LLM):**
+`./gradlew :core-bots:test :core-security:test` and
+`./gradlew :core-bots:ktlintCheck :core-security:ktlintCheck` —
+**BUILD SUCCESSFUL**, 6 new tests (24 total in `core-bots`), 0 failures.
+Full `./gradlew test ktlintCheck --continue`: 2743 tests, 0 failures,
+zero regressions. See `docs/AUDIT_2026-09-05.md`'s matching addendum.

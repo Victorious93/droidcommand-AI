@@ -1683,11 +1683,12 @@ Kai gates stay read-only and off. n8n is a separate Advanced screen.
 | API key storage | IMPLEMENTED (same vault as cloud keys) | `EncryptedSecretsVault` id `n8n.api.key`. The screen never shows a saved key again. |
 | Network policy | PARTIAL | OS cleartext permitted so `http://192.168.x.x` can be reached; the app refuses HTTP except LAN. System CAs only. Not pinned. |
 
-## 19. Bot Maker, Phase B1 (2026-10-31)
+## 19. Bot Maker, Phase B1 + B2 (2026-10-31, extended 2026-11-08)
 
 `docs/BRAIN_JARVIS_BOTMAKER_PLAN.md` §3's recipe shape, B1 (manual
-create/run/delete) only — B2 (pause/resume + log), B3 (phrase trigger),
-B4 (time trigger) and B5 stay on paper. New JVM-only `core-bots` module.
+create/run/delete) and now B2 (pause/resume + last-run log) — B3 (phrase
+trigger), B4 (time trigger) and B5 stay on paper. New JVM-only `core-bots`
+module.
 
 | Component | Status | Notes |
 |---|---|---|
@@ -1697,5 +1698,9 @@ B4 (time trigger) and B5 stay on paper. New JVM-only `core-bots` module.
 | `core-bots.BotRunner` | IMPLEMENTED — JVM-tested | Produces the scoped `ToolRunner` plus the composed system prompt (persona `contextContribution` + bot `instructions`) for an existing `ChatSession`/`DroidCommandSession` call site to consume. Deliberately has no dependency on `core-llm-factory`. |
 | `AssistantCapability.BOT_MAKER` / `botMakerEnabled` | IMPLEMENTED — default OFF | Eleventh Kai gate, same pattern as `BRAIN`. The other ten gates are unchanged. |
 | `:app` Bot Maker screen | NOT STARTED | No Android SDK in this session's container; documented follow-up, not attempted blind. Storing a recipe as `Brain/Bots/<id>/recipe.md` (vs. the JSON file built here) is also a documented future step, not built now. |
+| `core-bots.BotLifecycle` (B2) | IMPLEMENTED — JVM-tested | `pause`/`resume` toggle `BotRecipe.enabled` (idempotent, re-saves + re-logs rather than erroring on a no-op), persist via the existing `BotStore`, and record `BOT_PAUSED`/`BOT_RESUMED` on the existing `core-security.AuditLog` — the Activity log, not a new bot-specific log. `startRun` throws `BotPaused` before touching the persona store or the delegate `ToolRunner` if the recipe is disabled; otherwise records `BOT_RUN_STARTED` and returns a `BotRun` built from `BotRunner.compose`/`scopedExecutor` unchanged. No run-completion event yet — nothing inside `core-bots` observes how an external call site's run ends. |
+| `core-security.AuditEventType` | EXTENDED | Three new values (`BOT_RUN_STARTED`, `BOT_PAUSED`, `BOT_RESUMED`) for Bot Maker. Checked every `AuditEventType` reference in the repo first; `:app`'s `LogsScreen.typeColor` is a non-exhaustive `when` with an `else` branch, so the addition needed no other file changed. |
 
-**Verified this session (no Android SDK, no live LLM):** `./gradlew :core-bots:test :core-config:test` and `./gradlew :core-bots:ktlintCheck :core-config:ktlintCheck` — **BUILD SUCCESSFUL**, 18 new `core-bots` tests, 0 failures. Full `./gradlew test ktlintCheck --continue` (no `-PincludeAndroid`) run for regressions; see `docs/AUDIT_2026-09-05.md`'s matching addendum for the exact pass/fail counts.
+**Verified B1 session (no Android SDK, no live LLM):** `./gradlew :core-bots:test :core-config:test` and `./gradlew :core-bots:ktlintCheck :core-config:ktlintCheck` — **BUILD SUCCESSFUL**, 18 new `core-bots` tests, 0 failures. Full `./gradlew test ktlintCheck --continue` (no `-PincludeAndroid`) run for regressions; see `docs/AUDIT_2026-09-05.md`'s matching addendum for the exact pass/fail counts.
+
+**Verified B2 session (no Android SDK, no live LLM):** `./gradlew :core-bots:test :core-security:test` and `./gradlew :core-bots:ktlintCheck :core-security:ktlintCheck` — **BUILD SUCCESSFUL**, 6 new `BotLifecycleTest` tests (24 total in `core-bots`), 0 failures. Full `./gradlew test ktlintCheck --continue` (no `-PincludeAndroid`): **BUILD SUCCESSFUL** — 2743 tests, 0 failures/errors, 20 pre-existing device-only skips, zero regressions.
