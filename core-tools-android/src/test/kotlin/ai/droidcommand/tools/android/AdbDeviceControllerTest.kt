@@ -328,7 +328,7 @@ class AdbDeviceControllerTest {
     }
 
     @Test
-    fun `every unimplemented method fails with a distinct 'not yet implemented' reason, never touching adb`() {
+    fun `UI-navigation actions are gated off by default and the other mutating methods are unimplemented, none touching adb`() {
         val markerFile = File(tempDir, "touched")
         val adbPath = writeScript(
             "adb-marker",
@@ -340,12 +340,23 @@ class AdbDeviceControllerTest {
         )
         val device = newController(adbPath)
 
-        val results = listOf(
+        // The five UI-navigation actions are implemented but closed behind the opt-in safety gate when the
+        // controller is constructed with the default allowUiActions=false.
+        val gatedUiActions = listOf(
             device.tap(0, 0),
             device.swipe(0, 0, 1, 1, 100),
             device.typeText("x"),
             device.pressKey(DeviceKey.BACK),
             device.launchApp("com.example"),
+        )
+        for (result in gatedUiActions) {
+            val failure = assertIs<DeviceActionResult.Failure>(result)
+            assertTrue(failure.reason.contains("disabled"), "expected a gate 'disabled' reason, was: ${failure.reason}")
+            assertTrue(failure.reason.contains("safety gate"), "expected the reason to name the safety gate, was: ${failure.reason}")
+        }
+
+        // The remaining mutating methods are genuinely not implemented in this controller.
+        val unimplemented = listOf(
             device.writeFile("/x", "y", false),
             device.moveFile("/a", "/b"),
             device.copyFile("/a", "/b"),
@@ -364,12 +375,98 @@ class AdbDeviceControllerTest {
             device.launchNavigation("home", NavigationMode.WALKING),
             device.sendBroadcast("com.example.TEST", null, emptyMap()),
         )
-        for (result in results) {
+        for (result in unimplemented) {
             val failure = assertIs<DeviceActionResult.Failure>(result)
-            assertTrue(failure.reason.contains("not yet implemented"))
+            assertTrue(failure.reason.contains("not yet implemented"), "expected 'not yet implemented', was: ${failure.reason}")
         }
 
-        assertTrue(!markerFile.exists(), "an unimplemented method must never invoke adb at all")
+        assertTrue(!markerFile.exists(), "a gated-off or unimplemented method must never invoke adb at all")
+    }
+
+    private fun uiActionController(adbPath: String) = AdbDeviceController(
+        shell = ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = setOf(adbPath))),
+        adbExecutable = adbPath,
+        allowUiActions = true,
+    )
+
+    @Test
+    fun `with allowUiActions enabled, the UI-navigation actions run the correct adb input commands`() {
+        val argsFile = File(tempDir, "adb-args")
+        val adbPath = writeScript(
+            "adb-ui",
+            """
+            #!/bin/sh
+            printf '%s\n' "${'$'}*" >> '${argsFile.absolutePath}'
+            exit 0
+            """.trimIndent(),
+        )
+        val device = uiActionController(adbPath)
+
+        assertIs<DeviceActionResult.Success>(device.tap(100, 200))
+        assertIs<DeviceActionResult.Success>(device.swipe(10, 20, 30, 40, 250))
+        assertIs<DeviceActionResult.Success>(device.typeText("hello world"))
+        assertIs<DeviceActionResult.Success>(device.pressKey(DeviceKey.BACK))
+        assertIs<DeviceActionResult.Success>(device.pressKey(DeviceKey.RECENT_APPS))
+
+        val lines = argsFile.readLines()
+        assertEquals("shell input tap 100 200", lines[0])
+        assertEquals("shell input swipe 10 20 30 40 250", lines[1])
+        // space becomes %s for `input text`, then the whole token is single-quoted for the device shell.
+        assertEquals("shell input text 'hello%sworld'", lines[2])
+        assertEquals("shell input keyevent 4", lines[3])
+        assertEquals("shell input keyevent 187", lines[4])
+    }
+
+    @Test
+    fun `with allowUiActions enabled, launchApp runs monkey and rejects an invalid package name before touching adb`() {
+        val argsFile = File(tempDir, "adb-args-launch")
+        val adbPath = writeScript(
+            "adb-launch",
+            """
+            #!/bin/sh
+            printf '%s\n' "${'$'}*" >> '${argsFile.absolutePath}'
+            echo 'Events injected: 1'
+            exit 0
+            """.trimIndent(),
+        )
+        val device = uiActionController(adbPath)
+
+        assertIs<DeviceActionResult.Success>(device.launchApp("com.example.app"))
+        assertEquals("shell monkey -p com.example.app -c android.intent.category.LAUNCHER 1", argsFile.readLines()[0])
+
+        val invalid = assertIs<DeviceActionResult.Failure>(device.launchApp("not a package; rm -rf"))
+        assertTrue(invalid.reason.contains("not a valid Android package name"), "was: ${invalid.reason}")
+        assertEquals(1, argsFile.readLines().size, "an invalid package name must never invoke adb")
+    }
+
+    @Test
+    fun `with allowUiActions enabled, launchApp reports failure when monkey finds no launchable activity`() {
+        val adbPath = writeScript(
+            "adb-launch-fail",
+            """
+            #!/bin/sh
+            echo '** No activities found to run, monkey aborted.' 1>&2
+            exit 1
+            """.trimIndent(),
+        )
+        val result = assertIs<DeviceActionResult.Failure>(uiActionController(adbPath).launchApp("com.nonexistent"))
+        assertTrue(result.reason.contains("Cannot launch app"), "was: ${result.reason}")
+    }
+
+    @Test
+    fun `with allowUiActions enabled, swipe rejects a negative duration without touching adb`() {
+        val markerFile = File(tempDir, "touched-swipe")
+        val adbPath = writeScript(
+            "adb-swipe",
+            """
+            #!/bin/sh
+            touch '${markerFile.absolutePath}'
+            exit 0
+            """.trimIndent(),
+        )
+        val result = assertIs<DeviceActionResult.Failure>(uiActionController(adbPath).swipe(0, 0, 1, 1, -5))
+        assertTrue(result.reason.contains("durationMillis must be >= 0"), "was: ${result.reason}")
+        assertTrue(!markerFile.exists(), "a rejected swipe must never invoke adb")
     }
 
     @Test
