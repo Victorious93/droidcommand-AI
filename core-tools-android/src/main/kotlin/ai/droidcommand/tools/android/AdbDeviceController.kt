@@ -593,6 +593,7 @@ class AdbDeviceController(
         val ID_PATTERN = Regex("""\bid=(-?\d+)""")
         val TAG_PATTERN = Regex("""\btag=(\S+)""")
         val IFACE_PATTERN = Regex("""\bdev\s+(\S+)""")
+
         // A conservative Android package-name shape (>= 2 dot-separated segments, each starting with a
         // letter). Also serves as an allow-list that rejects shell metacharacters before launchApp reaches
         // the device shell — no space, quote, ';', '&', '|' or '$' can match.
