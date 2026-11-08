@@ -833,12 +833,24 @@ tool or objective loop.
 ## 4. Agent state machine (implemented in `core-agent`)
 
 `AgentState` is a sealed hierarchy: `Idle`, `Planning`, `AwaitingApproval`,
-`ExecutingTool`, `Observing`, `Recovering`, `Completed`, `Cancelled`,
+`ExecutingTool`, `Observing`, `Recovering`, `Paused`, `Completed`, `Cancelled`,
 `Failed`. Transitions are validated — an illegal transition (e.g.
 `Completed → ExecutingTool`) throws rather than silently succeeding, which is
 the mechanism that prevents an agent from being resumed after it has already
 terminated. Retry is bounded by an explicit `RetryPolicy(maxAttempts, backoff)`
 passed into the executor; there is no unbounded loop anywhere in this module.
+
+**Pause / resume / cancel (added 2026-11-08).** `AgentState.Paused` is a
+non-terminal, resumable state that captures the exact state it was paused from
+in `Paused.resumeState`. `AgentStateMachine.pause()` moves a running task into
+it (rejecting a terminal or already-paused task); `resume()` restores the
+captured state (rejecting a machine that isn't paused). Cancel needs no new
+API: `Paused` is non-terminal, so `transition(Cancelled(...))` out of it is
+already legal — a paused task stays cancellable. This fills Phase 4's
+"pause, resume, and cancel controls" / `PAUSED` task state at the state-machine
+layer; wiring the pause signal into a long-running `ObjectiveEngine` loop
+(so a mid-run task actually suspends between iterations) is named, not-yet-built
+follow-up work.
 
 ## 4b. Objective engine and LLM abstraction (implemented, partial)
 
