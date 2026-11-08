@@ -22,10 +22,15 @@ import javax.xml.parsers.DocumentBuilderFactory
  * **Deliberately implements only 12 of [DeviceController]'s 29 methods for real** —
  * [getDeviceInfo]/[getBatteryStatus]/[getStorageInfo]/[listInstalledApps]/[getUiTree]/[takeScreenshot]/
  * [listNotifications]/[getNetworkState]/[readFile]/[listDirectory]/[listContacts]/[getClipboardText] —
- * every one read-only and non-mutating. None of the other 17 (anything that taps, types, launches an app, sends an SMS, makes a call, or writes/deletes/
- * moves/copies a file) are implemented here: this device is a real personal phone, and actually
- * exercising a mutating action against it is not a call this class makes unilaterally. Every unimplemented
- * method fails with an explicit "not yet implemented" reason —
+ * every one read-only and non-mutating. The five UI-navigation actions ([tap]/[swipe]/[typeText]/
+ * [pressKey]/[launchApp]) are implemented, but behind an explicit opt-in safety gate: they run real
+ * `adb shell input`/`monkey` commands only when this controller is constructed with
+ * [allowUiActions]` = true`. The gate defaults to **false** — this device is a real personal phone, and
+ * actually exercising a mutating action against it is not a call this class makes unilaterally — so with
+ * the default gate those five fail with an explicit "disabled" reason and never touch adb. The remaining
+ * 12 mutating methods (anything that sends an SMS, makes a call, writes/deletes/moves/copies a file, sets
+ * the clipboard/alarm/timer/volume, controls media, or sends a broadcast) are still not implemented here
+ * and fail with an explicit "not yet implemented" reason —
  * a **different** honest reason from [NullDeviceController]'s "no real device is connected," since a
  * device genuinely is connected in this topology; conflating "missing capability" with "missing
  * device" would misreport why the call failed. [takeScreenshot] was excluded for a separate, technical
@@ -38,6 +43,7 @@ class AdbDeviceController(
     private val shell: ShellExecutor,
     private val adbExecutable: String = "adb",
     private val serial: String? = null,
+    private val allowUiActions: Boolean = false,
 ) : DeviceController {
     private fun notImplemented(action: String) =
         "$action is not yet implemented in AdbDeviceController — see docs/AUDIT_2026-09-05.md"
@@ -291,11 +297,101 @@ class AdbDeviceController(
 
     private fun failure(action: String) = DeviceActionResult.Failure(notImplemented(action))
 
-    override fun tap(x: Int, y: Int) = failure("tap")
-    override fun swipe(startX: Int, startY: Int, endX: Int, endY: Int, durationMillis: Long) = failure("swipe")
-    override fun typeText(text: String) = failure("type text")
-    override fun pressKey(key: DeviceKey) = failure("press key")
-    override fun launchApp(packageName: String) = failure("launch app")
+    /**
+     * The five UI-navigation actions below run real `adb shell input ...` (and `monkey` for [launchApp])
+     * commands, but only when this controller was constructed with [allowUiActions]` = true`. With the
+     * default gate ([allowUiActions]` = false`) each returns an explicit "disabled" failure and never
+     * invokes adb — the mutating-action safety-gate invariant this class documents. Coordinates and
+     * durations are integers (no shell-injection surface); [typeText] and [launchApp] validate/encode
+     * their string arguments before they reach the device shell.
+     */
+    override fun tap(x: Int, y: Int): DeviceActionResult =
+        gatedUiAction("tap at ($x, $y)") { mapUiResult("tap at ($x, $y)", runAdb("shell", "input", "tap", x.toString(), y.toString())) }
+
+    override fun swipe(startX: Int, startY: Int, endX: Int, endY: Int, durationMillis: Long): DeviceActionResult =
+        gatedUiAction("swipe from ($startX, $startY) to ($endX, $endY)") {
+            if (durationMillis < 0) {
+                DeviceActionResult.Failure("Cannot swipe: durationMillis must be >= 0, was $durationMillis")
+            } else {
+                mapUiResult(
+                    "swipe from ($startX, $startY) to ($endX, $endY)",
+                    runAdb("shell", "input", "swipe", startX.toString(), startY.toString(), endX.toString(), endY.toString(), durationMillis.toString()),
+                )
+            }
+        }
+
+    override fun typeText(text: String): DeviceActionResult =
+        gatedUiAction("type text") { mapUiResult("type text", runAdb("shell", "input", "text", shellQuote(encodeInputText(text)))) }
+
+    override fun pressKey(key: DeviceKey): DeviceActionResult =
+        gatedUiAction("press ${key.name}") { mapUiResult("press ${key.name}", runAdb("shell", "input", "keyevent", keyCodeFor(key).toString())) }
+
+    override fun launchApp(packageName: String): DeviceActionResult =
+        gatedUiAction("launch app '$packageName'") {
+            if (!PACKAGE_NAME_PATTERN.matches(packageName)) {
+                DeviceActionResult.Failure("Cannot launch app: '$packageName' is not a valid Android package name")
+            } else {
+                when (val result = runAdb("shell", "monkey", "-p", packageName, "-c", "android.intent.category.LAUNCHER", "1")) {
+                    is ShellExecutionResult.Failure -> DeviceActionResult.Failure("Cannot launch app '$packageName': ${result.reason}", result.cause)
+                    is ShellExecutionResult.Success -> {
+                        // monkey can print "No activities found to run, monkey aborted." and still exit 0 when the
+                        // package has no launchable activity, so the stream is inspected as well as the exit code.
+                        val combined = (result.stdout + "\n" + result.stderr)
+                        if (result.exitCode != 0 || "No activities found" in combined || "monkey aborted" in combined || "Error:" in combined) {
+                            DeviceActionResult.Failure(
+                                "Cannot launch app '$packageName': ${combined.trim().lineSequence().firstOrNull { it.isNotBlank() } ?: "monkey exited ${result.exitCode}"}",
+                            )
+                        } else {
+                            DeviceActionResult.Success("launched app '$packageName'")
+                        }
+                    }
+                }
+            }
+        }
+
+    private fun gatedUiAction(action: String, block: () -> DeviceActionResult): DeviceActionResult =
+        if (!allowUiActions) {
+            DeviceActionResult.Failure(
+                "$action is disabled: AdbDeviceController's UI-action safety gate is closed " +
+                    "(constructed with allowUiActions=false). Construct it with allowUiActions=true to permit " +
+                    "UI navigation actions on the connected device.",
+            )
+        } else {
+            block()
+        }
+
+    private fun mapUiResult(action: String, result: ShellExecutionResult): DeviceActionResult =
+        when (result) {
+            is ShellExecutionResult.Failure -> DeviceActionResult.Failure("Cannot $action: ${result.reason}", result.cause)
+            is ShellExecutionResult.Success ->
+                if (result.exitCode == 0) {
+                    DeviceActionResult.Success("$action succeeded")
+                } else {
+                    DeviceActionResult.Failure("Cannot $action: 'adb' exited ${result.exitCode}: ${result.stderr.trim()}")
+                }
+        }
+
+    /**
+     * Encodes [text] for `adb shell input text`: `input` treats `%s` as a space, so literal spaces are
+     * replaced with `%s`. The result is then single-quoted by the caller ([shellQuote]) for the device-side
+     * `sh -c`, the same way [listDirectory] quotes its path. Known limitation: a literal `%` in the text,
+     * and newlines/tabs, are not round-tripped faithfully by `input text` across Android versions — a
+     * documented limit of the `input text` transport, not a silently swallowed one.
+     */
+    private fun encodeInputText(text: String): String = text.replace(" ", "%s")
+
+    /** Maps a generic [DeviceKey] to its Android `KeyEvent` keycode number (numbers, not names, for cross-version `input keyevent`). */
+    private fun keyCodeFor(key: DeviceKey): Int = when (key) {
+        DeviceKey.BACK -> 4
+        DeviceKey.HOME -> 3
+        DeviceKey.ENTER -> 66
+        DeviceKey.DELETE -> 67
+        DeviceKey.TAB -> 61
+        DeviceKey.VOLUME_UP -> 24
+        DeviceKey.VOLUME_DOWN -> 25
+        DeviceKey.POWER -> 26
+        DeviceKey.RECENT_APPS -> 187
+    }
 
     /**
      * Reads a file's content via `adb exec-out cat <path>` — `exec-out`, not `shell`, for the same
@@ -497,6 +593,11 @@ class AdbDeviceController(
         val ID_PATTERN = Regex("""\bid=(-?\d+)""")
         val TAG_PATTERN = Regex("""\btag=(\S+)""")
         val IFACE_PATTERN = Regex("""\bdev\s+(\S+)""")
+
+        // A conservative Android package-name shape (>= 2 dot-separated segments, each starting with a
+        // letter). Also serves as an allow-list that rejects shell metacharacters before launchApp reaches
+        // the device shell — no space, quote, ';', '&', '|' or '$' can match.
+        val PACKAGE_NAME_PATTERN = Regex("""[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+""")
         val PRIMARY_CLIP_LINE_PATTERN = Regex("""mPrimaryClip:\s*(.*)""")
         val CLIP_TEXT_PATTERN = Regex("""<(.*)>""", RegexOption.DOT_MATCHES_ALL)
         val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
