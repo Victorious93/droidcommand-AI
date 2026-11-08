@@ -17,6 +17,9 @@ enum class AuditEventType {
     APPROVAL_DENIED,
     APPROVAL_TIMED_OUT,
     APPROVAL_UNAVAILABLE,
+    BOT_RUN_STARTED,
+    BOT_PAUSED,
+    BOT_RESUMED,
 }
 
 data class AuditEvent(
