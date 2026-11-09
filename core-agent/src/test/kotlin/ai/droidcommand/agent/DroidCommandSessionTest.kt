@@ -92,6 +92,39 @@ class DroidCommandSessionTest {
     }
 
     @Test
+    fun `a forge objective can be paused and resumed through the session API`() {
+        val (session, _, stateMachine) = newSession()
+        session.switchMode(AgentMode.FORGE)
+        val pause = PauseController(maxWaitMillis = 60_000L)
+        pause.pause()
+
+        var outcome: ObjectiveOutcome? = null
+        val done = CountDownLatch(1)
+        val worker = thread {
+            outcome = session.runForgeObjective(
+                "obj",
+                ImmediateCompletePlanner(),
+                isPaused = pause::isPaused,
+                awaitResume = { pause.awaitResume() },
+            )
+            done.countDown()
+        }
+        try {
+            // While paused the objective parks in AgentState.Paused and does not finish.
+            Thread.sleep(150)
+            assertTrue(stateMachine.state is AgentState.Paused, "should be paused, was ${stateMachine.state}")
+            assertEquals(1L, done.count, "must not finish while paused")
+
+            pause.resume()
+            assertTrue(done.await(5, TimeUnit.SECONDS), "should finish after resume()")
+            // Reading outcome is safe: the latch's countDown happens-before this await() returning.
+            assertEquals(AgentState.Completed("done"), outcome?.finalState)
+        } finally {
+            worker.join(5_000)
+        }
+    }
+
+    @Test
     fun `switches Pilot to Forge and back to Pilot while idle`() {
         val (session, _, _) = newSession()
         session.switchMode(AgentMode.FORGE)

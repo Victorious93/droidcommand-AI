@@ -87,6 +87,13 @@ class DroidCommandSession(
      * Exposed here so a Forge Mode caller can opt in without constructing an
      * [ObjectiveEngine] directly. [logger] (default [NoOpLogger]) is passed
      * through the same way, so a caller can watch each step as it happens.
+     *
+     * [isPaused] (default `{ false }`) and [awaitResume] (default `null`) are
+     * forwarded to [ObjectiveEngine.run] so a long objective can be suspended
+     * and resumed at an iteration boundary through the session API, not only by
+     * constructing the engine directly. Leaving [awaitResume] `null` keeps the
+     * engine's own default wait (a 50 ms poll); a caller wanting real
+     * wait/notify pause passes a [PauseController]'s `isPaused`/`awaitResume`.
      */
     fun runForgeObjective(
         objective: String,
@@ -95,6 +102,8 @@ class DroidCommandSession(
         maxIterations: Int = 25,
         retryPolicy: RetryPolicy = RetryPolicy(),
         isCancelled: () -> Boolean = { false },
+        isPaused: () -> Boolean = { false },
+        awaitResume: (() -> Unit)? = null,
         reservedFinalizationIterations: Int = 0,
         logger: Logger = NoOpLogger,
     ): ObjectiveOutcome {
@@ -113,7 +122,14 @@ class DroidCommandSession(
                 logger = logger,
                 reservedFinalizationIterations = reservedFinalizationIterations,
             )
-            return engine.run(objective, context, retryPolicy, isCancelled)
+            // awaitResume is forwarded only when supplied, so the engine's own default (a 50 ms poll)
+            // stays the single source of that default rather than being duplicated here. A caller that
+            // wants real wait/notify pause passes a PauseController's awaitResume alongside its isPaused.
+            return if (awaitResume != null) {
+                engine.run(objective, context, retryPolicy, isCancelled, isPaused, awaitResume)
+            } else {
+                engine.run(objective, context, retryPolicy, isCancelled, isPaused)
+            }
         } finally {
             synchronized(lock) { activeTasks-- }
         }
