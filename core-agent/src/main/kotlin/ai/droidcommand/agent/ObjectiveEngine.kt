@@ -70,6 +70,8 @@ class ObjectiveEngine(
         context: ConversationContext = ConversationContext(),
         retryPolicy: RetryPolicy = RetryPolicy(),
         isCancelled: () -> Boolean = { false },
+        isPaused: () -> Boolean = { false },
+        awaitResume: () -> Unit = { Thread.sleep(PAUSE_POLL_MILLIS) },
     ): ObjectiveOutcome {
         logger.info("objective_started", mapOf("mode" to mode.name))
         context.append(Role.USER, objective)
@@ -80,6 +82,27 @@ class ObjectiveEngine(
                 logger.warn("objective_cancelled", mapOf("iteration" to iteration.toString()))
                 val cancelled = stateMachine.transition(AgentState.Cancelled("Cancelled before iteration $iteration"))
                 return ObjectiveOutcome(cancelled, iteration - 1)
+            }
+
+            // Pause is honored only at an iteration boundary — never mid-tool — so a suspended task
+            // always resumes at a clean planning point rather than part-way through a side effect.
+            // The state machine moves to AgentState.Paused (visible to a status display), waits on
+            // [awaitResume] until [isPaused] clears, then resumes the exact pre-pause state. A paused
+            // task stays cancellable: a cancel observed during the wait transitions straight to
+            // Cancelled (legal out of the non-terminal Paused state) without resuming first.
+            if (isPaused() && !isCancelled()) {
+                logger.info("objective_paused", mapOf("iteration" to iteration.toString()))
+                stateMachine.pause()
+                while (isPaused() && !isCancelled()) {
+                    awaitResume()
+                }
+                if (isCancelled()) {
+                    logger.warn("objective_cancelled", mapOf("iteration" to iteration.toString(), "while" to "paused"))
+                    val cancelled = stateMachine.transition(AgentState.Cancelled("Cancelled while paused before iteration $iteration"))
+                    return ObjectiveOutcome(cancelled, iteration - 1)
+                }
+                stateMachine.resume()
+                logger.info("objective_resumed", mapOf("iteration" to iteration.toString()))
             }
 
             if (iteration >= finalizationWindowStart) {
@@ -170,5 +193,13 @@ class ObjectiveEngine(
         is ToolResult.Success, is ToolResult.Partial -> LogLevel.INFO
         is ToolResult.Unexpected -> LogLevel.WARN
         is ToolResult.Failure -> LogLevel.ERROR
+    }
+
+    private companion object {
+        // Default poll cadence for the pause wait loop when a caller supplies no awaitResume of its
+        // own. Short enough to feel responsive to a resume, long enough not to spin a core; a caller
+        // wanting different behaviour (an immediate wait/notify, a test's deterministic flag flip)
+        // passes its own awaitResume.
+        const val PAUSE_POLL_MILLIS = 50L
     }
 }

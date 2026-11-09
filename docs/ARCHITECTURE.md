@@ -848,9 +848,15 @@ captured state (rejecting a machine that isn't paused). Cancel needs no new
 API: `Paused` is non-terminal, so `transition(Cancelled(...))` out of it is
 already legal — a paused task stays cancellable. This fills Phase 4's
 "pause, resume, and cancel controls" / `PAUSED` task state at the state-machine
-layer; wiring the pause signal into a long-running `ObjectiveEngine` loop
-(so a mid-run task actually suspends between iterations) is named, not-yet-built
-follow-up work.
+layer. `ObjectiveEngine.run` now consumes it: it takes an `isPaused: () -> Boolean`
+callback alongside the existing `isCancelled`, checked at each iteration boundary
+(never mid-tool). When paused it moves the machine to `Paused`, waits on an
+injectable `awaitResume` (default a 50 ms poll) until `isPaused` clears, then
+`resume()`s the exact pre-pause state and continues; a cancel observed during the
+wait transitions straight to `Cancelled` without resuming. So a long Forge run
+suspends and resumes at clean planning points. A real wait/notify pause source
+(instead of the default poll) and a Pilot-loop equivalent remain the obvious
+extensions.
 
 ## 4b. Objective engine and LLM abstraction (implemented, partial)
 
