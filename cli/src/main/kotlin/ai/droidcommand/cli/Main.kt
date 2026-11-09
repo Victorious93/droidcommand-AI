@@ -48,6 +48,7 @@ import ai.droidcommand.skills.InstallResult
 import ai.droidcommand.skills.SkillDiscovery
 import ai.droidcommand.skills.SkillPromptAssembler
 import ai.droidcommand.skills.SkillRegistry
+import ai.droidcommand.skills.SkillStateStore
 import ai.droidcommand.termux.TermuxTool
 import ai.droidcommand.termux.VictorSuiteCapabilitiesTool
 import ai.droidcommand.websearch.WebSearchTool
@@ -98,6 +99,7 @@ fun main(args: Array<String>) {
         }
         "pilot" -> runPilot(session, args.drop(1))
         "forge" -> runForge(session, args.drop(1))
+        "skills" -> runSkills(args.drop(1))
         "regenerate-prompt" -> runRegeneratePrompt(args.drop(1))
         "device-serve" -> runDeviceServe(args.drop(1))
         "device-send" -> runDeviceSend(args.drop(1))
@@ -324,6 +326,9 @@ internal fun printUsage() {
           pilot <tool> [key=value ...]   Run a single Pilot Mode tool invocation
           forge <objective text...>      Run a Forge Mode objective via an LLM planner
                                           [--finalization-steps <n>]
+          skills list                    List discovered skills and their enabled/disabled state
+          skills enable <name>           Approve (enable) a discovered skill
+          skills disable <name>          Disable a discovered skill
           regenerate-prompt <input...>   Turn a vague request into an optimized prompt for another AI
                                           [--target claude|codex|gpt|gemini|local|general]
                                           [--repo <path>] [--previous-response-file <path>]
@@ -383,6 +388,13 @@ internal fun printUsage() {
         DROIDCOMMAND_CLI_SHELL_ALLOWED_EXECUTABLES; otherwise both fail without running
         anything. Every call still needs explicit approval regardless of either switch.
 
+        skills list/enable/disable read DROIDCOMMAND_SKILLS_DIR (a directory of
+        SKILL.md files) and persist each skill's enabled/disabled decision to
+        DROIDCOMMAND_SKILLS_STATE_FILE (default <dir>/enabled-skills.txt), the same
+        files 'forge' reads. A newly discovered skill starts disabled; 'skills
+        enable <name>' approves one (only a skill actually discovered on disk can be
+        enabled), and only enabled skills contribute to a Forge run's system prompt.
+
         web_search reaches a real Brave Search/SerpAPI endpoint only when
         DROIDCOMMAND_CLI_BRAVE_API_KEY and/or DROIDCOMMAND_CLI_SERPAPI_API_KEY is set
         (both set tries Brave first, falling back to SerpAPI on failure); with neither
@@ -404,6 +416,8 @@ internal fun printUsage() {
           pilot echo text=hello
           pilot web_search query="droidcommand ai" count=5
           forge "Echo the word hello"
+          skills list
+          skills enable summarize
           regenerate-prompt "fix the login bug" --target claude
           device-serve --bind 0.0.0.0:7100 --name "My laptop" --discoverable
           device-discover
@@ -510,25 +524,40 @@ internal fun runForge(
 }
 
 /**
- * Builds the system-prompt contribution of the user's enabled skills, or `null` when no skills are
- * configured or enabled (so the Forge run is byte-for-byte unchanged for anyone who hasn't opted in).
- *
- * Reads a skills directory from `DROIDCOMMAND_SKILLS_DIR`; if unset/blank, returns null immediately.
- * Otherwise it discovers every `SKILL.md` under that directory ([SkillDiscovery]), installs them
- * (which leaves them **disabled**), applies the persisted enable/disable decisions from
- * `DROIDCOMMAND_SKILLS_STATE_FILE` (default `<dir>/enabled-skills.txt`), and assembles only the
- * enabled skills into one system-prompt string ([SkillPromptAssembler]). A skill that is on disk but
- * not marked enabled in that file contributes nothing — the "disabled until the user approves it"
- * rule, surfaced through plain files a user edits. Discovery/parse problems are reported to stderr and
- * skipped, never fatal to the run. Pure config in, string out — [configSource] is the same injectable
- * [ConfigSource] [runForge] already uses, so this is testable without touching real env or disk layout.
+ * An in-memory [SkillRegistry] hydrated from the configured skills directory, paired with the
+ * [SkillStateStore] (and the enable/disable decisions it last held) that persists the user's
+ * approvals. Produced by [resolveSkillEnvironment] and consumed by both the Forge prompt builder and
+ * the `skills` subcommand, so the discover → install (disabled) → re-apply-persisted-state pipeline
+ * lives in exactly one place.
  */
-internal fun buildSkillSystemPrompt(configSource: ConfigSource): String? {
+internal class SkillEnvironment(
+    val registry: SkillRegistry,
+    val stateStore: SkillStateStore,
+    val stateFilePath: Path,
+    /** The decisions [stateStore] held at load time — the base a `skills enable/disable` write merges into,
+     * so an entry for a skill not currently on disk is preserved rather than pruned. */
+    val persistedState: Map<String, Boolean>,
+)
+
+/**
+ * Resolves the configured skills environment, or `null` when no skills directory is configured
+ * (`DROIDCOMMAND_SKILLS_DIR` unset/blank) — the opt-in boundary, so an environment that never set it
+ * is untouched.
+ *
+ * Otherwise it discovers every `SKILL.md` under that directory ([SkillDiscovery]), installs each into
+ * a fresh [SkillRegistry] (which leaves them **disabled** — "disabled until the user approves it"),
+ * and re-applies the persisted enable/disable decisions from `DROIDCOMMAND_SKILLS_STATE_FILE` (default
+ * `<dir>/enabled-skills.txt`, a [FileSkillStateStore]). Discovery/parse problems and duplicate-name
+ * conflicts are reported to stderr and skipped, never fatal. A caller that needs the assembled prompt
+ * uses [buildSkillSystemPrompt]; a caller that manages state (`skills list/enable/disable`) uses the
+ * registry and store directly. [configSource] is the same injectable [ConfigSource] [runForge] uses,
+ * so this is testable without touching real env or disk layout.
+ */
+internal fun resolveSkillEnvironment(configSource: ConfigSource): SkillEnvironment? {
     val dir = configSource.get("DROIDCOMMAND_SKILLS_DIR")?.takeIf { it.isNotBlank() } ?: return null
     val root = Path.of(dir)
     val report = SkillDiscovery().discover(root)
     report.failures.forEach { System.err.println("Skill discovery: skipped ${it.sourcePath}: ${it.reason}") }
-    if (report.discovered.isEmpty()) return null
 
     val registry = SkillRegistry()
     for (discovered in report.discovered) {
@@ -542,7 +571,23 @@ internal fun buildSkillSystemPrompt(configSource: ConfigSource): String? {
     val stateFile = configSource.get("DROIDCOMMAND_SKILLS_STATE_FILE")?.takeIf { it.isNotBlank() }
         ?.let { Path.of(it) }
         ?: root.resolve("enabled-skills.txt")
-    registry.applyEnabledState(FileSkillStateStore(stateFile).load())
+    val stateStore = FileSkillStateStore(stateFile)
+    val persistedState = stateStore.load()
+    registry.applyEnabledState(persistedState)
+    return SkillEnvironment(registry, stateStore, stateFile, persistedState)
+}
 
-    return SkillPromptAssembler().assemble(registry.list())
+/**
+ * Builds the system-prompt contribution of the user's enabled skills, or `null` when no skills are
+ * configured or enabled (so the Forge run is byte-for-byte unchanged for anyone who hasn't opted in).
+ *
+ * Only skills marked enabled in the persisted state file contribute ([SkillPromptAssembler] consults
+ * nothing else); a skill on disk but not approved stays silent — the "disabled until the user approves
+ * it" rule. See [resolveSkillEnvironment] for how the directory and state file are read.
+ */
+internal fun buildSkillSystemPrompt(configSource: ConfigSource): String? {
+    val env = resolveSkillEnvironment(configSource) ?: return null
+    val installed = env.registry.list()
+    if (installed.isEmpty()) return null
+    return SkillPromptAssembler().assemble(installed)
 }
