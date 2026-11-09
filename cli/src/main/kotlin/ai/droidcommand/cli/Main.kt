@@ -3,6 +3,7 @@ package ai.droidcommand.cli
 import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.AgentState
 import ai.droidcommand.agent.AgentStateMachine
+import ai.droidcommand.agent.ConversationContext
 import ai.droidcommand.agent.DroidCommandSession
 import ai.droidcommand.agent.PermissionCategory
 import ai.droidcommand.agent.Tool
@@ -42,6 +43,11 @@ import ai.droidcommand.shell.ShellSecurityPolicy
 import ai.droidcommand.shell.ShellTool
 import ai.droidcommand.shizuku.NullPrivilegedShell
 import ai.droidcommand.shizuku.ShizukuTool
+import ai.droidcommand.skills.FileSkillStateStore
+import ai.droidcommand.skills.InstallResult
+import ai.droidcommand.skills.SkillDiscovery
+import ai.droidcommand.skills.SkillPromptAssembler
+import ai.droidcommand.skills.SkillRegistry
 import ai.droidcommand.termux.TermuxTool
 import ai.droidcommand.termux.VictorSuiteCapabilitiesTool
 import ai.droidcommand.websearch.WebSearchTool
@@ -489,13 +495,54 @@ internal fun runForge(
         return 1
     }
 
+    val skillPrompt = buildSkillSystemPrompt(configSource)
+
     cliSession.session.switchMode(AgentMode.FORGE)
     val outcome = cliSession.session.runForgeObjective(
         objective,
         planner,
+        context = ConversationContext(systemPrompt = skillPrompt),
         reservedFinalizationIterations = finalizationSteps,
     )
     println("Final state: ${outcome.finalState}")
     println("Iterations: ${outcome.iterations}")
     return if (outcome.finalState is AgentState.Completed) 0 else 1
+}
+
+/**
+ * Builds the system-prompt contribution of the user's enabled skills, or `null` when no skills are
+ * configured or enabled (so the Forge run is byte-for-byte unchanged for anyone who hasn't opted in).
+ *
+ * Reads a skills directory from `DROIDCOMMAND_SKILLS_DIR`; if unset/blank, returns null immediately.
+ * Otherwise it discovers every `SKILL.md` under that directory ([SkillDiscovery]), installs them
+ * (which leaves them **disabled**), applies the persisted enable/disable decisions from
+ * `DROIDCOMMAND_SKILLS_STATE_FILE` (default `<dir>/enabled-skills.txt`), and assembles only the
+ * enabled skills into one system-prompt string ([SkillPromptAssembler]). A skill that is on disk but
+ * not marked enabled in that file contributes nothing — the "disabled until the user approves it"
+ * rule, surfaced through plain files a user edits. Discovery/parse problems are reported to stderr and
+ * skipped, never fatal to the run. Pure config in, string out — [configSource] is the same injectable
+ * [ConfigSource] [runForge] already uses, so this is testable without touching real env or disk layout.
+ */
+internal fun buildSkillSystemPrompt(configSource: ConfigSource): String? {
+    val dir = configSource.get("DROIDCOMMAND_SKILLS_DIR")?.takeIf { it.isNotBlank() } ?: return null
+    val root = Path.of(dir)
+    val report = SkillDiscovery().discover(root)
+    report.failures.forEach { System.err.println("Skill discovery: skipped ${it.sourcePath}: ${it.reason}") }
+    if (report.discovered.isEmpty()) return null
+
+    val registry = SkillRegistry()
+    for (discovered in report.discovered) {
+        if (registry.install(discovered.manifest) is InstallResult.Conflict) {
+            System.err.println(
+                "Skill discovery: duplicate skill name '${discovered.manifest.name}' at ${discovered.sourcePath} ignored",
+            )
+        }
+    }
+
+    val stateFile = configSource.get("DROIDCOMMAND_SKILLS_STATE_FILE")?.takeIf { it.isNotBlank() }
+        ?.let { Path.of(it) }
+        ?: root.resolve("enabled-skills.txt")
+    registry.applyEnabledState(FileSkillStateStore(stateFile).load())
+
+    return SkillPromptAssembler().assemble(registry.list())
 }

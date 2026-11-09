@@ -25,6 +25,7 @@ dependencies {
     implementation(project(":core-rootforge"))
     implementation(project(":core-flash"))
     implementation(project(":core-websearch"))
+    implementation(project(":core-skills"))
     testImplementation(kotlin("test"))
 }
 
