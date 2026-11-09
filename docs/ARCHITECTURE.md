@@ -833,12 +833,35 @@ tool or objective loop.
 ## 4. Agent state machine (implemented in `core-agent`)
 
 `AgentState` is a sealed hierarchy: `Idle`, `Planning`, `AwaitingApproval`,
-`ExecutingTool`, `Observing`, `Recovering`, `Completed`, `Cancelled`,
+`ExecutingTool`, `Observing`, `Recovering`, `Paused`, `Completed`, `Cancelled`,
 `Failed`. Transitions are validated — an illegal transition (e.g.
 `Completed → ExecutingTool`) throws rather than silently succeeding, which is
 the mechanism that prevents an agent from being resumed after it has already
 terminated. Retry is bounded by an explicit `RetryPolicy(maxAttempts, backoff)`
 passed into the executor; there is no unbounded loop anywhere in this module.
+
+**Pause / resume / cancel (added 2026-11-08).** `AgentState.Paused` is a
+non-terminal, resumable state that captures the exact state it was paused from
+in `Paused.resumeState`. `AgentStateMachine.pause()` moves a running task into
+it (rejecting a terminal or already-paused task); `resume()` restores the
+captured state (rejecting a machine that isn't paused). Cancel needs no new
+API: `Paused` is non-terminal, so `transition(Cancelled(...))` out of it is
+already legal — a paused task stays cancellable. This fills Phase 4's
+"pause, resume, and cancel controls" / `PAUSED` task state at the state-machine
+layer. `ObjectiveEngine.run` now consumes it: it takes an `isPaused: () -> Boolean`
+callback alongside the existing `isCancelled`, checked at each iteration boundary
+(never mid-tool). When paused it moves the machine to `Paused`, waits on an
+injectable `awaitResume` (default a 50 ms poll) until `isPaused` clears, then
+`resume()`s the exact pre-pause state and continues; a cancel observed during the
+wait transitions straight to `Cancelled` without resuming. So a long Forge run
+suspends and resumes at clean planning points. `PauseController` (added
+2026-11-08) is the real wait/notify pause source for this hook: `pause()`/
+`resume()`/`isPaused()` plus an `awaitResume()` that blocks on a `Condition`
+(woken immediately by `resume()`'s `signalAll`) with a bounded per-call wait
+(default 1 s) so a cancel-while-paused is still observed rather than deadlocking
+— a caller passes `controller::isPaused` and `{ controller.awaitResume() }` to
+`run`. A Pilot-loop pause equivalent (the direct `ToolExecutor` path has no
+per-iteration loop) remains the obvious extension.
 
 ## 4b. Objective engine and LLM abstraction (implemented, partial)
 

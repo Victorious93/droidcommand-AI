@@ -4,6 +4,13 @@ package ai.droidcommand.agent
  * Lifecycle states for a single agent task (one Pilot instruction, or one
  * Forge objective). [Completed], [Cancelled], and [Failed] are terminal:
  * [AgentStateMachine] rejects any transition out of them.
+ *
+ * [Paused] is non-terminal and resumable: it captures the exact state the
+ * task was paused from in [Paused.resumeState], so [AgentStateMachine.resume]
+ * can restore it. A paused task is still cancellable — `Cancelled` is a legal
+ * transition out of [Paused] like any other non-terminal state — which is
+ * what makes pause / resume / cancel a coherent control set rather than three
+ * unrelated flags.
  */
 sealed class AgentState {
     data object Idle : AgentState()
@@ -12,6 +19,7 @@ sealed class AgentState {
     data class ExecutingTool(val toolName: String, val attempt: Int) : AgentState()
     data class Observing(val toolName: String, val result: ToolResult) : AgentState()
     data class Recovering(val cause: Throwable, val attempt: Int) : AgentState()
+    data class Paused(val resumeState: AgentState) : AgentState()
     data class Completed(val summary: String) : AgentState()
     data class Cancelled(val reason: String) : AgentState()
     data class Failed(val cause: Throwable) : AgentState()
@@ -60,6 +68,39 @@ class AgentStateMachine(initial: AgentState = AgentState.Idle) {
                 throw IllegalAgentTransition(from, to)
             }
             state = to
+            return state
+        }
+    }
+
+    /**
+     * Pauses a running task: captures the current non-terminal state and moves
+     * to [AgentState.Paused], from which [resume] restores it exactly. Pausing
+     * a terminal task, or one already paused, is rejected the same way an
+     * illegal [transition] is. A paused task stays cancellable — `Paused` is
+     * non-terminal, so `transition(Cancelled(...))` out of it is allowed.
+     */
+    fun pause(): AgentState {
+        synchronized(lock) {
+            val from = state
+            if (from is AgentState.Completed || from is AgentState.Cancelled ||
+                from is AgentState.Failed || from is AgentState.Paused
+            ) {
+                throw IllegalAgentTransition(from, AgentState.Paused(from))
+            }
+            state = AgentState.Paused(from)
+            return state
+        }
+    }
+
+    /**
+     * Resumes a paused task back into the exact state it was paused from.
+     * Calling it on a machine that is not [AgentState.Paused] is rejected.
+     */
+    fun resume(): AgentState {
+        synchronized(lock) {
+            val from = state
+            check(from is AgentState.Paused) { "Cannot resume: the task is not paused (state=$from)" }
+            state = from.resumeState
             return state
         }
     }

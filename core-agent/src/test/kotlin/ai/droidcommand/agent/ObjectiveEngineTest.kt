@@ -102,6 +102,46 @@ class ObjectiveEngineTest {
     }
 
     @Test
+    fun `pauses at the iteration boundary, resumes, then completes`() {
+        val (engine, stateMachine, _) = newEngine(ScriptedPlanner(mutableListOf(PlannerDecision.Complete("done"))))
+        var paused = true
+        var awaitCalls = 0
+        var observedWhilePaused: AgentState? = null
+        val outcome = engine.run(
+            "obj",
+            isPaused = { paused },
+            awaitResume = {
+                awaitCalls++
+                observedWhilePaused = stateMachine.state
+                paused = false // resume after a single poll
+            },
+        )
+        assertTrue(awaitCalls >= 1, "the pause wait loop should have run at least once")
+        assertIs<AgentState.Paused>(observedWhilePaused)
+        assertIs<AgentState.Completed>(outcome.finalState)
+        assertEquals(1, outcome.iterations)
+    }
+
+    @Test
+    fun `a paused objective can be cancelled during the wait without resuming`() {
+        val (engine, _, _) = newEngine(ScriptedPlanner(mutableListOf(PlannerDecision.Complete("unreached"))))
+        var cancelled = false
+        var awaitCalls = 0
+        val outcome = engine.run(
+            "obj",
+            isCancelled = { cancelled },
+            isPaused = { true },
+            awaitResume = {
+                awaitCalls++
+                cancelled = true // cancel while paused
+            },
+        )
+        assertTrue(awaitCalls >= 1, "the pause wait loop should have run before the cancel was observed")
+        assertIs<AgentState.Cancelled>(outcome.finalState)
+        assertEquals(0, outcome.iterations)
+    }
+
+    @Test
     fun `runs a tool then completes on the planner's next decision`() {
         val registry = ToolRegistry().apply { register(EngineNoopTool("echo")) }
         val planner = ScriptedPlanner(
