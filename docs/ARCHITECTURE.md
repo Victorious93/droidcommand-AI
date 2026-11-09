@@ -854,9 +854,14 @@ callback alongside the existing `isCancelled`, checked at each iteration boundar
 injectable `awaitResume` (default a 50 ms poll) until `isPaused` clears, then
 `resume()`s the exact pre-pause state and continues; a cancel observed during the
 wait transitions straight to `Cancelled` without resuming. So a long Forge run
-suspends and resumes at clean planning points. A real wait/notify pause source
-(instead of the default poll) and a Pilot-loop equivalent remain the obvious
-extensions.
+suspends and resumes at clean planning points. `PauseController` (added
+2026-11-08) is the real wait/notify pause source for this hook: `pause()`/
+`resume()`/`isPaused()` plus an `awaitResume()` that blocks on a `Condition`
+(woken immediately by `resume()`'s `signalAll`) with a bounded per-call wait
+(default 1 s) so a cancel-while-paused is still observed rather than deadlocking
+— a caller passes `controller::isPaused` and `{ controller.awaitResume() }` to
+`run`. A Pilot-loop pause equivalent (the direct `ToolExecutor` path has no
+per-iteration loop) remains the obvious extension.
 
 ## 4b. Objective engine and LLM abstraction (implemented, partial)
 
