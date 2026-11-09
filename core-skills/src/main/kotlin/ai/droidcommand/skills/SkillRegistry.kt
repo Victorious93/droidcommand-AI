@@ -71,6 +71,32 @@ class SkillRegistry {
     fun enabled(): List<InstalledSkill> = synchronized(lock) { skills.values.filter { it.enabled } }
 
     /**
+     * A snapshot of every installed skill's enabled flag, keyed by name — the
+     * shape a [SkillStateStore] persists so the user's enable/disable decisions
+     * survive a restart.
+     */
+    fun enabledStateByName(): Map<String, Boolean> = synchronized(lock) {
+        skills.values.associate { it.manifest.name to it.enabled }
+    }
+
+    /**
+     * Re-applies a persisted enabled-state map (from [SkillStateStore.load]) to
+     * the skills currently installed. For each entry whose name is installed, the
+     * enabled flag is set to the stored value; an entry for a skill that is not
+     * installed is ignored, and an installed skill the map does not mention is
+     * left as-is (so a brand-new skill discovered on disk stays disabled until it
+     * is explicitly enabled — a persisted approval is re-applied, but a skill the
+     * user never approved is never auto-enabled). This only flips flags; it
+     * installs nothing and grants no tool.
+     */
+    fun applyEnabledState(states: Map<String, Boolean>) = synchronized(lock) {
+        for ((name, enabled) in states) {
+            val current = skills[name] ?: continue
+            skills[name] = current.copy(enabled = enabled)
+        }
+    }
+
+    /**
      * Case-insensitive search over skill name and description. A blank query
      * matches everything (the same as [list]). Matches are returned in
      * installation order.
