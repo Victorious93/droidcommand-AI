@@ -24,6 +24,9 @@ import ai.droidcommand.security.ApprovalPrompt
  *
  * It is never offered to the Pilot or Forge planners ([ToolSpec.allowedModes] is empty); only Chat's helper-bot
  * path, which lists tools without a mode, can offer it. Server failures become a plain [ToolResult.Failure].
+ *
+ * Once [revoke]d it never starts a call again. A call already handed to the network when the owner revokes is
+ * not interrupted: it finishes (or times out) and its answer is still returned.
  */
 class McpBridgedTool(
     val server: McpServerConfig,
@@ -43,7 +46,21 @@ class McpBridgedTool(
         parameterSchema = info.parameters,
     )
 
+    @Volatile
+    private var revoked = false
+
+    /**
+     * Called by [McpToolCatalog] when the owner turns MCP or this server off, or removes the server. From then on
+     * this tool sends nothing, even if a caller still holds it (for example while an approval dialog is open).
+     */
+    internal fun revoke() {
+        revoked = true
+    }
+
+    private fun revokedFailure() = ToolResult.Failure("${server.label} was turned off or removed. Nothing was sent.")
+
     override fun execute(input: Map<String, String>): ToolResult {
+        if (revoked) return revokedFailure()
         if (kind != McpToolKind.READ_ONLY) {
             val ok = try {
                 approval.requestApproval(spec.name, input, confirmReason(server, info, kind))
@@ -51,6 +68,8 @@ class McpBridgedTool(
                 false
             }
             if (!ok) return ToolResult.Failure("You said no. Nothing was sent to ${server.label}.")
+            // The owner may have turned the server off while that question was open.
+            if (revoked) return revokedFailure()
         }
         return try {
             when (val result = source.call(info.name, input)) {

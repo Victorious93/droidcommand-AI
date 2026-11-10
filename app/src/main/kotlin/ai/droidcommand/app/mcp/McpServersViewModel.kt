@@ -129,7 +129,12 @@ class McpServersViewModel @Inject constructor(
         if (runtime.enabled()) refresh() else reloadRows()
     }
 
-    /** Reconnects and reloads tools. Server trouble shows as a plain message on that server's row. */
+    /**
+     * Reconnects and reloads tools. Server trouble shows as a plain message on that server's row.
+     *
+     * While a refresh is running a second one is not started: the runtime already took away the tools of anything
+     * just turned off or removed, and the running refresh starts over with the new settings by itself.
+     */
     fun refresh() {
         if (mutable.value.busy) return
         if (!runtime.enabled()) {
@@ -143,7 +148,12 @@ class McpServersViewModel @Inject constructor(
             mutable.update {
                 it.copy(
                     busy = false,
-                    message = if (statuses.isEmpty()) "Add a server first." else "$count tool(s) ready. Pick them for a helper bot in Bot maker.",
+                    message = when {
+                        // Turned off while the servers were still answering: do not claim anything is ready.
+                        !runtime.enabled() -> "Extra AI tools are off. No server is contacted."
+                        statuses.isEmpty() -> "Add a server first."
+                        else -> "$count tool(s) ready. Pick them for a helper bot in Bot maker."
+                    },
                 )
             }
             reloadRows()
