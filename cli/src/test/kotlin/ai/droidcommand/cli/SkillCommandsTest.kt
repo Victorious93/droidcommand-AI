@@ -36,6 +36,15 @@ class SkillCommandsTest {
 
     private fun stateFile(): Path = root / "enabled-skills.txt"
 
+    /** Writes a SKILL.md whose frontmatter declares a `parameters:` block (each entry is one '- ' line's content). */
+    private fun writeSkillWithParameters(name: String, parameters: List<String>, body: String = "Body of $name") {
+        val dir = (root / name).also { it.createDirectories() }
+        val block = parameters.joinToString("\n") { "  - $it" }
+        (dir / "SKILL.md").writeText(
+            "---\nname: $name\ndescription: Skill $name\nparameters:\n$block\n---\n$body\n",
+        )
+    }
+
     private fun writeSkill(name: String, body: String = "Body of $name") {
         val dir = (root / name).also { it.createDirectories() }
         (dir / "SKILL.md").writeText(
@@ -98,6 +107,36 @@ class SkillCommandsTest {
         assertTrue(out.contains("1 enabled / 2 total"), out)
         assertTrue(out.contains("[enabled ] summarize — Skill summarize"), out)
         assertTrue(out.contains("[disabled] translate — Skill translate"), out)
+    }
+
+    @Test
+    fun `list shows a skill's declared parameters with their config keys`() {
+        writeSkillWithParameters(
+            "translate",
+            listOf(
+                "target | Target language | required",
+                "tone | Desired tone | optional | neutral",
+            ),
+        )
+        stateFile().writeText("translate=true\n")
+
+        val (code, out, _) = capture { runSkills(listOf("list"), dirConfig()) }
+        assertEquals(0, code)
+        assertTrue(out.contains("param target (required) — Target language  [set DROIDCOMMAND_SKILL_TRANSLATE_TARGET]"), out)
+        assertTrue(
+            out.contains("param tone (optional, default: neutral) — Desired tone  [set DROIDCOMMAND_SKILL_TRANSLATE_TONE]"),
+            out,
+        )
+    }
+
+    @Test
+    fun `list omits a parameters line for a skill that declares none`() {
+        writeSkill("summarize")
+        stateFile().writeText("summarize=true\n")
+
+        val (code, out, _) = capture { runSkills(listOf("list"), dirConfig()) }
+        assertEquals(0, code)
+        assertFalse(out.contains("param "), "a parameter-free skill should print no param lines: $out")
     }
 
     @Test
