@@ -24,14 +24,6 @@ _Steps above are taken from this repo’s build files / existing docs; anything 
 
 <!-- victorious-fleet-readme-refresh:end -->
 
-<p align="center">
-  <img src="assets/logo.png" alt="droidcommand-AI logo" width="200">
-</p>
-
-<p align="center">
-  <img src="docs/images/logo.jpg" alt="DroidCommand AI logo" width="200">
-</p>
-
 # DroidCommand AI
 
 DroidCommand AI (DCA) is the **hub app** of a small fleet of independently
