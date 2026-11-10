@@ -9,6 +9,7 @@ import kotlin.io.path.writeText
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -38,6 +39,15 @@ class SkillWiringTest {
             ---
             $body
             """.trimIndent(),
+        )
+    }
+
+    /** Writes a SKILL.md whose frontmatter declares a `parameters:` block (each entry is one '- ' line's content). */
+    private fun writeSkillWithParameters(name: String, parameters: List<String>, body: String) {
+        val dir = (root / name).also { it.createDirectories() }
+        val block = parameters.joinToString("\n") { "  - $it" }
+        (dir / "SKILL.md").writeText(
+            "---\nname: $name\ndescription: Skill $name\nparameters:\n$block\n---\n$body\n",
         )
     }
 
@@ -93,5 +103,71 @@ class SkillWiringTest {
         val prompt = buildSkillSystemPrompt(config(mapOf("DROIDCOMMAND_SKILLS_DIR" to root.toString())))!!
         assertTrue(prompt.contains("## good: Skill good"))
         assertFalse(prompt.contains("name: bad"))
+    }
+
+    @Test
+    fun `substitutes a configured parameter value into the prompt`() {
+        writeSkillWithParameters("translate", listOf("target | Target language | required"), "Translate into {{target}}.")
+        (root / "enabled-skills.txt").writeText("translate=true\n")
+
+        val prompt = buildSkillSystemPrompt(
+            config(
+                mapOf(
+                    "DROIDCOMMAND_SKILLS_DIR" to root.toString(),
+                    "DROIDCOMMAND_SKILL_TRANSLATE_TARGET" to "French",
+                ),
+            ),
+        )!!
+        assertTrue(prompt.contains("Translate into French."), prompt)
+        assertFalse(prompt.contains("{{target}}"), "the placeholder must be filled")
+    }
+
+    @Test
+    fun `falls back to a parameter default when the value is unset`() {
+        writeSkillWithParameters("translate", listOf("tone | Desired tone | optional | neutral"), "Use a {{tone}} tone.")
+        (root / "enabled-skills.txt").writeText("translate=true\n")
+
+        val prompt = buildSkillSystemPrompt(config(mapOf("DROIDCOMMAND_SKILLS_DIR" to root.toString())))!!
+        assertTrue(prompt.contains("Use a neutral tone."), prompt)
+    }
+
+    @Test
+    fun `skips an enabled skill whose required parameter is unset, keeping others`() {
+        writeSkillWithParameters("translate", listOf("target | Target language | required"), "Translate into {{target}}.")
+        writeSkill("summarize", "Summarize the document.")
+        (root / "enabled-skills.txt").writeText("translate=true\nsummarize=true\n")
+
+        // No DROIDCOMMAND_SKILL_TRANSLATE_TARGET -> translate is skipped; summarize still contributes.
+        val prompt = buildSkillSystemPrompt(config(mapOf("DROIDCOMMAND_SKILLS_DIR" to root.toString())))!!
+        assertTrue(prompt.contains("## summarize: Skill summarize"), prompt)
+        assertFalse(prompt.contains("translate"), "a skill missing a required parameter must not contribute")
+    }
+
+    @Test
+    fun `reads parameter values under the normalized config key`() {
+        // A hyphenated skill and parameter name map to an underscored, upper-cased env key.
+        writeSkillWithParameters(
+            "web-search",
+            listOf("max-results | How many results | required"),
+            "Fetch {{max-results}} results.",
+        )
+        (root / "enabled-skills.txt").writeText("web-search=true\n")
+
+        val prompt = buildSkillSystemPrompt(
+            config(
+                mapOf(
+                    "DROIDCOMMAND_SKILLS_DIR" to root.toString(),
+                    "DROIDCOMMAND_SKILL_WEB_SEARCH_MAX_RESULTS" to "5",
+                ),
+            ),
+        )!!
+        assertTrue(prompt.contains("Fetch 5 results."), prompt)
+    }
+
+    @Test
+    fun `builds the parameter config key by upper-casing and underscoring`() {
+        assertEquals("DROIDCOMMAND_SKILL_TRANSLATE_TARGET", skillParameterConfigKey("translate", "target"))
+        assertEquals("DROIDCOMMAND_SKILL_WEB_SEARCH_MAX_RESULTS", skillParameterConfigKey("web-search", "max-results"))
+        assertEquals("DROIDCOMMAND_SKILL_A_B_C_D", skillParameterConfigKey("a.b", "c.d"))
     }
 }
