@@ -4,6 +4,7 @@ import ai.droidcommand.config.AssistantCapability
 import ai.droidcommand.config.AssistantCapabilitySettingsStore
 import ai.droidcommand.skills.DiscoveredSkill
 import ai.droidcommand.skills.FileSkillStateStore
+import ai.droidcommand.skills.SkillBindResult
 import ai.droidcommand.skills.SkillDiscovery
 import ai.droidcommand.skills.SkillParameter
 import ai.droidcommand.skills.SkillParameterBinder
@@ -19,8 +20,6 @@ import kotlinx.coroutines.flow.update
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.inject.Inject
-import kotlin.io.path.readText
-import kotlin.io.path.writeText
 
 data class SkillFileRow(
     val name: String,
@@ -46,9 +45,10 @@ class SkillFilesViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val capabilities: AssistantCapabilitySettingsStore,
 ) : ViewModel() {
-    private val skillsDir: Path = context.filesDir.toPath().resolve("skills")
-    private val stateFile: Path = context.filesDir.toPath().resolve("skill-state.json")
-    private val valuesFile: Path = context.filesDir.toPath().resolve("skill-param-values.json")
+    private val filesDir: Path = context.filesDir.toPath()
+    private val skillsDir: Path = SkillFilesLocations.skillsDir(filesDir)
+    private val stateFile: Path = SkillFilesLocations.stateFile(filesDir)
+    private val valuesFile: Path = SkillFilesLocations.valuesFile(filesDir)
     private val stateStore = FileSkillStateStore(stateFile)
     private val discovery = SkillDiscovery()
     private val binder = SkillParameterBinder()
@@ -60,7 +60,7 @@ class SkillFilesViewModel @Inject constructor(
 
     init {
         Files.createDirectories(skillsDir)
-        loadParamValues()
+        paramValues.putAll(SkillParameterValues.load(valuesFile).mapValues { it.value.toMutableMap() })
         refresh()
     }
 
@@ -136,9 +136,15 @@ class SkillFilesViewModel @Inject constructor(
                 status = "Saved settings for $name.",
             )
         }
-        // Touch binder so unused-import / dead-code detectors keep the dependency honest.
         registry.get(name)?.let { installed ->
-            binder.bind(installed.manifest) { key -> paramValues[name]?.get(key) }
+            when (val bound = binder.bind(installed.manifest) { key -> paramValues[name]?.get(key) }) {
+                is SkillBindResult.Bound -> Unit
+                is SkillBindResult.MissingRequired -> mutable.update { ui ->
+                    ui.copy(
+                        status = "Saved settings for $name, but still missing: ${bound.missing.joinToString(", ")}.",
+                    )
+                }
+            }
         }
     }
 
@@ -171,33 +177,7 @@ class SkillFilesViewModel @Inject constructor(
             .filter { it.required && values[it.name].isNullOrBlank() && it.default.isNullOrBlank() }
             .map { it.name }
 
-    private fun loadParamValues() {
-        if (!Files.isRegularFile(valuesFile)) return
-        val text = runCatching { valuesFile.readText() }.getOrNull() ?: return
-        text.lineSequence().forEach { line ->
-            val trimmed = line.trim()
-            if (trimmed.isEmpty() || trimmed.startsWith("#")) return@forEach
-            val bar = trimmed.indexOf('|')
-            val eq = trimmed.indexOf('=')
-            if (bar <= 0 || eq <= bar) return@forEach
-            val skill = trimmed.substring(0, bar)
-            val param = trimmed.substring(bar + 1, eq)
-            val value = trimmed.substring(eq + 1)
-            paramValues.getOrPut(skill) { linkedMapOf() }[param] = value
-        }
-    }
-
     private fun persistParamValues() {
-        runCatching {
-            val body = buildString {
-                appendLine("# skill parameter values")
-                paramValues.entries.sortedBy { it.key }.forEach { (skill, map) ->
-                    map.entries.sortedBy { it.key }.forEach { (param, value) ->
-                        append(skill).append('|').append(param).append('=').append(value.replace('\n', ' ')).append('\n')
-                    }
-                }
-            }
-            valuesFile.writeText(body)
-        }
+        runCatching { SkillParameterValues.save(valuesFile, paramValues) }
     }
 }

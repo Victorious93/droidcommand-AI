@@ -60,6 +60,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -91,6 +92,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> Unit = {}) {
     val state by viewModel.state.collectAsState()
     LaunchedEffect(Unit) { viewModel.pickUpBot() }
+    DisposableEffect(Unit) {
+        viewModel.startWakeWordIfEnabled()
+        onDispose { viewModel.stopWakeWord() }
+    }
     // Saved across rotation, folding and theme changes: with plain remember a half-typed message vanished while the
     // ViewModel (and the conversation) survived.
     var input by rememberDraft()
@@ -412,6 +417,21 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
                 state.brainStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
         }
+    }
+    if (state.pendingRiskySend != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissRiskySend,
+            title = { Text("Send this request?") },
+            text = {
+                Text(
+                    (state.pendingRiskyReason ?: "This sounds like it could change or delete something.") +
+                        "\n\n\"" + state.pendingRiskySend + "\"",
+                )
+            },
+            confirmButton = { DroidTextButton(onClick = viewModel::confirmRiskySend, modifier = Modifier.testTag("jarvis_risky_confirm")) { Text("Yes, send") } },
+            dismissButton = { DroidTextButton(onClick = viewModel::dismissRiskySend, modifier = Modifier.testTag("jarvis_risky_cancel")) { Text("No") } },
+            modifier = Modifier.testTag("jarvis_risky_dialog"),
+        )
     }
     if (state.pendingBrainSave != null) {
         AlertDialog(

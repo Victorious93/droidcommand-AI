@@ -30,6 +30,7 @@ import ai.droidcommand.app.shizuku.embedded.WirelessAdbClient
 import ai.droidcommand.app.status.PersistingRemoteStatusTray
 import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
 import ai.droidcommand.app.theme.DataStoreThemePreferenceStore
+import ai.droidcommand.app.widget.StatusWidgetProvider
 import ai.droidcommand.config.AssistantCapabilitySettingsStore
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.config.FileAssistantCapabilitySettingsStore
@@ -212,7 +213,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideRemoteStatusTray(@ApplicationContext context: Context): RemoteStatusTray =
-        PersistingRemoteStatusTray(context.filesDir.toPath().resolve("status-tray.json"))
+        PersistingRemoteStatusTray(
+            context.filesDir.toPath().resolve("status-tray.json"),
+            onPersisted = { StatusWidgetProvider.refreshAll(context) },
+        )
 
     @Provides
     @Singleton

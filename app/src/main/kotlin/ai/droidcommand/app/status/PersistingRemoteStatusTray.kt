@@ -18,6 +18,7 @@ import kotlin.io.path.writeText
 class PersistingRemoteStatusTray(
     private val file: Path,
     private val memory: InMemoryRemoteStatusTray = InMemoryRemoteStatusTray(),
+    private val onPersisted: () -> Unit = {},
 ) : RemoteStatusTray {
     init {
         loadIntoMemory()
@@ -52,6 +53,7 @@ class PersistingRemoteStatusTray(
             } catch (_: AtomicMoveNotSupportedException) {
                 Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING)
             }
+            onPersisted()
         }
     }
 }

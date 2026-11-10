@@ -8,6 +8,7 @@ import ai.droidcommand.remotecontrol.NodeStatusSnapshotCodec
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
@@ -35,6 +36,16 @@ class StatusWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_status_text, summary)
             views.setOnClickPendingIntent(R.id.widget_status_root, open)
             appWidgetManager.updateAppWidget(id, views)
+        }
+    }
+
+    companion object {
+        /** Rebuilds every status widget from the persisted tray. Read-only — does not run tools. */
+        fun refreshAll(context: Context) {
+            val mgr = AppWidgetManager.getInstance(context)
+            val ids = mgr.getAppWidgetIds(ComponentName(context, StatusWidgetProvider::class.java))
+            if (ids.isEmpty()) return
+            StatusWidgetProvider().onUpdate(context.applicationContext, mgr, ids)
         }
     }
 

@@ -187,7 +187,7 @@ Complementary, not competing. Server executor is `ToolRunner` (accepts
 `SecureToolExecutor`); JSON array/object args are preserved as JSON
 text; explicit JSON `null` is omitted. This session added
 `ToolParameterSchema` validation and `ToolCallEnvelope` call ids on
-that path. There is still **no** MCP client module.
+that path. An MCP client (`core-mcp.McpToolClient`) exists and is unit-tested, but it is not wired into `core-skills` or the phone app.
 
 **Destination:** new `core-mcp-client` (Phase 2); `core-mcp` (server
 prerequisites: done).
@@ -403,7 +403,7 @@ feature.
 | KAI-003 | Personality | extend existing (UI) | NOT STARTED (model exists) |
 | KAI-004 | Providers / fallback | extend existing | PARTIAL |
 | KAI-005 | Local inference (LiteRT) | optional later; keep GGUF | GGUF PARTIAL; LiteRT NOT STARTED |
-| KAI-006 | MCP client | new adapter | server done; client NOT STARTED |
+| KAI-006 | MCP client | new adapter | server done; client exists (`McpToolClient`) but is not wired into core-skills or the phone app |
 | KAI-007 | SKILL.md | adapt source later | prompt-skills PARTIAL |
 | KAI-008 | Tasks / heartbeat | extend existing + later | macros done; heartbeat NOT STARTED |
 | KAI-009 | Linux / PRoot | optional later | Termux PARTIAL |

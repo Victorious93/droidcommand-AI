@@ -39,8 +39,8 @@ object HelperBots {
         options.filter { it.risky && it.name in selected }.map { it.name }.sorted()
 
     /**
-     * The system text added to every message while the bot is running in Chat. Tools are named so the AI
-     * knows its limits; the bot never gets a way around the app's approval prompts.
+     * The system text added to every message while the bot is running in Chat. Named tools are also enforced
+     * by a hard allow-list in Chat; the bot never gets a way around the app's approval prompts.
      */
     fun systemPrompt(bot: HelperBot): String = buildString {
         append("You are \"").append(bot.name.trim()).append("\", a helper bot inside DroidCommand.\n")
@@ -48,9 +48,9 @@ object HelperBots {
         if (bot.allowedTools.isEmpty()) {
             append("You may not use any device tools; answer in text only.")
         } else {
-            append("You may only suggest these device tools: ")
+            append("You may only use these device tools: ")
             append(bot.allowedTools.sorted().joinToString(", "))
-            append(". Any tool that can change the phone must be approved by the user first; never claim you ran one yourself.")
+            append(". Tools not on this list are refused. Any tool that can change the phone must be approved by the user first; never claim you ran one yourself.")
         }
     }
 
