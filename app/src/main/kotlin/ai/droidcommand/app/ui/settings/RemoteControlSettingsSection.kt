@@ -3,6 +3,9 @@ package ai.droidcommand.app.ui.settings
 import ai.droidcommand.app.fleet.connectionClassLabel
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.remotecontrol.DevicePairing
 import ai.droidcommand.remotecontrol.Macro
 import ai.droidcommand.remotecontrol.MacroTriggerKind
@@ -16,14 +19,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -96,13 +96,13 @@ fun RemoteControlSettingsSection(viewModel: RemoteControlViewModel = hiltViewMod
     DroidCard {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "Consumed and published fleet health (mesh / VPN / browser / SMS / node health). " +
-                    "Shared with VictorLaunch. Exact schema/transport is still pending. No live bind.",
+                "Latest health reports from paired fleet apps on this phone (mesh, VPN, browser, SMS, and node health). " +
+                    "Rows are saved across restarts. Open Status and backup under Advanced for the full view.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (ui.statusTray.isEmpty()) {
-                Text("No snapshots yet.", style = MaterialTheme.typography.bodySmall)
+                Text("No status reports yet.", style = MaterialTheme.typography.bodySmall)
             } else {
                 ui.statusTray.forEach { row ->
                     val health = row.healthy?.let { if (it) "healthy" else "unhealthy" } ?: "unknown"
@@ -118,15 +118,14 @@ fun RemoteControlSettingsSection(viewModel: RemoteControlViewModel = hiltViewMod
     DroidCard {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "Versioned local JSON of this controller's macros, mappings, and device pairings " +
-                    "(plus targets and status tray). Unified fleet schema is still pending. API keys " +
-                    "and VictorSMS secrets are not included.",
+                "Save or restore this phone's macros, command mappings, pairings, and status rows as a local file. " +
+                    "API keys and VictorSMS secrets are never included.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { viewModel.exportBackup() }) { Text("Export local backup") }
-                OutlinedButton(onClick = { viewModel.importBackup() }) { Text("Restore local backup") }
+                DroidPrimaryButton(onClick = { viewModel.exportBackup() }) { Text("Export local backup") }
+                DroidSecondaryButton(onClick = { viewModel.importBackup() }) { Text("Restore local backup") }
             }
         }
     }
@@ -175,7 +174,7 @@ private fun ExternalControlCard(enabled: Boolean, onSet: (Boolean) -> Unit) {
                 )
             },
             confirmButton = {
-                TextButton(
+                DroidTextButton(
                     onClick = {
                         confirmOn = false
                         onSet(true)
@@ -184,7 +183,7 @@ private fun ExternalControlCard(enabled: Boolean, onSet: (Boolean) -> Unit) {
                 ) { Text("Turn on") }
             },
             dismissButton = {
-                TextButton(onClick = { confirmOn = false }) { Text("Keep off") }
+                DroidTextButton(onClick = { confirmOn = false }) { Text("Keep off") }
             },
         )
     }
@@ -216,7 +215,7 @@ private fun PairingEditor(viewModel: RemoteControlViewModel) {
             OutlinedTextField(value = sourceNodeRef, onValueChange = { sourceNodeRef = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Source id") })
             OutlinedTextField(value = packageName, onValueChange = { packageName = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Package") })
             OutlinedTextField(value = certSha256, onValueChange = { certSha256 = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Signing certificate (optional)") })
-            Button(
+            DroidPrimaryButton(
                 onClick = { viewModel.savePairing(sourceNodeRef, packageName, certSha256) },
                 enabled = sourceNodeRef.isNotBlank() && packageName.isNotBlank(),
             ) { Text("Save pairing") }
@@ -236,7 +235,7 @@ private fun PairingRow(pairing: DevicePairing, viewModel: RemoteControlViewModel
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            OutlinedButton(onClick = { viewModel.removePairing(pairing.sourceNodeRef) }) { Text("Remove") }
+            DroidSecondaryButton(onClick = { viewModel.removePairing(pairing.sourceNodeRef) }) { Text("Remove") }
         }
     }
 }
@@ -259,7 +258,7 @@ private fun TargetEditor(viewModel: RemoteControlViewModel) {
                     Text(connectionClassLabel(candidate))
                 }
             }
-            Button(
+            DroidPrimaryButton(
                 onClick = { viewModel.saveTarget(nodeId, displayName, integrationClass, packageName) },
                 enabled = nodeId.isNotBlank() && displayName.isNotBlank(),
             ) { Text("Save target") }
@@ -279,7 +278,7 @@ private fun TargetRow(device: TargetDevice, viewModel: RemoteControlViewModel) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            OutlinedButton(onClick = { viewModel.removeTarget(device.nodeId) }) { Text("Remove") }
+            DroidSecondaryButton(onClick = { viewModel.removeTarget(device.nodeId) }) { Text("Remove") }
         }
     }
 }
@@ -320,7 +319,7 @@ private fun MappingEditor(viewModel: RemoteControlViewModel) {
                     enabled = !action.destructiveByDefinition,
                 )
             }
-            Button(
+            DroidPrimaryButton(
                 onClick = {
                     viewModel.saveMapping(id, displayName, voicePhrase, smsCommandId, targetNodeId, action, delivery, destructive)
                 },
@@ -350,9 +349,9 @@ private fun MappingRow(mapping: RemoteCommandMapping, viewModel: RemoteControlVi
             }
             OutlinedTextField(value = phrase, onValueChange = { phrase = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Test voice phrase") })
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { viewModel.previewVoice(phrase) }, enabled = phrase.isNotBlank()) { Text("Match") }
-                Button(onClick = { viewModel.requestRun(mapping.id) }) { Text("Run (asks first)") }
-                OutlinedButton(onClick = { viewModel.removeMapping(mapping.id) }) { Text("Delete") }
+                DroidSecondaryButton(onClick = { viewModel.previewVoice(phrase) }, enabled = phrase.isNotBlank()) { Text("Match") }
+                DroidPrimaryButton(onClick = { viewModel.requestRun(mapping.id) }) { Text("Run (asks first)") }
+                DroidSecondaryButton(onClick = { viewModel.removeMapping(mapping.id) }) { Text("Delete") }
             }
         }
     }
@@ -397,7 +396,7 @@ private fun MacroEditor(viewModel: RemoteControlViewModel) {
                 Text("First step destructive")
                 Switch(checked = destructive, onCheckedChange = { destructive = it })
             }
-            Button(
+            DroidPrimaryButton(
                 onClick = {
                     viewModel.saveMacro(
                         id, displayName, triggerKind, voicePhrase, smsCommandId, scheduleExpr,
@@ -422,9 +421,9 @@ private fun MacroRow(macro: Macro, viewModel: RemoteControlViewModel) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { viewModel.dryRunMacro(macro.id) }) { Text("Dry-run") }
-                Button(onClick = { viewModel.requestMacroRun(macro.id) }) { Text("Run (asks first)") }
-                OutlinedButton(onClick = { viewModel.removeMacro(macro.id) }) { Text("Delete") }
+                DroidSecondaryButton(onClick = { viewModel.dryRunMacro(macro.id) }) { Text("Dry-run") }
+                DroidPrimaryButton(onClick = { viewModel.requestMacroRun(macro.id) }) { Text("Run (asks first)") }
+                DroidSecondaryButton(onClick = { viewModel.removeMacro(macro.id) }) { Text("Delete") }
             }
         }
     }

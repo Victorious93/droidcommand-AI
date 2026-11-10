@@ -3,6 +3,9 @@ package ai.droidcommand.app.ui.onboarding
 import ai.droidcommand.app.localmodels.OpenGgufDocument
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import android.Manifest
 import android.os.Build
@@ -16,11 +19,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -104,18 +104,18 @@ fun FirstRunContent(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             if (state.step != FirstRunStep.WELCOME) {
-                OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f).testTag("first_run_back")) {
+                DroidSecondaryButton(onClick = onBack, modifier = Modifier.weight(1f).testTag("first_run_back")) {
                     Text("Back")
                 }
             }
-            Button(
+            DroidPrimaryButton(
                 onClick = onNext,
                 modifier = Modifier.weight(1f).testTag("first_run_next"),
             ) {
                 Text(if (state.step == FirstRunStep.PERMISSIONS) "Finish" else "Next")
             }
         }
-        TextButton(
+        DroidTextButton(
             onClick = onSkip,
             modifier = Modifier.fillMaxWidth().testTag("first_run_skip"),
         ) { Text("Skip for now") }
@@ -161,12 +161,12 @@ private fun ModelStep(
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Button(
+            DroidPrimaryButton(
                 onClick = onPickModel,
                 enabled = !state.importing,
                 modifier = Modifier.fillMaxWidth().testTag("first_run_pick_gguf"),
             ) { Text(if (state.importing) "Copying…" else "Pick a .gguf from storage") }
-            OutlinedButton(
+            DroidSecondaryButton(
                 onClick = onBrowseCatalog,
                 modifier = Modifier.fillMaxWidth().testTag("first_run_browse_catalog"),
             ) { Text("Browse catalog") }
@@ -248,7 +248,7 @@ private fun PermissionRow(
         if (granted) {
             Text("Allowed", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         } else {
-            OutlinedButton(onClick = onAsk, modifier = Modifier.fillMaxWidth().testTag(tag)) {
+            DroidSecondaryButton(onClick = onAsk, modifier = Modifier.fillMaxWidth().testTag(tag)) {
                 Text("Allow")
             }
         }

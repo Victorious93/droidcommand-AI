@@ -5,6 +5,7 @@ import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
 import ai.droidcommand.app.ui.theme.AccentBlueBright
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.app.ui.update.ApkDownloadBar
 import ai.droidcommand.app.update.ApkDownload
 import ai.droidcommand.app.ux.KaiCapabilityCopy
@@ -19,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +46,9 @@ fun AdvancedScreen(
     onOpenN8n: () -> Unit = {},
     onOpenToolbox: () -> Unit = {},
     onOpenStudio: () -> Unit = {},
+    onOpenBotMaker: () -> Unit = {},
+    onOpenSkillFiles: () -> Unit = {},
+    onOpenStatus: () -> Unit = {},
     onCopiedLink: () -> Unit = {},
 ) {
     AdvancedContent(
@@ -59,6 +62,9 @@ fun AdvancedScreen(
         onOpenN8n = onOpenN8n,
         onOpenToolbox = onOpenToolbox,
         onOpenStudio = onOpenStudio,
+        onOpenBotMaker = onOpenBotMaker,
+        onOpenSkillFiles = onOpenSkillFiles,
+        onOpenStatus = onOpenStatus,
         onCopiedLink = onCopiedLink,
     )
 }
@@ -75,6 +81,9 @@ private fun AdvancedContent(
     onOpenN8n: () -> Unit,
     onOpenToolbox: () -> Unit,
     onOpenStudio: () -> Unit,
+    onOpenBotMaker: () -> Unit,
+    onOpenSkillFiles: () -> Unit,
+    onOpenStatus: () -> Unit,
     onCopiedLink: () -> Unit,
 ) {
     Column(
@@ -104,15 +113,18 @@ private fun AdvancedContent(
         SectionLabel("Power-user screens")
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onOpenPilot, modifier = Modifier.fillMaxWidth()) { Text("One-step command") }
-                OutlinedButton(onClick = onOpenPlan, modifier = Modifier.fillMaxWidth()) { Text("Multi-step plan") }
-                OutlinedButton(onClick = onOpenMemory, modifier = Modifier.fillMaxWidth()) { Text("Memory") }
-                OutlinedButton(onClick = onOpenBrain, modifier = Modifier.fillMaxWidth().testTag("advanced_open_brain")) { Text("Brain") }
-                OutlinedButton(onClick = onOpenTools, modifier = Modifier.fillMaxWidth()) { Text("Extra tools") }
-                OutlinedButton(onClick = onOpenLogs, modifier = Modifier.fillMaxWidth()) { Text("Activity log") }
-                OutlinedButton(onClick = onOpenN8n, modifier = Modifier.fillMaxWidth().testTag("advanced_n8n")) { Text("n8n (self-hosted)") }
-                OutlinedButton(onClick = onOpenStudio, modifier = Modifier.fillMaxWidth().testTag("advanced_notes_studio")) { Text("Notes Studio") }
-                OutlinedButton(onClick = onOpenToolbox, modifier = Modifier.fillMaxWidth().testTag("advanced_system_toolbox")) { Text("System Toolbox (Shizuku / root)") }
+                DroidSecondaryButton(onClick = onOpenPilot, modifier = Modifier.fillMaxWidth()) { Text("One-step command") }
+                DroidSecondaryButton(onClick = onOpenPlan, modifier = Modifier.fillMaxWidth()) { Text("Multi-step plan") }
+                DroidSecondaryButton(onClick = onOpenMemory, modifier = Modifier.fillMaxWidth()) { Text("Memory") }
+                DroidSecondaryButton(onClick = onOpenBrain, modifier = Modifier.fillMaxWidth().testTag("advanced_open_brain")) { Text("Brain") }
+                DroidSecondaryButton(onClick = onOpenTools, modifier = Modifier.fillMaxWidth()) { Text("Extra tools") }
+                DroidSecondaryButton(onClick = onOpenLogs, modifier = Modifier.fillMaxWidth()) { Text("Activity log") }
+                DroidSecondaryButton(onClick = onOpenN8n, modifier = Modifier.fillMaxWidth().testTag("advanced_n8n")) { Text("n8n (self-hosted)") }
+                DroidSecondaryButton(onClick = onOpenStudio, modifier = Modifier.fillMaxWidth().testTag("advanced_notes_studio")) { Text("Notes Studio") }
+                DroidSecondaryButton(onClick = onOpenToolbox, modifier = Modifier.fillMaxWidth().testTag("advanced_system_toolbox")) { Text("System Toolbox (Shizuku / root)") }
+                DroidSecondaryButton(onClick = onOpenBotMaker, modifier = Modifier.fillMaxWidth().testTag("advanced_bot_maker")) { Text("Bot maker") }
+                DroidSecondaryButton(onClick = onOpenSkillFiles, modifier = Modifier.fillMaxWidth().testTag("advanced_skill_files")) { Text("Skill files") }
+                DroidSecondaryButton(onClick = onOpenStatus, modifier = Modifier.fillMaxWidth().testTag("advanced_status_backup")) { Text("Status and backup") }
             }
         }
         SectionLabel("Mode names")
@@ -145,13 +157,17 @@ private fun KaiCapabilityGatesSection(viewModel: SettingsViewModel) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Later assistant features", style = MaterialTheme.typography.titleMedium)
             Text(
-                "These stay off except Brain notes, which you can turn on. " +
-                    "Nothing here turns on remote control or skips a confirmation.",
+                "Brain notes, Bot Maker, and Skill scripts can be turned on here. " +
+                    "Everything else stays off for now. Nothing here turns on remote control or skips a confirmation.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             rows.forEach { row ->
-                val toggleable = row.capability == AssistantCapability.BRAIN
+                val toggleable = row.capability in setOf(
+                    AssistantCapability.BRAIN,
+                    AssistantCapability.BOT_MAKER,
+                    AssistantCapability.SKILL_SCRIPTS,
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -169,7 +185,18 @@ private fun KaiCapabilityGatesSection(viewModel: SettingsViewModel) {
                     }
                     Switch(
                         checked = row.enabled,
-                        onCheckedChange = if (toggleable) { on -> viewModel.setBrainEnabled(on) } else null,
+                        onCheckedChange = if (toggleable) {
+                            { on ->
+                                when (row.capability) {
+                                    AssistantCapability.BRAIN -> viewModel.setBrainEnabled(on)
+                                    AssistantCapability.BOT_MAKER -> viewModel.setBotMakerEnabled(on)
+                                    AssistantCapability.SKILL_SCRIPTS -> viewModel.setSkillScriptsEnabled(on)
+                                    else -> Unit
+                                }
+                            }
+                        } else {
+                            null
+                        },
                         enabled = toggleable,
                     )
                 }

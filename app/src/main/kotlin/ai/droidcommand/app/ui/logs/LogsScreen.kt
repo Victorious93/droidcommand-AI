@@ -8,6 +8,7 @@ import ai.droidcommand.app.ui.theme.AccentRed
 import ai.droidcommand.app.ui.theme.AccentSuccess
 import ai.droidcommand.app.ui.theme.BackgroundDark
 import ai.droidcommand.app.ui.theme.BorderDark
+import ai.droidcommand.app.ui.theme.DroidIconButton
 import ai.droidcommand.app.ui.theme.TextPrimary
 import ai.droidcommand.app.ui.theme.TextSecondary
 import ai.droidcommand.app.ux.ScreenHelpCatalog
@@ -28,7 +29,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
@@ -99,7 +99,7 @@ fun LogsScreen(viewModel: LogsViewModel = hiltViewModel()) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ScreenTitleWithHelp("Activity log", ScreenHelpCatalog.LOGS)
-            IconButton(onClick = viewModel::refresh) { Icon(Icons.Filled.Refresh, contentDescription = "Refresh", tint = TextSecondary) }
+            DroidIconButton(onClick = viewModel::refresh) { Icon(Icons.Filled.Refresh, contentDescription = "Refresh", tint = TextSecondary) }
         }
 
         SecondaryTabRow(

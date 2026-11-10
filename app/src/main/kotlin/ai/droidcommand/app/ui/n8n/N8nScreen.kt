@@ -4,6 +4,9 @@ import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
 import ai.droidcommand.app.ui.settings.KeyStatus
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.n8n.N8nWorkflow
 import androidx.compose.foundation.layout.Arrangement
@@ -16,14 +19,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -95,16 +95,16 @@ fun N8nScreen(viewModel: N8nViewModel = hiltViewModel()) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
+                    DroidPrimaryButton(
                         onClick = {
                             viewModel.saveApiKey(keyDraft)
                             keyDraft = ""
                         },
                         enabled = keyDraft.isNotBlank(),
                     ) { Text("Save key") }
-                    OutlinedButton(onClick = viewModel::clearApiKey, enabled = ui.keyStatus != KeyStatus.NOT_SET) { Text("Remove key") }
+                    DroidSecondaryButton(onClick = viewModel::clearApiKey, enabled = ui.keyStatus != KeyStatus.NOT_SET) { Text("Remove key") }
                 }
-                Button(
+                DroidPrimaryButton(
                     onClick = viewModel::testConnection,
                     enabled = !ui.busy,
                     modifier = Modifier.fillMaxWidth().testTag("n8n_test_connection"),
@@ -114,7 +114,7 @@ fun N8nScreen(viewModel: N8nViewModel = hiltViewModel()) {
         SectionLabel("Workflows")
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
+                DroidSecondaryButton(
                     onClick = viewModel::refreshWorkflows,
                     enabled = !ui.busy,
                     modifier = Modifier.fillMaxWidth(),
@@ -153,7 +153,7 @@ fun N8nScreen(viewModel: N8nViewModel = hiltViewModel()) {
                         minLines = 3,
                         label = { Text("JSON to send") },
                     )
-                    Button(
+                    DroidPrimaryButton(
                         onClick = viewModel::requestRun,
                         enabled = !ui.busy && selected.canTrigger,
                         modifier = Modifier.fillMaxWidth().testTag("n8n_run"),
@@ -200,10 +200,10 @@ fun N8nScreen(viewModel: N8nViewModel = hiltViewModel()) {
                 Text("This will send your JSON to $name on your n8n server. n8n will do whatever that workflow is set up to do.")
             },
             confirmButton = {
-                TextButton(onClick = viewModel::confirmRun, modifier = Modifier.testTag("n8n_run_confirm")) { Text("Run") }
+                DroidTextButton(onClick = viewModel::confirmRun, modifier = Modifier.testTag("n8n_run_confirm")) { Text("Run") }
             },
             dismissButton = {
-                TextButton(onClick = viewModel::cancelRun) { Text("Cancel") }
+                DroidTextButton(onClick = viewModel::cancelRun) { Text("Cancel") }
             },
         )
     }
@@ -215,10 +215,10 @@ fun N8nScreen(viewModel: N8nViewModel = hiltViewModel()) {
                 Text("When this is on, Chat or a one-step command can ask to run a workflow on your n8n server. This phone still asks before every run. Leave this off unless you need it.")
             },
             confirmButton = {
-                TextButton(onClick = viewModel::confirmAiToolsOn, modifier = Modifier.testTag("n8n_ai_tools_confirm")) { Text("Turn on") }
+                DroidTextButton(onClick = viewModel::confirmAiToolsOn, modifier = Modifier.testTag("n8n_ai_tools_confirm")) { Text("Turn on") }
             },
             dismissButton = {
-                TextButton(onClick = viewModel::cancelAiToolsOn) { Text("Keep off") }
+                DroidTextButton(onClick = viewModel::cancelAiToolsOn) { Text("Keep off") }
             },
         )
     }

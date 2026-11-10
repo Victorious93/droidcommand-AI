@@ -37,6 +37,9 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_shared")
+                if (providers.gradleProperty("disableVulkan").orNull == "true") {
+                    arguments += "-DDCA_ENABLE_VULKAN=OFF"
+                }
             }
         }
     }

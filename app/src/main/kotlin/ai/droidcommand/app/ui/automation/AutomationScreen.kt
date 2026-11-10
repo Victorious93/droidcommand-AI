@@ -4,6 +4,9 @@ import ai.droidcommand.app.automation.AutomationAction
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,13 +16,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -75,8 +75,8 @@ fun AutomationScreen(viewModel: AutomationViewModel = hiltViewModel()) {
                             overflow = TextOverflow.Ellipsis,
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { viewModel.runKey(key.id) }, enabled = !state.running) { Text("Run") }
-                            OutlinedButton(onClick = { viewModel.deleteKey(key.id) }) { Text("Delete") }
+                            DroidPrimaryButton(onClick = { viewModel.runKey(key.id) }, enabled = !state.running) { Text("Run") }
+                            DroidSecondaryButton(onClick = { viewModel.deleteKey(key.id) }) { Text("Delete") }
                         }
                     }
                 }
@@ -160,7 +160,7 @@ private fun NewKeyCard(onSave: (label: String, shell: Boolean, executable: Strin
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            Button(
+            DroidPrimaryButton(
                 onClick = { onSave(label, shell, executable, args, slashCommand) },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Save key") }
@@ -189,7 +189,7 @@ private fun AllowlistCard(entries: Set<String>, onAdd: (String) -> Unit, onRemov
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                     )
-                    TextButton(onClick = { onRemove(entry) }) { Text("Remove") }
+                    DroidTextButton(onClick = { onRemove(entry) }) { Text("Remove") }
                 }
             }
             OutlinedTextField(
@@ -199,7 +199,7 @@ private fun AllowlistCard(entries: Set<String>, onAdd: (String) -> Unit, onRemov
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedButton(onClick = { onAdd(newEntry) }, modifier = Modifier.fillMaxWidth()) { Text("Allow executable") }
+            DroidSecondaryButton(onClick = { onAdd(newEntry) }, modifier = Modifier.fillMaxWidth()) { Text("Allow executable") }
         }
     }
 }

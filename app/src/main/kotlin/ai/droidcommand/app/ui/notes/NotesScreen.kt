@@ -4,6 +4,9 @@ import ai.droidcommand.app.brain.BrainRuntime
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.rememberDraft
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.notes.BrainLibrarian
 import ai.droidcommand.notes.DailyNotes
@@ -34,13 +37,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -404,10 +404,10 @@ fun NotesScreen(viewModel: NotesViewModel = hiltViewModel()) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (viewModel.folder.isNotEmpty() || viewModel.openPath != null) {
-                    OutlinedButton(onClick = viewModel::up) { Text("Up") }
+                    DroidSecondaryButton(onClick = viewModel::up) { Text("Up") }
                 }
-                OutlinedButton(onClick = { showPlugins = !showPlugins }) { Text(if (showPlugins) "Notes" else "Plugins") }
-                OutlinedButton(onClick = viewModel::openToday, modifier = Modifier.testTag("brain_today")) { Text("Today") }
+                DroidSecondaryButton(onClick = { showPlugins = !showPlugins }) { Text(if (showPlugins) "Notes" else "Plugins") }
+                DroidSecondaryButton(onClick = viewModel::openToday, modifier = Modifier.testTag("brain_today")) { Text("Today") }
             }
         }
         if (!showPlugins && viewModel.openPath == null) {
@@ -440,9 +440,9 @@ fun NotesScreen(viewModel: NotesViewModel = hiltViewModel()) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { pickFolder.launch(null) }) { Text("Use Obsidian folder") }
+                            DroidSecondaryButton(onClick = { pickFolder.launch(null) }) { Text("Use Obsidian folder") }
                             if (viewModel.usingSaf) {
-                                OutlinedButton(onClick = viewModel::useAppFolder) { Text("Use app folder") }
+                                DroidSecondaryButton(onClick = viewModel::useAppFolder) { Text("Use app folder") }
                             }
                         }
                     }
@@ -464,7 +464,7 @@ fun NotesScreen(viewModel: NotesViewModel = hiltViewModel()) {
                 item { SearchCard(viewModel) }
                 items(viewModel.hits, key = { "hit-${it.path}" }) { hit ->
                     DroidCard {
-                        TextButton(onClick = { viewModel.openHit(hit) }, modifier = Modifier.fillMaxWidth()) {
+                        DroidTextButton(onClick = { viewModel.openHit(hit) }, modifier = Modifier.fillMaxWidth()) {
                             Column {
                                 Text(hit.title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                                 Text(hit.snippet, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
@@ -498,9 +498,9 @@ fun NotesScreen(viewModel: NotesViewModel = hiltViewModel()) {
 @Composable
 private fun PaneButton(label: String, pane: NotesPane, viewModel: NotesViewModel, tag: String) {
     if (viewModel.pane == pane) {
-        Button(onClick = { viewModel.showPane(pane) }, modifier = Modifier.testTag(tag)) { Text(label) }
+        DroidPrimaryButton(onClick = { viewModel.showPane(pane) }, modifier = Modifier.testTag(tag)) { Text(label) }
     } else {
-        OutlinedButton(onClick = { viewModel.showPane(pane) }, modifier = Modifier.testTag(tag)) { Text(label) }
+        DroidSecondaryButton(onClick = { viewModel.showPane(pane) }, modifier = Modifier.testTag(tag)) { Text(label) }
     }
 }
 
@@ -547,9 +547,9 @@ private fun VaultPickerCard(viewModel: NotesViewModel, onPickFolder: () -> Unit)
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onPickFolder) { Text("Use a folder on this phone") }
+                DroidSecondaryButton(onClick = onPickFolder) { Text("Use a folder on this phone") }
                 if (viewModel.usingSaf) {
-                    OutlinedButton(onClick = viewModel::useAppFolder) { Text("Use app folder") }
+                    DroidSecondaryButton(onClick = viewModel::useAppFolder) { Text("Use app folder") }
                 }
             }
         }
@@ -586,8 +586,8 @@ private fun NewNoteCard(
                 singleLine = true,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onNote, enabled = draftName.isNotBlank()) { Text("Note") }
-                OutlinedButton(onClick = onFolder, enabled = draftName.isNotBlank()) { Text("Folder") }
+                DroidPrimaryButton(onClick = onNote, enabled = draftName.isNotBlank()) { Text("Note") }
+                DroidSecondaryButton(onClick = onFolder, enabled = draftName.isNotBlank()) { Text("Folder") }
             }
         }
     }
@@ -608,7 +608,7 @@ private fun FileTreeCard(viewModel: NotesViewModel) {
                     node.folder -> "$indent Folder  ${node.name} …"
                     else -> "$indent${node.name}"
                 }
-                TextButton(onClick = { viewModel.openTreeNode(node) }, modifier = Modifier.fillMaxWidth()) {
+                DroidTextButton(onClick = { viewModel.openTreeNode(node) }, modifier = Modifier.fillMaxWidth()) {
                     Text(label, color = MaterialTheme.colorScheme.onSurface)
                 }
             }
@@ -626,7 +626,7 @@ private fun GraphPane(graph: NoteGraph, onOpen: (String) -> Unit) {
             } else {
                 GraphCanvas(graph, onOpen)
                 graph.nodes.forEach { node ->
-                    TextButton(onClick = { onOpen(node.path) }, modifier = Modifier.fillMaxWidth()) {
+                    DroidTextButton(onClick = { onOpen(node.path) }, modifier = Modifier.fillMaxWidth()) {
                         Text(node.title, color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
@@ -710,8 +710,8 @@ private fun Editor(viewModel: NotesViewModel) {
                 Text("Unsaved changes. Save, or go Up: leaving saves them.", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { viewModel.save() }) { Text("Save") }
-                OutlinedButton(onClick = viewModel::togglePreview) { Text(if (viewModel.preview) "Edit" else "Preview") }
+                DroidPrimaryButton(onClick = { viewModel.save() }) { Text("Save") }
+                DroidSecondaryButton(onClick = viewModel::togglePreview) { Text(if (viewModel.preview) "Edit" else "Preview") }
             }
             if (viewModel.preview) {
                 viewModel.previewBlocks().forEach { block ->
@@ -780,7 +780,7 @@ private fun PluginPanel(viewModel: NotesViewModel) {
                 minLines = 4,
                 label = { Text("id, name, replace") },
             )
-            Button(onClick = viewModel::installPlugin, enabled = viewModel.pluginText.isNotBlank()) { Text("Install") }
+            DroidPrimaryButton(onClick = viewModel::installPlugin, enabled = viewModel.pluginText.isNotBlank()) { Text("Install") }
             if (viewModel.installed.isEmpty()) {
                 Text("No plugins installed.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -806,7 +806,7 @@ private fun PluginRow(plugin: NotePlugin, onEnabled: (Boolean) -> Unit, onRemove
             Text(plugin.name, fontWeight = FontWeight.Bold)
             Text(plugin.id, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
-        TextButton(onClick = onRemove) { Text("Remove") }
+        DroidTextButton(onClick = onRemove) { Text("Remove") }
         Switch(checked = plugin.enabled, onCheckedChange = onEnabled)
     }
 }

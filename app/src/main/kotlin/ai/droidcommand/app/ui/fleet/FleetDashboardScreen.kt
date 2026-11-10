@@ -6,6 +6,9 @@ import ai.droidcommand.app.ui.theme.AccentBlueBright
 import ai.droidcommand.app.ui.theme.AccentRed
 import ai.droidcommand.app.ui.theme.AccentSuccess
 import ai.droidcommand.app.ui.theme.BorderDark
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ui.theme.TextSecondary
 import ai.droidcommand.app.ux.FleetAppHelp
 import ai.droidcommand.app.ux.FleetCardUi
@@ -27,11 +30,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -103,6 +103,12 @@ fun FleetDashboardContent(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        DroidCard(modifier = Modifier.testTag("fleet_status_strip")) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Status", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(state.statusSummary, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
         state.emptyHint?.let { hint ->
             DroidCard(
                 modifier = Modifier.testTag("fleet_dashboard_empty_cta"),
@@ -117,11 +123,11 @@ fun FleetDashboardContent(
         state.notice?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("fleet_dashboard_notice"))
         }
-        OutlinedButton(
+        DroidSecondaryButton(
             onClick = onRefresh,
             modifier = Modifier.fillMaxWidth().testTag("fleet_dashboard_refresh"),
         ) { Text("Refresh") }
-        Button(
+        DroidPrimaryButton(
             onClick = onOpenConnectDevice,
             modifier = Modifier.fillMaxWidth().testTag("fleet_connect_device"),
         ) { Text("Connect a computer or another phone") }
@@ -153,12 +159,12 @@ fun FleetDashboardContent(
             title = { Text(FleetUserCopy.unpairConfirmTitle(shown.card.name)) },
             text = { Text(FleetUserCopy.unpairConfirmBody(shown.card.name)) },
             confirmButton = {
-                TextButton(onClick = {
+                DroidTextButton(onClick = {
                     dialog = null
                     onUnpair(shown.card.id)
                 }) { Text("Stop pairing") }
             },
-            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+            dismissButton = { DroidTextButton(onClick = { dialog = null }) { Text("Cancel") } },
         )
         is FleetDialog.Help -> AlertDialog(
             onDismissRequest = { dialog = null },
@@ -170,7 +176,7 @@ fun FleetDashboardContent(
                     shown.card.status.fix?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 }
             },
-            confirmButton = { TextButton(onClick = { dialog = null }) { Text("Close") } },
+            confirmButton = { DroidTextButton(onClick = { dialog = null }) { Text("Close") } },
         )
         null -> Unit
     }
@@ -194,12 +200,12 @@ private fun PairStepsDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            DroidTextButton(
                 onClick = onConfirm,
                 modifier = Modifier.testTag("fleet_pair_confirm"),
             ) { Text(if (card.canPair) "Pair" else "Continue") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { DroidTextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 
@@ -254,14 +260,14 @@ private fun FleetAppCard(
             Text(card.seenLabel, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 if (card.canPair || card.status.kind == FleetUserKind.INSTALLED_TAP_TO_PAIR || card.status.kind == FleetUserKind.NOT_INSTALLED) {
-                    Button(
+                    DroidPrimaryButton(
                         onClick = onPair,
                         enabled = !busy,
                         modifier = Modifier.weight(1f).testTag("fleet_pair_${card.id}"),
                     ) { Text(if (card.canUnpair) "Re-pair" else "Pair") }
                 }
                 if (card.canUnpair) {
-                    OutlinedButton(
+                    DroidSecondaryButton(
                         onClick = onUnpair,
                         enabled = !busy,
                         modifier = Modifier.weight(1f),
@@ -269,17 +275,17 @@ private fun FleetAppCard(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(
+                DroidSecondaryButton(
                     onClick = onTest,
                     enabled = !busy,
                     modifier = Modifier.weight(1f).testTag("fleet_test_${card.id}"),
                 ) { Text("Test connection") }
-                TextButton(onClick = onHelp, modifier = Modifier.testTag("fleet_help_${card.id}")) {
+                DroidTextButton(onClick = onHelp, modifier = Modifier.testTag("fleet_help_${card.id}")) {
                     Text("What is this?")
                 }
             }
             if (card.opensApprovedCommands) {
-                TextButton(onClick = onApprovedCommands) { Text("Approved commands") }
+                DroidTextButton(onClick = onApprovedCommands) { Text("Approved commands") }
             }
         }
     }

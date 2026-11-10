@@ -1,6 +1,9 @@
 package ai.droidcommand.app.ui.chat
 
 import ai.droidcommand.app.ui.components.rememberDraft
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.templates.PromptTemplate
 import ai.droidcommand.templates.TemplateEngine
 import ai.droidcommand.templates.TemplateResult
@@ -11,12 +14,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,8 +27,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
- * Saved chats, skills, and prompt templates. Templates expand into the input field and are not sent
- * on their own. A skill's text is added to later requests and is not written into the saved transcript.
+ * Saved chats, chat prompts, and prompt templates. Templates expand into the input field and are not sent
+ * on their own. A chat prompt's text is added to later requests and is not written into the saved transcript.
  * The bundled set is seeded on first open. None of this has been run on a device.
  */
 @Composable
@@ -52,42 +52,42 @@ fun ChatLibrary(state: ChatUiState, viewModel: ChatViewModel) {
         }
         state.savedChats.forEach { chat ->
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = { viewModel.openChat(chat.id) }, enabled = chat.id != state.conversationId) {
+                DroidTextButton(onClick = { viewModel.openChat(chat.id) }, enabled = chat.id != state.conversationId) {
                     Text(if (chat.id == state.conversationId) "${chat.title} (open)" else chat.title)
                 }
-                TextButton(onClick = { viewModel.deleteChat(chat.id) }) { Text("Delete") }
+                DroidTextButton(onClick = { viewModel.deleteChat(chat.id) }) { Text("Delete") }
             }
         }
 
-        Text("Skill", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        Text("Chat prompts", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
         Text(
             "Added to each later request. It is not stored in the chat transcript.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
         )
-        OutlinedButton(onClick = { viewModel.selectSkill(null) }, enabled = state.skillId != null) { Text("No skill") }
+        DroidSecondaryButton(onClick = { viewModel.selectSkill(null) }, enabled = state.skillId != null) { Text("No chat prompt") }
         state.skills.forEach { skill ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (skill.id == state.skillId) {
-                    Button(onClick = { viewModel.selectSkill(skill.id) }) { Text(skill.name) }
+                    DroidPrimaryButton(onClick = { viewModel.selectSkill(skill.id) }) { Text(skill.name) }
                 } else {
-                    OutlinedButton(onClick = { viewModel.selectSkill(skill.id) }) { Text(skill.name) }
+                    DroidSecondaryButton(onClick = { viewModel.selectSkill(skill.id) }) { Text(skill.name) }
                 }
                 if (!skill.builtIn) {
-                    TextButton(onClick = { viewModel.deleteSkill(skill.id) }) { Text("Delete") }
+                    DroidTextButton(onClick = { viewModel.deleteSkill(skill.id) }) { Text("Delete") }
                 }
             }
         }
-        OutlinedTextField(value = newSkillName, onValueChange = { newSkillName = it }, label = { Text("New skill name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = newSkillName, onValueChange = { newSkillName = it }, label = { Text("New chat prompt name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = newSkillPrompt, onValueChange = { newSkillPrompt = it }, label = { Text("System text") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-        Button(
+        DroidPrimaryButton(
             onClick = {
                 viewModel.saveSkill(newSkillName, newSkillPrompt)
                 newSkillName = ""
                 newSkillPrompt = ""
             },
             enabled = newSkillName.isNotBlank() && newSkillPrompt.isNotBlank(),
-        ) { Text("Save skill") }
+        ) { Text("Save chat prompt") }
 
         Text("Templates", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
         Text(
@@ -97,7 +97,7 @@ fun ChatLibrary(state: ChatUiState, viewModel: ChatViewModel) {
         )
         state.templates.forEach { template ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = {
+                DroidSecondaryButton(onClick = {
                     slotError = null
                     if (template.variables.isEmpty()) {
                         filling = null
@@ -108,7 +108,7 @@ fun ChatLibrary(state: ChatUiState, viewModel: ChatViewModel) {
                     }
                 }) { Text(template.name) }
                 if (!template.builtIn) {
-                    TextButton(onClick = { viewModel.deleteTemplate(template.id) }) { Text("Delete") }
+                    DroidTextButton(onClick = { viewModel.deleteTemplate(template.id) }) { Text("Delete") }
                 }
             }
         }
@@ -123,7 +123,7 @@ fun ChatLibrary(state: ChatUiState, viewModel: ChatViewModel) {
                 )
             }
             slotError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-            Button(onClick = {
+            DroidPrimaryButton(onClick = {
                 when (val result = TemplateEngine.expand(template, slotValues)) {
                     is TemplateResult.Expanded -> {
                         viewModel.insertDraft(result.text)
@@ -136,7 +136,7 @@ fun ChatLibrary(state: ChatUiState, viewModel: ChatViewModel) {
         }
         OutlinedTextField(value = newTemplateName, onValueChange = { newTemplateName = it }, label = { Text("New template name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = newTemplateBody, onValueChange = { newTemplateBody = it }, label = { Text("Template text, with {{slots}}") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-        Button(
+        DroidPrimaryButton(
             onClick = {
                 viewModel.saveTemplate(newTemplateName, newTemplateBody)
                 newTemplateName = ""

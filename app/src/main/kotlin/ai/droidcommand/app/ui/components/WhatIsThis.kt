@@ -1,5 +1,6 @@
 package ai.droidcommand.app.ui.components
 
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ux.ScreenHelp
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import androidx.compose.foundation.layout.Arrangement
@@ -9,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,7 +35,7 @@ fun ScreenTitleWithHelp(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         ScreenTitle(title, uppercase = uppercase, modifier = Modifier.weight(1f))
-        TextButton(
+        DroidTextButton(
             onClick = { open = true },
             modifier = Modifier.testTag("what_is_this"),
         ) { Text("What is this?") }
@@ -58,7 +58,7 @@ fun WhatIsThisDialog(help: ScreenHelp, onDismiss: () -> Unit) {
             )
         },
         confirmButton = {
-            TextButton(onClick = onDismiss, modifier = Modifier.testTag("what_is_this_close")) {
+            DroidTextButton(onClick = onDismiss, modifier = Modifier.testTag("what_is_this_close")) {
                 Text("Close")
             }
         },

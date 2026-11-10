@@ -1,5 +1,8 @@
 package ai.droidcommand.app.ui.tools.setoolkit
 
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ui.tools.ToolRunStatusCard
 import ai.droidcommand.app.ui.tools.ToolRunUiState
 import ai.droidcommand.setoolkit.SetAttackVector
@@ -11,12 +14,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -68,9 +68,9 @@ fun SetToolScreen(viewModel: SetToolViewModel = hiltViewModel()) {
                     val selected = form.attackVector == vector
                     val label = vector.name.replace('_', ' ')
                     if (selected) {
-                        Button(onClick = { viewModel.updateForm { it.copy(attackVector = vector) } }) { Text(label) }
+                        DroidPrimaryButton(onClick = { viewModel.updateForm { it.copy(attackVector = vector) } }) { Text(label) }
                     } else {
-                        OutlinedButton(onClick = { viewModel.updateForm { it.copy(attackVector = vector) } }) { Text(label) }
+                        DroidSecondaryButton(onClick = { viewModel.updateForm { it.copy(attackVector = vector) } }) { Text(label) }
                     }
                 }
             }
@@ -99,7 +99,7 @@ fun SetToolScreen(viewModel: SetToolViewModel = hiltViewModel()) {
         form.options.forEachIndexed { index, pair ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("${pair.first} = ${pair.second}", modifier = Modifier.weight(1f))
-                TextButton(onClick = {
+                DroidTextButton(onClick = {
                     viewModel.updateForm { f -> f.copy(options = f.options.filterIndexed { i, _ -> i != index }) }
                 }) { Text("Remove") }
             }
@@ -117,7 +117,7 @@ fun SetToolScreen(viewModel: SetToolViewModel = hiltViewModel()) {
                 label = { Text("Value") },
                 modifier = Modifier.weight(1f),
             )
-            Button(onClick = {
+            DroidPrimaryButton(onClick = {
                 if (pendingOptionKey.isNotBlank()) {
                     viewModel.updateForm { f -> f.copy(options = f.options + (pendingOptionKey to pendingOptionValue)) }
                     pendingOptionKey = ""
@@ -126,7 +126,7 @@ fun SetToolScreen(viewModel: SetToolViewModel = hiltViewModel()) {
             }) { Text("Add") }
         }
 
-        Button(
+        DroidPrimaryButton(
             onClick = viewModel::runAttack,
             enabled = (form.targetHost.isNotBlank() || form.targetEmail.isNotBlank()) && uiState !is ToolRunUiState.Running,
             modifier = Modifier.fillMaxWidth(),

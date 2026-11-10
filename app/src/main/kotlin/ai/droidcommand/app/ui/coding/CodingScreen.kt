@@ -6,6 +6,8 @@ import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prefs.CodingTunnelChoice
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.rememberDraft
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.coding.CodingPhase
 import ai.droidcommand.coding.CodingSession
 import androidx.compose.foundation.layout.Arrangement
@@ -16,9 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -103,7 +103,7 @@ fun CodingScreen(viewModel: CodingViewModel = hiltViewModel()) {
                         minLines = 2,
                         maxLines = 5,
                     )
-                    Button(
+                    DroidPrimaryButton(
                         onClick = {
                             viewModel.start(goal)
                             goal = ""
@@ -139,10 +139,10 @@ private fun SessionCard(session: CodingSession, paired: Boolean, onAdvance: () -
             if (session.edit.isNotEmpty()) PhaseBlock("Edit", session.edit)
             if (session.report.isNotEmpty()) PhaseBlock("Report", session.report)
             if (open && !paired) {
-                Button(onClick = onAdvance, modifier = Modifier.fillMaxWidth()) {
+                DroidPrimaryButton(onClick = onAdvance, modifier = Modifier.fillMaxWidth()) {
                     Text(if (session.phase == CodingPhase.PLAN) "Continue to edit" else "Continue to report")
                 }
-                OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+                DroidSecondaryButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
             }
         }
     }

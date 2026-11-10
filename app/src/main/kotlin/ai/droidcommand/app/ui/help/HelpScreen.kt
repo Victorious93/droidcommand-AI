@@ -40,7 +40,7 @@ fun HelpScreen() {
         HelpCard(
             title = "The five tabs",
             body = "Fleet is your other apps. AI Chat is where you ask questions. Models is where you pick or download " +
-                "an on-phone model. Settings holds keys and voice. Advanced holds one-step commands, plans, memory, " +
+                "an on-phone model. Settings holds keys and voice. Advanced holds one-step commands, plans, memory, Bot maker, skill files, status and backup, " +
                 "Brain notes, logs, and security tools.",
         )
         HelpCard(

@@ -147,7 +147,7 @@ class ManifestPolicyTest {
     }
 
     @Test
-    fun `exported components are the launcher, CODE_ASSIST, COMPANION_ASSIST, fleet-theme receiver, and Shizuku`() {
+    fun `exported components are the launcher, CODE_ASSIST, COMPANION_ASSIST, status widget, fleet-theme receiver, and Shizuku`() {
         val exported = listOf("activity", "service", "receiver", "provider")
             .flatMap { application.children(it) }
             .filter { it.androidAttr("exported") == "true" }
@@ -157,6 +157,7 @@ class ManifestPolicyTest {
                 ".MainActivity",
                 ".codeassist.CodeAssistActivity",
                 ".companionassist.CompanionAssistActivity",
+                ".widget.StatusWidgetProvider",
                 ".fleet.FleetThemeChangedReceiver",
                 "rikka.shizuku.ShizukuProvider",
             ),

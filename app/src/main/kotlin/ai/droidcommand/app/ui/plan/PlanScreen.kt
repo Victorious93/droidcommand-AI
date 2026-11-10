@@ -16,6 +16,9 @@ import ai.droidcommand.app.ui.theme.AccentIndigo
 import ai.droidcommand.app.ui.theme.AccentRed
 import ai.droidcommand.app.ui.theme.AccentSuccess
 import ai.droidcommand.app.ui.theme.BorderDark
+import ai.droidcommand.app.ui.theme.DroidDangerButton
+import ai.droidcommand.app.ui.theme.DroidIconButton
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
 import ai.droidcommand.app.ui.theme.TextPrimary
 import ai.droidcommand.app.ui.theme.TextSecondary
 import ai.droidcommand.app.ux.FriendlyErrors
@@ -43,12 +46,9 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -131,13 +131,12 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
                         )
                     }
                     if (state.running) {
-                        Button(
+                        DroidDangerButton(
                             onClick = viewModel::stop,
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentRed, contentColor = TextPrimary),
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text("Stop after current step") }
                     } else {
-                        Button(
+                        DroidPrimaryButton(
                             onClick = {
                                 selectedId = null
                                 viewModel.run(objective)
@@ -331,7 +330,7 @@ private fun HistoryRow(run: PlanRun, selected: Boolean, onSelect: () -> Unit, on
                 }
             }
             if (run.status != PlanStatus.RUNNING) {
-                IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete run", tint = TextSecondary) }
+                DroidIconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete run", tint = TextSecondary) }
             }
         }
     }

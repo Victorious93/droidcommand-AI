@@ -6,6 +6,9 @@ import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.theme.AccentRed
 import ai.droidcommand.app.ui.theme.AccentSuccess
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ui.theme.TextSecondary
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.security.FleetReachability
@@ -23,12 +26,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -68,7 +68,7 @@ fun FleetOrchestratorScreen(viewModel: FleetOrchestratorViewModel = hiltViewMode
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        OutlinedButton(onClick = viewModel::refreshAll, modifier = Modifier.fillMaxWidth().testTag("fleet_refresh_all")) {
+        DroidSecondaryButton(onClick = viewModel::refreshAll, modifier = Modifier.fillMaxWidth().testTag("fleet_refresh_all")) {
             Text("Check all statuses")
         }
         rows.forEach { row ->
@@ -114,12 +114,12 @@ private fun FleetNodeCard(row: FleetRowUi, formatTime: (Long) -> String, onCheck
                 Text("Checked at ${formatTime(it)}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(
+                DroidSecondaryButton(
                     onClick = onCheck,
                     enabled = row.canCheckStatus,
                     modifier = Modifier.weight(1f).testTag("fleet_check_${row.node.id}"),
                 ) { Text(if (row.busy) "Working…" else "Check status") }
-                Button(
+                DroidPrimaryButton(
                     onClick = onSend,
                     enabled = row.canSend,
                     modifier = Modifier.weight(1f).testTag("fleet_send_${row.node.id}"),
@@ -172,10 +172,10 @@ private fun SendCommandDialog(row: FleetRowUi, onDismiss: () -> Unit, onSend: (S
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSend(capabilityId.trim(), inputJson) }, enabled = capabilityId.isNotBlank()) {
+            DroidTextButton(onClick = { onSend(capabilityId.trim(), inputJson) }, enabled = capabilityId.isNotBlank()) {
                 Text("Continue to approval")
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { DroidTextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

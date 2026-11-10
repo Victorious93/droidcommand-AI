@@ -106,6 +106,39 @@ class ToolboxCommandsTest {
         backend.run(ToolboxCommands.forceStop("com.example.app").ok())
         assertEquals(listOf("am", "force-stop", "com.example.app"), shell.ran.single())
     }
+
+    @Test
+    fun `freeze and unfreeze reuse disable-user and enable`() {
+        assertEquals(
+            listOf("pm", "disable-user", "--user", "0", "com.example.app"),
+            ToolboxCommands.freeze("com.example.app").ok().argv,
+        )
+        assertEquals("Freeze app", ToolboxCommands.freeze("com.example.app").ok().label)
+        assertEquals(
+            listOf("pm", "enable", "--user", "0", "com.example.app"),
+            ToolboxCommands.unfreeze("com.example.app").ok().argv,
+        )
+    }
+
+    @Test
+    fun `component on off validates shape`() {
+        assertIs<ToolboxBuild.Rejected>(ToolboxCommands.disableComponent("bad"))
+        assertEquals(
+            listOf("pm", "disable-user", "--user", "0", "com.example/.MainActivity"),
+            ToolboxCommands.disableComponent("com.example/.MainActivity").ok().argv,
+        )
+        assertEquals(
+            listOf("pm", "enable", "--user", "0", "com.example/.MainActivity"),
+            ToolboxCommands.enableComponent("com.example/.MainActivity").ok().argv,
+        )
+    }
+
+    @Test
+    fun `health reads are non-destructive`() {
+        assertFalse(ToolboxCommands.healthBattery().destructive)
+        assertFalse(ToolboxCommands.healthStorage().destructive)
+        assertFalse(ToolboxCommands.healthMemory().destructive)
+    }
 }
 
 class SystemToolboxToolTest {

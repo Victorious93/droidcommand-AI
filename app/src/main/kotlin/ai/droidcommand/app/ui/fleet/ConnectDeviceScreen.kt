@@ -3,6 +3,9 @@ package ai.droidcommand.app.ui.fleet
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.deviceconnect.DeviceConnect
 import ai.droidcommand.deviceconnect.DeviceConnectPhase
@@ -19,14 +22,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -125,7 +125,7 @@ fun ConnectDeviceContent(
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
                 )
-                OutlinedButton(onClick = onGenerate, modifier = Modifier.fillMaxWidth()) {
+                DroidSecondaryButton(onClick = onGenerate, modifier = Modifier.fillMaxWidth()) {
                     Text("Make a password for me")
                 }
                 Text(
@@ -168,9 +168,9 @@ fun ConnectDeviceContent(
                     )
                 }
                 if (state.status.listening) {
-                    OutlinedButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) { Text("Stop waiting") }
+                    DroidSecondaryButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) { Text("Stop waiting") }
                 } else {
-                    Button(onClick = onWait, modifier = Modifier.fillMaxWidth().testTag("connect_wait")) { Text("Wait here") }
+                    DroidPrimaryButton(onClick = onWait, modifier = Modifier.fillMaxWidth().testTag("connect_wait")) { Text("Wait here") }
                 }
             }
         }
@@ -185,7 +185,7 @@ fun ConnectDeviceContent(
                     label = { Text("Address or invite") },
                     supportingText = { Text("Example: 192.168.1.8:17890") },
                 )
-                Button(onClick = onJoin, modifier = Modifier.fillMaxWidth().testTag("connect_join")) { Text("Join") }
+                DroidPrimaryButton(onClick = onJoin, modifier = Modifier.fillMaxWidth().testTag("connect_join")) { Text("Join") }
             }
         }
         state.message?.let {
@@ -224,8 +224,8 @@ fun ConnectDeviceContent(
                     state.status.peerName?.let { Text("Other device: $it") }
                 }
             },
-            confirmButton = { TextButton(onClick = onConfirmCode) { Text("Yes, they match") } },
-            dismissButton = { TextButton(onClick = onRejectCode) { Text("No") } },
+            confirmButton = { DroidTextButton(onClick = onConfirmCode) { Text("Yes, they match") } },
+            dismissButton = { DroidTextButton(onClick = onRejectCode) { Text("No") } },
         )
     }
 }
@@ -248,8 +248,8 @@ private fun PairedDeviceCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onPing) { Text("Check connection") }
-                OutlinedButton(onClick = onRevoke) { Text("Forget") }
+                DroidSecondaryButton(onClick = onPing) { Text("Check connection") }
+                DroidSecondaryButton(onClick = onRevoke) { Text("Forget") }
             }
             OutlinedTextField(
                 value = note,
@@ -258,7 +258,7 @@ private fun PairedDeviceCard(
                 singleLine = true,
                 label = { Text("Note for Chat") },
             )
-            Button(onClick = onSend, enabled = note.isNotBlank()) { Text("Send note to Chat") }
+            DroidPrimaryButton(onClick = onSend, enabled = note.isNotBlank()) { Text("Send note to Chat") }
         }
     }
 }

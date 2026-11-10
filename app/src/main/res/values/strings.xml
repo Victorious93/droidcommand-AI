@@ -3,4 +3,8 @@
     <string name="app_name">DroidCommand AI</string>
     <string name="fleet_theme_trust_hint">Trust installed fleet share apps to apply the fleet theme.</string>
     <string name="fleet_theme_trust_dismiss">Dismiss</string>
+    <string name="status_widget_description">Fleet status summary (read-only)</string>
+    <string name="shortcut_chat">Chat</string>
+    <string name="shortcut_toolbox">Toolbox</string>
+    <string name="shortcut_notes">Notes</string>
 </resources>
