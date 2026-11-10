@@ -1,5 +1,6 @@
 package ai.droidcommand.app.ui.settings
 
+import ai.droidcommand.app.mcp.McpServersSection
 import ai.droidcommand.app.shizuku.ShizukuStatusSection
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
@@ -132,6 +133,7 @@ private fun AdvancedContent(
         SectionLabel("Model and runtime")
         AdvancedSection(viewModel)
         KaiCapabilityGatesSection(viewModel)
+        McpServersSection()
         RemoteControlSettingsSection()
         ShizukuStatusSection(showEmbeddedControls = true)
         SectionLabel("Device tools")
