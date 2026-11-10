@@ -7,6 +7,10 @@ import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolSpec
+import ai.droidcommand.security.ApprovalPrompt
+import ai.droidcommand.skills.mcp.McpServerConfig
+import ai.droidcommand.skills.mcp.McpServerStatus
+import ai.droidcommand.skills.mcp.McpToolCatalog
 import io.modelcontextprotocol.kotlin.sdk.client.StdioClientTransport
 import io.modelcontextprotocol.kotlin.sdk.server.StdioServerTransport
 import kotlinx.coroutines.Job
@@ -128,6 +132,29 @@ class McpToolClientTest {
             val tool = client.asTools().single()
             val result = assertIs<ToolResult.Success>(tool.execute(mapOf("b" to "2", "a" to "1")))
             assertEquals("a=1, b=2", result.output)
+        }
+    }
+
+    @Test
+    fun `McpToolClient plugs into the core-skills catalog and its calls ask first`() {
+        val serverTools = ToolRegistry().apply { register(EchoTool()) }
+        withConnectedClient(serverTools) { client ->
+            val appTools = ToolRegistry()
+            val asked = mutableListOf<String>()
+            val approval = ApprovalPrompt { reason ->
+                asked += reason
+                true
+            }
+            val catalog = McpToolCatalog(appTools, approval) { client }
+            val status = catalog.refresh(true, listOf(McpServerConfig("jvm", "Test server", "stdio://test")))
+
+            assertIs<McpServerStatus.Loaded>(status.single())
+            val tool = appTools.get("mcp_jvm_echo")
+            val result = assertIs<ToolResult.Success>(tool.execute(mapOf("a" to "1")))
+            assertEquals("a=1", result.output)
+            // McpToolServer sends no hints, so MCP's defaults apply: treated as destructive and asked about first.
+            assertEquals(1, asked.size)
+            assertTrue(asked.single().contains("delete or overwrite"))
         }
     }
 }

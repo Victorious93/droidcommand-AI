@@ -23,6 +23,7 @@ object KaiCapabilityCopy {
                 detail = when (capability) {
                     AssistantCapability.BRAIN -> "Markdown notes the AI can search. Off until you turn it on."
                     AssistantCapability.BOT_MAKER -> "Make small helper bots for one job. Off until you turn it on."
+                    AssistantCapability.MCP_CLIENT -> "Tools from your own MCP server. Turn on under Extra AI tools (MCP) below."
                     AssistantCapability.SKILL_SCRIPTS -> "Instruction files (SKILL.md) the AI can follow. Off until you turn it on."
                     else -> "Off until a later phase turns this on."
                 },

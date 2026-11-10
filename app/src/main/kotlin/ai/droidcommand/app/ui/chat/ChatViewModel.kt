@@ -16,6 +16,7 @@ import ai.droidcommand.app.documents.EmbedderDownloadSupervisor
 import ai.droidcommand.app.localmodels.ImportOutcome
 import ai.droidcommand.app.localmodels.ImportedModel
 import ai.droidcommand.app.localmodels.LocalModelRuntime
+import ai.droidcommand.app.mcp.McpToolsRuntime
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prompts.PromptLibrary
 import ai.droidcommand.app.skills.SkillFilesPrompt
@@ -43,6 +44,7 @@ import ai.droidcommand.notes.NoteDraft
 import ai.droidcommand.rag.AttachResult
 import ai.droidcommand.rag.DocumentInfo
 import ai.droidcommand.remote.HttpTransport
+import ai.droidcommand.skills.mcp.McpBridgedTool
 import ai.droidcommand.templates.PromptTemplate
 import ai.droidcommand.templates.Skill
 import ai.droidcommand.voice.SpeakMode
@@ -80,6 +82,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
@@ -182,6 +185,7 @@ class ChatViewModel @Inject constructor(
     private val capabilities: AssistantCapabilitySettingsStore,
     private val toolRunner: ToolRunner,
     private val toolRegistry: ToolRegistry,
+    private val mcpTools: McpToolsRuntime,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
@@ -865,6 +869,35 @@ class ChatViewModel @Inject constructor(
             it.copy(activeBotName = bot.name, activeBotPrompt = HelperBots.systemPrompt(bot), notice = "Running helper bot \"${bot.name}\".")
         }
         applyChatSystemPrompt(mutableState.value)
+        loadMcpToolsFor(bot.name, bot.allowedTools)
+    }
+
+    /**
+     * A bot that lists MCP tools (`mcp_…`) needs them loaded from the owner's MCP servers first. This only runs
+     * when MCP is turned on; the tools still go through the same allow-list and approval prompts as above.
+     */
+    private fun loadMcpToolsFor(botName: String, allowedTools: Set<String>) {
+        if (allowedTools.none { McpBridgedTool.isMcpTool(it) }) return
+        viewModelScope.launch {
+            val ready = withContext(Dispatchers.IO) {
+                mcpTools.refreshIfNeeded()
+                if (mcpTools.enabled()) mcpTools.loadedToolNames().toSet() else emptySet()
+            }
+            if (mutableState.value.activeBotName != botName) return@launch
+            session.setToolAccess(
+                HelperBotTools.scopedRunner(toolRunner, allowedTools),
+                HelperBotTools.offeredTools(toolRegistry, allowedTools),
+            )
+            val missing = allowedTools.filter { McpBridgedTool.isMcpTool(it) && it !in ready }
+            if (missing.isNotEmpty()) {
+                val words = if (!mcpTools.enabled()) {
+                    "Extra AI tools (MCP) are off, so this bot cannot use its MCP tools."
+                } else {
+                    "Some MCP tools for this bot are not available right now: ${missing.sorted().joinToString(", ")}."
+                }
+                mutableState.update { it.copy(notice = words) }
+            }
+        }
     }
 
     fun stopBot() {

@@ -187,10 +187,46 @@ Complementary, not competing. Server executor is `ToolRunner` (accepts
 `SecureToolExecutor`); JSON array/object args are preserved as JSON
 text; explicit JSON `null` is omitted. This session added
 `ToolParameterSchema` validation and `ToolCallEnvelope` call ids on
-that path. An MCP client (`core-mcp.McpToolClient`) exists and is unit-tested, but it is not wired into `core-skills` or the phone app.
+that path.
 
-**Destination:** new `core-mcp-client` (Phase 2); `core-mcp` (server
-prerequisites: done).
+**MCP client — now wired (2026-11-10).** The client side lives in
+`core-skills` (`ai.droidcommand.skills.mcp`) and the phone app:
+
+- `McpToolSource` is the one interface for "a connection to an MCP
+  server". Two implementations: `core-mcp.McpToolClient` (the official
+  MCP Kotlin SDK client, JVM) and `HttpMcpToolSource` (MCP Streamable
+  HTTP over core-remote's `HttpTransport`, used on the phone so the APK
+  does not pull in ktor / the SDK).
+- `McpToolCatalog` loads each turned-on server's tools into the app's one
+  `ToolRegistry` as `McpBridgedTool`s named `mcp_<server>_<tool>`, and
+  removes them again on refresh or when MCP is turned off.
+- **Off by default.** Nothing is contacted unless
+  `AssistantCapabilitySettings.mcpClientEnabled` is on (Advanced → Extra
+  AI tools (MCP), which asks before turning on). The owner adds a server
+  address there; an optional token goes to `EncryptedSecretsVault`
+  (`mcp.server.<id>.token`), never to prefs or the repo.
+- **Same path as every other tool.** A loaded MCP tool is only pickable
+  in Bot Maker. In Chat, a helper bot reaches it only if its allow-list
+  names it (`ScopedToolRunner`), then `SecureToolExecutor` (policy,
+  approval dialog, audit). MCP tools are `SENSITIVE` + `NETWORK`, never
+  auto-approved by the read-only policy, and never offered to the Pilot
+  or Forge planners (empty `allowedModes`). A skill file's `tools:` list
+  never grants one.
+- **Confirm before write.** A tool the server does not mark
+  `readOnlyHint: true` also asks inside the tool, with the exact inputs,
+  before anything is sent; YOLO and grants cannot skip that ask.
+  `destructiveHint: true` or no hints at all (MCP's defaults) gets the
+  stronger "can delete or overwrite" wording. The hints come from the
+  server, so they can only add asks, never remove the normal dialog.
+- Server down, timeout, 401/403, error codes, JSON-RPC errors and
+  unreadable answers become plain messages (settings row or tool
+  result), never a crash.
+- Not done: prompts/resources, stdio servers on the phone, OAuth sign-in
+  flows (token paste only), plain Chat without a helper bot (still runs
+  no tools). Not tested on a real phone.
+
+**Destination:** `core-skills` (`ai.droidcommand.skills.mcp`) + `app/mcp`;
+`core-mcp` keeps the server and the SDK client.
 
 **Decision:** *new adapter* for the client. Wrap imported tools as
 `core-agent.Tool` through `SecureToolExecutor`. Disabled until
@@ -198,7 +234,8 @@ prerequisites: done).
 default **false**).
 
 **Implementation status:** server prerequisites IMPLEMENTED; client
-NOT STARTED.
+IMPLEMENTED and wired into core-skills and the phone app's helper-bot
+Chat path (JVM unit tests with a fake MCP server; device UNVERIFIED).
 
 ---
 
@@ -403,7 +440,7 @@ feature.
 | KAI-003 | Personality | extend existing (UI) | NOT STARTED (model exists) |
 | KAI-004 | Providers / fallback | extend existing | PARTIAL |
 | KAI-005 | Local inference (LiteRT) | optional later; keep GGUF | GGUF PARTIAL; LiteRT NOT STARTED |
-| KAI-006 | MCP client | new adapter | server done; client exists (`McpToolClient`) but is not wired into core-skills or the phone app |
+| KAI-006 | MCP client | new adapter | server done; client wired into core-skills (`McpToolCatalog`) and the phone app (Advanced → Extra AI tools, helper-bot Chat path); off by default; device UNVERIFIED |
 | KAI-007 | SKILL.md | adapt source later | prompt-skills PARTIAL |
 | KAI-008 | Tasks / heartbeat | extend existing + later | macros done; heartbeat NOT STARTED |
 | KAI-009 | Linux / PRoot | optional later | Termux PARTIAL |
