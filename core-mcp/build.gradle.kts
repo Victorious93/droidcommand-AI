@@ -10,7 +10,9 @@ repositories {
 dependencies {
     implementation(project(":core-agent"))
     implementation("io.modelcontextprotocol:kotlin-sdk-server:0.15.0")
-    testImplementation("io.modelcontextprotocol:kotlin-sdk-client:0.15.0")
+    // Client-side SDK: McpToolClient connects this process to an external MCP server and surfaces its
+    // tools. Also on the test classpath (McpToolServerTest drives a client against the server in-process).
+    implementation("io.modelcontextprotocol:kotlin-sdk-client:0.15.0")
     // Test-only: proves McpToolServer's executor param (typed as the
     // core-agent.ToolRunner interface) genuinely accepts a real
     // SecureToolExecutor, not just that the type signature allows it.

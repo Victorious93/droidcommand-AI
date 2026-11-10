@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh api --method PUT repos/Victorious93/droidcommand-AI/pulls/*)"
+    ]
+  }
+}
