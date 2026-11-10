@@ -121,4 +121,80 @@ class SkillManifestParserTest {
         val result = assertIs<SkillParseResult.Failure>(parser.parse(doc))
         assertTrue(result.reason.contains("must be a slug"), result.reason)
     }
+
+    @Test
+    fun `defaults parameters to empty when absent`() {
+        val doc = "---\nname: x\ndescription: A skill\n---\nBody."
+        val manifest = assertIs<SkillParseResult.Success>(parser.parse(doc)).manifest
+        assertEquals(emptyList(), manifest.parameters)
+    }
+
+    @Test
+    fun `parses a block of parameters with all fields`() {
+        val doc = """
+            ---
+            name: translate
+            description: Translate text
+            parameters:
+              - target_language | Language to translate into | required
+              - tone | Desired tone | optional | neutral
+              - city
+            ---
+            Translate into {{target_language}} with a {{tone}} tone.
+        """.trimIndent()
+        val manifest = assertIs<SkillParseResult.Success>(parser.parse(doc)).manifest
+        assertEquals(3, manifest.parameters.size)
+
+        val target = manifest.parameters[0]
+        assertEquals("target_language", target.name)
+        assertEquals("Language to translate into", target.description)
+        assertTrue(target.required)
+        assertEquals(null, target.default)
+
+        val tone = manifest.parameters[1]
+        assertEquals("tone", tone.name)
+        assertEquals(false, tone.required)
+        assertEquals("neutral", tone.default)
+
+        val city = manifest.parameters[2]
+        assertEquals("city", city.name)
+        assertEquals("", city.description)
+        assertEquals(false, city.required)
+        assertEquals(null, city.default)
+    }
+
+    @Test
+    fun `distinguishes an explicit empty default from no default`() {
+        val doc = "---\nname: x\ndescription: d\nparameters:\n  - suffix | A suffix | optional | \n---\nBody {{suffix}}."
+        val manifest = assertIs<SkillParseResult.Success>(parser.parse(doc)).manifest
+        assertEquals("", manifest.parameters.single().default)
+    }
+
+    @Test
+    fun `fails on a parameter with an invalid requiredness token`() {
+        val doc = "---\nname: x\ndescription: d\nparameters:\n  - p | desc | mandatory\n---\nBody."
+        val result = assertIs<SkillParseResult.Failure>(parser.parse(doc))
+        assertTrue(result.reason.contains("must be 'required' or 'optional'"), result.reason)
+    }
+
+    @Test
+    fun `fails on a parameter with an invalid name`() {
+        val doc = "---\nname: x\ndescription: d\nparameters:\n  - not a slug! | desc\n---\nBody."
+        val result = assertIs<SkillParseResult.Failure>(parser.parse(doc))
+        assertTrue(result.reason.contains("must be a slug"), result.reason)
+    }
+
+    @Test
+    fun `fails on duplicate parameter names`() {
+        val doc = "---\nname: x\ndescription: d\nparameters:\n  - p | one\n  - p | two\n---\nBody."
+        val result = assertIs<SkillParseResult.Failure>(parser.parse(doc))
+        assertTrue(result.reason.contains("duplicate skill parameter 'p'"), result.reason)
+    }
+
+    @Test
+    fun `fails when parameters is given an inline value instead of a block`() {
+        val doc = "---\nname: x\ndescription: d\nparameters: a, b\n---\nBody."
+        val result = assertIs<SkillParseResult.Failure>(parser.parse(doc))
+        assertTrue(result.reason.contains("must be a block list"), result.reason)
+    }
 }

@@ -20,16 +20,44 @@ data class SkillManifest(
     val declaredTools: List<String> = emptyList(),
     val version: String? = null,
     val instructions: String = "",
+    val parameters: List<SkillParameter> = emptyList(),
 ) {
     init {
         require(NAME_PATTERN.matches(name)) {
             "skill name must be a slug (letters, digits, '-', '_', '.'; starting with a letter), was '$name'"
         }
         require(description.isNotBlank()) { "skill description must not be blank" }
+        require(parameters.map { it.name }.toSet().size == parameters.size) {
+            "skill parameters must have unique names, were ${parameters.map { it.name }}"
+        }
     }
 
     companion object {
         /** A conservative skill-name shape: a slug starting with a letter. Also keeps a name usable as a map key / file name. */
         val NAME_PATTERN = Regex("""[A-Za-z][A-Za-z0-9_.-]*""")
+    }
+}
+
+/**
+ * A single parameter a skill declares in its frontmatter — a named slot a caller
+ * fills before the skill's instructions are used, substituted into the body
+ * wherever `{{name}}` appears (see [SkillParameterBinder]).
+ *
+ * Declaring a parameter is metadata, not a capability: like [SkillManifest.declaredTools]
+ * it only records what a skill *expects*, so a caller can collect values and a UI can
+ * prompt for them. It grants the skill nothing. [required] with no supplied value and no
+ * [default] means the skill cannot be bound (the binder reports it rather than silently
+ * substituting a blank); an optional parameter with neither resolves to an empty string.
+ */
+data class SkillParameter(
+    val name: String,
+    val description: String = "",
+    val required: Boolean = false,
+    val default: String? = null,
+) {
+    init {
+        require(SkillManifest.NAME_PATTERN.matches(name)) {
+            "skill parameter name must be a slug (letters, digits, '-', '_', '.'; starting with a letter), was '$name'"
+        }
     }
 }
