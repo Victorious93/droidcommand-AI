@@ -45,7 +45,9 @@ import ai.droidcommand.shizuku.NullPrivilegedShell
 import ai.droidcommand.shizuku.ShizukuTool
 import ai.droidcommand.skills.FileSkillStateStore
 import ai.droidcommand.skills.InstallResult
+import ai.droidcommand.skills.SkillBindResult
 import ai.droidcommand.skills.SkillDiscovery
+import ai.droidcommand.skills.SkillParameterBinder
 import ai.droidcommand.skills.SkillPromptAssembler
 import ai.droidcommand.skills.SkillRegistry
 import ai.droidcommand.skills.SkillStateStore
@@ -395,6 +397,14 @@ internal fun printUsage() {
         enable <name>' approves one (only a skill actually discovered on disk can be
         enabled), and only enabled skills contribute to a Forge run's system prompt.
 
+        A skill may declare parameters (a SKILL.md 'parameters:' block) whose {{name}}
+        slots are filled before the Forge run. 'forge' reads each value from
+        DROIDCOMMAND_SKILL_<SKILL>_<PARAM> (both names upper-cased, '.'/'-' -> '_'),
+        falling back to the parameter's declared default. An enabled skill with a
+        required parameter that has neither a value nor a default is skipped for that
+        run (a note on stderr names the exact keys to set); a skill with no parameters
+        is unaffected.
+
         web_search reaches a real Brave Search/SerpAPI endpoint only when
         DROIDCOMMAND_CLI_BRAVE_API_KEY and/or DROIDCOMMAND_CLI_SERPAPI_API_KEY is set
         (both set tries Brave first, falling back to SerpAPI on failure); with neither
@@ -584,10 +594,52 @@ internal fun resolveSkillEnvironment(configSource: ConfigSource): SkillEnvironme
  * Only skills marked enabled in the persisted state file contribute ([SkillPromptAssembler] consults
  * nothing else); a skill on disk but not approved stays silent — the "disabled until the user approves
  * it" rule. See [resolveSkillEnvironment] for how the directory and state file are read.
+ *
+ * Each enabled skill's declared parameters ([SkillParameter]) are bound before assembly
+ * ([SkillParameterBinder]): a `{{name}}` slot in the body is filled from
+ * [skillParameterConfigKey]'s config key, else the parameter's default, else (optional) an empty
+ * string. A skill with a **required** parameter that has neither a configured value nor a default is
+ * skipped (with a stderr note naming the exact keys to set) rather than contributing a half-filled
+ * prompt — the same fail-safe-not-silent posture the rest of the pipeline takes. A skill with no
+ * parameters binds to its body unchanged, so this is byte-for-byte identical for any skill that never
+ * declared one.
  */
 internal fun buildSkillSystemPrompt(configSource: ConfigSource): String? {
     val env = resolveSkillEnvironment(configSource) ?: return null
     val installed = env.registry.list()
     if (installed.isEmpty()) return null
-    return SkillPromptAssembler().assemble(installed)
+
+    val binder = SkillParameterBinder()
+    val contributing = installed.mapNotNull { skill ->
+        // Only enabled skills reach the prompt; leave the disabled ones untouched (the assembler drops
+        // them anyway) so no spurious "missing parameter" note fires for a skill the user hasn't enabled.
+        if (!skill.enabled) return@mapNotNull skill
+        val name = skill.manifest.name
+        when (val bound = binder.bind(skill.manifest) { param -> configSource.get(skillParameterConfigKey(name, param)) }) {
+            is SkillBindResult.Bound ->
+                skill.copy(manifest = skill.manifest.copy(instructions = bound.instructions))
+            is SkillBindResult.MissingRequired -> {
+                val keys = bound.missing.joinToString(", ") { skillParameterConfigKey(name, it) }
+                System.err.println(
+                    "Skill '$name' skipped: missing required parameter(s) ${bound.missing.joinToString(", ")} " +
+                        "(set $keys)",
+                )
+                null
+            }
+        }
+    }
+    return SkillPromptAssembler().assemble(contributing)
+}
+
+/**
+ * The [ConfigSource] key a skill parameter's value is read from: `DROIDCOMMAND_SKILL_<SKILL>_<PARAM>`,
+ * with each name upper-cased and its slug punctuation (`.`/`-`) mapped to `_` for environment-variable
+ * compatibility (a skill/parameter name is a slug that may contain `.`/`-`, neither valid in an env var
+ * name). Named limitation: that mapping is not injective, so skills/parameters whose names differ only
+ * by `.` vs `-` vs `_` (e.g. `a-b` and `a.b`) would collide on one key — an accepted edge for keeping
+ * the keys plain environment variables rather than inventing an escaping scheme.
+ */
+internal fun skillParameterConfigKey(skillName: String, parameterName: String): String {
+    fun normalize(part: String) = part.uppercase().replace('.', '_').replace('-', '_')
+    return "DROIDCOMMAND_SKILL_${normalize(skillName)}_${normalize(parameterName)}"
 }
