@@ -4,7 +4,10 @@ import ai.droidcommand.agent.ConversationStore
 import ai.droidcommand.agent.GraphRetriever
 import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.agent.Role
+import ai.droidcommand.agent.ToolRegistry
+import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.app.bots.HelperBotHandoff
+import ai.droidcommand.app.bots.HelperBotTools
 import ai.droidcommand.app.bots.HelperBots
 import ai.droidcommand.app.brain.BrainRuntime
 import ai.droidcommand.app.documents.DocumentRuntime
@@ -15,7 +18,10 @@ import ai.droidcommand.app.localmodels.ImportedModel
 import ai.droidcommand.app.localmodels.LocalModelRuntime
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prompts.PromptLibrary
+import ai.droidcommand.app.skills.SkillFilesPrompt
 import ai.droidcommand.app.voice.VoiceRuntime
+import ai.droidcommand.config.AssistantCapability
+import ai.droidcommand.config.AssistantCapabilitySettingsStore
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.config.SecretState
 import ai.droidcommand.deviceconnect.DeviceConnectService
@@ -94,6 +100,9 @@ data class ChatUiState(
     val brainEnabled: Boolean = false,
     val brainStatus: String? = null,
     val pendingBrainSave: NoteDraft? = null,
+    /** A spoken request that sounded destructive; Send waits on a Yes/No confirm dialog. */
+    val pendingRiskySend: String? = null,
+    val pendingRiskyReason: String? = null,
     /** Chat-toolbar toggle; off by default because turning it on sends the message text to the search provider. */
     val webSearchEnabled: Boolean = false,
     /** Non-fatal note from the last turn (e.g. web search failed and the reply is ungrounded). */
@@ -170,6 +179,9 @@ class ChatViewModel @Inject constructor(
     private val onDeviceModels: LocalModelRuntime,
     private val deviceConnect: DeviceConnectService,
     private val brainRuntime: BrainRuntime,
+    private val capabilities: AssistantCapabilitySettingsStore,
+    private val toolRunner: ToolRunner,
+    private val toolRegistry: ToolRegistry,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
@@ -210,6 +222,9 @@ class ChatViewModel @Inject constructor(
 
     @Volatile private var handsFreeRound = false
 
+    /** Chat is on screen and may run the wake-word listener if the user setting is on. */
+    @Volatile private var wakeWanted = false
+
     /** Wake-word settings held while the POST_NOTIFICATIONS prompt is on screen. */
     @Volatile private var awaitingNotificationAnswer: WakeWordSettings? = null
 
@@ -235,7 +250,6 @@ class ChatViewModel @Inject constructor(
     }
 
     init {
-        startWakeWordIfEnabled()
         viewModelScope.launch {
             while (true) {
                 delay(1_000)
@@ -277,7 +291,7 @@ class ChatViewModel @Inject constructor(
             val templates = runCatching { prompts.templates() }.getOrDefault(emptyList())
             val skills = runCatching { prompts.skills() }.getOrDefault(emptyList())
             val skillId = prefs.getString(KEY_SKILL, null)?.takeIf { id -> skills.any { it.id == id } }
-            session.setRequestPrompt(skills.firstOrNull { it.id == skillId }?.systemPrompt)
+            applyChatSystemPrompt(mutableState.value.copy(skills = skills, skillId = skillId))
             mutableState.update {
                 it.copy(
                     lines = if (it.lines.isEmpty()) lines else it.lines,
@@ -395,6 +409,23 @@ class ChatViewModel @Inject constructor(
         mutableState.update { it.copy(model = model) }
     }
 
+    /** Combines enabled Skill files (with saved parameter values) and the active bot or Chat prompt. */
+    private fun applyChatSystemPrompt(state: ChatUiState) {
+        val files = if (capabilities.load().isEnabled(AssistantCapability.SKILL_SCRIPTS)) {
+            runCatching { SkillFilesPrompt.assemble(context.filesDir.toPath()) }.getOrDefault(
+                ai.droidcommand.skills.BoundSkillPrompt(null),
+            )
+        } else {
+            ai.droidcommand.skills.BoundSkillPrompt(null)
+        }
+        val selected = state.activeBotPrompt ?: state.skills.firstOrNull { it.id == state.skillId }?.systemPrompt
+        val prompt = listOfNotNull(files.prompt, selected).joinToString("\n\n").ifBlank { null }
+        session.setRequestPrompt(prompt)
+        files.skippedNotice()?.let { note ->
+            mutableState.update { it.copy(notice = listOfNotNull(it.notice, note).joinToString(" ")) }
+        }
+    }
+
     fun send(text: String) {
         val current = mutableState.value
         if (current.sending || text.isBlank()) return
@@ -410,7 +441,7 @@ class ChatViewModel @Inject constructor(
         mutableState.update { it.copy(sending = true, streaming = "", error = null, notice = null) }
         sendJob?.cancel()
         sendJob = viewModelScope.launch(Dispatchers.IO) {
-            session.setRequestPrompt(current.activeBotPrompt ?: current.skills.firstOrNull { it.id == current.skillId }?.systemPrompt)
+            applyChatSystemPrompt(current)
             val localId = if (slashProvider == null) current.activeLocalModelId else null
             val outgoing = slash?.prompt ?: text
             // Web search sends the message text to a search provider, so it is not used for on-device replies.
@@ -624,7 +655,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             val skill = id?.let { chosen -> mutableState.value.skills.firstOrNull { it.id == chosen } }
             prefs.edit { if (skill == null) remove(KEY_SKILL) else putString(KEY_SKILL, skill.id) }
-            session.setRequestPrompt(skill?.systemPrompt)
+            applyChatSystemPrompt(mutableState.value)
             mutableState.update { it.copy(skillId = skill?.id, promptError = null) }
         }
     }
@@ -665,7 +696,7 @@ class ChatViewModel @Inject constructor(
             prompts.deleteSkill(id)
             val still = prompts.skills()
             val selected = mutableState.value.skillId?.takeIf { chosen -> still.any { it.id == chosen } }
-            if (selected == null) session.setRequestPrompt(null)
+            applyChatSystemPrompt(mutableState.value.copy(skillId = selected))
             prefs.edit { if (selected == null) remove(KEY_SKILL) else putString(KEY_SKILL, selected) }
             mutableState.update { it.copy(skills = still, skillId = selected) }
         }
@@ -820,17 +851,38 @@ class ChatViewModel @Inject constructor(
 
     /**
      * Picks up a bot the user tapped "Run" on in the Bot maker. Its instructions replace the skill text for the
-     * next messages; tools it asks for still go through the normal approval prompt.
+     * next messages. Tools not on the bot's allow-list are refused by [HelperBotTools]; allowed tools that can
+     * change the phone still go through the normal approval prompt.
      */
     fun pickUpBot() {
         val bot = HelperBotHandoff.consume() ?: return
         if (bot.model.isNotBlank() && mutableState.value.activeLocalModelId == null) setModel(bot.model)
+        session.setToolAccess(
+            HelperBotTools.scopedRunner(toolRunner, bot.allowedTools),
+            HelperBotTools.offeredTools(toolRegistry, bot.allowedTools),
+        )
         mutableState.update {
             it.copy(activeBotName = bot.name, activeBotPrompt = HelperBots.systemPrompt(bot), notice = "Running helper bot \"${bot.name}\".")
         }
+        applyChatSystemPrompt(mutableState.value)
     }
 
-    fun stopBot() = mutableState.update { it.copy(activeBotName = null, activeBotPrompt = null, notice = null) }
+    fun stopBot() {
+        session.setToolAccess(null)
+        mutableState.update { it.copy(activeBotName = null, activeBotPrompt = null, notice = null) }
+        applyChatSystemPrompt(mutableState.value)
+    }
+
+    fun confirmRiskySend() {
+        val text = mutableState.value.pendingRiskySend ?: return
+        mutableState.update { it.copy(pendingRiskySend = null, pendingRiskyReason = null, notice = null) }
+        handsFreeRound = true
+        send(text)
+    }
+
+    fun dismissRiskySend() {
+        mutableState.update { it.copy(pendingRiskySend = null, pendingRiskyReason = null, notice = "Cancelled.") }
+    }
 
     /**
      * Hands-free: after the wake word, the spoken sentence is sent (not left in the box),
@@ -850,19 +902,15 @@ class ChatViewModel @Inject constructor(
                 mutableState.update { it.copy(notice = "Opening ${command.destination.name.lowercase()}…", pendingInput = "") }
             }
             is ai.droidcommand.app.assistant.JarvisCommand.SaveNote -> {
-                // Leave a draft in the input so the existing Brain save flow can confirm.
-                mutableState.update {
-                    it.copy(
-                        pendingInput = "Save a Brain note titled \"${command.title}\":\n${command.text}",
-                        notice = "Say send, or tap Send. Saving a note still asks you first.",
-                    )
-                }
+                askSaveFactToBrain(command.title, command.text)
             }
             is ai.droidcommand.app.assistant.JarvisCommand.NeedsConfirmation -> {
                 mutableState.update {
                     it.copy(
-                        pendingInput = command.text,
-                        notice = command.reason + " Tap Send if you want the AI to try — tools still ask first.",
+                        pendingRiskySend = command.text,
+                        pendingRiskyReason = command.reason,
+                        pendingInput = "",
+                        notice = command.reason,
                     )
                 }
             }
@@ -875,15 +923,17 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * Wake word is opt-in (off by default), needs its model installed and RECORD_AUDIO, and lives only as long as
-     * this screen's ViewModel: leaving the chat stops it and its notification. After a wake,
-     * [onHandsFreeTranscript] sends the request and speaks the answer; tools still need confirmation.
+     * Wake word is opt-in (off by default), needs its model installed and RECORD_AUDIO, and is tied to the
+     * Chat screen being visible: leaving Chat stops the microphone and its notification; returning to Chat
+     * starts it again if the setting is still on. After a wake, [onHandsFreeTranscript] sends the request
+     * and speaks the answer; tools still need confirmation.
      */
-    private fun startWakeWordIfEnabled() {
+    fun startWakeWordIfEnabled() {
+        wakeWanted = true
         viewModelScope.launch(Dispatchers.IO) {
             val features = runtime.refresh() // hashes the model files: must not run on the main thread
             val settings = voiceStore.load().normalized(features)
-            if (!settings.wakeWord.enabled || !features.wakeWord) return@launch
+            if (!wakeWanted || !settings.wakeWord.enabled || !features.wakeWord) return@launch
             if (shouldAskNotificationPermission(Build.VERSION.SDK_INT, notificationsPermitted())) {
                 // Ask first so the "microphone is on" notification can show; the screen answers via onNotificationPermissionResult.
                 awaitingNotificationAnswer = settings.wakeWord
@@ -894,6 +944,16 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** Stops wake-word listening because Chat is no longer on screen. Does not change the user's setting. */
+    fun stopWakeWord() {
+        wakeWanted = false
+        awaitingNotificationAnswer = null
+        tearDownWakeWord()
+        voice.stopListening()
+        voice.stopSpeaking()
+        mutableState.update { it.copy(askNotificationPermission = false, wakeWord = it.wakeWord.copy(listeningForWakeWord = false)) }
+    }
+
     /** The screen's answer to the POST_NOTIFICATIONS prompt. Wake word starts either way; a denial is stated, not hidden. */
     fun onNotificationPermissionResult(granted: Boolean) {
         val settings = awaitingNotificationAnswer
@@ -901,7 +961,7 @@ class ChatViewModel @Inject constructor(
         mutableState.update {
             it.copy(askNotificationPermission = false, notice = if (granted) it.notice else NOTIFICATIONS_DENIED_NOTICE)
         }
-        if (settings != null) viewModelScope.launch(Dispatchers.IO) { startWakeWord(settings) }
+        if (settings != null && wakeWanted) viewModelScope.launch(Dispatchers.IO) { startWakeWord(settings) }
     }
 
     private fun notificationsPermitted() =
@@ -909,6 +969,9 @@ class ChatViewModel @Inject constructor(
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
     private fun startWakeWord(settings: WakeWordSettings) {
+        if (!wakeWanted) return
+        tearDownWakeWord()
+        if (!wakeWanted) return
         val controller = WakeWordController(
             runtime.wakeWordDetector(),
             voice,
@@ -927,13 +990,18 @@ class ChatViewModel @Inject constructor(
         if (mutableState.value.wakeWord.enabled) WakeWordService.start(context, settings.listenWhenScreenOff)
     }
 
-    override fun onCleared() {
+    private fun tearDownWakeWord() {
         wake?.setEnabled(false)
         wake = null
         WakeWordHost.hold = null
         WakeWordHost.release = null
         WakeWordHost.onStopRequested = null
         WakeWordService.stop(context)
+    }
+
+    override fun onCleared() {
+        wakeWanted = false
+        tearDownWakeWord()
         voice.stopListening()
         voice.stopSpeaking()
         tts.shutdown()

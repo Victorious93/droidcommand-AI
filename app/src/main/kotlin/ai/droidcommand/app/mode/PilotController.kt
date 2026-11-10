@@ -49,6 +49,11 @@ class PilotController @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val cancelFlag = AtomicBoolean(false)
     private var runJob: Job? = null
+    private val lock = Any()
+    private var nextRunId = 0
+
+    /** Identity of the run that currently owns [EngineModes] busy; null if no run is active. */
+    private var activeRunId: Int? = null
     private val mutableState = MutableStateFlow(
         PilotUiState(tools = registry.list(AgentMode.PILOT, Initiator.DEVICE_OWNER)),
     )
@@ -73,22 +78,30 @@ class PilotController @Inject constructor(
             return
         }
         cancelFlag.set(false)
+        val runId = synchronized(lock) {
+            nextRunId += 1
+            activeRunId = nextRunId
+            nextRunId
+        }
         mutableState.update { it.copy(running = true, error = null, result = null) }
         runJob = scope.launch {
             try {
                 val instruction = PilotInstruction(registry) { machine -> secureRunner(machine) }
-                val result = instruction.run(tool.name, input, isCancelled = { cancelFlag.get() })
-                if (cancelFlag.get()) {
-                    mutableState.update { it.copy(result = "Stopped.", error = null) }
-                } else {
-                    mutableState.update { it.copy(result = result.describe()) }
+                val result = instruction.run(tool.name, input, isCancelled = { cancelFlag.get() || activeRunId != runId })
+                synchronized(lock) {
+                    if (activeRunId != runId) return@launch
+                    if (cancelFlag.get()) {
+                        mutableState.update { it.copy(result = "Stopped.", error = null) }
+                    } else {
+                        mutableState.update { it.copy(result = result.describe()) }
+                    }
                 }
             } catch (e: Exception) {
-                mutableState.update { it.copy(error = e.message ?: e.javaClass.simpleName) }
+                if (activeRunId == runId && !cancelFlag.get()) {
+                    mutableState.update { it.copy(error = e.message ?: e.javaClass.simpleName) }
+                }
             } finally {
-                mutableState.update { it.copy(running = false) }
-                modes.endTask()
-                runJob = null
+                finishRun(runId)
             }
         }
     }
@@ -96,10 +109,25 @@ class PilotController @Inject constructor(
     /** Asks the running Pilot tool to stop as soon as it checks cancellation. */
     fun stop() {
         if (!mutableState.value.running) return
+        val runId = synchronized(lock) { activeRunId } ?: return
         cancelFlag.set(true)
         runJob?.cancel()
         mutableState.update { it.copy(running = false, result = "Stopped.", error = null) }
-        modes.endTask()
+        finishRun(runId)
+    }
+
+    /**
+     * Ends [runId] exactly once. A later run has a new id, so an old `finally` cannot clear
+     * the newer run's busy flag.
+     */
+    private fun finishRun(runId: Int) {
+        synchronized(lock) {
+            if (activeRunId != runId) return
+            activeRunId = null
+            runJob = null
+            modes.endTask()
+        }
+        mutableState.update { it.copy(running = false) }
     }
 
     private fun secureRunner(machine: AgentStateMachine): SecureToolExecutor {
