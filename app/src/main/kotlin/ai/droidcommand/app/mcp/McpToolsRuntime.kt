@@ -9,6 +9,7 @@ import ai.droidcommand.skills.mcp.HttpMcpToolSource
 import ai.droidcommand.skills.mcp.McpSecrets
 import ai.droidcommand.skills.mcp.McpServerConfig
 import ai.droidcommand.skills.mcp.McpServerStatus
+import ai.droidcommand.skills.mcp.McpSettings
 import ai.droidcommand.skills.mcp.McpToolCatalog
 import android.content.Context
 import androidx.core.content.edit
@@ -27,7 +28,10 @@ import javax.inject.Singleton
  * tools). Loaded tools reach nothing by themselves — a helper bot must list them, and every call goes through the
  * app's `SecureToolExecutor` and approval dialog, plus the extra ask for tools that change something.
  *
- * [refresh] blocks on the network: call it off the main thread.
+ * [refresh] blocks on the network: call it off the main thread. [setEnabled] and [saveServers] never wait for the
+ * network: turning MCP or one server off, or removing a server, takes its tools away at once, even while a
+ * [refresh] is still waiting for a server. That refresh then starts over with the new settings, so an old answer
+ * can never bring the tools or a "ready" status back.
  */
 @Singleton
 class McpToolsRuntime @Inject constructor(
@@ -45,6 +49,8 @@ class McpToolsRuntime @Inject constructor(
     private val mutableStatuses = MutableStateFlow<List<McpServerStatus>>(emptyList())
     val statuses: StateFlow<List<McpServerStatus>> = mutableStatuses.asStateFlow()
 
+    private val publishLock = Any()
+
     @Volatile
     private var loaded = false
 
@@ -55,7 +61,7 @@ class McpToolsRuntime @Inject constructor(
         if (!on) {
             catalog.clear()
             loaded = false
-            mutableStatuses.value = emptyList()
+            publish()
         }
     }
 
@@ -63,15 +69,21 @@ class McpToolsRuntime @Inject constructor(
 
     fun saveServers(servers: List<McpServerConfig>) {
         prefs.edit { putString(KEY_SERVERS, McpServerCodec.encode(servers)) }
+        // Takes away the tools of a server that was just turned off or removed, without waiting for a refresh.
+        catalog.settingsChanged(McpSettings(enabled(), servers))
+        publish()
     }
 
     /** Reconnects to every turned-on server and reloads its tools. Never throws. */
     fun refresh(): List<McpServerStatus> {
-        val statuses = catalog.refresh(enabled(), servers())
+        val statuses = catalog.refresh { McpSettings(enabled(), servers()) }
         loaded = enabled()
-        mutableStatuses.value = statuses
+        publish()
         return statuses
     }
+
+    /** Shows the catalog's current statuses. Always the latest, whichever thread gets here last. */
+    private fun publish() = synchronized(publishLock) { mutableStatuses.value = catalog.lastStatuses }
 
     /** Loads the tools once if MCP is on and they have not been loaded since the app started. */
     fun refreshIfNeeded() {
