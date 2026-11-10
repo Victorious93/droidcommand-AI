@@ -2,6 +2,7 @@ package ai.droidcommand.app.ui.fleet
 
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
+import ai.droidcommand.app.ui.remotepc.RemotePcTile
 import ai.droidcommand.app.ui.theme.AccentBlueBright
 import ai.droidcommand.app.ui.theme.AccentRed
 import ai.droidcommand.app.ui.theme.AccentSuccess
@@ -73,6 +74,7 @@ fun FleetDashboardScreen(
         onOpenPairing = onOpenPairing,
         onOpenOrchestrator = onOpenOrchestrator,
         onOpenConnectDevice = onOpenConnectDevice,
+        remotePcTile = { RemotePcTile() },
     )
 }
 
@@ -86,6 +88,7 @@ fun FleetDashboardContent(
     onOpenPairing: () -> Unit,
     onOpenOrchestrator: () -> Unit,
     onOpenConnectDevice: () -> Unit = {},
+    remotePcTile: @Composable () -> Unit = {},
 ) {
     var dialog by remember { mutableStateOf<FleetDialog?>(null) }
 
@@ -131,6 +134,7 @@ fun FleetDashboardContent(
             onClick = onOpenConnectDevice,
             modifier = Modifier.fillMaxWidth().testTag("fleet_connect_device"),
         ) { Text("Connect a computer or another phone") }
+        remotePcTile()
 
         state.cards.forEach { card ->
             FleetAppCard(

@@ -2,6 +2,7 @@ package ai.droidcommand.app
 
 import ai.droidcommand.app.fleet.FleetCatalog
 import ai.droidcommand.app.fleet.FleetNodes
+import ai.droidcommand.remotepc.PcProfileContract
 import ai.droidcommand.security.InboundEntryPointCatalog
 import ai.droidcommand.shizuku.ShizukuPackages
 import org.w3c.dom.Element
@@ -66,6 +67,18 @@ class ManifestPolicyTest {
         val declared = manifest.children("queries").single().children("package").map { it.androidAttr("name") }.toSet()
         val catalogued = FleetCatalog.queryPackages + ShizukuPackages.queryPackages
         assertEquals(catalogued, declared)
+    }
+
+    @Test
+    fun `My PC tile can see VictorSuite, its PC provider and the OPEN_PC and consent actions`() {
+        val queries = manifest.children("queries").single()
+        val packages = queries.children("package").map { it.androidAttr("name") }
+        assertTrue(PcProfileContract.VICTORSUITE_PACKAGE in packages)
+        val authorities = queries.children("provider").map { it.androidAttr("authorities") }
+        assertTrue(PcProfileContract.AUTHORITY in authorities)
+        val actions = queries.children("intent").flatMap { it.children("action") }.map { it.androidAttr("name") }
+        assertTrue(PcProfileContract.ACTION_OPEN_PC in actions)
+        assertTrue(PcProfileContract.ACTION_PC_CONSENT in actions)
     }
 
     @Test
