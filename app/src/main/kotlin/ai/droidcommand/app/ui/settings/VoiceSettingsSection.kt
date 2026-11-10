@@ -2,14 +2,14 @@ package ai.droidcommand.app.ui.settings
 
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.voice.TtsEngineChoice
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,8 +32,8 @@ fun VoiceSettingsSection(viewModel: VoiceSettingsViewModel = hiltViewModel()) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Spoken replies", style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { viewModel.setEngine(TtsEngineChoice.SYSTEM) }, enabled = s.ttsEngine != TtsEngineChoice.SYSTEM) { Text("System voice") }
-                OutlinedButton(onClick = { viewModel.setEngine(TtsEngineChoice.NEURAL) }, enabled = ui.features.neuralTts && s.ttsEngine != TtsEngineChoice.NEURAL) { Text("Neural voice") }
+                DroidSecondaryButton(onClick = { viewModel.setEngine(TtsEngineChoice.SYSTEM) }, enabled = s.ttsEngine != TtsEngineChoice.SYSTEM) { Text("System voice") }
+                DroidSecondaryButton(onClick = { viewModel.setEngine(TtsEngineChoice.NEURAL) }, enabled = ui.features.neuralTts && s.ttsEngine != TtsEngineChoice.NEURAL) { Text("Neural voice") }
             }
             Note(if (ui.features.neuralTts) "Neural voice falls back to the system voice if its model is missing." else "Download the English voice under Voice models to use it.")
         }
@@ -42,7 +42,7 @@ fun VoiceSettingsSection(viewModel: VoiceSettingsViewModel = hiltViewModel()) {
         title = "Wake word",
         checked = s.wakeWord.enabled,
         enabled = ui.features.wakeWord,
-        note = if (ui.features.wakeWord) "Keeps the microphone on and shows a notification while listening. Audio is not recorded or sent." else "Download the wake word model under Voice models to use it.",
+        note = if (ui.features.wakeWord) "After the wake word, it listens, sends your request, and can speak the answer. Tools still ask first. Audio is not recorded or uploaded." else "Download the wake word model under Voice models to use it.",
         onChange = viewModel::setWakeWord,
     )
     ToggleCard(
@@ -77,8 +77,8 @@ fun VoiceSettingsSection(viewModel: VoiceSettingsViewModel = hiltViewModel()) {
                 Note("License: ${m.license}")
                 m.message?.let { Note(it) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { viewModel.install(m.id) }, enabled = !m.busy && !m.installed) { Text(if (m.busy) "Downloading…" else "Download") }
-                    OutlinedButton(onClick = { viewModel.delete(m.id) }, enabled = !m.busy && m.installed) { Text("Delete") }
+                    DroidPrimaryButton(onClick = { viewModel.install(m.id) }, enabled = !m.busy && !m.installed) { Text(if (m.busy) "Downloading…" else "Download") }
+                    DroidSecondaryButton(onClick = { viewModel.delete(m.id) }, enabled = !m.busy && m.installed) { Text("Delete") }
                 }
             }
         }

@@ -4,6 +4,8 @@ import ai.droidcommand.agent.ConversationStore
 import ai.droidcommand.agent.GraphRetriever
 import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.agent.Role
+import ai.droidcommand.app.bots.HelperBotHandoff
+import ai.droidcommand.app.bots.HelperBots
 import ai.droidcommand.app.brain.BrainRuntime
 import ai.droidcommand.app.documents.DocumentRuntime
 import ai.droidcommand.app.documents.DownloadOutcome
@@ -64,11 +66,13 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
@@ -137,6 +141,9 @@ data class ChatUiState(
      * need this. Refreshed when Chat is shown again so a key saved in Settings is picked up.
      */
     val cloudKeyReady: Boolean = false,
+    /** Helper bot from the Bot maker whose instructions are used instead of the skill while it runs. */
+    val activeBotName: String? = null,
+    val activeBotPrompt: String? = null,
 )
 
 /**
@@ -199,6 +206,9 @@ class ChatViewModel @Inject constructor(
     private fun micPermitted() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     private var wake: WakeWordController? = null
+    private var sendJob: Job? = null
+
+    @Volatile private var handsFreeRound = false
 
     /** Wake-word settings held while the POST_NOTIFICATIONS prompt is on screen. */
     @Volatile private var awaitingNotificationAnswer: WakeWordSettings? = null
@@ -398,8 +408,9 @@ class ChatViewModel @Inject constructor(
         val slash = command as? AiSlashCommands.Parsed.Command
         val slashProvider = slash?.let { CloudProviderCatalog.byId(it.providerId) }
         mutableState.update { it.copy(sending = true, streaming = "", error = null, notice = null) }
-        viewModelScope.launch(Dispatchers.IO) {
-            session.setRequestPrompt(current.skills.firstOrNull { it.id == current.skillId }?.systemPrompt)
+        sendJob?.cancel()
+        sendJob = viewModelScope.launch(Dispatchers.IO) {
+            session.setRequestPrompt(current.activeBotPrompt ?: current.skills.firstOrNull { it.id == current.skillId }?.systemPrompt)
             val localId = if (slashProvider == null) current.activeLocalModelId else null
             val outgoing = slash?.prompt ?: text
             // Web search sends the message text to a search provider, so it is not used for on-device replies.
@@ -425,9 +436,31 @@ class ChatViewModel @Inject constructor(
             // Read the saved-chat list and speak the reply outside the update: the flow may run the lambda more than once
             // (speaking re-enters this flow through the voice callback, which can force exactly such a retry and a second speak).
             val refreshedChats = if (result is ChatResult.Reply) runCatching { savedChats(store) }.getOrNull() else null
-            mutableState.update { it.afterTurn(result, text, localNotice, refreshedChats) }
-            if (result is ChatResult.Reply) voice.onReply(result.text, mutableState.value.speakMode)
+            val cancelled = !isActive
+            if (!cancelled) {
+                mutableState.update { it.afterTurn(result, text, localNotice, refreshedChats) }
+                if (result is ChatResult.Reply) {
+                    if (handsFreeRound) {
+                        voice.speak(result.text)
+                    } else {
+                        voice.onReply(result.text, mutableState.value.speakMode)
+                    }
+                }
+            } else {
+                mutableState.update { it.copy(sending = false, streaming = "", notice = "Stopped.") }
+            }
+            handsFreeRound = false
+            sendJob = null
         }
+    }
+
+    /** Stops the in-flight chat reply. The send button comes back so you can try again. */
+    fun stopSending() {
+        sendJob?.cancel()
+        sendJob = null
+        handsFreeRound = false
+        mutableState.update { it.copy(sending = false, streaming = "", notice = "Stopped.") }
+        voice.stopSpeaking()
     }
 
     /**
@@ -768,10 +801,83 @@ class ChatViewModel @Inject constructor(
 
     fun dismissVoiceError() = voice.clearError()
 
+    /** Voice assistant: one round of listening; [onTranscript] gets the recognised sentence. */
+    fun listenOnce(micPermitted: Boolean, onTranscript: (String) -> Unit) {
+        if (mutableState.value.voice.listening) return
+        voice.startListening(micPermitted, onTranscript)
+    }
+
+    /** Voice assistant: reads [text] aloud with the user's chosen voice. */
+    fun speakText(text: String) {
+        if (text.isNotBlank()) voice.speak(text)
+    }
+
+    /** Voice assistant: stops listening and speaking at once. */
+    fun stopVoice() {
+        voice.stopListening()
+        voice.stopSpeaking()
+    }
+
+    /**
+     * Picks up a bot the user tapped "Run" on in the Bot maker. Its instructions replace the skill text for the
+     * next messages; tools it asks for still go through the normal approval prompt.
+     */
+    fun pickUpBot() {
+        val bot = HelperBotHandoff.consume() ?: return
+        if (bot.model.isNotBlank() && mutableState.value.activeLocalModelId == null) setModel(bot.model)
+        mutableState.update {
+            it.copy(activeBotName = bot.name, activeBotPrompt = HelperBots.systemPrompt(bot), notice = "Running helper bot \"${bot.name}\".")
+        }
+    }
+
+    fun stopBot() = mutableState.update { it.copy(activeBotName = null, activeBotPrompt = null, notice = null) }
+
+    /**
+     * Hands-free: after the wake word, the spoken sentence is sent (not left in the box),
+     * the screen state for this turn is cleared, and the answer is spoken. Tool use still
+     * goes through the existing confirmation dialog.
+     */
+    private fun onHandsFreeTranscript(spoken: String) {
+        val command = ai.droidcommand.app.assistant.JarvisCommandRouter.route(spoken)
+        when (command) {
+            ai.droidcommand.app.assistant.JarvisCommand.Nothing -> Unit
+            ai.droidcommand.app.assistant.JarvisCommand.Stop -> {
+                stopVoice()
+                stopSending()
+            }
+            is ai.droidcommand.app.assistant.JarvisCommand.Open -> {
+                ai.droidcommand.app.assistant.JarvisNavInbox.offer(command.destination)
+                mutableState.update { it.copy(notice = "Opening ${command.destination.name.lowercase()}…", pendingInput = "") }
+            }
+            is ai.droidcommand.app.assistant.JarvisCommand.SaveNote -> {
+                // Leave a draft in the input so the existing Brain save flow can confirm.
+                mutableState.update {
+                    it.copy(
+                        pendingInput = "Save a Brain note titled \"${command.title}\":\n${command.text}",
+                        notice = "Say send, or tap Send. Saving a note still asks you first.",
+                    )
+                }
+            }
+            is ai.droidcommand.app.assistant.JarvisCommand.NeedsConfirmation -> {
+                mutableState.update {
+                    it.copy(
+                        pendingInput = command.text,
+                        notice = command.reason + " Tap Send if you want the AI to try — tools still ask first.",
+                    )
+                }
+            }
+            is ai.droidcommand.app.assistant.JarvisCommand.Ask -> {
+                mutableState.update { it.copy(pendingInput = "", notice = null, error = null) }
+                handsFreeRound = true
+                send(command.text)
+            }
+        }
+    }
+
     /**
      * Wake word is opt-in (off by default), needs its model installed and RECORD_AUDIO, and lives only as long as
-     * this screen's ViewModel: leaving the chat stops it and its notification. A detection can only start dictation
-     * (see [WakeWordController]); it never sends, runs a tool or approves anything.
+     * this screen's ViewModel: leaving the chat stops it and its notification. After a wake,
+     * [onHandsFreeTranscript] sends the request and speaks the answer; tools still need confirmation.
      */
     private fun startWakeWordIfEnabled() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -807,7 +913,7 @@ class ChatViewModel @Inject constructor(
             runtime.wakeWordDetector(),
             voice,
             micPermitted = ::micPermitted,
-            onTranscript = { text -> mutableState.update { it.copy(pendingInput = text) } },
+            onTranscript = { text -> onHandsFreeTranscript(text) },
             onChange = { w -> mutableState.update { it.copy(wakeWord = w) } },
         )
         wake = controller

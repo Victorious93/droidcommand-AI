@@ -72,6 +72,20 @@ object ScreenHelpCatalog {
             "unless you turn that on here, and it still asks every time.",
     )
 
+    val BOT_MAKER = ScreenHelp(
+        title = "What is Bot maker?",
+        body = "Make small helper bots for one job. Each bot has a name, instructions, and optional tools. " +
+            "Running a bot opens AI Chat with those instructions. Tools still ask before they change the phone. " +
+            "Turn Bot Maker on under Advanced → Kai capabilities first.",
+    )
+
+    val SKILL_FILES = ScreenHelp(
+        title = "What are skill files?",
+        body = "Skill files are instruction folders (SKILL.md) the AI can turn on. " +
+            "They are different from Chat prompts, which are short system texts saved inside Chat. " +
+            "Turn Skill scripts on under Advanced → Kai capabilities first. Tools a skill mentions still need approval.",
+    )
+
     val NOTES_STUDIO = ScreenHelp(
         title = "What is Notes Studio?",
         body = "Tools for markdown in your Brain vault: write and check AI context files (CLAUDE.md, AGENTS.md, " +

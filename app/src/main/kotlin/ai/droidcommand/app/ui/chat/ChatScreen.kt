@@ -10,6 +10,9 @@ import ai.droidcommand.app.ui.theme.AccentCyan
 import ai.droidcommand.app.ui.theme.AccentIndigo
 import ai.droidcommand.app.ui.theme.BorderDark
 import ai.droidcommand.app.ui.theme.CardDark
+import ai.droidcommand.app.ui.theme.DroidIconButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ui.theme.OnAccent
 import ai.droidcommand.app.ui.theme.TextPrimary
 import ai.droidcommand.app.ui.theme.TextSecondary
@@ -48,17 +51,14 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -70,6 +70,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -89,6 +90,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @Composable
 fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> Unit = {}) {
     val state by viewModel.state.collectAsState()
+    LaunchedEffect(Unit) { viewModel.pickUpBot() }
     // Saved across rotation, folding and theme changes: with plain remember a half-typed message vanished while the
     // ViewModel (and the conversation) survived.
     var input by rememberDraft()
@@ -198,6 +200,13 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
             Text(state.voice.partial, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
 
+        state.activeBotName?.let { botName ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                Text("Helper bot: $botName", color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                DroidTextButton(onClick = viewModel::stopBot) { Text("Stop bot") }
+            }
+        }
+
         state.notice?.let {
             Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
@@ -211,8 +220,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
                 onDismissRequest = viewModel::dismissMeteredEmbedderDownload,
                 title = { Text("Use mobile data?") },
                 text = { Text("You are on a metered connection. The embedding model is about ${state.embedderDownloadMegabytes} MB. If it is interrupted, the next attempt resumes where it stopped.") },
-                confirmButton = { TextButton(onClick = viewModel::confirmMeteredEmbedderDownload) { Text("Download") } },
-                dismissButton = { TextButton(onClick = viewModel::dismissMeteredEmbedderDownload) { Text("Not now") } },
+                confirmButton = { DroidTextButton(onClick = viewModel::confirmMeteredEmbedderDownload) { Text("Download") } },
+                dismissButton = { DroidTextButton(onClick = viewModel::dismissMeteredEmbedderDownload) { Text("Not now") } },
             )
         }
 
@@ -240,10 +249,12 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
             value = input,
             onValueChange = { input = it },
             canSend = !state.sending && input.isNotBlank(),
+            sending = state.sending,
             onSend = {
                 viewModel.send(input)
                 input = ""
             },
+            onStop = viewModel::stopSending,
         )
     }
 }
@@ -282,10 +293,10 @@ private fun Header(
             )
         }
         Column(horizontalAlignment = Alignment.End) {
-            TextButton(onClick = onToggleLibrary) {
+            DroidTextButton(onClick = onToggleLibrary) {
                 Text(if (libraryOpen) "Hide library" else "Library", color = MaterialTheme.colorScheme.primary)
             }
-            TextButton(onClick = onNewChat, enabled = newChatEnabled) {
+            DroidTextButton(onClick = onNewChat, enabled = newChatEnabled) {
                 Text("New chat", color = TextSecondary)
             }
         }
@@ -299,7 +310,7 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
     DroidCard(modifier = Modifier.padding(bottom = 12.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Box {
-                OutlinedButton(onClick = { menuOpen = true }) {
+                DroidSecondaryButton(onClick = { menuOpen = true }) {
                     Text(if (state.activeLocalModelId != null) "On device: ${activeLocal?.label ?: "model"}" else state.provider.label)
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -348,7 +359,7 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                 )
-                OutlinedButton(onClick = viewModel::askDeleteLocalModel, enabled = !state.sending) { Text("Delete this model file") }
+                DroidSecondaryButton(onClick = viewModel::askDeleteLocalModel, enabled = !state.sending) { Text("Delete this model file") }
             }
             state.localStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -361,7 +372,7 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
                     Text("Auto-remember every 6 replies (one extra request each; applies next time you open Chat)", style = MaterialTheme.typography.bodySmall)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = viewModel::rememberChat, enabled = !state.sending) { Text("Remember this chat") }
+                    DroidSecondaryButton(onClick = viewModel::rememberChat, enabled = !state.sending) { Text("Remember this chat") }
                     state.memoryStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 }
             }
@@ -377,7 +388,7 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
             if (state.brainEnabled) {
                 var factTitle by remember { mutableStateOf("") }
                 var factBody by remember { mutableStateOf("") }
-                OutlinedButton(onClick = viewModel::askSaveChatToBrain, enabled = !state.sending) { Text("Save this chat to Brain") }
+                DroidSecondaryButton(onClick = viewModel::askSaveChatToBrain, enabled = !state.sending) { Text("Save this chat to Brain") }
                 OutlinedTextField(
                     value = factTitle,
                     onValueChange = { factTitle = it },
@@ -392,7 +403,7 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                 )
-                OutlinedButton(
+                DroidSecondaryButton(
                     onClick = {
                         viewModel.askSaveFactToBrain(factTitle, factBody)
                     },
@@ -412,8 +423,8 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
                         "Nothing is saved until you confirm.",
                 )
             },
-            confirmButton = { TextButton(onClick = viewModel::confirmSaveToBrain) { Text("Save") } },
-            dismissButton = { TextButton(onClick = viewModel::dismissSaveToBrain) { Text("Cancel") } },
+            confirmButton = { DroidTextButton(onClick = viewModel::confirmSaveToBrain) { Text("Save") } },
+            dismissButton = { DroidTextButton(onClick = viewModel::dismissSaveToBrain) { Text("Cancel") } },
         )
     }
     if (state.confirmDeleteLocalModel) {
@@ -421,8 +432,8 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
             onDismissRequest = viewModel::dismissDeleteLocalModel,
             title = { Text("Delete this model file?") },
             text = { Text("The file is removed from this device. You can import it again from the original file.") },
-            confirmButton = { TextButton(onClick = viewModel::confirmDeleteLocalModel) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = viewModel::dismissDeleteLocalModel) { Text("Keep") } },
+            confirmButton = { DroidTextButton(onClick = viewModel::confirmDeleteLocalModel) { Text("Delete") } },
+            dismissButton = { DroidTextButton(onClick = viewModel::dismissDeleteLocalModel) { Text("Keep") } },
         )
     }
 }
@@ -482,20 +493,22 @@ private fun InputBar(
     value: String,
     onValueChange: (String) -> Unit,
     canSend: Boolean,
+    sending: Boolean,
     onSend: () -> Unit,
+    onStop: () -> Unit,
 ) {
     // Document Q&A: attached files' relevant passages are added to each message while they stay attached.
     // Indexing happens on this device; the passages go to the chat provider only inside later messages.
     if (ToolbarToggle.ATTACH in visibleToggles) {
         Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = onAttachDocument, enabled = documentsAvailable && !attachingDocument) {
+            DroidSecondaryButton(onClick = onAttachDocument, enabled = documentsAvailable && !attachingDocument) {
                 Text(if (attachingDocument) "Indexing…" else "Attach document")
             }
             if (!documentsAvailable) {
                 if (embedderDownloadBytes == null) {
-                    OutlinedButton(onClick = onDownloadEmbedder) { Text("Download embedding model ($embedderDownloadMegabytes MB)") }
+                    DroidSecondaryButton(onClick = onDownloadEmbedder) { Text("Download embedding model ($embedderDownloadMegabytes MB)") }
                 } else {
-                    OutlinedButton(onClick = onCancelEmbedderDownload) { Text("Cancel (${embedderDownloadBytes / BYTES_PER_MEGABYTE} / $embedderDownloadMegabytes MB)") }
+                    DroidSecondaryButton(onClick = onCancelEmbedderDownload) { Text("Cancel (${embedderDownloadBytes / BYTES_PER_MEGABYTE} / $embedderDownloadMegabytes MB)") }
                 }
             }
         }
@@ -530,7 +543,7 @@ private fun InputBar(
             )
         }
         if (ToolbarToggle.SPEAK in visibleToggles && (speakMode == SpeakMode.TAP || speaking)) {
-            OutlinedButton(onClick = onSpeakLast, enabled = canSpeak || speaking) { Text(if (speaking) "Stop" else "Speak reply") }
+            DroidSecondaryButton(onClick = onSpeakLast, enabled = canSpeak || speaking) { Text(if (speaking) "Stop" else "Speak reply") }
         }
     }
     Row(
@@ -554,7 +567,7 @@ private fun InputBar(
             ),
         )
         if (ToolbarToggle.MICROPHONE in visibleToggles) {
-            IconButton(onClick = onMic, enabled = micEnabled) {
+            DroidIconButton(onClick = onMic, enabled = micEnabled) {
                 Icon(
                     if (listening) Icons.Filled.Stop else Icons.Filled.Mic,
                     contentDescription = if (listening) "Stop dictation" else "Dictate",
@@ -562,18 +575,29 @@ private fun InputBar(
                 )
             }
         }
-        IconButton(
-            onClick = onSend,
-            enabled = canSend,
-            colors = IconButtonDefaults.iconButtonColors(
-                containerColor = AccentBlue,
-                contentColor = OnAccent,
-                disabledContainerColor = CardDark,
-                disabledContentColor = TextSecondary,
-            ),
-            modifier = Modifier.padding(start = 2.dp),
-        ) {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
+        if (sending) {
+            DroidIconButton(
+                onClick = onStop,
+                enabled = true,
+                filled = true,
+                modifier = Modifier.padding(start = 2.dp).testTag("chat_stop"),
+            ) {
+                Icon(Icons.Filled.Stop, contentDescription = "Stop")
+            }
+        } else {
+            DroidIconButton(
+                onClick = onSend,
+                enabled = canSend,
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = AccentBlue,
+                    contentColor = OnAccent,
+                    disabledContainerColor = CardDark,
+                    disabledContentColor = TextSecondary,
+                ),
+                modifier = Modifier.padding(start = 2.dp),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
+            }
         }
     }
 }

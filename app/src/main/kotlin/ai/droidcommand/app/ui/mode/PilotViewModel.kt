@@ -18,4 +18,5 @@ class PilotViewModel @Inject constructor(
     val modeState: StateFlow<EngineModeState> = modes.state
 
     fun run(toolName: String, argumentText: String) = controller.run(toolName, argumentText)
+    fun stop() = controller.stop()
 }

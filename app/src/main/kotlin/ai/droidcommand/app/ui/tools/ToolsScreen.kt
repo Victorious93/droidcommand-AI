@@ -4,6 +4,7 @@ import ai.droidcommand.app.navigation.Routes
 import ai.droidcommand.app.shizuku.ShizukuStatusSection
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,15 +47,15 @@ fun ToolsScreen(navController: NavHostController) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(
+                DroidPrimaryButton(
                     onClick = { navController.navigate(Routes.FLEET) },
                     modifier = Modifier.fillMaxWidth().testTag("tools_open_fleet"),
                 ) { Text("Open Fleet") }
-                Button(
+                DroidPrimaryButton(
                     onClick = { navController.navigate(Routes.FLEET_ORCHESTRATOR) },
                     modifier = Modifier.fillMaxWidth().testTag("tools_open_fleet_orchestrator"),
                 ) { Text("Approved commands") }
-                Button(
+                DroidPrimaryButton(
                     onClick = { navController.navigate(Routes.HELP) },
                     modifier = Modifier.fillMaxWidth().testTag("tools_open_help"),
                 ) { Text("Open Help") }
@@ -71,11 +71,11 @@ fun ToolsScreen(navController: NavHostController) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(
+                DroidPrimaryButton(
                     onClick = { navController.navigate(Routes.METASPLOIT) },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Metasploit") }
-                Button(
+                DroidPrimaryButton(
                     onClick = { navController.navigate(Routes.SETOOLKIT) },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Social-Engineer Toolkit") }
@@ -90,7 +90,7 @@ fun ToolsScreen(navController: NavHostController) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(
+                DroidPrimaryButton(
                     onClick = { navController.navigate(Routes.CLIPBOARDS) },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Open clipboards") }
@@ -105,7 +105,7 @@ fun ToolsScreen(navController: NavHostController) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(
+                DroidPrimaryButton(
                     onClick = { navController.navigate(Routes.AUTOMATION) },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Open automation keys") }
@@ -120,7 +120,7 @@ fun ToolsScreen(navController: NavHostController) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(
+                DroidPrimaryButton(
                     onClick = { navController.navigate(Routes.CODING) },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Open coding session") }
@@ -135,7 +135,7 @@ fun ToolsScreen(navController: NavHostController) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(
+                DroidPrimaryButton(
                     onClick = { navController.navigate(Routes.NOTES) },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Open Brain") }

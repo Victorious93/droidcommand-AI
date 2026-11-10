@@ -6,6 +6,9 @@ import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
 import ai.droidcommand.app.ui.theme.BorderDark
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ux.FriendlyErrors
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.llm.local.HuggingFaceGgufFile
@@ -25,13 +28,10 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -82,7 +82,7 @@ fun ModelsScreen(viewModel: ModelsViewModel = hiltViewModel()) {
         SectionLabel("This device")
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
+                DroidPrimaryButton(
                     onClick = { picker.launch(Unit) },
                     enabled = !state.importing,
                     modifier = Modifier.fillMaxWidth().testTag("models_pick_gguf"),
@@ -95,9 +95,9 @@ fun ModelsScreen(viewModel: ModelsViewModel = hiltViewModel()) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (state.allFilesAccess) {
-                    OutlinedButton(onClick = { viewModel.refresh(scan = true) }, modifier = Modifier.fillMaxWidth()) { Text("Scan Download and models folders") }
+                    DroidSecondaryButton(onClick = { viewModel.refresh(scan = true) }, modifier = Modifier.fillMaxWidth()) { Text("Scan Download and models folders") }
                 } else {
-                    OutlinedButton(onClick = viewModel::showAllFilesExplanation, modifier = Modifier.fillMaxWidth()) {
+                    DroidSecondaryButton(onClick = viewModel::showAllFilesExplanation, modifier = Modifier.fillMaxWidth()) {
                         Text("Allow all-files access (optional)")
                     }
                 }
@@ -112,7 +112,7 @@ fun ModelsScreen(viewModel: ModelsViewModel = hiltViewModel()) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        OutlinedButton(onClick = { viewModel.importScanned(file.path) }, enabled = !state.importing) { Text("Use") }
+                        DroidSecondaryButton(onClick = { viewModel.importScanned(file.path) }, enabled = !state.importing) { Text("Use") }
                     }
                 }
                 if (state.installed.isEmpty() && state.scanned.isEmpty()) {
@@ -129,9 +129,9 @@ fun ModelsScreen(viewModel: ModelsViewModel = hiltViewModel()) {
                             )
                         }
                         if (model.id != state.activeId) {
-                            OutlinedButton(onClick = { viewModel.select(model.id) }) { Text("Use") }
+                            DroidSecondaryButton(onClick = { viewModel.select(model.id) }) { Text("Use") }
                         }
-                        TextButton(onClick = { viewModel.askDelete(model.id) }) { Text("Remove") }
+                        DroidTextButton(onClick = { viewModel.askDelete(model.id) }) { Text("Remove") }
                     }
                 }
             }
@@ -155,7 +155,7 @@ fun ModelsScreen(viewModel: ModelsViewModel = hiltViewModel()) {
                     singleLine = true,
                     label = { Text("GGUF repo search") },
                 )
-                Button(onClick = viewModel::search, enabled = !state.searching && state.searchQuery.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+                DroidPrimaryButton(onClick = viewModel::search, enabled = !state.searching && state.searchQuery.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
                     Text(if (state.searching) "Searching…" else "Search")
                 }
                 state.searchError?.let { Text(FriendlyErrors.forUser(it), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
@@ -165,7 +165,7 @@ fun ModelsScreen(viewModel: ModelsViewModel = hiltViewModel()) {
                             Text(hit.id, style = MaterialTheme.typography.bodyMedium)
                             Text("${hit.license} · ${hit.downloads} downloads", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        OutlinedButton(onClick = { viewModel.openRepo(hit.id) }) { Text("Files") }
+                        DroidSecondaryButton(onClick = { viewModel.openRepo(hit.id) }) { Text("Files") }
                     }
                 }
                 if (state.hubRepo != null) {
@@ -189,12 +189,12 @@ fun ModelsScreen(viewModel: ModelsViewModel = hiltViewModel()) {
                 )
             },
             confirmButton = {
-                Button(onClick = {
+                DroidPrimaryButton(onClick = {
                     viewModel.dismissAllFilesExplanation()
                     allFilesLauncher.launch(viewModel.allFilesSettingsIntent())
                 }) { Text("Open system settings") }
             },
-            dismissButton = { TextButton(onClick = viewModel::dismissAllFilesExplanation) { Text("Not now") } },
+            dismissButton = { DroidTextButton(onClick = viewModel::dismissAllFilesExplanation) { Text("Not now") } },
         )
     }
     state.confirmDeleteId?.let {
@@ -202,8 +202,8 @@ fun ModelsScreen(viewModel: ModelsViewModel = hiltViewModel()) {
             onDismissRequest = viewModel::dismissDelete,
             title = { Text("Remove this model?") },
             text = { Text("A copy in app storage is deleted. A file that was used from shared storage is left on disk.") },
-            confirmButton = { Button(onClick = viewModel::confirmDelete) { Text("Remove") } },
-            dismissButton = { TextButton(onClick = viewModel::dismissDelete) { Text("Cancel") } },
+            confirmButton = { DroidPrimaryButton(onClick = viewModel::confirmDelete) { Text("Remove") } },
+            dismissButton = { DroidTextButton(onClick = viewModel::dismissDelete) { Text("Cancel") } },
         )
     }
 }
@@ -270,7 +270,7 @@ private fun DownloadControls(
     onUse: () -> Unit,
 ) {
     when {
-        installed -> OutlinedButton(onClick = onUse) { Text("Use in chat") }
+        installed -> DroidSecondaryButton(onClick = onUse) { Text("Use in chat") }
         tooBig -> Text("Too big for this device's RAM.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         state is ModelDownloadState.Running || state is ModelDownloadState.Queued -> {
             val bytes = (state as? ModelDownloadState.Running)?.bytesSoFar
@@ -278,13 +278,13 @@ private fun DownloadControls(
                 ?: 0L
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             Text("${bytes / MEGABYTE} MB so far", style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = onCancel) { Text("Cancel") }
+            DroidTextButton(onClick = onCancel) { Text("Cancel") }
         }
         state is ModelDownloadState.Failed -> {
             Text(FriendlyErrors.forUser(state.reason), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            Button(onClick = onDownload) { Text("Retry") }
+            DroidPrimaryButton(onClick = onDownload) { Text("Retry") }
         }
-        else -> Button(onClick = onDownload) { Text("Download") }
+        else -> DroidPrimaryButton(onClick = onDownload) { Text("Download") }
     }
 }
 
@@ -333,12 +333,12 @@ private fun ModelsEmptyState(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Button(
+            DroidPrimaryButton(
                 onClick = onPick,
                 enabled = !importing,
                 modifier = Modifier.fillMaxWidth().testTag("models_empty_pick"),
             ) { Text("Pick a .gguf from storage") }
-            OutlinedButton(
+            DroidSecondaryButton(
                 onClick = onBrowse,
                 modifier = Modifier.fillMaxWidth().testTag("models_empty_browse"),
             ) { Text("Browse catalog") }

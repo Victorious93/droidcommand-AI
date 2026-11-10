@@ -1,6 +1,9 @@
 package ai.droidcommand.app.ui.tools.metasploit
 
 import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ui.tools.ToolRunStatusCard
 import ai.droidcommand.app.ui.tools.ToolRunUiState
 import ai.droidcommand.metasploit.MetasploitModuleType
@@ -18,13 +21,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -123,7 +123,7 @@ fun MetasploitScreen(viewModel: MetasploitViewModel = hiltViewModel()) {
             label = { Text("Scope file path (required)") },
             modifier = Modifier.fillMaxWidth(),
         )
-        OutlinedButton(
+        DroidSecondaryButton(
             onClick = { viewModel.writeScopeFileForHost(context.filesDir) },
             enabled = form.targetHost.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
@@ -138,7 +138,7 @@ fun MetasploitScreen(viewModel: MetasploitViewModel = hiltViewModel()) {
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-        Button(
+        DroidPrimaryButton(
             onClick = { withRunCommandPermission(viewModel::runAuthorizedKaliPlaybook) },
             enabled = form.targetHost.isNotBlank() &&
                 form.scopeFilePath.isNotBlank() &&
@@ -152,9 +152,9 @@ fun MetasploitScreen(viewModel: MetasploitViewModel = hiltViewModel()) {
             MetasploitModuleType.entries.forEach { type ->
                 val selected = form.moduleType == type
                 if (selected) {
-                    Button(onClick = { viewModel.updateForm { it.copy(moduleType = type) } }) { Text(type.name) }
+                    DroidPrimaryButton(onClick = { viewModel.updateForm { it.copy(moduleType = type) } }) { Text(type.name) }
                 } else {
-                    OutlinedButton(onClick = { viewModel.updateForm { it.copy(moduleType = type) } }) { Text(type.name) }
+                    DroidSecondaryButton(onClick = { viewModel.updateForm { it.copy(moduleType = type) } }) { Text(type.name) }
                 }
             }
         }
@@ -162,7 +162,7 @@ fun MetasploitScreen(viewModel: MetasploitViewModel = hiltViewModel()) {
         Text("Module (tap to select, or edit below)", style = MaterialTheme.typography.labelLarge)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(COMMON_MODULES) { module ->
-                OutlinedButton(onClick = { viewModel.updateForm { it.copy(modulePath = module) } }) {
+                DroidSecondaryButton(onClick = { viewModel.updateForm { it.copy(modulePath = module) } }) {
                     Text(module, maxLines = 1)
                 }
             }
@@ -190,7 +190,7 @@ fun MetasploitScreen(viewModel: MetasploitViewModel = hiltViewModel()) {
         Text("Payload (optional, tap to select, or edit below)", style = MaterialTheme.typography.labelLarge)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(COMMON_PAYLOADS) { payload ->
-                OutlinedButton(onClick = { viewModel.updateForm { it.copy(payload = payload) } }) {
+                DroidSecondaryButton(onClick = { viewModel.updateForm { it.copy(payload = payload) } }) {
                     Text(payload, maxLines = 1)
                 }
             }
@@ -206,7 +206,7 @@ fun MetasploitScreen(viewModel: MetasploitViewModel = hiltViewModel()) {
         form.options.forEachIndexed { index, pair ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("${pair.first} = ${pair.second}", modifier = Modifier.weight(1f))
-                TextButton(onClick = {
+                DroidTextButton(onClick = {
                     viewModel.updateForm { f -> f.copy(options = f.options.filterIndexed { i, _ -> i != index }) }
                 }) { Text("Remove") }
             }
@@ -224,7 +224,7 @@ fun MetasploitScreen(viewModel: MetasploitViewModel = hiltViewModel()) {
                 label = { Text("Value") },
                 modifier = Modifier.weight(1f),
             )
-            Button(onClick = {
+            DroidPrimaryButton(onClick = {
                 if (pendingOptionKey.isNotBlank()) {
                     viewModel.updateForm { f -> f.copy(options = f.options + (pendingOptionKey to pendingOptionValue)) }
                     pendingOptionKey = ""
@@ -233,7 +233,7 @@ fun MetasploitScreen(viewModel: MetasploitViewModel = hiltViewModel()) {
             }) { Text("Add") }
         }
 
-        Button(
+        DroidPrimaryButton(
             onClick = { withRunCommandPermission(viewModel::runModule) },
             enabled = form.targetHost.isNotBlank() && form.modulePath.isNotBlank() && uiState !is ToolRunUiState.Running,
             modifier = Modifier.fillMaxWidth(),

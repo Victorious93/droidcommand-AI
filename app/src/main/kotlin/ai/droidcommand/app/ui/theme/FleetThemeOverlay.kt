@@ -10,7 +10,6 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,7 +86,7 @@ fun FleetThemeTrustHint(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp,
             )
-            TextButton(onClick = onDismiss) {
+            DroidTextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.fleet_theme_trust_dismiss))
             }
         }

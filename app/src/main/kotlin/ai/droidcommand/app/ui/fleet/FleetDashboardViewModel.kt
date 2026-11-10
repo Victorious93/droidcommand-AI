@@ -6,6 +6,7 @@ import ai.droidcommand.app.fleet.FleetCompanionLivePublisher
 import ai.droidcommand.app.fleet.FleetMember
 import ai.droidcommand.app.fleet.FleetTrustedLivePublisher
 import ai.droidcommand.app.fleet.PackageFleetProbe
+import ai.droidcommand.app.ui.status.StatusTraySummary
 import ai.droidcommand.app.ux.FleetCardUi
 import ai.droidcommand.app.ux.FleetUserCopy
 import ai.droidcommand.app.ux.FleetUserKind
@@ -42,6 +43,8 @@ data class FleetHomeUi(
     val emptyHint: String? = "None of your other apps are connected yet. Install one, then tap Pair.",
     val notice: String? = null,
     val busyIds: Set<String> = emptySet(),
+    /** One-line status tray summary for the home strip. */
+    val statusSummary: String = "No fleet status yet",
 )
 
 /**
@@ -185,6 +188,8 @@ class FleetDashboardViewModel @Inject constructor(
             )
         }
         val anyConnected = cards.any { it.status.kind == FleetUserKind.CONNECTED }
+        val now = System.currentTimeMillis()
+        val summary = StatusTraySummary.overall(statusTray.publish(now), now)
         mutableState.update {
             it.copy(
                 cards = cards,
@@ -192,6 +197,7 @@ class FleetDashboardViewModel @Inject constructor(
                 emptyHint = if (anyConnected) null else snap.emptyStateCta?.let { FleetUserCopy.banner(true, false) },
                 notice = notice,
                 busyIds = if (busyRemove == null) it.busyIds else it.busyIds - busyRemove,
+                statusSummary = summary,
             )
         }
     }

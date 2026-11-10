@@ -5,6 +5,8 @@ import ai.droidcommand.app.ui.components.SectionLabel
 import ai.droidcommand.app.ui.theme.AccentBlueBright
 import ai.droidcommand.app.ui.theme.AccentCyan
 import ai.droidcommand.app.ui.theme.AccentSuccess
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.app.ui.theme.TextSecondary
 import ai.droidcommand.shizuku.EmbeddedShizukuCopy
 import ai.droidcommand.shizuku.EmbeddedStartMethod
@@ -19,9 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -83,7 +83,7 @@ fun ShizukuStatusCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (state == ShizukuState.DENIED) {
-                Button(
+                DroidPrimaryButton(
                     onClick = onRequestPermission,
                     modifier = Modifier.testTag("shizuku_request_permission"),
                 ) {
@@ -144,7 +144,7 @@ private fun EmbeddedShizukuCard(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
+                DroidPrimaryButton(
                     onClick = viewModel::startBuiltIn,
                     enabled = !ui.busy && ui.startMethod != EmbeddedStartMethod.UNAVAILABLE,
                     modifier = Modifier.testTag("shizuku_start"),
@@ -152,7 +152,7 @@ private fun EmbeddedShizukuCard(
                     Text(if (ui.busy) "Starting…" else EmbeddedShizukuCopy.START_BUTTON)
                 }
                 if (ui.rootButtonVisible) {
-                    OutlinedButton(
+                    DroidSecondaryButton(
                         onClick = viewModel::startWithRoot,
                         enabled = !ui.busy,
                         modifier = Modifier.testTag("shizuku_start_root"),
@@ -193,7 +193,7 @@ private fun EmbeddedShizukuCard(
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.testTag("shizuku_wss_command"),
                 )
-                OutlinedButton(
+                DroidSecondaryButton(
                     onClick = { copyCommand(context) },
                     modifier = Modifier.testTag("shizuku_copy_wss"),
                 ) {

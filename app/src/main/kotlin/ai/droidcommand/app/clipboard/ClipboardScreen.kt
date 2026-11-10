@@ -3,6 +3,9 @@ package ai.droidcommand.app.clipboard
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,11 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,7 +47,7 @@ fun ClipboardScreen(viewModel: ClipboardViewModel = hiltViewModel()) {
         SectionLabel("Public")
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = viewModel::pasteFromSystem, modifier = Modifier.fillMaxWidth()) {
+                DroidPrimaryButton(onClick = viewModel::pasteFromSystem, modifier = Modifier.fillMaxWidth()) {
                     Text("Paste from system clipboard")
                 }
                 if (state.publicClips.isEmpty()) {
@@ -55,13 +55,13 @@ fun ClipboardScreen(viewModel: ClipboardViewModel = hiltViewModel()) {
                 }
                 state.publicClips.forEach { clip ->
                     ClipRow(clip.text) {
-                        OutlinedButton(onClick = { viewModel.moveToPrivate(clip.id) }) { Text("Move to private") }
-                        OutlinedButton(onClick = { viewModel.copyToSystem(clip.text) }) { Text("Copy") }
-                        OutlinedButton(onClick = { viewModel.deletePublic(clip.id) }) { Text("Delete") }
+                        DroidSecondaryButton(onClick = { viewModel.moveToPrivate(clip.id) }) { Text("Move to private") }
+                        DroidSecondaryButton(onClick = { viewModel.copyToSystem(clip.text) }) { Text("Copy") }
+                        DroidSecondaryButton(onClick = { viewModel.deletePublic(clip.id) }) { Text("Delete") }
                     }
                 }
                 if (state.publicClips.isNotEmpty()) {
-                    TextButton(onClick = viewModel::clearPublic) { Text("Clear public clips") }
+                    DroidTextButton(onClick = viewModel::clearPublic) { Text("Clear public clips") }
                 }
             }
         }
@@ -75,7 +75,7 @@ fun ClipboardScreen(viewModel: ClipboardViewModel = hiltViewModel()) {
                             "Nothing has been moved into them. Erase them to start again.",
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    OutlinedButton(onClick = viewModel::eraseAllPrivate) { Text("Erase all private clips") }
+                    DroidSecondaryButton(onClick = viewModel::eraseAllPrivate) { Text("Erase all private clips") }
                 } else {
                     if (state.privateClips.isEmpty()) {
                         Text(
@@ -86,12 +86,12 @@ fun ClipboardScreen(viewModel: ClipboardViewModel = hiltViewModel()) {
                     }
                     state.privateClips.forEach { clip ->
                         ClipRow(clip.text) {
-                            OutlinedButton(onClick = { viewModel.copyToSystem(clip.text, sensitive = true) }) { Text("Copy (exposes it)") }
-                            OutlinedButton(onClick = { viewModel.deletePrivate(clip.id) }) { Text("Delete") }
+                            DroidSecondaryButton(onClick = { viewModel.copyToSystem(clip.text, sensitive = true) }) { Text("Copy (exposes it)") }
+                            DroidSecondaryButton(onClick = { viewModel.deletePrivate(clip.id) }) { Text("Delete") }
                         }
                     }
                     if (state.privateClips.isNotEmpty()) {
-                        TextButton(onClick = viewModel::eraseAllPrivate) { Text("Erase all private clips") }
+                        DroidTextButton(onClick = viewModel::eraseAllPrivate) { Text("Erase all private clips") }
                     }
                 }
             }

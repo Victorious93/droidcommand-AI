@@ -7,6 +7,9 @@ import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
 import ai.droidcommand.app.ui.theme.AccentRed
 import ai.droidcommand.app.ui.theme.AccentSuccess
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ux.FleetAppHelp
 import ai.droidcommand.app.ux.FriendlyErrors
 import ai.droidcommand.app.ux.ScreenHelpCatalog
@@ -23,13 +26,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -107,12 +107,12 @@ fun FleetScreen(viewModel: FleetViewModel = hiltViewModel()) {
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                DroidTextButton(onClick = {
                     pending = null
                     viewModel.pair(action.row.spec.id)
                 }) { Text("Pair") }
             },
-            dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancel") } },
+            dismissButton = { DroidTextButton(onClick = { pending = null }) { Text("Cancel") } },
         )
         is PendingAction.PairByPassword -> {
             var password by remember { mutableStateOf("") }
@@ -141,7 +141,7 @@ fun FleetScreen(viewModel: FleetViewModel = hiltViewModel()) {
                     }
                 },
                 confirmButton = {
-                    TextButton(
+                    DroidTextButton(
                         enabled = password.isNotBlank(),
                         onClick = {
                             val typed = password
@@ -150,7 +150,7 @@ fun FleetScreen(viewModel: FleetViewModel = hiltViewModel()) {
                         },
                     ) { Text("Link") }
                 },
-                dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancel") } },
+                dismissButton = { DroidTextButton(onClick = { pending = null }) { Text("Cancel") } },
             )
         }
         is PendingAction.Unpair -> AlertDialog(
@@ -158,12 +158,12 @@ fun FleetScreen(viewModel: FleetViewModel = hiltViewModel()) {
             title = { Text("Unpair ${action.row.spec.displayName}?") },
             text = { Text("DroidCommand will stop talking to this app until you pair it again.") },
             confirmButton = {
-                TextButton(onClick = {
+                DroidTextButton(onClick = {
                     pending = null
                     viewModel.unpair(action.row.spec.id)
                 }) { Text("Unpair") }
             },
-            dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancel") } },
+            dismissButton = { DroidTextButton(onClick = { pending = null }) { Text("Cancel") } },
         )
         is PendingAction.BringUp -> AlertDialog(
             onDismissRequest = { pending = null },
@@ -175,12 +175,12 @@ fun FleetScreen(viewModel: FleetViewModel = hiltViewModel()) {
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                DroidTextButton(onClick = {
                     pending = null
                     viewModel.bringUpAndPoll(action.row.spec.id)
                 }) { Text("Send") }
             },
-            dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancel") } },
+            dismissButton = { DroidTextButton(onClick = { pending = null }) { Text("Cancel") } },
         )
         null -> Unit
     }
@@ -226,28 +226,28 @@ private fun ExternalNodeCard(
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 if (row.canPair) {
-                    Button(onClick = onPair, enabled = !busy, modifier = Modifier.weight(1f)) {
+                    DroidPrimaryButton(onClick = onPair, enabled = !busy, modifier = Modifier.weight(1f)) {
                         Text(if (row.canUnpair) "Re-pair" else "Pair")
                     }
-                    OutlinedButton(onClick = onPairByPassword, enabled = !busy, modifier = Modifier.weight(1f)) {
+                    DroidSecondaryButton(onClick = onPairByPassword, enabled = !busy, modifier = Modifier.weight(1f)) {
                         Text("Password")
                     }
                 }
                 if (row.canUnpair) {
-                    OutlinedButton(onClick = onUnpair, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Unpair") }
+                    DroidSecondaryButton(onClick = onUnpair, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Unpair") }
                 }
             }
             if (row.liveEnabled) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = onCapabilities, enabled = !busy, modifier = Modifier.weight(1f)) {
+                    DroidSecondaryButton(onClick = onCapabilities, enabled = !busy, modifier = Modifier.weight(1f)) {
                         Text("What can it do")
                     }
-                    OutlinedButton(onClick = onStatus, enabled = !busy, modifier = Modifier.weight(1f)) {
+                    DroidSecondaryButton(onClick = onStatus, enabled = !busy, modifier = Modifier.weight(1f)) {
                         Text("Test connection")
                     }
                 }
                 if (row.spec.upOperation != null) {
-                    OutlinedButton(onClick = onBringUp, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    DroidSecondaryButton(onClick = onBringUp, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                         Text("Ask it to come online")
                     }
                 }

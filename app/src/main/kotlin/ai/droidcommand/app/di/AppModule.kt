@@ -27,6 +27,7 @@ import ai.droidcommand.app.shizuku.embedded.EmbeddedShizukuPayload
 import ai.droidcommand.app.shizuku.embedded.EmbeddedShizukuStarter
 import ai.droidcommand.app.shizuku.embedded.ShizukuStartNotifier
 import ai.droidcommand.app.shizuku.embedded.WirelessAdbClient
+import ai.droidcommand.app.status.PersistingRemoteStatusTray
 import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
 import ai.droidcommand.app.theme.DataStoreThemePreferenceStore
 import ai.droidcommand.config.AssistantCapabilitySettingsStore
@@ -60,7 +61,6 @@ import ai.droidcommand.pentestswarm.KaliAuthorizedScanTool
 import ai.droidcommand.pentestswarm.LocalKaliPlaybookRunner
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.remote.HttpUrlConnectionTransport
-import ai.droidcommand.remotecontrol.InMemoryRemoteStatusTray
 import ai.droidcommand.remotecontrol.JsonFileRemoteControlStore
 import ai.droidcommand.remotecontrol.RemoteActionExecutor
 import ai.droidcommand.remotecontrol.RemoteCommandDispatcher
@@ -211,7 +211,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideRemoteStatusTray(): RemoteStatusTray = InMemoryRemoteStatusTray()
+    fun provideRemoteStatusTray(@ApplicationContext context: Context): RemoteStatusTray =
+        PersistingRemoteStatusTray(context.filesDir.toPath().resolve("status-tray.json"))
 
     @Provides
     @Singleton

@@ -8,6 +8,8 @@ import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.WebSearchCatalog
@@ -20,9 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
@@ -69,7 +69,7 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(onClick = onReplaySetup, modifier = Modifier.fillMaxWidth()) { Text("Show setup guide again") }
+                DroidPrimaryButton(onClick = onReplaySetup, modifier = Modifier.fillMaxWidth()) { Text("Show setup guide again") }
             }
         }
         SectionLabel("API keys (stored encrypted on this device)")
@@ -89,7 +89,7 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(onClick = onOpenModels, modifier = Modifier.fillMaxWidth()) { Text("On-device models") }
+                DroidPrimaryButton(onClick = onOpenModels, modifier = Modifier.fillMaxWidth()) { Text("On-device models") }
             }
         }
         CloudProviderCatalog.all.forEach { provider ->
@@ -131,7 +131,7 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(onClick = onOpenHelp, modifier = Modifier.fillMaxWidth()) { Text("Open Help") }
+                DroidPrimaryButton(onClick = onOpenHelp, modifier = Modifier.fillMaxWidth()) { Text("Open Help") }
             }
         }
         SectionLabel("Advanced")
@@ -142,7 +142,7 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                OutlinedButton(onClick = onOpenAdvanced, modifier = Modifier.fillMaxWidth()) { Text("Open Advanced") }
+                DroidSecondaryButton(onClick = onOpenAdvanced, modifier = Modifier.fillMaxWidth()) { Text("Open Advanced") }
             }
         }
     }
@@ -177,13 +177,13 @@ internal fun ModeNamesSection(viewModel: SettingsViewModel) {
                 label = { Text("Mode 2 label (Forge)") },
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = {
+                DroidPrimaryButton(onClick = {
                     viewModel.renameMode(AgentMode.PILOT, pilotText)
                     viewModel.renameMode(AgentMode.FORGE, forgeText)
                     pilotDraft = null
                     forgeDraft = null
                 }) { Text("Save names") }
-                OutlinedButton(onClick = {
+                DroidSecondaryButton(onClick = {
                     viewModel.resetModeLabels()
                     pilotDraft = null
                     forgeDraft = null
@@ -257,11 +257,11 @@ private fun ApiKeyRow(label: String, status: KeyStatus, onSave: (String) -> Unit
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = {
+                DroidPrimaryButton(onClick = {
                     onSave(input)
                     input = ""
                 }, enabled = input.isNotBlank()) { Text("Save") }
-                OutlinedButton(onClick = onClear, enabled = status != KeyStatus.NOT_SET) { Text("Remove") }
+                DroidSecondaryButton(onClick = onClear, enabled = status != KeyStatus.NOT_SET) { Text("Remove") }
             }
         }
     }

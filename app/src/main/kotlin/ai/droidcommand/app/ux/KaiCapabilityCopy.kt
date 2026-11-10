@@ -5,7 +5,7 @@ import ai.droidcommand.config.AssistantCapabilitySettings
 
 /**
  * Owner-facing labels for the Kai-integration gates.
- * The gates themselves stay default OFF. Brain is the one the owner can turn on.
+ * The gates themselves stay default OFF. Brain, Bot Maker, and Skill scripts can be turned on.
  */
 data class KaiCapabilityRow(
     val capability: AssistantCapability,
@@ -20,10 +20,11 @@ object KaiCapabilityCopy {
             KaiCapabilityRow(
                 capability = capability,
                 label = label(capability),
-                detail = if (capability == AssistantCapability.BRAIN) {
-                    "Markdown notes the AI can search. Off until you turn it on."
-                } else {
-                    "Off until a later phase turns this on."
+                detail = when (capability) {
+                    AssistantCapability.BRAIN -> "Markdown notes the AI can search. Off until you turn it on."
+                    AssistantCapability.BOT_MAKER -> "Make small helper bots for one job. Off until you turn it on."
+                    AssistantCapability.SKILL_SCRIPTS -> "Instruction files (SKILL.md) the AI can follow. Off until you turn it on."
+                    else -> "Off until a later phase turns this on."
                 },
                 enabled = settings.isEnabled(capability),
             )

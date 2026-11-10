@@ -3,6 +3,8 @@ package ai.droidcommand.app.ui.studio
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.notes.studio.AiContextKind
 import ai.droidcommand.notes.studio.ContextSection
@@ -27,12 +29,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -82,7 +82,7 @@ fun NotesStudioScreen(viewModel: NotesStudioViewModel = hiltViewModel()) {
         }
     }
     toast?.let { m ->
-        AlertDialog(onDismissRequest = { toast = null }, text = { Text(m) }, confirmButton = { TextButton(onClick = { toast = null }) { Text("OK") } })
+        AlertDialog(onDismissRequest = { toast = null }, text = { Text(m) }, confirmButton = { DroidTextButton(onClick = { toast = null }) { Text("OK") } })
     }
 }
 
@@ -99,7 +99,7 @@ private fun ContextTab(viewModel: NotesStudioViewModel, show: (String) -> Unit) 
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         OutlinedTextField(value = project, onValueChange = { project = it }, label = { Text("Project name") }, singleLine = true, modifier = Modifier.weight(1f))
-        OutlinedButton(onClick = { viewModel.applyTemplate(project) }) { Text("Template") }
+        DroidSecondaryButton(onClick = { viewModel.applyTemplate(project) }) { Text("Template") }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         FilterChip(selected = structured, onClick = { structured = true }, label = { Text("Sections") })
@@ -119,7 +119,7 @@ private fun ContextTab(viewModel: NotesStudioViewModel, show: (String) -> Unit) 
                             singleLine = true,
                             modifier = Modifier.weight(1f),
                         )
-                        TextButton(onClick = { viewModel.editDocument(doc.removeSection(i)) }) { Text("Remove") }
+                        DroidTextButton(onClick = { viewModel.editDocument(doc.removeSection(i)) }) { Text("Remove") }
                     }
                     OutlinedTextField(
                         value = section.body,
@@ -131,7 +131,7 @@ private fun ContextTab(viewModel: NotesStudioViewModel, show: (String) -> Unit) 
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             OutlinedTextField(value = newSection, onValueChange = { newSection = it }, label = { Text("New section") }, singleLine = true, modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = {
+            DroidSecondaryButton(onClick = {
                 if (newSection.isNotBlank()) viewModel.editDocument(doc.addSection(newSection))
                 newSection = ""
             }) { Text("Add") }
@@ -160,8 +160,8 @@ private fun ContextTab(viewModel: NotesStudioViewModel, show: (String) -> Unit) 
         }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { show(viewModel.saveContext()) }, modifier = Modifier.testTag("studio_context_save")) { Text("Save to vault") }
-        OutlinedButton(onClick = { show(viewModel.exportContext()) }) { Text("Export file") }
+        DroidSecondaryButton(onClick = { show(viewModel.saveContext()) }, modifier = Modifier.testTag("studio_context_save")) { Text("Save to vault") }
+        DroidSecondaryButton(onClick = { show(viewModel.exportContext()) }) { Text("Export file") }
     }
 }
 
@@ -202,16 +202,16 @@ private fun PromptsTab(viewModel: NotesStudioViewModel, show: (String) -> Unit) 
                 Text(p.category, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(p.body.take(300), style = MaterialTheme.typography.bodySmall)
                 Row {
-                    TextButton(onClick = {
+                    DroidTextButton(onClick = {
                         clipboard.setText(AnnotatedString(p.body))
                         show("Copied")
                     }) { Text("Copy") }
-                    TextButton(onClick = {
+                    DroidTextButton(onClick = {
                         category = p.category
                         title = p.title
                         body = p.body
                     }) { Text("Edit") }
-                    TextButton(onClick = { viewModel.deletePrompt(p) }) { Text("Delete") }
+                    DroidTextButton(onClick = { viewModel.deletePrompt(p) }) { Text("Delete") }
                 }
             }
         }
@@ -220,7 +220,7 @@ private fun PromptsTab(viewModel: NotesStudioViewModel, show: (String) -> Unit) 
     OutlinedTextField(value = category, onValueChange = { category = it }, label = { Text("Category") }, singleLine = true, modifier = Modifier.fillMaxWidth())
     OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
     OutlinedTextField(value = body, onValueChange = { body = it }, label = { Text("Prompt") }, modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp))
-    OutlinedButton(onClick = { show(viewModel.savePrompt(category, title, body)) }) { Text("Save prompt") }
+    DroidSecondaryButton(onClick = { show(viewModel.savePrompt(category, title, body)) }) { Text("Save prompt") }
 }
 
 private val TOOLBAR = listOf(
@@ -245,7 +245,7 @@ private fun EditorTab(viewModel: NotesStudioViewModel, show: (String) -> Unit) {
     if (mode != 2) {
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()).testTag("studio_toolbar"), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             TOOLBAR.forEach { (action, label) ->
-                TextButton(onClick = {
+                DroidTextButton(onClick = {
                     val out = MarkdownFormatting.apply(action, TextEdit(field.text, field.selection.start, field.selection.end))
                     viewModel.editorText = out.text
                     field = TextFieldValue(out.text, TextRange(out.start, out.end))
@@ -269,8 +269,8 @@ private fun EditorTab(viewModel: NotesStudioViewModel, show: (String) -> Unit) {
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         OutlinedTextField(value = path, onValueChange = { path = it }, label = { Text("Vault path") }, singleLine = true, modifier = Modifier.weight(1f))
-        OutlinedButton(onClick = { show(viewModel.openEditor(path)) }) { Text("Open") }
-        OutlinedButton(onClick = { show(viewModel.saveEditor(path)) }) { Text("Save") }
+        DroidSecondaryButton(onClick = { show(viewModel.openEditor(path)) }) { Text("Open") }
+        DroidSecondaryButton(onClick = { show(viewModel.saveEditor(path)) }) { Text("Save") }
     }
 }
 
@@ -296,14 +296,14 @@ private fun LanTab(viewModel: NotesStudioViewModel, show: (String) -> Unit) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth().testTag("studio_lan_password"),
                 )
-                OutlinedButton(
+                DroidSecondaryButton(
                     onClick = { show(viewModel.startLan(password)) },
                     enabled = password.length >= LanVaultServer.MIN_PASSWORD,
                     modifier = Modifier.testTag("studio_lan_start"),
                 ) { Text("Start sharing") }
             } else {
                 Text("Sharing at $url", fontWeight = FontWeight.Medium, modifier = Modifier.testTag("studio_lan_url"))
-                OutlinedButton(onClick = viewModel::stopLan) { Text("Stop sharing") }
+                DroidSecondaryButton(onClick = viewModel::stopLan) { Text("Stop sharing") }
             }
         }
     }

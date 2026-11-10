@@ -7,6 +7,9 @@ import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.theme.AccentCyan
 import ai.droidcommand.app.ui.theme.AccentRed
+import ai.droidcommand.app.ui.theme.DroidDangerButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,15 +21,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -89,10 +89,9 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel()) {
                         )
                     }
                 }
-                OutlinedButton(
+                DroidDangerButton(
                     onClick = { confirmingClear = true },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentRed),
                 ) {
                     Text("Clear all")
                 }
@@ -113,7 +112,7 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel()) {
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Box {
-                        OutlinedButton(onClick = { typeMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                        DroidSecondaryButton(onClick = { typeMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
                             Text("Type: ${draftType.name}")
                         }
                         DropdownMenu(expanded = typeMenuOpen, onDismissRequest = { typeMenuOpen = false }) {
@@ -138,7 +137,7 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel()) {
                 }
             },
             confirmButton = {
-                TextButton(
+                DroidTextButton(
                     enabled = draft.isNotBlank(),
                     onClick = {
                         viewModel.update(target.id, draft, draftType, MemoryController.parseProperties(draftProps))
@@ -146,7 +145,7 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel()) {
                     },
                 ) { Text("Save") }
             },
-            dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } },
+            dismissButton = { DroidTextButton(onClick = { editing = null }) { Text("Cancel") } },
         )
     }
 
@@ -156,12 +155,12 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel()) {
             title = { Text("Clear all memory?") },
             text = { Text("This permanently deletes everything remembered from every conversation. This cannot be undone.") },
             confirmButton = {
-                TextButton(onClick = {
+                DroidTextButton(onClick = {
                     confirmingClear = false
                     viewModel.clearAll()
                 }) { Text("Clear all") }
             },
-            dismissButton = { TextButton(onClick = { confirmingClear = false }) { Text("Cancel") } },
+            dismissButton = { DroidTextButton(onClick = { confirmingClear = false }) { Text("Cancel") } },
         )
     }
 }
@@ -189,8 +188,8 @@ private fun MemoryRow(entity: Entity, onEdit: () -> Unit, onDelete: () -> Unit) 
                 Text(entity.type.name, style = MaterialTheme.typography.labelSmall, color = AccentCyan)
                 Text(entity.label, style = MaterialTheme.typography.bodyLarge)
             }
-            TextButton(onClick = onEdit) { Text("Edit") }
-            TextButton(onClick = onDelete) { Text("Delete", color = AccentRed) }
+            DroidTextButton(onClick = onEdit) { Text("Edit") }
+            DroidTextButton(onClick = onDelete) { Text("Delete", color = AccentRed) }
         }
     }
 }

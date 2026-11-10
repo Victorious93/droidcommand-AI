@@ -5,6 +5,9 @@ import ai.droidcommand.app.mode.ToolBackendNotes
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.rememberDraft
+import ai.droidcommand.app.ui.theme.DroidDangerButton
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,11 +17,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
@@ -63,7 +65,7 @@ fun PilotScreen(viewModel: PilotViewModel = hiltViewModel()) {
             DroidCard {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box {
-                        OutlinedButton(onClick = { menuOpen = true }, enabled = !state.running, modifier = Modifier.fillMaxWidth()) {
+                        DroidSecondaryButton(onClick = { menuOpen = true }, enabled = !state.running, modifier = Modifier.fillMaxWidth()) {
                             Text(selected?.name ?: "Choose a tool")
                         }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -93,11 +95,18 @@ fun PilotScreen(viewModel: PilotViewModel = hiltViewModel()) {
                         minLines = 3,
                         maxLines = 8,
                     )
-                    Button(
-                        onClick = { viewModel.run(toolName, args) },
-                        enabled = !state.running && toolName.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(if (state.running) "Running…" else "Run tool") }
+                    if (state.running) {
+                        DroidDangerButton(
+                            onClick = viewModel::stop,
+                            modifier = Modifier.fillMaxWidth().testTag("pilot_stop"),
+                        ) { Text("Stop") }
+                    } else {
+                        DroidPrimaryButton(
+                            onClick = { viewModel.run(toolName, args) },
+                            enabled = toolName.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Run tool") }
+                    }
                     state.error?.let {
                         Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }

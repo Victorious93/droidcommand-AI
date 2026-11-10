@@ -4,6 +4,8 @@ import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitle
 import ai.droidcommand.app.ui.components.SectionLabel
 import ai.droidcommand.app.ui.theme.AccentRed
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.security.CompanionAssist
 import ai.droidcommand.security.CompanionAssistRequest
 import androidx.compose.foundation.layout.Arrangement
@@ -18,9 +20,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -133,14 +133,14 @@ fun CompanionAssistConsentScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                OutlinedButton(
+                DroidSecondaryButton(
                     onClick = onDeny,
                     enabled = !running,
                     modifier = Modifier.weight(1f),
                 ) {
                     Text("Deny")
                 }
-                Button(
+                DroidPrimaryButton(
                     onClick = { onAllow(typedPassword.takeIf { needsPassword }) },
                     enabled = !running && (!needsPassword || typedPassword.isNotBlank()),
                     modifier = Modifier.weight(1f),

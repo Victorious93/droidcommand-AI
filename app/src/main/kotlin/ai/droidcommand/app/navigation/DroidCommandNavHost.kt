@@ -1,6 +1,12 @@
 package ai.droidcommand.app.navigation
 
+import ai.droidcommand.app.assistant.JarvisDestination
+import ai.droidcommand.app.assistant.JarvisNavInbox
+import ai.droidcommand.app.bots.BotMakerScreen
 import ai.droidcommand.app.clipboard.ClipboardScreen
+import ai.droidcommand.app.shortcuts.QuickAction
+import ai.droidcommand.app.shortcuts.QuickActionInbox
+import ai.droidcommand.app.skills.SkillFilesScreen
 import ai.droidcommand.app.ui.automation.AutomationScreen
 import ai.droidcommand.app.ui.chat.ChatScreen
 import ai.droidcommand.app.ui.coding.CodingScreen
@@ -19,6 +25,7 @@ import ai.droidcommand.app.ui.onboarding.FirstRunScreen
 import ai.droidcommand.app.ui.plan.PlanScreen
 import ai.droidcommand.app.ui.settings.AdvancedScreen
 import ai.droidcommand.app.ui.settings.SettingsScreen
+import ai.droidcommand.app.ui.status.StatusBackupScreen
 import ai.droidcommand.app.ui.studio.NotesStudioScreen
 import ai.droidcommand.app.ui.toolbox.SystemToolboxScreen
 import ai.droidcommand.app.ui.tools.ToolsScreen
@@ -98,6 +105,9 @@ object Routes {
     const val N8N = "advanced/n8n"
     const val SYSTEM_TOOLBOX = "advanced/toolbox"
     const val NOTES_STUDIO = "advanced/notes-studio"
+    const val BOT_MAKER = "advanced/bot-maker"
+    const val SKILL_FILES = "advanced/skill-files"
+    const val STATUS_BACKUP = "advanced/status-backup"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -147,6 +157,26 @@ fun DroidCommandNavHost(
                 navController.navigate(Routes.MODELS) { launchSingleTop = true }
             }
         }
+        val quickAction by QuickActionInbox.state.collectAsState()
+        LaunchedEffect(quickAction) {
+            when (QuickActionInbox.consume()) {
+                QuickAction.CHAT -> navController.navigate(Routes.CHAT) { launchSingleTop = true }
+                QuickAction.TOOLBOX -> navController.navigate(Routes.SYSTEM_TOOLBOX) { launchSingleTop = true }
+                QuickAction.NOTES -> navController.navigate(Routes.NOTES) { launchSingleTop = true }
+                null -> Unit
+            }
+        }
+        val jarvisDest by JarvisNavInbox.state.collectAsState()
+        LaunchedEffect(jarvisDest) {
+            when (JarvisNavInbox.consume()) {
+                JarvisDestination.NOTES -> navController.navigate(Routes.NOTES) { launchSingleTop = true }
+                JarvisDestination.TOOLBOX -> navController.navigate(Routes.SYSTEM_TOOLBOX) { launchSingleTop = true }
+                JarvisDestination.BOTS -> navController.navigate(Routes.BOT_MAKER) { launchSingleTop = true }
+                JarvisDestination.STATUS -> navController.navigate(Routes.STATUS_BACKUP) { launchSingleTop = true }
+                JarvisDestination.CHAT -> navController.navigate(Routes.CHAT) { launchSingleTop = true }
+                null -> Unit
+            }
+        }
         NavHost(
             navController = navController,
             startDestination = Routes.FLEET,
@@ -178,12 +208,22 @@ fun DroidCommandNavHost(
                     onOpenN8n = { navController.navigate(Routes.N8N) },
                     onOpenToolbox = { navController.navigate(Routes.SYSTEM_TOOLBOX) },
                     onOpenStudio = { navController.navigate(Routes.NOTES_STUDIO) },
+                    onOpenBotMaker = { navController.navigate(Routes.BOT_MAKER) },
+                    onOpenSkillFiles = { navController.navigate(Routes.SKILL_FILES) },
+                    onOpenStatus = { navController.navigate(Routes.STATUS_BACKUP) },
                     onCopiedLink = { scope.launch { snackbar.showSnackbar("Link copied") } },
                 )
             }
             composable(Routes.N8N) { N8nScreen() }
             composable(Routes.SYSTEM_TOOLBOX) { SystemToolboxScreen() }
             composable(Routes.NOTES_STUDIO) { NotesStudioScreen() }
+            composable(Routes.BOT_MAKER) {
+                BotMakerScreen(onRunInChat = {
+                    navController.navigate(Routes.CHAT) { launchSingleTop = true }
+                })
+            }
+            composable(Routes.SKILL_FILES) { SkillFilesScreen() }
+            composable(Routes.STATUS_BACKUP) { StatusBackupScreen() }
             composable(Routes.HELP) { HelpScreen() }
             composable(Routes.MODELS) { ModelsScreen() }
             composable(Routes.MEMORY) { MemoryScreen() }
@@ -278,4 +318,7 @@ private val advancedChildRoutes = setOf(
     Routes.N8N,
     Routes.SYSTEM_TOOLBOX,
     Routes.NOTES_STUDIO,
+    Routes.BOT_MAKER,
+    Routes.SKILL_FILES,
+    Routes.STATUS_BACKUP,
 )

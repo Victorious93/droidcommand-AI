@@ -27,6 +27,7 @@ object ToolboxCommands {
     private val SETTING_KEY = Regex("^[A-Za-z0-9_.:-]{1,128}$")
     private val PERMISSION = Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)+$")
     private val PROP = Regex("^[A-Za-z0-9_.-]{1,128}$")
+    private val COMPONENT = Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)+(/\\.?[A-Za-z][A-Za-z0-9_$.]*)?$")
 
     // Read-only.
     fun listPackages(filter: PackageFilter): ToolboxCommand =
@@ -129,6 +130,38 @@ object ToolboxCommands {
         return ToolboxBuild.Ok(ToolboxCommand("Back up APK", listOf("cp", sourceApk, dest), destructive = true, timeoutMs = 120_000))
     }
 
+
+    /** Same as disable-user — freezes the app for this user so it cannot run until enabled. */
+    fun freeze(pkg: String): ToolboxBuild = disable(pkg).let { build ->
+        when (build) {
+            is ToolboxBuild.Ok -> ToolboxBuild.Ok(build.command.copy(label = "Freeze app"))
+            else -> build
+        }
+    }
+
+    /** Same as enable — unfreezes an app that was frozen with [freeze]/[disable]. */
+    fun unfreeze(pkg: String): ToolboxBuild = enable(pkg).let { build ->
+        when (build) {
+            is ToolboxBuild.Ok -> ToolboxBuild.Ok(build.command.copy(label = "Unfreeze app"))
+            else -> build
+        }
+    }
+
+    /** Turn one activity/service/receiver/provider component off for this user. */
+    fun disableComponent(component: String): ToolboxBuild = componentCommand(component) {
+        ToolboxCommand("Turn component off", listOf("pm", "disable-user", "--user", "0", it), destructive = true)
+    }
+
+    /** Turn one component back on. */
+    fun enableComponent(component: String): ToolboxBuild = componentCommand(component) {
+        ToolboxCommand("Turn component on", listOf("pm", "enable", "--user", "0", it), destructive = true)
+    }
+
+    /** Simple health reads: battery, storage, and memory. Each is read-only. */
+    fun healthBattery(): ToolboxCommand = battery()
+    fun healthStorage(): ToolboxCommand = storage()
+    fun healthMemory(): ToolboxCommand = ToolboxCommand("Memory", listOf("cat", "/proc/meminfo"), destructive = false)
+
     /** Parses `pm path` output (`package:/data/app/.../base.apk`). */
     fun parseApkPaths(stdout: String): List<String> =
         stdout.lineSequence().map { it.trim() }.filter { it.startsWith("package:") }.map { it.removePrefix("package:") }.toList()
@@ -146,6 +179,12 @@ object ToolboxCommands {
         if (!PERMISSION.matches(permission) || permission.length > 256) return ToolboxBuild.Rejected("That is not a permission name.")
         val label = if (verb == "grant") "Grant permission" else "Revoke permission"
         return ToolboxBuild.Ok(ToolboxCommand(label, listOf("pm", verb, pkg, permission), destructive = true))
+    }
+
+    private fun componentCommand(component: String, build: (String) -> ToolboxCommand): ToolboxBuild {
+        val trimmed = component.trim()
+        if (!COMPONENT.matches(trimmed)) return ToolboxBuild.Rejected("Use package/class, like com.example/.MainActivity.")
+        return ToolboxBuild.Ok(build(trimmed))
     }
 
     private fun pathCommand(path: String, build: (String) -> ToolboxCommand): ToolboxBuild {

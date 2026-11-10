@@ -4,9 +4,13 @@ import ai.droidcommand.app.approval.ApprovalHost
 import ai.droidcommand.app.approval.ComposeApprovalPrompt
 import ai.droidcommand.app.fleet.AndroidFleetThemeClient
 import ai.droidcommand.app.navigation.DroidCommandNavHost
+import ai.droidcommand.app.shortcuts.QuickAction
+import ai.droidcommand.app.shortcuts.QuickActionInbox
+import ai.droidcommand.app.shortcuts.ShortcutPublisher
 import ai.droidcommand.app.theme.AppThemeSettings
 import ai.droidcommand.app.ui.theme.DroidCommandTheme
 import ai.droidcommand.app.ui.theme.FleetThemeTrustHint
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -47,6 +51,8 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        ShortcutPublisher.publish(this)
+        offerQuickAction(intent)
         setContent {
             val fleetTheme by fleetThemeClient.state.collectAsState()
             val themePreference by appThemeSettings.state.collectAsState()
@@ -86,5 +92,15 @@ class MainActivity : ComponentActivity() {
                 ApprovalHost(approvalPrompt)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        offerQuickAction(intent)
+    }
+
+    private fun offerQuickAction(intent: Intent?) {
+        QuickActionInbox.offer(QuickAction.fromIntentAction(intent?.action))
     }
 }

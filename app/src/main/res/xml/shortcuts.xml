@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="chat"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_chat"
+        android:shortcutLongLabel="@string/shortcut_chat">
+        <intent
+            android:action="ai.droidcommand.app.action.OPEN_CHAT"
+            android:targetPackage="ai.droidcommand.app"
+            android:targetClass="ai.droidcommand.app.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="toolbox"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_toolbox"
+        android:shortcutLongLabel="@string/shortcut_toolbox">
+        <intent
+            android:action="ai.droidcommand.app.action.OPEN_TOOLBOX"
+            android:targetPackage="ai.droidcommand.app"
+            android:targetClass="ai.droidcommand.app.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="notes"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_notes"
+        android:shortcutLongLabel="@string/shortcut_notes">
+        <intent
+            android:action="ai.droidcommand.app.action.OPEN_NOTES"
+            android:targetPackage="ai.droidcommand.app"
+            android:targetClass="ai.droidcommand.app.MainActivity" />
+    </shortcut>
+</shortcuts>

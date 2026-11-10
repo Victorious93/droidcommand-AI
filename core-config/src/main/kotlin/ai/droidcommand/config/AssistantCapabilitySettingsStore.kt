@@ -69,6 +69,7 @@ class FileAssistantCapabilitySettingsStore(private val file: Path) : AssistantCa
             appendLine("${AssistantCapability.SKILL_SCRIPTS.wireName}=${settings.skillScriptsEnabled}")
             appendLine("${AssistantCapability.KAI_BUILD.wireName}=${settings.kaiBuildEnabled}")
             appendLine("${AssistantCapability.BRAIN.wireName}=${settings.brainEnabled}")
+            appendLine("${AssistantCapability.BOT_MAKER.wireName}=${settings.botMakerEnabled}")
         }
 
         fun decode(text: String): AssistantCapabilitySettings {
@@ -94,6 +95,7 @@ class FileAssistantCapabilitySettingsStore(private val file: Path) : AssistantCa
                 skillScriptsEnabled = flag(AssistantCapability.SKILL_SCRIPTS.wireName),
                 kaiBuildEnabled = flag(AssistantCapability.KAI_BUILD.wireName),
                 brainEnabled = flag(AssistantCapability.BRAIN.wireName),
+                botMakerEnabled = flag(AssistantCapability.BOT_MAKER.wireName),
             )
         }
     }

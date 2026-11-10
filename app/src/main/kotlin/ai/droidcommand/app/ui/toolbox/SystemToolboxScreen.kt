@@ -3,6 +3,9 @@ package ai.droidcommand.app.ui.toolbox
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ui.theme.DroidPrimaryButton
+import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.shizuku.toolbox.LogLevel
 import ai.droidcommand.shizuku.toolbox.PackageFilter
@@ -22,13 +25,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -44,7 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
-private val TABS = listOf("Shell", "Apps", "Logcat", "Settings", "Files", "Device", "Reboot")
+private val TABS = listOf("Shell", "Apps", "Health", "Logcat", "Settings", "Files", "Device", "Reboot")
 
 /**
  * Shizuku / root power tools. Nothing here runs on its own: read-only Shizuku commands run when their button is tapped,
@@ -69,13 +70,14 @@ fun SystemToolboxScreen(viewModel: SystemToolboxViewModel = hiltViewModel()) {
             when (tab) {
                 0 -> ShellTab(viewModel)
                 1 -> AppsTab(viewModel)
-                2 -> LogcatTab(viewModel)
-                3 -> SettingsTab(viewModel)
-                4 -> FilesTab(viewModel)
-                5 -> DeviceTab(viewModel)
+                2 -> HealthTab(viewModel)
+                3 -> LogcatTab(viewModel)
+                4 -> SettingsTab(viewModel)
+                5 -> FilesTab(viewModel)
+                6 -> DeviceTab(viewModel)
                 else -> RebootTab(viewModel)
             }
-            if (tab != 2 && viewModel.output.isNotEmpty()) OutputBox(viewModel.output)
+            if (tab != 3 && viewModel.output.isNotEmpty()) OutputBox(viewModel.output)
         }
     }
     viewModel.pending?.let { p ->
@@ -92,15 +94,15 @@ fun SystemToolboxScreen(viewModel: SystemToolboxViewModel = hiltViewModel()) {
                     if (p.command.destructive) Text("It can change this phone. Cancel if you are not sure.", color = MaterialTheme.colorScheme.error)
                 }
             },
-            confirmButton = { TextButton(onClick = viewModel::confirm, modifier = Modifier.testTag("toolbox_confirm_run")) { Text("Run") } },
-            dismissButton = { TextButton(onClick = viewModel::cancel) { Text("Cancel") } },
+            confirmButton = { DroidTextButton(onClick = viewModel::confirm, modifier = Modifier.testTag("toolbox_confirm_run")) { Text("Run") } },
+            dismissButton = { DroidTextButton(onClick = viewModel::cancel) { Text("Cancel") } },
         )
     }
     viewModel.message?.let { m ->
         AlertDialog(
             onDismissRequest = { viewModel.message = null },
             text = { Text(m) },
-            confirmButton = { TextButton(onClick = { viewModel.message = null }) { Text("OK") } },
+            confirmButton = { DroidTextButton(onClick = { viewModel.message = null }) { Text("OK") } },
         )
     }
 }
@@ -144,12 +146,12 @@ private fun BackendCard(viewModel: SystemToolboxViewModel) {
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                DroidTextButton(onClick = {
                     viewModel.setAi(true)
                     confirmAi = false
                 }) { Text("Turn on") }
             },
-            dismissButton = { TextButton(onClick = { confirmAi = false }) { Text("Cancel") } },
+            dismissButton = { DroidTextButton(onClick = { confirmAi = false }) { Text("Cancel") } },
         )
     }
 }
@@ -169,7 +171,7 @@ private fun ShellTab(viewModel: SystemToolboxViewModel) {
     SectionLabel("Shell")
     Text("Every command is shown to you before it runs.", style = MaterialTheme.typography.bodySmall)
     OutlinedTextField(value = command, onValueChange = { command = it }, label = { Text("Command") }, modifier = Modifier.fillMaxWidth().testTag("toolbox_shell_input"), singleLine = false)
-    OutlinedButton(onClick = { viewModel.request(ToolboxCommands.shell(command)) }, enabled = !viewModel.busy, modifier = Modifier.testTag("toolbox_shell_run")) { Text("Run…") }
+    DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.shell(command)) }, enabled = !viewModel.busy, modifier = Modifier.testTag("toolbox_shell_run")) { Text("Run…") }
 }
 
 @Composable
@@ -181,25 +183,29 @@ private fun AppsTab(viewModel: SystemToolboxViewModel) {
     Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         PackageFilter.entries.forEach { f -> FilterChip(selected = filter == f, onClick = { filter = f }, label = { Text(f.label) }) }
     }
-    OutlinedButton(onClick = { viewModel.listPackages(filter) }, enabled = !viewModel.busy, modifier = Modifier.testTag("toolbox_list_packages")) { Text("List packages") }
+    DroidSecondaryButton(onClick = { viewModel.listPackages(filter) }, enabled = !viewModel.busy, modifier = Modifier.testTag("toolbox_list_packages")) { Text("List packages") }
     OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Filter") }, singleLine = true, modifier = Modifier.fillMaxWidth())
     viewModel.packages.filter { query.isBlank() || query.lowercase() in it.lowercase() }.take(200).forEach { pkg ->
-        TextButton(onClick = { selected = pkg }, modifier = Modifier.fillMaxWidth()) { Text(pkg, modifier = Modifier.fillMaxWidth()) }
+        DroidTextButton(onClick = { selected = pkg }, modifier = Modifier.fillMaxWidth()) { Text(pkg, modifier = Modifier.fillMaxWidth()) }
     }
     selected?.let { pkg ->
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(pkg, fontWeight = FontWeight.Medium)
                 Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedButton(onClick = { viewModel.loadPermissions(pkg) }) { Text("Permissions") }
-                    OutlinedButton(onClick = { viewModel.backupApk(pkg) }) { Text("Back up APK") }
-                    OutlinedButton(onClick = { viewModel.request(ToolboxCommands.forceStop(pkg)) }) { Text("Force stop") }
+                    DroidSecondaryButton(onClick = { viewModel.loadPermissions(pkg) }) { Text("Permissions") }
+                    DroidSecondaryButton(onClick = { viewModel.backupApk(pkg) }) { Text("Back up APK") }
+                    DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.forceStop(pkg)) }) { Text("Force stop") }
                 }
                 Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedButton(onClick = { viewModel.request(ToolboxCommands.disable(pkg)) }) { Text("Disable") }
-                    OutlinedButton(onClick = { viewModel.request(ToolboxCommands.enable(pkg)) }) { Text("Enable") }
-                    OutlinedButton(onClick = { viewModel.request(ToolboxCommands.clearData(pkg)) }) { Text("Clear data") }
-                    OutlinedButton(onClick = { viewModel.request(ToolboxCommands.uninstall(pkg)) }) { Text("Uninstall") }
+                    DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.freeze(pkg)) }) { Text("Freeze") }
+                    DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.unfreeze(pkg)) }) { Text("Unfreeze") }
+                    DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.disable(pkg)) }) { Text("Disable") }
+                    DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.enable(pkg)) }) { Text("Enable") }
+                }
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.clearData(pkg)) }) { Text("Clear data") }
+                    DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.uninstall(pkg)) }) { Text("Uninstall") }
                 }
                 viewModel.permissions.forEach { p ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -209,7 +215,7 @@ private fun AppsTab(viewModel: SystemToolboxViewModel) {
                             modifier = Modifier.weight(1f),
                         )
                         if (p.runtime) {
-                            TextButton(onClick = {
+                            DroidTextButton(onClick = {
                                 viewModel.request(if (p.granted) ToolboxCommands.revoke(pkg, p.name) else ToolboxCommands.grant(pkg, p.name))
                             }) { Text(if (p.granted) "Revoke" else "Grant") }
                         }
@@ -217,6 +223,50 @@ private fun AppsTab(viewModel: SystemToolboxViewModel) {
                 }
             }
         }
+    }
+    ComponentTabExtras(viewModel)
+}
+
+@Composable
+private fun HealthTab(viewModel: SystemToolboxViewModel) {
+    SectionLabel("Phone health")
+    Text(
+        "Read-only checks. Nothing here changes the phone.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        DroidPrimaryButton(onClick = { viewModel.request(ToolboxCommands.healthBattery()) }, enabled = !viewModel.busy) { Text("Battery") }
+        DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.healthStorage()) }, enabled = !viewModel.busy) { Text("Storage") }
+        DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.healthMemory()) }, enabled = !viewModel.busy) { Text("Memory") }
+    }
+}
+
+@Composable
+private fun ComponentTabExtras(viewModel: SystemToolboxViewModel) {
+    var component by rememberSaveable { mutableStateOf("") }
+    SectionLabel("Component on / off")
+    Text(
+        "Turn one activity, service, receiver, or provider on or off. Use package/class, like com.example/.MainActivity. Every change asks first.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    OutlinedTextField(
+        value = component,
+        onValueChange = { component = it },
+        label = { Text("Component") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth().testTag("toolbox_component"),
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        DroidSecondaryButton(
+            onClick = { viewModel.request(ToolboxCommands.disableComponent(component)) },
+            enabled = !viewModel.busy && component.isNotBlank(),
+        ) { Text("Turn off") }
+        DroidSecondaryButton(
+            onClick = { viewModel.request(ToolboxCommands.enableComponent(component)) },
+            enabled = !viewModel.busy && component.isNotBlank(),
+        ) { Text("Turn on") }
     }
 }
 
@@ -229,8 +279,8 @@ private fun LogcatTab(viewModel: SystemToolboxViewModel) {
         LogLevel.entries.forEach { l -> FilterChip(selected = level == l, onClick = { level = l }, label = { Text(l.name.lowercase()) }) }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { viewModel.loadLogcat(level, 500) }, enabled = !viewModel.busy, modifier = Modifier.testTag("toolbox_logcat_load")) { Text("Load last 500") }
-        OutlinedButton(onClick = { viewModel.saveLogcat(filter) }) { Text("Save") }
+        DroidSecondaryButton(onClick = { viewModel.loadLogcat(level, 500) }, enabled = !viewModel.busy, modifier = Modifier.testTag("toolbox_logcat_load")) { Text("Load last 500") }
+        DroidSecondaryButton(onClick = { viewModel.saveLogcat(filter) }) { Text("Save") }
     }
     OutlinedTextField(value = filter, onValueChange = { filter = it }, label = { Text("Filter text") }, singleLine = true, modifier = Modifier.fillMaxWidth())
     val shown = viewModel.filteredLogcat(filter)
@@ -249,8 +299,8 @@ private fun SettingsTab(viewModel: SystemToolboxViewModel) {
     OutlinedTextField(value = key, onValueChange = { key = it }, label = { Text("Key") }, singleLine = true, modifier = Modifier.fillMaxWidth())
     OutlinedTextField(value = value, onValueChange = { value = it }, label = { Text("New value (for put)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { viewModel.request(ToolboxCommands.getSetting(ns, key)) }) { Text("Get") }
-        OutlinedButton(onClick = { viewModel.request(ToolboxCommands.putSetting(ns, key, value)) }) { Text("Put…") }
+        DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.getSetting(ns, key)) }) { Text("Get") }
+        DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.putSetting(ns, key, value)) }) { Text("Put…") }
     }
 }
 
@@ -261,9 +311,9 @@ private fun FilesTab(viewModel: SystemToolboxViewModel) {
     Text("Needs root. Lists folders and shows the first 64 KB of a file; it never writes.", style = MaterialTheme.typography.bodySmall)
     OutlinedTextField(value = path, onValueChange = { path = it }, label = { Text("Path") }, singleLine = true, modifier = Modifier.fillMaxWidth())
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { viewModel.request(ToolboxCommands.listDir(path)) }) { Text("List") }
-        OutlinedButton(onClick = { viewModel.request(ToolboxCommands.readFile(path)) }) { Text("Read") }
-        OutlinedButton(onClick = { path = path.trimEnd('/').substringBeforeLast('/').ifEmpty { "/" } }) { Text("Up") }
+        DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.listDir(path)) }) { Text("List") }
+        DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.readFile(path)) }) { Text("Read") }
+        DroidSecondaryButton(onClick = { path = path.trimEnd('/').substringBeforeLast('/').ifEmpty { "/" } }) { Text("Up") }
     }
 }
 
@@ -271,9 +321,9 @@ private fun FilesTab(viewModel: SystemToolboxViewModel) {
 private fun DeviceTab(viewModel: SystemToolboxViewModel) {
     SectionLabel("Device info")
     Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { viewModel.request(ToolboxCommands.deviceProps()) }, modifier = Modifier.testTag("toolbox_device_props")) { Text("Properties") }
-        OutlinedButton(onClick = { viewModel.request(ToolboxCommands.battery()) }) { Text("Battery") }
-        OutlinedButton(onClick = { viewModel.request(ToolboxCommands.storage()) }) { Text("Storage") }
+        DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.deviceProps()) }, modifier = Modifier.testTag("toolbox_device_props")) { Text("Properties") }
+        DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.battery()) }) { Text("Battery") }
+        DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.storage()) }) { Text("Storage") }
     }
     Text(
         "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT}) · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
@@ -286,6 +336,6 @@ private fun RebootTab(viewModel: SystemToolboxViewModel) {
     SectionLabel("Reboot")
     Text("Each option asks first and shows the exact command.", style = MaterialTheme.typography.bodySmall)
     RebootTarget.entries.forEach { t ->
-        OutlinedButton(onClick = { viewModel.request(ToolboxCommands.reboot(t)) }, modifier = Modifier.fillMaxWidth()) { Text(t.label) }
+        DroidSecondaryButton(onClick = { viewModel.request(ToolboxCommands.reboot(t)) }, modifier = Modifier.fillMaxWidth()) { Text(t.label) }
     }
 }

@@ -14,11 +14,13 @@ import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -45,6 +47,8 @@ class PilotController @Inject constructor(
     private val modes: EngineModes,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val cancelFlag = AtomicBoolean(false)
+    private var runJob: Job? = null
     private val mutableState = MutableStateFlow(
         PilotUiState(tools = registry.list(AgentMode.PILOT, Initiator.DEVICE_OWNER)),
     )
@@ -68,19 +72,34 @@ class PilotController @Inject constructor(
             mutableState.update { it.copy(error = modes.state.value.switchError) }
             return
         }
+        cancelFlag.set(false)
         mutableState.update { it.copy(running = true, error = null, result = null) }
-        scope.launch {
+        runJob = scope.launch {
             try {
                 val instruction = PilotInstruction(registry) { machine -> secureRunner(machine) }
-                val result = instruction.run(tool.name, input)
-                mutableState.update { it.copy(result = result.describe()) }
+                val result = instruction.run(tool.name, input, isCancelled = { cancelFlag.get() })
+                if (cancelFlag.get()) {
+                    mutableState.update { it.copy(result = "Stopped.", error = null) }
+                } else {
+                    mutableState.update { it.copy(result = result.describe()) }
+                }
             } catch (e: Exception) {
                 mutableState.update { it.copy(error = e.message ?: e.javaClass.simpleName) }
             } finally {
                 mutableState.update { it.copy(running = false) }
                 modes.endTask()
+                runJob = null
             }
         }
+    }
+
+    /** Asks the running Pilot tool to stop as soon as it checks cancellation. */
+    fun stop() {
+        if (!mutableState.value.running) return
+        cancelFlag.set(true)
+        runJob?.cancel()
+        mutableState.update { it.copy(running = false, result = "Stopped.", error = null) }
+        modes.endTask()
     }
 
     private fun secureRunner(machine: AgentStateMachine): SecureToolExecutor {
