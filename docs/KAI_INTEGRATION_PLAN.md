@@ -17,7 +17,7 @@ gate is not removed):
   tests pass; say what was not run.
 - Every landing updates `docs/ARCHITECTURE.md` and appends a dated
   `docs/AUDIT_2026-09-05.md` addendum (append-only).
-- **Do not change** the inbound 13 included / 4 excluded
+- **Do not change** the inbound 14 included / 4 excluded
   `COMPANION_ASSIST` list, cert gating, `externalControlEnabled`
   default (OFF), or destructive `confirmation_required`.
 - Never commit keys or passwords.

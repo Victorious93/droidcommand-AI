@@ -255,7 +255,7 @@ object InboundEntryPointCatalog {
         certTodo = "TODO: pin File-Manager RELEASE cert when one exists — do not invent. " +
             "Inbound CODE_ASSIST (PR #255) uses KnownNodeSigningCatalog.FILE_MANAGER_DEBUG_UNSTABLE_CI_SECRETS.",
         packageSource = "KnownFleet.FILE_MANAGER / Victorious93/File-Manager applicationId",
-        notes = "Pattern from PR #255. Not one of the 13 COMPANION_ASSIST callers. " +
+        notes = "Pattern from PR #255. Not one of the 14 COMPANION_ASSIST callers. " +
             "Outbound Messenger stays fail-open; this inbound pin is the documented debug constant.",
     )
 
@@ -307,6 +307,18 @@ object InboundEntryPointCatalog {
         notes = "Excluded on purpose. Game. Must not be controllable by droidcommand-AI.",
     )
 
+    val VICTORBOTS = InboundEntryPoint(
+        id = "victorbots",
+        displayName = "VictorBots",
+        packages = listOf("com.victorious.bots"),
+        capability = "companion.assist.victorbots",
+        certStatus = InboundCertStatus.PENDING_REFUSED,
+        kind = InboundEntryKind.INCLUDED,
+        certTodo = "Link the installed VictorBots app using Settings → Password pairing.",
+        packageSource = "Victorious Framework VictorBots applicationId",
+        notes = "Inbound text assist only. The owner pairs the installed signer and approves each request.",
+    )
+
     val INCLUDED: List<InboundEntryPoint> = listOf(
         VICTORSUITE,
         VICTOR_SMS,
@@ -321,6 +333,7 @@ object InboundEntryPointCatalog {
         ROOTFORGE,
         VICTOR_GPS,
         KEYBOARD,
+        VICTORBOTS,
     )
 
     val EXCLUDED: List<InboundEntryPoint> = listOf(
@@ -333,7 +346,7 @@ object InboundEntryPointCatalog {
     val ALL: List<InboundEntryPoint> = INCLUDED + EXCLUDED + listOf(FILE_MANAGER_CODE_ASSIST)
 
     init {
-        require(INCLUDED.size == 13) { "Expected 13 included inbound apps, got ${INCLUDED.size}" }
+        require(INCLUDED.size == 14) { "Expected 14 included inbound apps, got ${INCLUDED.size}" }
         require(EXCLUDED.size == 4) { "Expected 4 excluded inbound apps, got ${EXCLUDED.size}" }
         val packages = ALL.flatMap { it.packages }
         require(packages.size == packages.toSet().size) {
@@ -448,7 +461,7 @@ object InboundEntryPointCatalog {
                 packageName = packageName,
                 kind = NodeSignatureRefusal.EXPECTED_CERT_MISSING,
                 message = "Refusing inbound COMPANION_ASSIST: '$packageName' is not " +
-                    "one of the 13 included fleet callers.",
+                    "one of the 14 included fleet callers.",
             )
         }
         if (included.certStatus == InboundCertStatus.PENDING_REFUSED) {
@@ -527,7 +540,7 @@ object InboundEntryPointCatalog {
 }
 
 /**
- * Contract v1 for inbound companion assist from the 13 included fleet
+ * Contract v1 for inbound companion assist from the 14 included fleet
  * apps. Field names are this repo's (no per-app PHASE17 document exists
  * for these callers). CODE_ASSIST stays on `ai.droidcommand.action.CODE_ASSIST`
  * in PR #255.

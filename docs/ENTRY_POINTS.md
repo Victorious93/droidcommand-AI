@@ -43,7 +43,7 @@ This catalogue generalizes that PR's caller allow-list
 the session that wrote this. [Likely] the Activity would behave like
 CODE_ASSIST on a device once Allow is tapped.
 
-## Included (13)
+## Included (14)
 
 rootforge-os, VictorGPS, and Victorious Keyboard are **later additions
 — Don to confirm**.
@@ -63,6 +63,15 @@ rootforge-os, VictorGPS, and Victorious Keyboard are **later additions
 | rootforge-os | `ai.rootforge.os.debug` **enforced**; `ai.rootforge.os` **pending-refused** (no release pin) | mixed — see packages | `companion.assist.rootforge` |
 | VictorGPS | `com.victorious.gps` | **pending-refused** — debug keystore exists in their repo; SHA-256 is **not** catalogued here and was not invented | `companion.assist.victorgps` |
 | Victorious Keyboard | `com.victorious.keyboard` / `.debug` | **enforced** (`KEYBOARD_DEBUG_SHA256`). `.bench` is not a caller | `companion.assist.keyboard` |
+| VictorBots | `com.victorious.bots` | **pending-refused** until the owner pairs the installed signer | `companion.assist.victorbots` |
+
+### Connect VictorBots
+
+Install VictorBots and a DroidCommand build that includes this catalogue entry on the same device.
+In DroidCommand Settings, open **Password pairing**, save a password and enable **Allow password pairing**.
+Send a chat request from VictorBots. In DroidCommand, verify the caller is VictorBots, enter the pairing password
+and tap **Allow**. Subsequent requests still require **Allow**. A changed signer requires revoking and re-pairing
+the install. DroidCommand uses its configured chat model and returns text.
 
 Keyboard never forwards typed text or keystrokes. VictorSpoof assist
 never places a call. No inbound path runs wipe / power-off / lock /
@@ -80,13 +89,13 @@ flash / bootloader.
 `InboundEntryPointTest` refuses all four even when a cert is supplied.
 
 Hub `<queries>` names every included inbound package (Fleet-screen
-rows plus cam / trade / taskbar / mango / gps). The four excluded
+rows plus cam / trade / taskbar / mango / gps / bots). The four excluded
 packages are **not** listed. Inbound callers do not need our
 `<queries>` to start `COMPANION_ASSIST`; the entries exist so
 Android 11+ PackageManager can see those packages if the hub later
 probes them. This is not a second inbound allow-list.
 
-## Pattern row (not one of the 13)
+## Pattern row (outside the 14 COMPANION_ASSIST callers)
 
 | App | Package id | Cert status | Capability |
 |---|---|---|---|

@@ -57,7 +57,7 @@ class ManifestPolicyTest {
         assertTrue(declared.containsAll(included), "Missing inbound <queries>: ${included - declared}")
         assertTrue(declared.containsAll(FleetCatalog.INBOUND_VISIBILITY_PACKAGES))
         assertTrue(excluded.none { it in declared }, "Excluded inbound packages must stay out of <queries>: ${excluded.intersect(declared)}")
-        assertEquals(13, InboundEntryPointCatalog.INCLUDED.size)
+        assertEquals(14, InboundEntryPointCatalog.INCLUDED.size)
         assertEquals(4, InboundEntryPointCatalog.EXCLUDED.size)
     }
 

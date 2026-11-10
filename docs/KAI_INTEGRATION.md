@@ -37,7 +37,8 @@ not the 2026-10-07 module count. No Kai file was copied into this tree.
 
 **Inbound / remote-control constraints this map does not change:**
 
-- 13 included / 4 excluded inbound `COMPANION_ASSIST` callers
+- 14 included / 4 excluded inbound `COMPANION_ASSIST` callers (VictorBots
+  added 2026-11-09 with owner approval)
   (`docs/ENTRY_POINTS.md`, `InboundEntryPointCatalog`). Cert pins stay
   in `KnownNodeSigningCatalog` / `KnownFleet` only.
 - `RemoteControlConfig.externalControlEnabled` stays **false** by

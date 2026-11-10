@@ -104,6 +104,7 @@ class FleetStatusTest {
                 "com.victorious.taskbar",
                 "com.victorious.mango",
                 "com.victorious.gps",
+                "com.victorious.bots",
             ),
             FleetCatalog.INBOUND_VISIBILITY_PACKAGES,
         )
