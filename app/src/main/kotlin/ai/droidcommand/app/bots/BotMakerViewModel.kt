@@ -2,17 +2,22 @@ package ai.droidcommand.app.bots
 
 import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.ToolRegistry
+import ai.droidcommand.app.mcp.McpToolsRuntime
 import ai.droidcommand.config.AssistantCapability
 import ai.droidcommand.config.AssistantCapabilitySettingsStore
 import android.content.Context
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 import javax.inject.Inject
 
@@ -32,11 +37,16 @@ data class BotMakerUi(
 @HiltViewModel
 class BotMakerViewModel @Inject constructor(
     @ApplicationContext context: Context,
-    registry: ToolRegistry,
+    private val registry: ToolRegistry,
     private val capabilities: AssistantCapabilitySettingsStore,
+    private val mcpTools: McpToolsRuntime,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("helper_bots", Context.MODE_PRIVATE)
-    private val tools = registry.list().map {
+
+    // MCP tools appear here only after they are loaded from the owner's MCP servers (see init).
+    private var tools = toolOptions()
+
+    private fun toolOptions(): List<BotToolOption> = registry.list().map {
         BotToolOption(
             name = it.name,
             description = it.description,
@@ -57,6 +67,17 @@ class BotMakerViewModel @Inject constructor(
         ),
     )
     val state: StateFlow<BotMakerUi> = mutable.asStateFlow()
+
+    init {
+        // When Extra AI tools (MCP) are on, load the servers' tools so they can be picked. Off: nothing is contacted.
+        if (mcpTools.enabled()) {
+            viewModelScope.launch {
+                withContext(Dispatchers.IO) { mcpTools.refreshIfNeeded() }
+                tools = toolOptions()
+                mutable.update { it.copy(tools = tools) }
+            }
+        }
+    }
 
     fun save(id: String?, name: String, instructions: String, allowedTools: Set<String>, model: String): Boolean {
         HelperBots.validate(name, instructions)?.let { problem ->

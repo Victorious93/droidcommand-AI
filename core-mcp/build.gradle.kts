@@ -9,6 +9,8 @@ repositories {
 
 dependencies {
     implementation(project(":core-agent"))
+    // McpToolClient is a core-skills McpToolSource, so McpToolCatalog can load its tools like any other MCP server's.
+    implementation(project(":core-skills"))
     implementation("io.modelcontextprotocol:kotlin-sdk-server:0.15.0")
     // Client-side SDK: McpToolClient connects this process to an external MCP server and surfaces its
     // tools. Also on the test classpath (McpToolServerTest drives a client against the server in-process).

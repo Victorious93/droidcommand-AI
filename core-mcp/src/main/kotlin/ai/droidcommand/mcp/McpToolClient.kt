@@ -4,6 +4,9 @@ import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolSpec
+import ai.droidcommand.skills.mcp.HttpMcpToolSource
+import ai.droidcommand.skills.mcp.McpToolInfo
+import ai.droidcommand.skills.mcp.McpToolSource
 import io.modelcontextprotocol.kotlin.sdk.client.Client
 import io.modelcontextprotocol.kotlin.sdk.client.ClientOptions
 import io.modelcontextprotocol.kotlin.sdk.shared.Transport
@@ -13,6 +16,9 @@ import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlin.concurrent.thread
 
 /** A tool a connected external MCP server offers: its remote name and description, as the server reports them. */
@@ -48,11 +54,16 @@ data class RemoteToolDescriptor(val name: String, val description: String)
  * server **processes**, and it exposes only MCP *tools* (not prompts/resources) and maps arguments as a
  * flat string map — process launching, richer typed arguments, and prompts/resources are deliberate
  * follow-ups. It is not designed for concurrent [call]s on one client.
+ *
+ * **Wired into core-skills.** It is also a `core-skills` [McpToolSource], so a connected client can be handed to
+ * `McpToolCatalog` exactly like the phone app's `HttpMcpToolSource`: its tools then get the same
+ * `mcp_<server>_<tool>` names, the same bot allow-list and approval path, and the same extra confirm before a
+ * tool that changes something ([listTools] carries the server's read-only/destructive hints for that).
  */
 class McpToolClient(
     clientName: String = "droidcommand-ai",
     clientVersion: String = "0.1.0",
-) : AutoCloseable {
+) : McpToolSource {
     private val client = Client(Implementation(name = clientName, version = clientVersion), ClientOptions())
     private val ready = CompletableDeferred<Unit>()
     private val closeSignal = Job()
@@ -93,14 +104,31 @@ class McpToolClient(
         client.listTools().tools.map { RemoteToolDescriptor(it.name, it.description ?: "") }
     }
 
+    /** The tools the connected server offers, with their hints and input schema, for `core-skills` `McpToolCatalog`. */
+    override fun listTools(): List<McpToolInfo> = runBlocking {
+        client.listTools().tools.map { tool ->
+            val schema = buildJsonObject {
+                tool.inputSchema.properties?.let { put("properties", it) }
+                tool.inputSchema.required?.let { names -> put("required", JsonArray(names.map { JsonPrimitive(it) })) }
+            }
+            McpToolInfo(
+                name = tool.name,
+                description = tool.description ?: "",
+                readOnlyHint = tool.annotations?.readOnlyHint,
+                destructiveHint = tool.annotations?.destructiveHint,
+                parameters = HttpMcpToolSource.parseSchema(schema),
+            )
+        }
+    }
+
     /**
-     * Calls the remote tool [remoteName] with [arguments] and maps the MCP result to a [ToolResult]:
+     * Calls the remote tool [name] with [arguments] and maps the MCP result to a [ToolResult]:
      * an `isError` result becomes [ToolResult.Failure], otherwise [ToolResult.Success], with the text
      * of all text-content blocks joined. (The MCP shape has no partial/unexpected distinction, so those
      * `ToolResult` variants are intentionally never fabricated here.)
      */
-    fun call(remoteName: String, arguments: Map<String, String>): ToolResult = runBlocking {
-        mapResult(client.callTool(remoteName, arguments))
+    override fun call(name: String, arguments: Map<String, String>): ToolResult = runBlocking {
+        mapResult(client.callTool(name, arguments))
     }
 
     /**
