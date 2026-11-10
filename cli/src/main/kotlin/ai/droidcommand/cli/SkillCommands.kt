@@ -2,6 +2,7 @@ package ai.droidcommand.cli
 
 import ai.droidcommand.config.ConfigSource
 import ai.droidcommand.config.EnvConfigSource
+import ai.droidcommand.skills.SkillParameter
 
 /**
  * The `skills` subcommand: a thin, device-free manager so a user never has to hand-edit
@@ -54,8 +55,24 @@ private fun runSkillsList(configSource: ConfigSource): Int {
     for (skill in skills) {
         val state = if (skill.enabled) "enabled " else "disabled"
         println("  [$state] ${skill.manifest.name} — ${skill.manifest.description}")
+        for (parameter in skill.manifest.parameters) {
+            println("      param ${formatParameter(skill.manifest.name, parameter)}")
+        }
     }
     return 0
+}
+
+/**
+ * One line describing a declared [parameter] for `skills list`: its name, whether it is required or
+ * optional (with its default, if any), its description, and the exact config key a user sets to supply
+ * a value ([skillParameterConfigKey]) — so the listing is self-documenting about what to configure.
+ */
+private fun formatParameter(skillName: String, parameter: SkillParameter): String {
+    val requiredness = if (parameter.required) "required" else "optional"
+    val default = parameter.default?.let { ", default: $it" } ?: ""
+    val description = parameter.description.takeIf { it.isNotBlank() }?.let { " — $it" } ?: ""
+    val key = skillParameterConfigKey(skillName, parameter.name)
+    return "${parameter.name} ($requiredness$default)$description  [set $key]"
 }
 
 private fun runSkillsSetEnabled(args: List<String>, configSource: ConfigSource, enable: Boolean): Int {
