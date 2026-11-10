@@ -130,7 +130,6 @@ object ToolboxCommands {
         return ToolboxBuild.Ok(ToolboxCommand("Back up APK", listOf("cp", sourceApk, dest), destructive = true, timeoutMs = 120_000))
     }
 
-
     /** Same as disable-user — freezes the app for this user so it cannot run until enabled. */
     fun freeze(pkg: String): ToolboxBuild = disable(pkg).let { build ->
         when (build) {

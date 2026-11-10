@@ -106,6 +106,7 @@ class ToolboxCommandsTest {
         backend.run(ToolboxCommands.forceStop("com.example.app").ok())
         assertEquals(listOf("am", "force-stop", "com.example.app"), shell.ran.single())
     }
+
     @Test
     fun `freeze and unfreeze reuse disable-user and enable`() {
         assertEquals(
@@ -138,7 +139,6 @@ class ToolboxCommandsTest {
         assertFalse(ToolboxCommands.healthStorage().destructive)
         assertFalse(ToolboxCommands.healthMemory().destructive)
     }
-
 }
 
 class SystemToolboxToolTest {
@@ -189,5 +189,4 @@ class SystemToolboxToolTest {
         assertTrue(shell.ran.isEmpty())
         assertTrue("shizuku" in SystemToolboxTool.NAME && "root" in SystemToolboxTool.NAME)
     }
-
 }
