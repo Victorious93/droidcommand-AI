@@ -39,7 +39,7 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
- * Inbound COMPANION_ASSIST entry point for the 13 included fleet apps.
+ * Inbound COMPANION_ASSIST entry point for the 14 included fleet apps.
  * Thin Android shell: request parse / 60k cap / result JSON live in
  * [CompanionAssist] (JVM-tested); caller package+cert uses
  * [CompanionAssist.verifyCaller] (catalog pin, then optional

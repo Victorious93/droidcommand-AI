@@ -13,8 +13,8 @@ class InboundEntryPointTest {
         "00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF"
 
     @Test
-    fun `catalogue has thirteen included apps and four excluded apps`() {
-        assertEquals(13, InboundEntryPointCatalog.INCLUDED.size)
+    fun `catalogue has fourteen included apps and four excluded apps`() {
+        assertEquals(14, InboundEntryPointCatalog.INCLUDED.size)
         assertEquals(4, InboundEntryPointCatalog.EXCLUDED.size)
         assertEquals(
             listOf(
@@ -31,6 +31,7 @@ class InboundEntryPointTest {
                 "rootforge",
                 "victorgps",
                 "keyboard",
+                "victorbots",
             ),
             InboundEntryPointCatalog.INCLUDED.map { it.id },
         )
@@ -38,6 +39,43 @@ class InboundEntryPointTest {
             listOf("victoryped", "victorlink64", "matchvictorious", "victorops-zombies"),
             InboundEntryPointCatalog.EXCLUDED.map { it.id },
         )
+    }
+
+    @Test
+    fun `VictorBots v1 request requires owner pairing to the installed signer`() {
+        val pkg = "com.victorious.bots"
+        val cert = KnownNodeSigningCatalog.DROIDCOMMAND_AI_DEBUG_SHA256
+        val observed = listOf(cert)
+        val password = "test-pairing-password"
+        val pairing = PasswordPairingService(InMemoryPasswordPairingStore())
+        assertIs<PasswordPairingDecision.Allowed>(pairing.setPassword(password))
+        val parsed = assertIs<CompanionAssistParse.Valid>(
+            CompanionAssist.parseRequest(
+                """{"v":1,"task":"assist","capability":"companion.assist","prompt":"USER:\nHello\n\n","destructive":false}""",
+            ),
+        )
+        val request = parsed.request
+        assertTrue(InboundEntryPointCatalog.resolvedPins(InboundEntryPointCatalog.VICTORBOTS, pkg).isEmpty())
+        assertIs<NodeSignatureDecision.Refused>(CompanionAssist.verifyCaller(pkg, observed, pairing))
+        assertIs<CompanionAssistParse.Invalid>(CompanionAssist.bindToCaller(request, pkg, pairing, observed))
+
+        pairing.enable(true)
+        val bound = assertIs<CompanionAssistParse.Valid>(
+            CompanionAssist.bindToCaller(request, pkg, pairing, observed),
+        )
+        assertEquals("companion.assist.victorbots", bound.request.capability)
+        assertIs<NodeSignatureDecision.Refused>(CompanionAssist.verifyCaller(pkg, observed, pairing))
+        assertIs<PasswordPairingDecision.Refused>(
+            pairing.evaluateInbound(pkg, observed, null, password, screenConfirmed = false),
+        )
+        assertIs<PasswordPairingDecision.Allowed>(
+            pairing.evaluateInbound(pkg, observed, null, password, screenConfirmed = true),
+        )
+        assertIs<NodeSignatureDecision.Allowed>(CompanionAssist.verifyCaller(pkg, observed, pairing))
+        assertIs<NodeSignatureDecision.Refused>(CompanionAssist.verifyCaller(pkg, listOf(attacker), pairing))
+
+        assertTrue(pairing.revoke(pkg))
+        assertIs<NodeSignatureDecision.Refused>(CompanionAssist.verifyCaller(pkg, observed, pairing))
     }
 
     @Test
@@ -161,7 +199,7 @@ class InboundEntryPointTest {
         )
         val bench = CompanionAssist.verifyCaller("com.victorious.keyboard.bench", listOf(attacker))
         val refused = assertIs<NodeSignatureDecision.Refused>(bench)
-        assertTrue(refused.message.contains("not one of the 13"))
+        assertTrue(refused.message.contains("not one of the 14"))
     }
 
     @Test

@@ -285,6 +285,7 @@ object FleetCatalog {
         "com.victorious.taskbar",
         "com.victorious.mango",
         "com.victorious.gps",
+        "com.victorious.bots",
     )
 
     /**

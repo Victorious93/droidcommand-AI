@@ -1644,14 +1644,15 @@ physical device.
 ## 15. Inbound companion entry points (2026-10-28b)
 
 `core-security.InboundEntryPointCatalog` is the per-app allow-list for
-inbound `ai.droidcommand.action.COMPANION_ASSIST` (13 included fleet
+inbound `ai.droidcommand.action.COMPANION_ASSIST` (14 included fleet
 apps) and the File-Manager `code-assist` allow-list that PR #255 can
 rebase onto. Pins come from `KnownNodeSigningCatalog` / `KnownFleet`
 only. Undocumented or unenforced certs are **pending-refused** (fail
 closed). VictoryPed, VictorLink64, MatchVictorious, and VictorOps
 Zombies are excluded. rootforge-os, VictorGPS, and Victorious Keyboard
 are **later additions — Don to confirm**. Full table:
-`docs/ENTRY_POINTS.md`.
+`docs/ENTRY_POINTS.md`. VictorBots (`com.victorious.bots`) uses the existing inbound
+text assist activity with owner-confirmed password pairing to its installed signing certificate.
 
 | Component | Status | Notes |
 |---|---|---|

@@ -64,6 +64,7 @@
     <!-- Android 11+ package visibility. Without an entry here, a lookup of another app (PackageManager.getPackageInfo)
          throws as if the app were not installed, and a speech or TTS service is invisible to the platform checks. -->
     <queries>
+        <package android:name="com.victorious.bots" />
         <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
         <intent>
@@ -184,7 +185,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Inbound COMPANION_ASSIST for the 13 included fleet apps.
+        <!-- Inbound COMPANION_ASSIST for the 14 included fleet apps.
              Exported so startActivityForResult from those packages can
              reach it. Caller package + signing cert are checked in
              CompanionAssistActivity before any UI or model call; deny /
