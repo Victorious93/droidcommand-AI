@@ -72,6 +72,7 @@ include(":core-notes")
 include(":core-bots")
 include(":core-skills")
 include(":core-device-connect")
+include(":core-remote-pc")
 include(":pc-companion")
 project(":pc-companion").projectDir = file("tools/pc-companion")
 

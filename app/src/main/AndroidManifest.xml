@@ -97,6 +97,12 @@
              to resolve the writer; the authority is named so a ContentResolver
              query is visible on Android 11+. Reader only — never write. -->
         <provider android:authorities="com.victorious.launch.theme" />
+        <!-- My PC hub tile (victorpc spec v1, VictorSuite docs/specs/VICTORPC_PAIRING.md): read-only
+             PcProfileProvider query plus the OPEN_PC / PC_CONSENT handoffs, all targeted at com.termux.
+             This app holds no SSH key and never binds PcEnrollService. -->
+        <provider android:authorities="com.termux.victor.pc" />
+        <intent><action android:name="com.termux.victor.action.OPEN_PC" /></intent>
+        <intent><action android:name="com.termux.victor.action.PC_CONSENT" /></intent>
         <!-- KYC companion EXTERNAL_NODE for remote.command
              ([provisional/pending-stable-cert], fail-open). Probe only. -->
         <package android:name="com.identityshield.companion" />

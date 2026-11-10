@@ -114,6 +114,7 @@ dependencies {
     implementation(project(":core-remote"))
     implementation(project(":core-remotecontrol"))
     implementation(project(":core-device-connect"))
+    implementation(project(":core-remote-pc"))
     implementation(project(":core-coding-session"))
     implementation(project(":core-llm-factory"))
     implementation(project(":core-templates"))
