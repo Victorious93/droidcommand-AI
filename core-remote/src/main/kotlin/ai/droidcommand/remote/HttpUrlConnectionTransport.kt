@@ -18,6 +18,10 @@ import java.util.TreeMap
  * is collected whole into [HttpResponseSpec.body], response header names are case-insensitive, and I/O
  * failures — including timeouts, as [SocketTimeoutException] — are thrown as [IOException].
  *
+ * A request carrying a [RequestCancellation] is aborted by [HttpURLConnection.disconnect] from the
+ * cancelling thread and ends with [RequestCancelled]. On a desktop JVM a cancel during the TCP connect
+ * only takes effect once the connect returns or times out.
+ *
  * Differences, stated rather than hidden: no certificate pinning or mutual TLS (use [JdkHttpTransport]
  * on a JVM for those); [HttpRequestSpec.requestTimeoutMillis] is applied as a per-read timeout, not a
  * whole-request deadline, so a slow trickle can outlast it; only methods [HttpURLConnection] supports
@@ -36,14 +40,22 @@ class HttpUrlConnectionTransport : StreamingHttpTransport {
                 val body = (connection.errorStream ?: runCatching { connection.inputStream }.getOrNull())?.use { readAll(it) }.orEmpty()
                 return@execute HttpResponseSpec(status, headers, body)
             }
-            connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader -> reader.forEachLine(onLine) }
+            connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                reader.forEachLine { line ->
+                    request.cancellation?.throwIfCancelled()
+                    onLine(line)
+                }
+            }
             HttpResponseSpec(status, headers, "")
         }
 
     private fun <T> execute(request: HttpRequestSpec, handle: (HttpURLConnection, Int) -> T): T {
         val connection = URL(request.url).openConnection() as? HttpURLConnection
             ?: throw IOException("Not an HTTP(S) URL: ${request.url}")
+        val cancellation = request.cancellation
         try {
+            // disconnect() from another thread closes the socket, which ends a blocked read with an IOException.
+            cancellation?.attach(connection::disconnect)
             connection.requestMethod = request.method
             connection.connectTimeout = request.connectTimeoutMillis.toInt()
             connection.readTimeout = request.requestTimeoutMillis.toInt()
@@ -54,7 +66,11 @@ class HttpUrlConnectionTransport : StreamingHttpTransport {
                 connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             }
             return handle(connection, connection.responseCode)
+        } catch (e: IOException) {
+            if (cancellation?.isCancelled == true) throw RequestCancelled()
+            throw e
         } finally {
+            cancellation?.detach()
             connection.disconnect()
         }
     }

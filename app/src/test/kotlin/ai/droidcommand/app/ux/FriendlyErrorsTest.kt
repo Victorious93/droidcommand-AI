@@ -1,5 +1,12 @@
 package ai.droidcommand.app.ux
 
+import ai.droidcommand.app.ui.chat.ChatRoute
+import ai.droidcommand.llm.LlmError
+import ai.droidcommand.llm.pchost.PcHostAddress
+import ai.droidcommand.llm.pchost.PcHostAddressParse
+import ai.droidcommand.llm.pchost.PcHostErrors
+import ai.droidcommand.llm.pchost.PcHostKind
+import ai.droidcommand.llm.pchost.PcHostTarget
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -46,5 +53,21 @@ class FriendlyErrorsTest {
     fun `chat empty copy never says refused`() {
         assertFalse(FriendlyErrors.emptyChat(false).contains("refuse"))
         assertFalse(FriendlyErrors.missingChatSetup("Groq").contains("refuse"))
+    }
+
+    @Test
+    fun `PC-hosted messages are shown as written, never rewritten into a cloud or internet message`() {
+        assertEquals(PcHostErrors.PREFIX, FriendlyErrors.PC_HOST_PREFIX)
+        val address = (PcHostAddress.parse(PcHostKind.OLLAMA, "192.168.1.20") as PcHostAddressParse.Ok).address
+        val target = PcHostTarget(PcHostKind.OLLAMA, address, "gemma4:latest")
+        val messages = listOf(
+            PcHostErrors.unreachable(address, "failed to connect to /192.168.1.20 (port 11434): connect timed out"),
+            PcHostErrors.forChat(target, LlmError.Authentication("Request failed with status 401: unauthorized"), false, true, 180).second,
+            PcHostErrors.forChat(target, LlmError.Timeout("Read timed out"), false, false, 180).second,
+            PcHostErrors.forChat(target, LlmError.Network("Connection reset"), true, false, 180).second,
+            PcHostErrors.forChat(target, LlmError.InvalidResponse("Request failed with status 404: {\"error\":\"model not found\"}"), false, false, 180).second,
+            ChatRoute.pcNotReady(PcHostKind.OLLAMA),
+        )
+        messages.forEach { assertEquals(it, FriendlyErrors.forUser(it)) }
     }
 }

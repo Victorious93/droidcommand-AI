@@ -50,6 +50,8 @@ import ai.droidcommand.hackerai.HackerAiTool
 import ai.droidcommand.knowledge.android.RoomKnowledgeGraph
 import ai.droidcommand.llm.factory.CloudPromptClient
 import ai.droidcommand.llm.factory.CloudProviderSpec
+import ai.droidcommand.llm.pchost.FilePcHostSettingsStore
+import ai.droidcommand.llm.pchost.PcHostSettingsStore
 import ai.droidcommand.metasploit.MetasploitExecutor
 import ai.droidcommand.metasploit.MetasploitTool
 import ai.droidcommand.metasploit.TermuxMetasploitExecutor
@@ -264,6 +266,12 @@ object AppModule {
     @Singleton
     fun provideAssistantCapabilitySettingsStore(@ApplicationContext context: Context): AssistantCapabilitySettingsStore =
         FileAssistantCapabilitySettingsStore(context.filesDir.toPath().resolve("assistant-capabilities.settings"))
+
+    /** Saved PC model servers (address and model; not secret). The optional key is in the vault. */
+    @Provides
+    @Singleton
+    fun providePcHostSettingsStore(@ApplicationContext context: Context): PcHostSettingsStore =
+        FilePcHostSettingsStore(context.filesDir.toPath().resolve("pc-hosts.properties"))
 
     @Provides
     @Singleton

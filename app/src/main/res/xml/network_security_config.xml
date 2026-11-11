@@ -2,7 +2,8 @@
 <!-- HTTPS is the default for the public internet. Cleartext is permitted at the OS layer so a
      user-entered LAN n8n URL (http://192.168.x.x:5678) can be reached — Android cannot express
      RFC1918 as a domain-config CIDR. The app still refuses HTTP except to LAN / loopback / .local
-     (N8nServerUrl). Cloud-metadata addresses stay blocked. Trust the system CA store only. -->
+     (N8nServerUrl), and for PC-hosted models except to private, link-local and VPN addresses
+     (PcHostAddress: a model server on the owner's PC speaks plain HTTP on port 11434 or similar). Cloud-metadata addresses stay blocked. Trust the system CA store only. -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>

@@ -21,6 +21,7 @@ import ai.droidcommand.app.mcp.McpToolsRuntime
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prompts.PromptLibrary
 import ai.droidcommand.app.skills.SkillFilesPrompt
+import ai.droidcommand.app.ui.pchost.PcHostChoice
 import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.config.AssistantCapability
 import ai.droidcommand.config.AssistantCapabilitySettingsStore
@@ -41,6 +42,9 @@ import ai.droidcommand.llm.local.GgufFileName
 import ai.droidcommand.llm.local.ModelInstallResult
 import ai.droidcommand.llm.local.RamFit
 import ai.droidcommand.llm.local.RamFitVerdict
+import ai.droidcommand.llm.pchost.PcHostEndpoint
+import ai.droidcommand.llm.pchost.PcHostKind
+import ai.droidcommand.llm.pchost.PcHostSettingsStore
 import ai.droidcommand.notes.NoteDraft
 import ai.droidcommand.rag.AttachResult
 import ai.droidcommand.rag.DocumentInfo
@@ -143,6 +147,10 @@ data class ChatUiState(
     val localStatus: String? = null,
     /** True while the delete-model confirmation is open. */
     val confirmDeleteLocalModel: Boolean = false,
+    /** Model servers saved in Settings, PC-hosted models. */
+    val pcHosts: Map<PcHostKind, PcHostEndpoint> = emptyMap(),
+    /** The PC server turns are sent to, or null. When set, [activeLocalModelId] is null. */
+    val activePcHost: PcHostKind? = null,
     val conversationId: String = ChatSession.DEFAULT_CONVERSATION_ID,
     val savedChats: List<SavedChat> = emptyList(),
     val templates: List<PromptTemplate> = emptyList(),
@@ -188,6 +196,7 @@ class ChatViewModel @Inject constructor(
     private val toolRunner: ToolRunner,
     private val toolRegistry: ToolRegistry,
     private val mcpTools: McpToolsRuntime,
+    private val pcHostStore: PcHostSettingsStore,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
@@ -262,6 +271,7 @@ class ChatViewModel @Inject constructor(
             micAvailable = voice.sttAvailable,
             toolbar = advanced.toolbarToggles(),
             activeLocalModelId = prefs.getString(KEY_LOCAL_MODEL, null),
+            activePcHost = PcHostKind.byId(prefs.getString(PcHostChoice.KEY_PC_HOST, null)),
             cloudKeyReady = keyReady(provider),
         )
     }
@@ -328,8 +338,12 @@ class ChatViewModel @Inject constructor(
         val models = onDeviceModels.list()
         val saved = prefs.getString(KEY_LOCAL_MODEL, null)?.takeIf { it.isNotBlank() }
         val missing = saved != null && models.none { it.id == saved }
+        // The PC-hosted screen writes its choice and endpoints while this view model stays alive behind it.
+        val pcHosts = PcHostKind.entries.mapNotNull { kind -> runCatching { pcHostStore.load(kind) }.getOrNull()?.let { kind to it } }.toMap()
         mutableState.update { state ->
             state.copy(
+                pcHosts = pcHosts,
+                activePcHost = PcHostKind.byId(prefs.getString(PcHostChoice.KEY_PC_HOST, null)),
                 localModels = models,
                 activeLocalModelId = saved,
                 localStatus = if (missing) ChatRoute.MISSING_MESSAGE else state.localStatus?.takeIf { it != ChatRoute.MISSING_MESSAGE },
@@ -341,12 +355,14 @@ class ChatViewModel @Inject constructor(
         prefs.edit {
             putString(KEY_PROVIDER, provider.id)
             remove(KEY_LOCAL_MODEL)
+            remove(PcHostChoice.KEY_PC_HOST)
         }
         mutableState.update {
             it.copy(
                 provider = provider,
                 model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel,
                 activeLocalModelId = null,
+                activePcHost = null,
                 error = null,
                 localStatus = null,
                 cloudKeyReady = keyReady(provider),
@@ -358,8 +374,20 @@ class ChatViewModel @Inject constructor(
 
     /** Chooses an imported on-device model for the following turns. The previous one is unloaded when the new one loads. */
     fun selectLocalModel(modelId: String) {
-        prefs.edit { putString(KEY_LOCAL_MODEL, modelId) }
-        mutableState.update { it.copy(activeLocalModelId = modelId, error = null, localStatus = null) }
+        prefs.edit {
+            putString(KEY_LOCAL_MODEL, modelId)
+            remove(PcHostChoice.KEY_PC_HOST)
+        }
+        mutableState.update { it.copy(activeLocalModelId = modelId, activePcHost = null, error = null, localStatus = null) }
+    }
+
+    /** Sends the following turns to the model server saved for [kind] in Settings, PC-hosted models. */
+    fun selectPcHost(kind: PcHostKind) {
+        prefs.edit {
+            putString(PcHostChoice.KEY_PC_HOST, kind.id)
+            remove(KEY_LOCAL_MODEL)
+        }
+        mutableState.update { it.copy(activePcHost = kind, activeLocalModelId = null, error = null, localStatus = null) }
     }
 
     /**
@@ -422,8 +450,11 @@ class ChatViewModel @Inject constructor(
     fun cancelLocalImport() = importCancelled.set(true)
 
     private fun selectImported(id: String, models: List<ImportedModel>, status: String) {
-        prefs.edit { putString(KEY_LOCAL_MODEL, id) }
-        mutableState.update { it.copy(localImporting = false, localModels = models, activeLocalModelId = id, localStatus = status) }
+        prefs.edit {
+            putString(KEY_LOCAL_MODEL, id)
+            remove(PcHostChoice.KEY_PC_HOST)
+        }
+        mutableState.update { it.copy(localImporting = false, localModels = models, activeLocalModelId = id, activePcHost = null, localStatus = status) }
     }
 
     fun askDeleteLocalModel() = mutableState.update { it.copy(confirmDeleteLocalModel = true) }
@@ -489,10 +520,22 @@ class ChatViewModel @Inject constructor(
                 selectedLocalId = current.activeLocalModelId,
                 installedIds = onDeviceModels.list().map { it.id }.toSet(),
                 slashCommandNamesCloud = slashProvider != null,
+                pcHost = current.activePcHost,
+                // Read fresh: the address or model may have been changed in Settings since this screen last refreshed.
+                pcHostEndpoint = current.activePcHost?.let { kind -> runCatching { pcHostStore.load(kind) }.getOrNull() },
             )
             val outgoing = slash?.prompt ?: text
             val result = if (route is ChatRoute.OnDeviceMissing) {
                 ChatResult.Failure(route.message)
+            } else if (route is ChatRoute.PcHostNotReady) {
+                ChatResult.Failure(route.message)
+            } else if (route is ChatRoute.PcHosted) {
+                // The message goes to the PC. Stop closes the connection, so the PC stops generating too.
+                runCatching {
+                    session.sendPcHost(route.target, outgoing, useWebSearch = current.webSearchEnabled, cancelled = stop::get) { delta ->
+                        if (!stop.get()) mutableState.update { it.copy(streaming = it.streaming + delta) }
+                    }
+                }.getOrElse { ChatResult.Failure("PC-hosted model: the request could not be made (${it.message ?: it.javaClass.simpleName}).") }
             } else if (route is ChatRoute.OnDevice) {
                 // An on-device turn makes no network request: ChatSession skips web search and tools for it and says so.
                 runCatching {
@@ -546,6 +589,7 @@ class ChatViewModel @Inject constructor(
     fun stopSending() {
         stopRequested.set(true)
         session.requestStopLocal()
+        session.requestStopPcHost()
         sendJob?.cancel()
         sendJob = null
         handsFreeRound = false
@@ -919,7 +963,7 @@ class ChatViewModel @Inject constructor(
      */
     fun pickUpBot() {
         val bot = HelperBotHandoff.consume() ?: return
-        if (bot.model.isNotBlank() && mutableState.value.activeLocalModelId == null) setModel(bot.model)
+        if (bot.model.isNotBlank() && mutableState.value.activeLocalModelId == null && mutableState.value.activePcHost == null) setModel(bot.model)
         session.setToolAccess(
             HelperBotTools.scopedRunner(toolRunner, bot.allowedTools),
             HelperBotTools.offeredTools(toolRegistry, bot.allowedTools),
@@ -1098,6 +1142,7 @@ class ChatViewModel @Inject constructor(
         // A reply still being generated for a screen that is gone would hold the model and the CPU until it ended.
         stopRequested.set(true)
         session.requestStopLocal()
+        session.requestStopPcHost()
         importCancelled.set(true)
         wakeWanted = false
         tearDownWakeWord()

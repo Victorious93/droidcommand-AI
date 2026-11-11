@@ -22,6 +22,7 @@ import ai.droidcommand.app.ui.models.ModelsScreen
 import ai.droidcommand.app.ui.n8n.N8nScreen
 import ai.droidcommand.app.ui.notes.NotesScreen
 import ai.droidcommand.app.ui.onboarding.FirstRunScreen
+import ai.droidcommand.app.ui.pchost.PcHostScreen
 import ai.droidcommand.app.ui.plan.PlanScreen
 import ai.droidcommand.app.ui.settings.AdvancedScreen
 import ai.droidcommand.app.ui.settings.SettingsScreen
@@ -102,6 +103,7 @@ object Routes {
     const val CONNECT_DEVICE = "fleet/connect"
     const val HELP = "help"
     const val MODELS = "models"
+    const val PC_HOSTS = "settings/pc-hosts"
     const val N8N = "advanced/n8n"
     const val SYSTEM_TOOLBOX = "advanced/toolbox"
     const val NOTES_STUDIO = "advanced/notes-studio"
@@ -182,7 +184,9 @@ fun DroidCommandNavHost(
             startDestination = Routes.FLEET,
             modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding).imePadding(),
         ) {
-            composable(Routes.CHAT) { ChatScreen(onOpenModels = { navController.navigate(Routes.MODELS) }) }
+            composable(Routes.CHAT) {
+                ChatScreen(onOpenModels = { navController.navigate(Routes.MODELS) }, onOpenPcHosts = { navController.navigate(Routes.PC_HOSTS) })
+            }
             composable(Routes.PILOT) { PilotScreen() }
             composable(Routes.PLAN) { PlanScreen() }
             composable(Routes.LOGS) { LogsScreen() }
@@ -193,6 +197,7 @@ fun DroidCommandNavHost(
                 SettingsScreen(
                     onOpenHelp = { navController.navigate(Routes.HELP) },
                     onOpenModels = { navController.navigate(Routes.MODELS) },
+                    onOpenPcHosts = { navController.navigate(Routes.PC_HOSTS) },
                     onOpenAdvanced = { navController.navigate(Routes.ADVANCED) },
                     onReplaySetup = shell::replayFirstRun,
                 )
@@ -226,6 +231,7 @@ fun DroidCommandNavHost(
             composable(Routes.STATUS_BACKUP) { StatusBackupScreen() }
             composable(Routes.HELP) { HelpScreen() }
             composable(Routes.MODELS) { ModelsScreen() }
+            composable(Routes.PC_HOSTS) { PcHostScreen(onOpenModels = { navController.navigate(Routes.MODELS) }) }
             composable(Routes.MEMORY) { MemoryScreen() }
             composable(Routes.CLIPBOARDS) { ClipboardScreen() }
             composable(Routes.AUTOMATION) { AutomationScreen() }

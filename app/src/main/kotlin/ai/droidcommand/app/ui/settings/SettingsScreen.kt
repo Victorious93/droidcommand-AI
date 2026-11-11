@@ -49,6 +49,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onOpenHelp: () -> Unit = {},
     onOpenModels: () -> Unit = {},
+    onOpenPcHosts: () -> Unit = {},
     onOpenAdvanced: () -> Unit = {},
     onReplaySetup: () -> Unit = {},
 ) {
@@ -76,7 +77,7 @@ fun SettingsScreen(
         DroidCard {
             Text(
                 "Chat uses the provider last chosen on the Chat screen. " +
-                    "Without a key for that provider — and without an on-device model — Chat cannot send. A key is never shown again after you save it.",
+                    "Without a key for that provider — and without an on-device model or a PC-hosted one — Chat cannot send. A key is never shown again after you save it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -90,6 +91,17 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 DroidPrimaryButton(onClick = onOpenModels, modifier = Modifier.fillMaxWidth()) { Text("On-device models") }
+            }
+        }
+        SectionLabel("PC-hosted models (Ollama or an OpenAI-compatible server)")
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Chat with a model that runs on your own PC, over your Wi-Fi or VPN. Messages are sent to the PC; no model file is copied to this phone, and no internet is needed while the phone can reach the PC.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                DroidPrimaryButton(onClick = onOpenPcHosts, modifier = Modifier.fillMaxWidth()) { Text("PC-hosted models") }
             }
         }
         CloudProviderCatalog.all.forEach { provider ->

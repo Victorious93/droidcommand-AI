@@ -137,6 +137,22 @@ DroidCommand AI
 │                            CloudProviderCatalog — the JVM-tested chat core used
 │                            by the app's ChatViewModel.
 │
+├── PC-hosted models (2026-11-11b) — Chat against a model server on the owner's
+│                            own PC (Ollama, or any OpenAI-compatible server)
+│                            over a LAN or VPN address. No new module:
+│                            core-llm-factory `ai.droidcommand.llm.pchost`
+│                            (PcHostAddress, PcHostClient probe/model list,
+│                            PcHostErrors, PcHostSettingsStore) +
+│                            ChatSession.sendPcHost, chatting through the
+│                            existing OpenAiLlmProvider for both kinds.
+│                            core-remote gained RequestCancellation (Stop
+│                            closes the connection). :app: Settings →
+│                            PC-hosted models screen, Chat route/header.
+│                            JVM-tested against a controlled server and run
+│                            against a real llama.cpp llama-server on a host;
+│                            NOT run against a real Ollama, NOT run on a
+│                            device. See docs/PC_HOSTED_MODELS.md.
+│
 ├── core-llm-google          GeminiLlmProvider (2026-10-07, Phase 1) — Gemini
 │                            generateContent / streamGenerateContent?alt=sse,
 │                            its own JSON shape (contents/parts,

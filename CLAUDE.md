@@ -122,6 +122,11 @@ re-verifying something.
   **Phase 2 (Core assistant) needs explicit owner go-ahead** before
   implementation starts.
 
+- **`docs/PC_HOSTED_MODELS.md`** (2026-11-11b) — Chat against a model server on the owner's PC (Ollama or an
+  OpenAI-compatible server) over LAN/VPN: `core-llm-factory`'s `ai.droidcommand.llm.pchost` package,
+  `ChatSession.sendPcHost`, Settings → PC-hosted models. It is a different workflow from importing a `.gguf` onto the
+  phone; read the doc's first table before touching either. Not run against a real Ollama, not run on a device.
+
 ## What's already been verified (don't re-derive)
 
 - This is a 25-module pure-Kotlin/JVM Gradle project (confirmed directly

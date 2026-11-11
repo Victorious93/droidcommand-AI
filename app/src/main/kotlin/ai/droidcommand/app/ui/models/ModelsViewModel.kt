@@ -7,6 +7,7 @@ import ai.droidcommand.app.localmodels.LocalModelRuntime
 import ai.droidcommand.app.localmodels.download.EnqueueResult
 import ai.droidcommand.app.localmodels.download.ModelDownloadScheduler
 import ai.droidcommand.app.localmodels.download.ModelDownloadState
+import ai.droidcommand.app.ui.pchost.PcHostChoice
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.llm.local.ChatModelCatalog
 import ai.droidcommand.llm.local.ChatModelCatalogEntry
@@ -228,7 +229,7 @@ class ModelsViewModel @Inject constructor(
     }
 
     fun select(id: String) {
-        prefs.edit { putString(KEY_LOCAL_MODEL, id) }
+        selectForChat(id)
         mutableState.update { it.copy(activeId = id, status = "Selected. Chat will run this model on the device.") }
     }
 
@@ -320,7 +321,7 @@ class ModelsViewModel @Inject constructor(
         val models = runtime.list()
         when (outcome) {
             is ImportOutcome.Imported -> {
-                prefs.edit { putString(KEY_LOCAL_MODEL, outcome.model.id) }
+                selectForChat(outcome.model.id)
                 val suffix = ramSuffix(outcome.model.metadata.sizeBytes, outcome.model.metadata.contextTokens) +
                     outcome.note?.let { " $it" }.orEmpty()
                 mutableState.update {
@@ -328,7 +329,7 @@ class ModelsViewModel @Inject constructor(
                 }
             }
             is ImportOutcome.Duplicate -> {
-                prefs.edit { putString(KEY_LOCAL_MODEL, outcome.id) }
+                selectForChat(outcome.id)
                 mutableState.update {
                     it.copy(importing = false, installed = models, activeId = outcome.id, status = "That file is already imported. Selected it.")
                 }
@@ -424,6 +425,12 @@ class ModelsViewModel @Inject constructor(
         allFiles && count == 0 -> "No .gguf files in Download, Download/models, Documents/models, or /sdcard/models."
         allFiles -> "Found $count .gguf file(s) in shared storage."
         else -> "Shared-storage scan needs all-files access (optional). The picker below works without it."
+    }
+
+    /** Choosing an on-device model ends a PC-hosted choice: Chat has exactly one place it sends a message. */
+    private fun selectForChat(id: String) = prefs.edit {
+        putString(KEY_LOCAL_MODEL, id)
+        remove(PcHostChoice.KEY_PC_HOST)
     }
 
     private companion object {
