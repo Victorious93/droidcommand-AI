@@ -79,4 +79,64 @@ class LlamaCppBackendInstrumentedTest {
         }
         backend.unload() // a second unload must be a harmless no-op
     }
+
+    /**
+     * A prompt of more than 512 tokens (one llama.cpp batch). Before 2026-11-11 the shim handed the whole prompt to
+     * `llama_decode` at once and llama.cpp aborted the process; this is the on-device proof that it no longer does.
+     * Verified on a Linux host only (scripts/host-chat-flow.sh). Same model argument as the test above.
+     */
+    @Test
+    fun realModelAnswersAPromptLongerThanOneBatch() {
+        val path = InstrumentationRegistry.getArguments().getString("dcaTestModel")
+        assumeTrue("pass -Pandroid.testInstrumentationRunnerArguments.dcaTestModel=<gguf path> to run this", path != null)
+        assumeTrue("model file not found on device: $path", File(path!!).isFile)
+
+        val backend = LlamaCppBackend(BackendKind.CPU)
+        backend.load(path, 2048)
+        try {
+            val long = "Summarise this note. " + "The quick brown fox jumps over the lazy dog. ".repeat(80)
+            val out = StringBuilder()
+            backend.generate(GenerationRequest(null, listOf(Message(Role.USER, long)), 8, 0.0)) {
+                out.append(it)
+                true
+            }
+            assertTrue("model produced no text for a long prompt", out.isNotBlank())
+        } finally {
+            backend.unload()
+        }
+    }
+
+    /** A stop requested from another thread ends a generation that would otherwise run to its token limit. */
+    @Test
+    fun stopRequestEndsARunningGeneration() {
+        val path = InstrumentationRegistry.getArguments().getString("dcaTestModel")
+        assumeTrue("pass -Pandroid.testInstrumentationRunnerArguments.dcaTestModel=<gguf path> to run this", path != null)
+        assumeTrue("model file not found on device: $path", File(path!!).isFile)
+
+        val backend = LlamaCppBackend(BackendKind.CPU)
+        backend.load(path, 2048)
+        try {
+            var pieces = 0
+            val stopper = Thread {
+                Thread.sleep(1500)
+                backend.requestStop()
+            }
+            stopper.start()
+            backend.generate(GenerationRequest(null, listOf(Message(Role.USER, "Count from 1 to 5000, one number per line.")), 1024, 0.0)) {
+                pieces++
+                true
+            }
+            stopper.join()
+            assertTrue("generation ran to its limit instead of stopping (pieces=$pieces)", pieces < 1024)
+            // The context is still usable afterwards.
+            val out = StringBuilder()
+            backend.generate(GenerationRequest(null, listOf(Message(Role.USER, "Say hello.")), 8, 0.0)) {
+                out.append(it)
+                true
+            }
+            assertTrue("no text after a stop", out.isNotBlank())
+        } finally {
+            backend.unload()
+        }
+    }
 }

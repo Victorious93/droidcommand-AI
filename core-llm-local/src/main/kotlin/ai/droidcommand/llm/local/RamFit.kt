@@ -32,11 +32,15 @@ object RamFit {
     internal const val KV_BYTES_PER_TOKEN = 512L
     private const val MEGABYTE = 1024L * 1024L
 
-    /** Bytes the process is likely to need once the model is loaded at [contextTokens]. */
-    fun estimateBytes(fileBytes: Long, contextTokens: Int): Long {
+    /**
+     * Bytes the process is likely to need once the model is loaded at [contextTokens]. [kvBytesPerToken] is the
+     * model's real cache cost when its GGUF states its shape ([GgufMetadata.kvBytesPerToken]); without it only the
+     * [KV_BYTES_PER_TOKEN] floor is counted, which is far too low for a large window on a large model.
+     */
+    fun estimateBytes(fileBytes: Long, contextTokens: Int, kvBytesPerToken: Long? = null): Long {
         val file = fileBytes.coerceAtLeast(0L)
         val scratch = file / 20L // 5 %
-        val kv = contextTokens.coerceAtLeast(0).toLong() * KV_BYTES_PER_TOKEN
+        val kv = contextTokens.coerceAtLeast(0).toLong() * maxOf(KV_BYTES_PER_TOKEN, kvBytesPerToken ?: 0L)
         return file + maxOf(RUNTIME_FLOOR_BYTES, scratch) + kv
     }
 
@@ -45,8 +49,9 @@ object RamFit {
         contextTokens: Int,
         totalRamBytes: Long,
         availableRamBytes: Long,
+        kvBytesPerToken: Long? = null,
     ): RamFitAssessment {
-        val estimated = estimateBytes(fileBytes, contextTokens)
+        val estimated = estimateBytes(fileBytes, contextTokens, kvBytesPerToken)
         val total = totalRamBytes.coerceAtLeast(0L)
         val available = availableRamBytes.coerceAtLeast(0L)
         val mb = { n: Long -> (n + MEGABYTE - 1) / MEGABYTE }

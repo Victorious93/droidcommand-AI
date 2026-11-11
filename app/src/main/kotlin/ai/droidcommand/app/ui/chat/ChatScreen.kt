@@ -367,6 +367,9 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
                 DroidSecondaryButton(onClick = viewModel::askDeleteLocalModel, enabled = !state.sending) { Text("Delete this model file") }
             }
             state.localStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            if (state.localImporting) {
+                DroidSecondaryButton(onClick = viewModel::cancelLocalImport) { Text("Cancel import") }
+            }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Switch(checked = state.memoryEnabled, onCheckedChange = viewModel::setMemoryEnabled)
                 Text("Memory (applies next time you open Chat)", style = MaterialTheme.typography.bodySmall)
