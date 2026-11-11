@@ -22,6 +22,14 @@ interface InferenceBackend {
     /** Streams generated text to [onToken]; stops early when [onToken] returns `false`. */
     fun generate(request: GenerationRequest, onToken: (String) -> Boolean)
 
+    /**
+     * Asks a [generate] that is running on another thread to return as soon as it can, including while it is still
+     * reading the prompt (before the first token, where [generate]'s `onToken` cannot be consulted). Safe to call
+     * from any thread at any time; a call with nothing running does nothing. The default does nothing, which leaves
+     * stopping to `onToken` returning `false`.
+     */
+    fun requestStop() {}
+
     fun unload()
 }
 

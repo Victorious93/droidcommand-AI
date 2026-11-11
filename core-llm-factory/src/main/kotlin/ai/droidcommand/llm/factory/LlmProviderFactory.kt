@@ -19,6 +19,7 @@ import ai.droidcommand.llm.groq.GroqLlmProvider
 import ai.droidcommand.llm.local.DeviceMemory
 import ai.droidcommand.llm.local.InferenceBackend
 import ai.droidcommand.llm.local.LocalLlmProvider
+import ai.droidcommand.llm.local.LocalProviderPool
 import ai.droidcommand.llm.local.ModelRepository
 import ai.droidcommand.llm.openai.OpenAiLlmProvider
 import ai.droidcommand.remote.HttpTransport
@@ -50,6 +51,11 @@ class LocalProviderNotConfiguredException(message: String) : IllegalStateExcepti
 class LocalProviderResources(
     val repository: ModelRepository,
     val memory: DeviceMemory? = null,
+    /**
+     * When set, `ChatSession` takes its on-device providers from here instead of creating its own, so every chat in
+     * the process shares the one loaded copy of a model. Build it from the same [repository] and [backendFactory].
+     */
+    val pool: LocalProviderPool? = null,
     val backendFactory: () -> InferenceBackend,
 )
 

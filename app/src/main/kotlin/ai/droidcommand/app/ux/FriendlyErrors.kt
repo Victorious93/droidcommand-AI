@@ -76,8 +76,11 @@ object FriendlyErrors {
             lower.contains("network") && (lower.contains("fail") || lower.contains("error") || lower.contains("unreachable"))
 
     private fun looksLikeAuth(lower: String) =
-        lower.contains("unauthorized") || lower.contains("401") || lower.contains("invalid api key") ||
+        lower.contains("unauthorized") || HTTP_401.containsMatchIn(lower) || lower.contains("invalid api key") ||
             lower.contains("authentication")
+
+    // "401" as a status code, not as part of a size or count ("1401 MB", "401 of 2000 MB", "4010 tokens").
+    private val HTTP_401 = Regex("""(?<![\d.,])401(?![\d.,])(?! ?(mb|gb|kb|bytes|tokens|of ))""")
 
     private fun looksLikeNotInstalled(lower: String) =
         lower.contains("not installed") || lower.contains("not visible")

@@ -570,6 +570,13 @@ mid-conversation switch works via the existing `AiProviderSelector`;
 (loads a tiny test model, one inference call, non-empty output); every
 downloaded model SHA-256-checked before load.
 
+**Update 2026-11-11 (read the audit addendum of that date before trusting the Phase 2 status line above):** local
+inference **is** wired into `:app` (Models → Chat, `LocalModelRuntime`), `:app` is minSdk 28, and the JNI shim was
+changed (prompt decoded in `n_batch` pieces — a prompt over 512 tokens aborted the process —, stop, trained-context
+clamp, load-error detail). The app's real import → chat chain was run on a Linux host against the real llama.cpp
+(`core-llm-local-android/scripts/host-chat-flow.sh`); it has still never run on a device. Device steps:
+`docs/ON_DEVICE_GGUF_CHECKLIST.md`.
+
 ---
 
 ### Phase 3 — Prompt Templates + Skill Builder

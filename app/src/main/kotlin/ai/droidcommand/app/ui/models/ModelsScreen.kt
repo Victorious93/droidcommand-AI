@@ -89,6 +89,11 @@ fun ModelsScreen(viewModel: ModelsViewModel = hiltViewModel()) {
                 ) {
                     Text(if (state.importing) "Copying…" else "Pick a .gguf from storage")
                 }
+                if (state.importing) {
+                    DroidSecondaryButton(onClick = viewModel::cancelImport, modifier = Modifier.testTag("models_cancel_import")) {
+                        Text("Cancel import")
+                    }
+                }
                 Text(
                     "Opens the system file picker (any type; only .gguf files are kept). The app takes a persistable read grant and copies the file into its own storage, or opens it from shared storage when a copy will not fit.",
                     style = MaterialTheme.typography.bodySmall,

@@ -298,6 +298,17 @@ DroidCommand AI
 │                            (scripts/host-smoke-test.sh). The VULKAN path is COMPILED
 │                            ONLY: no GPU, device or emulator has ever run it. No
 │                            OpenCL (deferred), no armeabi-v7a, not wired into :app.
+│                            2026-11-11: the "not wired into :app" above is stale (the
+│                            app's LocalModelRuntime builds LlamaCppBackend). The shim
+│                            now decodes the prompt in n_batch pieces (a prompt over 512
+│                            tokens used to abort the process), has requestStop (atomic
+│                            flag + llama.cpp abort callback, so Stop works before the
+│                            first token), clamps n_ctx to the trained window, and
+│                            reports llama.cpp's own error lines on a failed load.
+│                            scripts/host-chat-flow.sh drives the app's real
+│                            LocalModelRuntime -> ChatSession -> LocalLlmProvider ->
+│                            JNI -> llama.cpp chain on a Linux host (RUN, 14 checks;
+│                            random-weight GGUF). Still never run on Android.
 │                            Phase 5 (2026-10-09l, review fixes 2026-10-09n):
 │                            LlamaCppEmbeddingBackend (core-llm-local's
 │                            EmbeddingBackend) — a second, separate native context
@@ -342,6 +353,12 @@ DroidCommand AI
 │                            .part file via the ModelDownloader seam, moved into place
 │                            only after size + SHA-256 match; never throws) with
 │                            HttpsModelDownloader, and EmbeddingModelCatalog (pinned
+│                            2026-11-11: GgufMetadataReader/GgufCompatibility (pure-Kotlin
+│                            read of a file's own key/values: trained context, shape,
+│                            split/adapter/mmproj/embedding detection); LocalLlmProvider
+│                            loads at min(registered, trained) context, uses the model's
+│                            real KV-cache cost in RamFit, is stoppable, and explains a
+│                            failed load; LocalProviderPool (one loaded model per process).
 │                            nomic-embed-text-v1.5 Q4_K_M, ~84 MB, Apache-2.0). JVM-tested
 │                            with a fake downloader; the real Hub download was run once
 │                            (DCA_NETWORK_TESTS=1). :app's DocumentRuntime/Chat screen use it
@@ -1637,6 +1654,7 @@ physical device.
 | `ContextFit` (`core-llm-local`) | IMPLEMENTED — JVM-tested, not run against a real model | `LocalLlmProvider` drops the oldest turns to fit the model window, caps the reply at half the window, and refuses a message that cannot fit, before loading the model. Estimate errs high; the native check remains the backstop. |
 | `LocalModelImporter.discardAbandonedImports` | IMPLEMENTED — JVM-tested | Deletes `import-*.part` leftovers from a killed import on the first registry load. |
 | `GgufHeader`, `ModelArtifactIntegrity`, `ModelDownloadPolicy`, `InstallDisposition` (`core-llm-local`) | IMPLEMENTED — JVM-tested (`GgufHeaderTest`, `ModelArtifactIntegrityTest`, `ModelRepositoryGgufTest`, `ModelDownloadPolicyTest`, `InstallDispositionTest`) | A model file is usable only if it exists, has the exact published size, a valid GGUF v2/v3 header and the published SHA-256, checked cheapest first (a non-GGUF or wrong-sized file is rejected without hashing). `ModelRepository(requireGguf = true)` applies it in `verify` and `install`; `ModelCheck.Rejected` is the new non-digest rejection. Design adapted from OpenDroid's `ModelArtifactIntegrity` (Apache-2.0). |
+| On-device chat dependability: stop, long prompts, compatibility pre-checks, offline rules (`core-llm-local`, `core-llm-local-android`, `core-llm-factory`, `:app`) | IMPLEMENTED — JVM-tested with FAKE backends; RUN on a Linux host with the real JNI shim and llama.cpp (`scripts/host-chat-flow.sh`, random-weight GGUF); NOT RUN ON A DEVICE | Added 2026-11-11. Native: prompt decoded in `n_batch` pieces (was a process abort over 512 tokens), `requestStop` via atomic flag + abort callback, `n_ctx` clamped to the trained window, llama.cpp error lines in load failures. `GgufMetadataReader`/`GgufCompatibility`: split shards, LoRA adapters, mmproj, embedding models and tokenizer-less files are refused with what to do instead. `LocalLlmProvider.stream(request, cancelled, …)` + `requestStop()`; `LocalProviderPool` shares one loaded model per process. `ChatSession.sendLocal`: `cancelled` (a stopped reply is not saved), never runs web search, never offers tools, `requestStopLocal()`. `:app`: `ChatRoute` (a selected on-device model whose file is gone is never answered by a cloud provider), Chat re-reads the Models selection when shown, cancellable import with progress, interrupted/short copies refused, storage and ABI-aware messages (`NativeLibraryAdvice`). Device steps: `docs/ON_DEVICE_GGUF_CHECKLIST.md`. |
 | `ChatModelCatalog` (`core-llm-local`) | IMPLEMENTED (JVM-tested) — downloads never run on a device | Four Apache-2.0 GGUF files pinned to Hub LFS size + SHA-256 at a 40-hex commit (SmolLM2 360M Q8_0, Qwen2.5 0.5B Q4_K_M, TinyLlama 1.1B Q4_K_M, SmolLM2 1.7B Q4_K_M; Hub tree checked 2026-10-30). `ModelDownloadPolicy` still refuses an incomplete entry. Live Hub search (`HuggingFaceGgufClient`) lists public, non-gated, free-license GGUF repos; no API key required; optional token in the secrets vault. |
 | `ModelDownloadWorker`, `ModelDownloadScheduler`, `ModelDownloadState`, `LocalModelRuntime.installDownloadable` (`:app`) | ON DISK — compiled, never run on a device | WorkManager `CoroutineWorker` (data-sync foreground service, unmetered + storage-not-low constraints by default, exponential backoff, `.part` resume via `HttpsModelDownloader`) that installs a catalog model through `ModelRepository.install`. `installDownloadable` and `ModelDownloadState.from` are JVM-tested; WorkManager scheduling, the foreground service, the notification and resume-after-process-death are UNVERIFIED. **Updated 2026-10-30:** `ModelsScreen` / `ModelsViewModel` call `ModelDownloadScheduler.enqueue(ModelMetadata)` for curated entries and Hub search hits. Adapted from OpenDroid's `ModelDownloadWorker` (Apache-2.0). |
 | Sensitive private-clip copy | ON DISK — compiled, no unit test | `EXTRA_IS_SENSITIVE` on clips copied from the private list (Android 13+ hides the preview). Does not stop another foreground app reading the clipboard. |
