@@ -62,7 +62,8 @@ fun ModelsScreen(viewModel: ModelsViewModel = hiltViewModel()) {
     ) {
         ScreenTitleWithHelp("Models", ScreenHelpCatalog.MODELS)
         Text(
-            "Chat uses the model you pick here, on this phone. No paid download, and no Hugging Face token is required.",
+            "Chat uses the model you pick here, on this phone: the file is copied onto the phone and the phone writes the replies. " +
+                "No paid download, and no Hugging Face token is required. To use a model that stays on your PC instead, open Settings, PC-hosted models.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

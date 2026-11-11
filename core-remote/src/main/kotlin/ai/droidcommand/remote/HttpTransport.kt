@@ -7,6 +7,8 @@ data class HttpRequestSpec(
     val body: String? = null,
     val connectTimeoutMillis: Long = 10_000,
     val requestTimeoutMillis: Long = 30_000,
+    /** When set, [RequestCancellation.cancel] from another thread aborts this request. See [RequestCancellation]. */
+    val cancellation: RequestCancellation? = null,
 )
 
 data class HttpResponseSpec(

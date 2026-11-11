@@ -60,6 +60,12 @@ class OpenAiLlmProvider(
     transport: HttpTransport,
     private val retryPolicy: RetryPolicy = RetryPolicy(),
     requireHttps: Boolean = true,
+    /**
+     * When true, a stream that closes with neither a `finish_reason` nor `data: [DONE]` is reported as
+     * [LlmError.Network] instead of being returned as a complete reply. Off by default, so existing hosted
+     * providers behave as before; a self-hosted server that can be switched off mid-reply turns it on.
+     */
+    private val requireStreamEnd: Boolean = false,
 ) : StreamingLlmProvider {
     private val remoteClient = RemoteClient(
         RemoteEndpoint(config.endpoint ?: DEFAULT_BASE_URL, requireHttps = requireHttps),
@@ -181,6 +187,7 @@ class OpenAiLlmProvider(
         private val toolArguments = mutableMapOf<Int, StringBuilder>()
         private var sawChoice = false
         private var done = false
+        private var finished = false
         private var error: LlmError? = null
 
         fun accept(data: String) {
@@ -199,7 +206,9 @@ class OpenAiLlmProvider(
                 error = LlmError.ModelUnavailable("Stream error ${it.type ?: "unknown"}: ${it.message ?: ""}")
                 return
             }
-            val delta = chunk.choices.firstOrNull()?.also { sawChoice = true }?.delta ?: return
+            val choice = chunk.choices.firstOrNull()?.also { sawChoice = true } ?: return
+            if (choice.finishReason != null) finished = true
+            val delta = choice.delta ?: return
             delta.content?.takeIf { it.isNotEmpty() }?.let {
                 text.append(it)
                 onTextDelta(it)
@@ -212,6 +221,9 @@ class OpenAiLlmProvider(
 
         fun result(): LlmResponse {
             error?.let { return LlmResponse.Error(it) }
+            if (requireStreamEnd && !done && !finished) {
+                return LlmResponse.Error(LlmError.Network(STREAM_ENDED_EARLY))
+            }
             toolNames.entries.firstOrNull()?.let { (index, name) ->
                 val raw = toolArguments[index]?.toString().orEmpty().ifBlank { "{}" }
                 val arguments = try {
@@ -263,6 +275,9 @@ class OpenAiLlmProvider(
 
     companion object {
         const val DEFAULT_BASE_URL = "https://api.openai.com"
+
+        /** [LlmError.Network] message for a stream cut off before its end marker (see `requireStreamEnd`). */
+        const val STREAM_ENDED_EARLY = "The response stream ended before the reply was complete"
     }
 }
 
