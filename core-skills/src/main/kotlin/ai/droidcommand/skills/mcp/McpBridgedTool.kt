@@ -6,6 +6,7 @@ import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolSpec
 import ai.droidcommand.security.ApprovalPrompt
+import java.security.MessageDigest
 
 /**
  * One tool from an opt-in MCP server, as an ordinary DroidCommand [Tool].
@@ -33,11 +34,15 @@ class McpBridgedTool(
     val info: McpToolInfo,
     private val source: McpToolSource,
     private val approval: ApprovalPrompt,
+    name: String = toolName(server.id, info.name),
 ) : Tool {
     val kind: McpToolKind = McpToolKind.of(info)
 
+    /** Which server entry and which exact remote tool this is. A saved bot selection is tied to this, not to the name. */
+    val binding: McpToolBinding = McpToolBinding(server.instanceId, info.name)
+
     override val spec: ToolSpec = ToolSpec(
-        name = toolName(server.id, info.name),
+        name = name,
         description = describe(server, info, kind),
         securityLevel = SecurityLevel.SENSITIVE,
         requiresConfirmation = true,
@@ -100,7 +105,28 @@ class McpBridgedTool(
             return (PREFIX + serverId + "_" + safe).take(MAX_NAME)
         }
 
+        /**
+         * A name that cannot be mixed up: the usual name cut shorter, plus a short code made from the server entry
+         * and the exact remote name. Used when two remote names would clean up to the same [toolName], or when the
+         * usual name already stood for another tool. It does not depend on the order the server lists its tools in.
+         */
+        fun longName(server: McpServerConfig, remoteName: String): String {
+            val digest = MessageDigest.getInstance("SHA-256").digest((server.instanceId + "\u0000" + remoteName).toByteArray(Charsets.UTF_8))
+            val code = digest.take(CODE_BYTES).joinToString("") { "%02x".format(it) }
+            return toolName(server.id, remoteName).take(MAX_NAME - code.length - 1) + "_" + code
+        }
+
+        private const val CODE_BYTES = 4
+
         fun isMcpTool(name: String): Boolean = name.startsWith(PREFIX)
+
+        /** The server id inside an MCP tool name (`mcp_<id>_…`), or null when [name] is not shaped like one. */
+        fun serverIdOf(name: String): String? {
+            if (!isMcpTool(name)) return null
+            val rest = name.removePrefix(PREFIX)
+            val id = rest.substringBefore('_', "")
+            return id.takeIf { McpServerConfig.ID_PATTERN.matches(it) }
+        }
 
         fun confirmReason(server: McpServerConfig, info: McpToolInfo, kind: McpToolKind): String = when (kind) {
             McpToolKind.DESTRUCTIVE ->
