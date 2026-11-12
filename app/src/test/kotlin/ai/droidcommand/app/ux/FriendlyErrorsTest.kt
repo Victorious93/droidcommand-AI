@@ -70,4 +70,20 @@ class FriendlyErrorsTest {
         )
         messages.forEach { assertEquals(it, FriendlyErrors.forUser(it)) }
     }
+
+    @Test
+    fun `the note about tool actions that already ran survives any rewording`() {
+        val note = "1 tool action had already run in this turn (note_write) and was not undone. " +
+            "Nothing is repeated automatically; sending the message again may run it again."
+        // The same expression the chat session publishes, so the two cannot drift.
+        assertEquals(note, ai.droidcommand.llm.factory.ChatSession.TOOLS_RAN_NOTE.find("Stopped. $note")?.value)
+
+        val network = FriendlyErrors.forUser("Request failed: connection reset $note")
+        assertTrue(network.endsWith(note), network)
+        assertEquals(FriendlyErrors.forUser("Request failed: connection reset") + " " + note, network)
+
+        val pc = FriendlyErrors.forUser("PC-hosted model: the server reported an error (HTTP 500). $note")
+        assertEquals("PC-hosted model: the server reported an error (HTTP 500). $note", pc)
+        assertEquals("Stopped. $note", FriendlyErrors.forUser("Stopped. $note"))
+    }
 }

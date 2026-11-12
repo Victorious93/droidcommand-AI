@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
 import java.net.InetAddress
@@ -57,6 +58,68 @@ class PcHostClient(
         } ?: return PcHostProbe.Failed(PcHostProblem.NOT_COMPATIBLE, PcHostErrors.notCompatible(kind, address))
         val version = if (kind == PcHostKind.OLLAMA) ollamaVersion(client) else null
         return PcHostProbe.Reachable(version, models)
+    }
+
+    /**
+     * Asks the server whether [model] can call tools. Metadata only: no chat request is made and nothing is generated.
+     *
+     * Ollama: `POST /api/show` lists the model's `capabilities`; `tools` is one of them. An OpenAI-compatible server:
+     * llama.cpp's `GET /props` reports `chat_template_caps` (`supports_tools`, `supports_tool_calls`) for the model it
+     * has loaded. The OpenAI API itself has no such field, so any other server, and any server that does not answer
+     * these, is [PcToolSupport.UNKNOWN] with a sentence saying so. An unreachable server is also UNKNOWN: this never
+     * turns "could not ask" into "no".
+     */
+    fun toolSupport(kind: PcHostKind, address: PcHostAddress, model: String, key: String?): PcHostToolCheck {
+        val refused = if (resolve == null) address.cleartextProblem() else address.cleartextProblem(resolve)
+        if (refused != null) return PcHostToolCheck(PcToolSupport.UNKNOWN, PcHostErrors.cleartextRefused(refused))
+        val token = key?.takeIf { it.isNotBlank() }
+        val client = RemoteClient(RemoteEndpoint(address.base, requireHttps = false), transport, authToken = { token })
+        return when (kind) {
+            PcHostKind.OLLAMA -> ollamaToolSupport(client, model)
+            PcHostKind.OPENAI_COMPATIBLE -> propsToolSupport(client)
+        }
+    }
+
+    private fun ollamaToolSupport(client: RemoteClient, model: String): PcHostToolCheck {
+        val body = JsonObject(mapOf("model" to JsonPrimitive(model))).toString()
+        val result = client.send(
+            path = "api/show",
+            method = "POST",
+            headers = mapOf("content-type" to "application/json"),
+            body = body,
+            retryPolicy = RetryPolicy(maxAttempts = 1),
+            connectTimeoutMillis = connectTimeoutMillis,
+            requestTimeoutMillis = requestTimeoutMillis,
+        )
+        val root = (result as? RemoteResult.Success)?.let { runCatching { Json.parseToJsonElement(it.body) as? JsonObject }.getOrNull() }
+            ?: return PcHostToolCheck(PcToolSupport.UNKNOWN, "Ollama did not answer the question about \"$model\" (${failureWords(result)}).")
+        val capabilities = (root["capabilities"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+            ?: return PcHostToolCheck(PcToolSupport.UNKNOWN, "This Ollama version does not list what \"$model\" can do.")
+        return if ("tools" in capabilities) {
+            PcHostToolCheck(PcToolSupport.SUPPORTED, "Ollama lists the tools capability for \"$model\".")
+        } else {
+            PcHostToolCheck(PcToolSupport.UNSUPPORTED, "Ollama does not list the tools capability for \"$model\" (it lists: ${capabilities.joinToString(", ").ifBlank { "none" }}).")
+        }
+    }
+
+    private fun propsToolSupport(client: RemoteClient): PcHostToolCheck {
+        val unknown = "This server does not report whether its model can call tools (only llama.cpp's server does, through /props)."
+        val result = get(client, "props")
+        val root = (result as? RemoteResult.Success)?.let { runCatching { Json.parseToJsonElement(it.body) as? JsonObject }.getOrNull() }
+            ?: return PcHostToolCheck(PcToolSupport.UNKNOWN, unknown)
+        val caps = root["chat_template_caps"] as? JsonObject ?: return PcHostToolCheck(PcToolSupport.UNKNOWN, unknown)
+        val tools = (caps["supports_tools"] as? JsonPrimitive)?.booleanOrNull
+        val calls = (caps["supports_tool_calls"] as? JsonPrimitive)?.booleanOrNull
+        return when {
+            tools == null || calls == null -> PcHostToolCheck(PcToolSupport.UNKNOWN, unknown)
+            tools && calls -> PcHostToolCheck(PcToolSupport.SUPPORTED, "The server reports that its loaded model's chat template supports tools and tool calls.")
+            else -> PcHostToolCheck(PcToolSupport.UNSUPPORTED, "The server reports that its loaded model's chat template does not support tool calls.")
+        }
+    }
+
+    private fun failureWords(result: RemoteResult): String = when (result) {
+        is RemoteResult.Failure -> result.statusCode?.let { "HTTP $it" } ?: "no connection"
+        is RemoteResult.Success -> "unreadable answer"
     }
 
     private fun get(client: RemoteClient, path: String): RemoteResult = client.send(

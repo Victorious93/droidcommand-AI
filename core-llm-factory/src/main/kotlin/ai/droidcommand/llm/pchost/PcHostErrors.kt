@@ -80,7 +80,14 @@ object PcHostErrors {
      * Maps a failed chat turn. [sawText] is whether any reply text had already arrived, which is the difference
      * between "could not reach the PC" and "lost the PC part-way through".
      */
-    fun forChat(target: PcHostTarget, error: LlmError, sawText: Boolean, keySaved: Boolean, readTimeoutSeconds: Long): Pair<PcHostProblem, String> {
+    fun forChat(
+        target: PcHostTarget,
+        error: LlmError,
+        sawText: Boolean,
+        keySaved: Boolean,
+        readTimeoutSeconds: Long,
+        toolsOffered: Boolean = false,
+    ): Pair<PcHostProblem, String> {
         val address = target.address
         val status = STATUS.find(error.message)?.groupValues?.get(1)?.toIntOrNull()
         val server = serverText(error.message)
@@ -90,6 +97,11 @@ object PcHostErrors {
                 PcHostProblem.MODEL_MISSING to PREFIX +
                     "the server at ${address.base} does not have the model \"${target.model}\" (HTTP 404). " +
                     missingModelAdvice(target.kind, target.model) + detailSuffix(server) + NOTHING_SAVED
+            toolsOffered && status != null && status in TOOL_REFUSAL_STATUSES && server != null && TOOL_REFUSAL.containsMatchIn(server) ->
+                PcHostProblem.SERVER_ERROR to PREFIX +
+                    "the server at ${address.base} refused a request that offered the helper bot's tools (HTTP $status)." + detailSuffix(server) +
+                    " This model or server setup cannot call tools. No tool was run by that request. " +
+                    toolRefusalAdvice(target) + NOTHING_SAVED
             status == 502 && target.location == PcModelLocation.CLOUD_BACKED ->
                 PcHostProblem.SERVER_ERROR to PREFIX +
                     "your PC answered, but it could not reach the internet service behind the cloud-backed model \"${target.model}\" (HTTP 502). " +
@@ -122,6 +134,12 @@ object PcHostErrors {
         PcHostKind.OPENAI_COMPATIBLE -> "Load that model on the server, or pick another model in Settings, PC-hosted models. If the address has an extra path, check it."
     }
 
+    private fun toolRefusalAdvice(target: PcHostTarget): String = when {
+        target.toolsForced -> "Switch off \"Offer tools anyway\" in Settings, PC-hosted models, or pick a model that supports tools."
+        target.kind == PcHostKind.OLLAMA -> "Check tool support again in Settings, PC-hosted models, or pick a model that supports tools."
+        else -> "llama.cpp's server needs its --jinja option and a tool-capable chat template; check tool support again in Settings, PC-hosted models."
+    }
+
     private fun article(kind: PcHostKind) = if (kind == PcHostKind.OLLAMA) "an Ollama" else "an OpenAI-compatible"
 
     private fun isConnectTimeout(message: String) = message.contains("connect", ignoreCase = true)
@@ -143,6 +161,14 @@ object PcHostErrors {
         } ?: body
     }
 
+    private val TOOL_REFUSAL_STATUSES = setOf(400, 422, 500, 501)
+
+    /**
+     * The two refusals this is written against: Ollama's "<model> does not support tools" (HTTP 400, `server/images.go`
+     * `errCapabilities` + `errCapabilityTools`) and llama.cpp's "tools param requires --jinja flag"
+     * (`tools/server/server-common.cpp`). Any other error keeps the general wording, even if it mentions tools.
+     */
+    private val TOOL_REFUSAL = Regex("""does not support\b.*\btools?\b|tools? param requires|tools? (?:are|is) not supported""", RegexOption.IGNORE_CASE)
     private val STATUS = Regex("""(?:status|Server error) (\d{3})""")
     private val BODY = Regex("""(?:status|Server error) \d{3}: (.*)""", RegexOption.DOT_MATCHES_ALL)
 }

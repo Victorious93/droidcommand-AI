@@ -148,6 +148,12 @@ DroidCommand AI
 │                            core-remote gained RequestCancellation (Stop
 │                            closes the connection). :app: Settings →
 │                            PC-hosted models screen, Chat route/header.
+│                            2026-11-11c: a helper bot's tools are offered on
+│                            a PC turn when PcHostClient.toolSupport (Ollama
+│                            /api/show capabilities, llama.cpp /props
+│                            chat_template_caps) reported support, or the
+│                            owner switched them on; PcToolSupport is saved
+│                            per model. See docs/PC_HOSTED_MODELS.md.
 │                            JVM-tested against a controlled server and run
 │                            against a real llama.cpp llama-server on a host;
 │                            NOT run against a real Ollama, NOT run on a
@@ -354,7 +360,40 @@ DroidCommand AI
 │                            measured once with this model (2026-10-09r): good at
 │                            128-word chunks, weak at the 512-word default.
 │
+├── Tool-call protocol (2026-11-11c) — shared by every chat path. core-agent
+│                            Message carries toolCalls (ToolCallRequest: id,
+│                            name, argumentsJson) and toolCallId; core-llm
+│                            LlmResponse.ToolCall carries id, argumentsJson,
+│                            text and additionalCalls (every call of one
+│                            response). core-llm-openai sends assistant
+│                            `tool_calls` and `tool` messages with the exact
+│                            ids/arguments and joins streamed fragments per
+│                            index; core-llm-anthropic sends tool_use /
+│                            tool_result blocks; core-llm-google still
+│                            replays calls as text (named gap).
+│                            ChatSession.turn runs every call of a response
+│                            in order through the bot's ToolRunner, answers
+│                            each under its id, never retries, and names the
+│                            actions that already ran when a turn fails or is
+│                            stopped. Stored conversations are unchanged
+│                            (user text + final reply). Test server that
+│                            refuses malformed transcripts:
+│                            core-llm-openai testFixtures StrictChatServer.
+│                            ObjectiveEngine (Pilot/Forge) still appends
+│                            id-less TOOL messages, sent as `user` as before.
+│
 ├── core-llm-local           LocalLlmProvider (2026-10-07, Phase 2, JVM slice only) —
+│                            2026-11-11c: on-device tool calling for one
+│                            combination (LocalToolProtocol): a backend with
+│                            grammar support and a model whose GGUF chat
+│                            template defines <tool_call>. The reply is held
+│                            to a GBNF grammar (text, or 1-4 calls to an
+│                            offered tool) and validated again in Kotlin
+│                            before anything runs. toolSupport() gives the
+│                            status and the reason shown when unsupported.
+│                            The JNI shim passes the grammar to llama.cpp's
+│                            grammar sampler (run on a host with random
+│                            weights; no trained model, no device).
 │                            ProviderType.LOCAL StreamingLlmProvider over an
 │                            InferenceBackend seam; ModelRepository with
 │                            SHA-256 verify-before-load; BackendSelector

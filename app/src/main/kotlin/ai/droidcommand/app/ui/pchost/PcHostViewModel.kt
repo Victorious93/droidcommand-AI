@@ -14,7 +14,10 @@ import ai.droidcommand.llm.pchost.PcHostModel
 import ai.droidcommand.llm.pchost.PcHostModels
 import ai.droidcommand.llm.pchost.PcHostProbe
 import ai.droidcommand.llm.pchost.PcHostSettingsStore
+import ai.droidcommand.llm.pchost.PcHostToolCheck
+import ai.droidcommand.llm.pchost.PcHostToolNotices
 import ai.droidcommand.llm.pchost.PcModelLocation
+import ai.droidcommand.llm.pchost.PcToolSupport
 import ai.droidcommand.remote.HttpTransport
 import android.content.Context
 import androidx.core.content.edit
@@ -50,6 +53,12 @@ data class PcHostCard(
     val modelLocation: String? = null,
     /** True while AI Chat sends its messages to this server. */
     val usedByChat: Boolean = false,
+    /** One line on whether a helper bot's tools are offered to [model]; null until a model is chosen. */
+    val toolStatus: String? = null,
+    /** What the last tool-support check rested on, in the server's terms; null when none ran since the screen opened. */
+    val toolDetail: String? = null,
+    val toolsForced: Boolean = false,
+    val checkingTools: Boolean = false,
 )
 
 /**
@@ -124,7 +133,54 @@ class PcHostViewModel @Inject constructor(
     private fun saveModel(kind: PcHostKind, model: String, location: PcModelLocation, upstream: String?) {
         viewModelScope.launch(Dispatchers.IO) {
             val saved = store.load(kind) ?: return@launch
-            store.save(kind, saved.copy(model = model, location = location, upstream = upstream))
+            // What was learned about tools, and the owner's override, belonged to the previous model.
+            val changed = saved.model != model
+            store.save(
+                kind,
+                saved.copy(
+                    model = model,
+                    location = location,
+                    upstream = upstream,
+                    toolSupport = if (changed) PcToolSupport.UNKNOWN else saved.toolSupport,
+                    toolsForced = if (changed) false else saved.toolsForced,
+                ),
+            )
+            if (changed) update(kind) { it.copy(toolDetail = null) }
+            reload(kind)
+            if (changed) askToolSupport(kind)
+        }
+    }
+
+    /**
+     * Asks the server whether the chosen model can call tools ([PcHostClient.toolSupport]: metadata only, nothing is
+     * generated) and saves the answer with the model. Listing a model is not evidence of this, so it is asked separately.
+     */
+    fun checkTools(kind: PcHostKind) {
+        viewModelScope.launch(Dispatchers.IO) { askToolSupport(kind) }
+    }
+
+    private fun askToolSupport(kind: PcHostKind) {
+        val saved = runCatching { store.load(kind) }.getOrNull() ?: return
+        val target = saved.target(kind) ?: return
+        update(kind) { it.copy(checkingTools = true) }
+        val key = runCatching { vault.getSecret(kind.secretId) }.getOrNull()
+        val check = runCatching { client.toolSupport(kind, target.address, target.model, key) }
+            .getOrElse { PcHostToolCheck(PcToolSupport.UNKNOWN, "The check could not run: ${it.message ?: it.javaClass.simpleName}") }
+        // Saved only if the same server and model are still the chosen ones.
+        val now = runCatching { store.load(kind) }.getOrNull()
+        if (now != null && now.address == saved.address && now.model == saved.model) {
+            store.save(kind, now.copy(toolSupport = check.support))
+            update(kind) { it.copy(toolDetail = check.detail) }
+        }
+        update(kind) { it.copy(checkingTools = false) }
+        reload(kind)
+    }
+
+    /** The owner's own switch for a server that cannot report tool support (or reports none): offer tools anyway. */
+    fun setToolsForced(kind: PcHostKind, forced: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val saved = store.load(kind) ?: return@launch
+            store.save(kind, saved.copy(toolsForced = forced))
             reload(kind)
         }
     }
@@ -184,6 +240,8 @@ class PcHostViewModel @Inject constructor(
                 model = saved?.model.orEmpty(),
                 modelLocation = saved?.takeIf { s -> s.model.isNotBlank() }?.let { s -> PcHostModels.locationLabel(s.location, s.upstream) },
                 usedByChat = active,
+                toolStatus = saved?.takeIf { s -> s.model.isNotBlank() }?.let { s -> PcHostToolNotices.status(s.toolSupport, s.toolsForced) },
+                toolsForced = saved?.toolsForced == true,
             )
         }
     }

@@ -9,6 +9,8 @@ import ai.droidcommand.llm.LlmRequest
 import ai.droidcommand.llm.LlmResponse
 import ai.droidcommand.remote.JdkHttpTransport
 import com.sun.net.httpserver.HttpServer
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.AfterTest
@@ -207,5 +209,58 @@ class AnthropicLlmProviderIntegrationTest {
         )
 
         assertTrue(capturedRequest.get().contains(""""messages":[{"role":"user","content":"exit code 0"}]"""))
+    }
+
+    @Test
+    fun `a tool exchange is sent as tool_use and tool_result blocks with the ids the API gave`() {
+        var captured = ""
+        val httpServer = startServer { body ->
+            captured = body
+            200 to """{"content":[{"type":"text","text":"done"}]}"""
+        }
+        val messages = listOf(
+            Message(Role.USER, "time and echo"),
+            Message(
+                Role.ASSISTANT,
+                "Checking.",
+                toolCalls = listOf(
+                    ai.droidcommand.agent.ToolCallRequest("toolu_1", "clock", """{"zone":"UTC"}"""),
+                    ai.droidcommand.agent.ToolCallRequest("toolu_2", "echo", "{}"),
+                ),
+            ),
+            Message(Role.TOOL, "12:00", toolCallId = "toolu_1"),
+            Message(Role.TOOL, "ERROR: nothing", toolCallId = "toolu_2"),
+        )
+        assertEquals(LlmResponse.Text("done"), providerFor(httpServer).complete(LlmRequest(systemPrompt = null, messages = messages)))
+
+        val sent = kotlinx.serialization.json.Json.parseToJsonElement(captured).jsonObject["messages"]!!.jsonArray
+        assertEquals(
+            kotlinx.serialization.json.Json.parseToJsonElement(
+                """[
+                  {"role":"user","content":"time and echo"},
+                  {"role":"assistant","content":[
+                    {"type":"text","text":"Checking."},
+                    {"type":"tool_use","id":"toolu_1","name":"clock","input":{"zone":"UTC"}},
+                    {"type":"tool_use","id":"toolu_2","name":"echo","input":{}}]},
+                  {"role":"user","content":[
+                    {"type":"tool_result","tool_use_id":"toolu_1","content":"12:00"},
+                    {"type":"tool_result","tool_use_id":"toolu_2","content":"ERROR: nothing"}]}
+                ]""",
+            ),
+            sent,
+        )
+    }
+
+    @Test
+    fun `every tool_use block of a response is returned with its id`() {
+        val httpServer = startServer {
+            200 to """{"content":[{"type":"text","text":"Two things."},{"type":"tool_use","id":"toolu_a","name":"clock","input":{"zone":"UTC"}},{"type":"tool_use","id":"toolu_b","name":"echo","input":{"n":2}}]}"""
+        }
+        val call = assertIs<LlmResponse.ToolCall>(
+            providerFor(httpServer).complete(LlmRequest(systemPrompt = null, messages = listOf(Message(Role.USER, "go")), tools = listOf(ToolSpec("clock", "d"), ToolSpec("echo", "d")))),
+        )
+        assertEquals(listOf("toolu_a", "toolu_b"), call.calls.map { it.id })
+        assertEquals(listOf("""{"zone":"UTC"}""", """{"n":2}"""), call.calls.map { it.argumentsJson })
+        assertEquals("Two things.", call.text)
     }
 }

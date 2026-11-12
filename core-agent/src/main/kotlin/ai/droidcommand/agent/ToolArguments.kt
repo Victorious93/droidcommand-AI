@@ -1,5 +1,7 @@
 package ai.droidcommand.agent
 
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -84,6 +86,30 @@ object ToolArgumentCodec {
         is ToolArgumentValue.Bool -> value.value.toString()
         is ToolArgumentValue.NestedJson -> value.json
     }
+
+    /**
+     * [text] as a JSON object, or null when it is not one. Stricter than `Json.parseToJsonElement`, which also
+     * accepts bare words as values (`{"a": hello}`): here every value that is not a quoted string must be a JSON
+     * number, `true`, `false` or `null`. Tool-call arguments written by a model go through this before anything
+     * is run from them.
+     */
+    fun parseStrictObject(text: String): JsonObject? {
+        val parsed = try {
+            Json.parseToJsonElement(text) as? JsonObject
+        } catch (_: SerializationException) {
+            null
+        } ?: return null
+        return parsed.takeIf(::isStrict)
+    }
+
+    private fun isStrict(element: JsonElement): Boolean = when (element) {
+        is JsonNull -> true
+        is JsonPrimitive -> element.isString || element.content == "true" || element.content == "false" || JSON_NUMBER.matches(element.content)
+        is JsonArray -> element.all(::isStrict)
+        is JsonObject -> element.values.all(::isStrict)
+    }
+
+    private val JSON_NUMBER = Regex("""-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?""")
 
     private fun primitive(value: JsonPrimitive): ToolArgumentValue = when {
         value.isString -> ToolArgumentValue.Text(value.content)

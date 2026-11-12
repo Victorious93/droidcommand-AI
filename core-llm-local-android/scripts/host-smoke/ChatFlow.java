@@ -47,7 +47,7 @@ public class ChatFlow {
         return new ChatSession(
             new InMemorySecretsVault(), new JsonFileConversationStore(conversations.toPath()), "default", null, NO_NETWORK,
             (spec, config) -> { throw new IllegalStateException("CLOUD PROVIDER BUILT"); },
-            null, null, null, null, runtime.getResources(), null, Set.of(), 600, null, "", 0, null);
+            null, null, null, null, runtime.getResources(), null, Set.of(), 600, null, "", 0, null, new ai.droidcommand.llm.pchost.PcHostTimeouts(8_000, 180_000));
     }
 
     static ImportOutcome importFile(LocalModelRuntime runtime, File file, Long expected) throws Exception {

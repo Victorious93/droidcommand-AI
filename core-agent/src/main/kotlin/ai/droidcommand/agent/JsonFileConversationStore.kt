@@ -1,5 +1,7 @@
 package ai.droidcommand.agent
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -14,7 +16,17 @@ class InvalidConversationId(id: String) : IllegalArgumentException(
 )
 
 @Serializable
-private data class MessageDto(val role: String, val content: String)
+private data class ToolCallDto(val id: String, val name: String, val arguments: String)
+
+/** The two tool fields are written only when set, so a conversation without tool calls is the same file as before. */
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
+private data class MessageDto(
+    val role: String,
+    val content: String,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) @SerialName("tool_calls") val toolCalls: List<ToolCallDto> = emptyList(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER) @SerialName("tool_call_id") val toolCallId: String? = null,
+)
 
 @Serializable
 private data class ConversationDto(
@@ -50,7 +62,9 @@ class JsonFileConversationStore(private val directory: Path) : ConversationStore
         val dto = ConversationDto(
             systemPrompt = context.systemPrompt,
             maxTokens = context.maxTokens,
-            messages = context.messages.map { MessageDto(it.role.name, it.content) },
+            messages = context.messages.map { m ->
+                MessageDto(m.role.name, m.content, m.toolCalls.map { ToolCallDto(it.id, it.name, it.argumentsJson) }, m.toolCallId)
+            },
         )
         val bytes = json.encodeToString(ConversationDto.serializer(), dto).toByteArray()
         Files.write(file, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)
@@ -71,7 +85,7 @@ class JsonFileConversationStore(private val directory: Path) : ConversationStore
             } catch (e: IllegalArgumentException) {
                 throw IOException("Conversation file for '$conversationId' has an unknown role '${message.role}'", e)
             }
-            context.append(role, message.content)
+            context.append(Message(role, message.content, message.toolCalls.map { ToolCallRequest(it.id, it.name, it.arguments) }, message.toolCallId))
         }
         return context
     }
