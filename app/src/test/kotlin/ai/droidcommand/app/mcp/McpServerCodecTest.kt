@@ -27,4 +27,17 @@ class McpServerCodecTest {
             McpServerCodec.decode("""[{"id":"BAD ID","url":"x"},{"id":"ok","url":"https://a/mcp"},{"nope":1}]""").map { it.id },
         )
     }
+
+    @Test
+    fun `a server keeps its own instance id and an older saved server reads as the old kind`() {
+        val added = McpServerConfig("notes", "Notes", "https://new.test/mcp", instanceId = McpServerConfig.newInstanceId())
+        assertEquals(listOf(added), McpServerCodec.decode(McpServerCodec.encode(listOf(added))))
+
+        val older = McpServerCodec.decode("""[{"id":"notes","label":"Notes","url":"https://old.test/mcp","enabled":true}]""").single()
+        assertEquals("pre-notes", older.instanceId)
+        assertEquals(older, McpServerCodec.decode(McpServerCodec.encode(listOf(older))).single())
+        assertTrue(added.instanceId != older.instanceId, "a server added now is never the old kind")
+
+        assertTrue(McpServerCodec.decode("""[{"id":"notes","url":"https://x.test/mcp","instance":"not ok!"}]""").isEmpty())
+    }
 }

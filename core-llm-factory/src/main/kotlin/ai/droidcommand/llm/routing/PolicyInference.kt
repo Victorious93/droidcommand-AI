@@ -92,8 +92,9 @@ class PolicyInference(
     }
 
     /**
-     * A planner for Plan and Pilot/Forge. A planner drives tools, so only a place that can call tools qualifies: an
-     * on-device model never does, and a PC model only when its server reports tool support.
+     * A planner for Plan (Forge). A planner drives tools on every step, so only a place the resolver marks as
+     * tool-calling qualifies: a PC model whose server reports tool support, or the cloud provider. An on-device model
+     * is not used for planning (a helper bot's tools in Chat can run on one; planning on one is untested).
      */
     fun planner(feature: String): RoutedPlanner =
         when (val routed = provider(RouteNeed(feature, required = setOf(ProviderCapability.TOOL_CALLING)))) {

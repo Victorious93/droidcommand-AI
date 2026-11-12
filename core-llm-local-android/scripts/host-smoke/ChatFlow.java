@@ -123,7 +123,7 @@ public class ChatFlow {
 
         // Prefer PC: a PC server is saved, and nothing is listening there. The real transport gets "connection refused".
         PcHostSettingsStore pcHosts = new InMemoryPcHostSettingsStore();
-        pcHosts.save(PcHostKind.OLLAMA, new PcHostEndpoint("http://127.0.0.1:9", "some-model", PcModelLocation.SERVER_LOCAL, null));
+        pcHosts.save(PcHostKind.OLLAMA, new PcHostEndpoint("http://127.0.0.1:9", "some-model", PcModelLocation.SERVER_LOCAL, null, ai.droidcommand.llm.pchost.PcToolSupport.UNKNOWN, false));
         ChatSession prefer = routedChat(runtime, new File(work, "routed-prefer"), new InferenceSettings(InferencePolicy.PC_THEN_DEVICE, false, id, PcHostKind.OLLAMA),
             pcHosts, new ai.droidcommand.remote.HttpUrlConnectionTransport());
         String r4 = routed(prefer, "Hello again", new AtomicBoolean(false), new AtomicInteger());

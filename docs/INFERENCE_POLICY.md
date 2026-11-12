@@ -31,7 +31,7 @@ file (Chat's own pick holds only one of the two at a time).
 |---|---|---|
 | Chat, helper-bot Chat, bot-maker "Run in Chat", voice and wake-word requests (all go through `ChatViewModel.send`) | Unchanged | `ChatSession.sendRouted`: the policy decides; the reply shows where it came from |
 | A slash command naming a cloud provider (`/claude …`) | Unchanged | Refused before a provider is built, unless cloud fallback is on |
-| Plan (Forge objectives) | Cloud provider picked in Chat | `PolicyInference.planner`: needs a tool-calling model, so an on-device model never qualifies and a PC model only when its server reports tool support. Otherwise refused with the reason |
+| Plan (Forge objectives) | Cloud provider picked in Chat | `PolicyInference.planner`: a PC model whose server reports tool support, or (with cloud fallback) the cloud provider. Not run on an on-device model. Otherwise refused with the reason |
 | Code assist / Companion assist pop-ups | Chat's last pick (cloud or on-device) | `PolicyInference.ask`: the policy decides |
 | "Remember this chat", auto-remember | Needs a cloud turn first | Extraction is sent where the policy says; never to a cloud provider unless cloud is allowed |
 | Web search toggle | Unchanged | Not run unless cloud is allowed (it sends the message to a search service); the reply says so |
@@ -87,8 +87,11 @@ A refusal lists every place the policy allows with the reason each could not ser
 
 ## Tools, fallback and repeats
 
-- A helper bot's tools are offered only to a place that can call them. On-device models cannot; a PC model can when
-  its server reports it; the reply says when they were not offered and what to do.
+- A helper bot's tools are offered only to a place that can call them: an on-device model whose chat template
+  declares tool calls (`LocalLlmProvider.toolSupport`), a PC model whose server reports tool support, or the cloud
+  provider. The reply says when they were not offered and why. The tool mechanics themselves (limits, the owner's
+  switch for servers that report nothing) are described in `docs/PC_HOSTED_MODELS.md` and
+  `docs/ON_DEVICE_GGUF_CHECKLIST.md`.
 - Calls run through the bot's allow-list (`ScopedToolRunner`), then `SecureToolExecutor` (policy, approval prompt,
   audit log), one at a time, in the order the model asked.
 - If the place that ran a tool then fails, the next allowed place is given the completed calls and results. An
@@ -119,5 +122,6 @@ core-llm-local-android/scripts/host-routed-flow.sh
   `ModelRouter` does not say which provider of a chain answered.
 - A server other than Ollama or llama.cpp cannot be used under the three local policies (it does not establish where
   the model runs). There is no "I vouch for this server" switch.
-- Cloud turns still use the flat tool form (one call per reply, no ids), as before.
+- Under a policy the owner's "offer tools anyway" switch for a PC server is not consulted: tools go to a PC model
+  only when the server reports support.
 - Token figures are estimates. A server with a smaller real window than it reports still returns its own error.

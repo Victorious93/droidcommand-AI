@@ -1,6 +1,7 @@
 # PC-hosted models (Ollama or an OpenAI-compatible server)
 
-Added 2026-11-11. Status and what was actually run: `docs/AUDIT_2026-09-05.md`, addendum "2026-11-11b".
+Added 2026-11-11. Status and what was actually run: `docs/AUDIT_2026-09-05.md`, addenda "2026-11-11b" (chat) and
+"2026-11-11c" (helper-bot tools).
 
 ## Two workflows — do not mix them up
 
@@ -24,6 +25,9 @@ has no field for this, so its models are shown as "Location not reported by this
 | Test connection / list models, OpenAI-compatible | `GET /v1/models` | OpenAI OpenAPI spec (`ListModelsResponse`) |
 | Chat, both kinds | `POST /v1/chat/completions` with `"stream": true`, read until `data: [DONE]` | Ollama `docs/api/openai-compatibility.mdx`; OpenAI spec |
 | Optional key | `Authorization: Bearer <key>` | Ollama `docs/api/authentication.mdx`; llama.cpp server README (`--api-key`) |
+| Check tool support, Ollama | `POST /api/show` `{"model": …}`, read `capabilities` | Ollama `docs/openapi.yaml` (`ShowResponse.capabilities`); `types/model/capability.go` (`tools`) |
+| Check tool support, OpenAI-compatible | `GET /props`, read `chat_template_caps` | llama.cpp `tools/server/README.md`; `common/jinja/caps.h` |
+| A helper bot's tools | `tools` on the chat request; calls come back as `tool_calls`, results go back as `tool` messages | OpenAI OpenAPI spec (`ChatCompletionMessageToolCall`, `ChatCompletionRequestToolMessage`); Ollama `docs/api/openai-compatibility.mdx` (Tools) |
 
 Ollama's chat goes through its OpenAI-compatible endpoint, so both kinds share the existing `OpenAiLlmProvider`.
 Consequence: the phone cannot set Ollama's context size per request (Ollama's own document says the OpenAI API has no
@@ -77,6 +81,41 @@ only to this server). On the phone: Settings → PC-hosted models → OpenAI-com
 
 LM Studio, vLLM and similar servers use the same two endpoints; their own setup was not checked for this document.
 
+## Helper-bot tools on a PC-hosted model
+
+A helper bot (Bot maker → Run) can use its allowed tools while Chat is on a PC-hosted model, when the model can call
+tools. Listing a model says nothing about that, so the app asks separately and shows the answer in Settings →
+PC-hosted models and in the Chat header:
+
+| Status shown | Meaning | Tools offered |
+|---|---|---|
+| Tools: supported (reported by the server) | Ollama lists the `tools` capability for the model, or llama.cpp's server reports `supports_tools` and `supports_tool_calls` for its loaded model | yes |
+| Tools: not supported by this model (reported by the server) | the server answered and said no | no |
+| Tools: not confirmed | not checked yet, the server was unreachable, or it is a server with no such report (LM Studio, vLLM, an old Ollama) | no |
+| Tools: offered because you switched them on | the "Offer tools anyway" switch, for a server that cannot report it | yes |
+
+The check runs when a model is picked and from the *Check tool support* button. It reads metadata only: no chat
+request is made and nothing is generated. What it learned belongs to that model; picking another model resets it and
+the switch.
+
+What happens in a turn:
+
+- Only the bot's allow-list is offered. Every call goes through the same path as on a cloud provider: the bot's
+  allow-list, then the security policy, the approval prompt for anything that is not read-only, and the audit log.
+- A call to a tool that was not offered is answered with an error and never reaches the approval prompt. A denied
+  approval is answered with an error too. In both cases the model is told and continues.
+- Several calls in one reply are run in order. Arguments that are not valid JSON reject the whole reply: nothing is run.
+- At most 4 rounds of calls per message, at most 8 calls per reply.
+- Stop is honoured between two actions. A request is never retried. If the turn fails or is stopped after an action
+  already ran, the message names the actions that ran and says that sending the message again may run them again.
+- If tools were switched on by hand and the server refuses them (Ollama: "does not support tools"; llama.cpp:
+  "tools param requires --jinja flag"), the reply says so, nothing is run, and the request is not silently repeated
+  without tools.
+
+PC setup for tools: with Ollama, use a model whose page lists tool support. With llama.cpp's server, tools need the
+Jinja template engine (on by default in the pinned version; `--jinja` on older ones) and a chat template that defines
+tool calls; `--chat-template-file` can supply one.
+
 ## Addresses the phone accepts
 
 - `https://` anything.
@@ -98,28 +137,13 @@ LM Studio, vLLM and similar servers use the same two endpoints; their own setup 
 
 In every case nothing is saved and the message returns to the input box, so it can be sent again.
 
-## Helper-bot tools on a PC model (2026-11-12)
-
-A helper bot's tools are offered to a PC model when the server reports that the model can call them: Ollama lists
-`tools` in `/api/show` `capabilities`; a llama.cpp server reports `chat_template_caps.supports_tools` in `/props`.
-The server is asked only when a bot with tools is running (plain chat sends exactly what it sent before).
-
-- Calls and results are sent in OpenAI's structured form: the assistant message carries every call with the server's
-  own id and its argument text exactly as streamed; each result is a `tool` message with the matching `tool_call_id`.
-  Several calls in one reply are run in order. A call with no id gets one made on the phone.
-- A call whose arguments are not a JSON object, or that names no tool, is not run; the model is told.
-- Every call goes through the bot's allow-list, then the normal approval dialog and audit log. Denied, refused and
-  revoked calls run nothing and the model is told.
-- Stop during a tool round: no further call is run, nothing is saved.
-- Not offered, with the reason in the reply: a model Ollama lists no `tools` for; a llama.cpp model whose chat
-  template has no tool support; any other OpenAI-compatible server (it does not report this).
-
-Policies ("My PC only", "Prefer PC, then this device", …) are in `docs/INFERENCE_POLICY.md`.
-
 ## Limits
 
 - Plan, the assist pop-ups and "Remember this chat" use the PC only under an inference policy
-  (`docs/INFERENCE_POLICY.md`); with "Use the model I pick" they behave as before.
+  (`docs/INFERENCE_POLICY.md`: "My PC only", "Prefer PC, then this device", …). With "Use the model I pick" they
+  behave as before and do not use the PC server.
+- Tool support cannot be confirmed for servers that do not report it; those need the owner's switch.
+- With llama.cpp's server the report describes the model the server has loaded, not the model name the phone sends.
 - No model download/pull from the phone, no server discovery on the network: you type the address.
 - Reasoning-only output (a model that returns no `content`) is shown as an empty reply.
 
@@ -132,4 +156,6 @@ PC_HOST_LIVE_URL=http://192.168.1.20:11434 PC_HOST_LIVE_KIND=ollama \
 
 Runs the app's probe and chat path (JVM, same transport class as the phone) against that server: list models, stream
 a reply, a missing model, stop mid-reply. `PC_HOST_LIVE_KIND=openai-compatible`, `PC_HOST_LIVE_MODEL`,
-`PC_HOST_LIVE_KEY` are optional.
+`PC_HOST_LIVE_KEY` are optional. One of its tests checks tools: it asks the server for tool support and, if the server
+reports it, sends a tool exchange (a call, its result, the follow-up) and a helper-bot turn. It is skipped when the
+server does not report tool support.

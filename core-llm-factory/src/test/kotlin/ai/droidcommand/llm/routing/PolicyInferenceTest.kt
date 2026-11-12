@@ -94,7 +94,7 @@ class PolicyInferenceTest {
         val refused = assertIs<RoutedPlanner.Refused>(world.inference.planner("Plan"))
 
         assertTrue(refused.message.contains("Plan was not sent anywhere"), refused.message)
-        assertTrue(refused.message.contains("needs a model that can call tools, and on-device models cannot"), refused.message)
+        assertTrue(refused.message.contains("Plan is not run on an on-device model"), refused.message)
         assertTrue(refused.message.contains("choose another policy"), refused.message)
         assertTrue(world.transport.urls.isEmpty())
         assertEquals(0, world.cloudBuilt)

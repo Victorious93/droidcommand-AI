@@ -31,6 +31,11 @@ data class GgufMetadata(
     val splitCount: Int?,
     val hasTokenizer: Boolean,
     val hasChatTemplate: Boolean,
+    /**
+     * Whether `tokenizer.chat_template` renders `<tool_call>` blocks for offered tools ([LocalToolProtocol]). Only
+     * this yes/no is kept, not the template. False when there is no template or it is too long to have been read.
+     */
+    val chatTemplateDeclaresToolCalls: Boolean = false,
 ) {
     /**
      * Bytes of key/value cache one context token costs, from the model's own shape: per layer one key and one value
@@ -98,6 +103,7 @@ object GgufMetadataReader {
         val numbers = HashMap<String, Long>()
         var tokenizer = false
         var template = false
+        var toolCalls = false
         try {
             repeat(header.metadataEntryCount.toInt()) {
                 val key = source.string(MAX_KEY_BYTES) ?: return GgufMetadataResult.Invalid("The GGUF metadata is damaged (a key is too long).")
@@ -107,7 +113,10 @@ object GgufMetadataReader {
                     key == "tokenizer.chat_template" -> template = true
                 }
                 when (type) {
-                    TYPE_STRING -> source.string(MAX_KEPT_STRING_BYTES)?.let { if (wanted(key)) strings[key] = it }
+                    TYPE_STRING -> source.string(MAX_KEPT_STRING_BYTES)?.let {
+                        if (wanted(key)) strings[key] = it
+                        if (key == "tokenizer.chat_template") toolCalls = LocalToolProtocol.templateDeclaresToolCalls(it)
+                    }
                     TYPE_ARRAY -> skipArray(source) ?: return GgufMetadataResult.Invalid("The GGUF metadata is damaged (unknown array type).")
                     else -> {
                         val value = scalar(source, type) ?: return GgufMetadataResult.Invalid("The GGUF metadata is damaged (unknown value type $type).")
@@ -137,6 +146,7 @@ object GgufMetadataReader {
                 splitCount = numbers["split.count"]?.takeIf { it in 0..Int.MAX_VALUE }?.toInt(),
                 hasTokenizer = tokenizer,
                 hasChatTemplate = template,
+                chatTemplateDeclaresToolCalls = toolCalls,
             ),
         )
     }

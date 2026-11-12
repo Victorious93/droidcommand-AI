@@ -190,7 +190,7 @@ class ChatSessionOnDeviceTest {
         chat.setToolAccess(runner, listOf(ToolSpec(name = "echo", description = "Repeats text")))
         val reply = assertIs<ChatResult.Reply>(chat.sendLocal("tiny", "hi"))
         assertEquals("local answer", reply.text)
-        assertEquals(ChatSession.LOCAL_TOOLS_NOTICE, reply.notice)
+        assertEquals(ai.droidcommand.llm.local.LocalToolProtocol.NO_GRAMMAR, reply.notice)
         assertEquals(0, runner.calls)
     }
 

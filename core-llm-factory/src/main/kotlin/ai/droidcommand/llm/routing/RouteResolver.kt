@@ -237,7 +237,7 @@ class RouteResolver(
 
     private fun explain(selectorReason: String?, need: RouteNeed, candidate: RouteCandidate): String = when {
         ProviderCapability.TOOL_CALLING in need.required && !candidate.toolCalling -> when (candidate) {
-            is RouteCandidate.Device -> "${need.feature} needs a model that can call tools, and on-device models cannot"
+            is RouteCandidate.Device -> "${need.feature} is not run on an on-device model (it depends on tool calls a planner can rely on)"
             is RouteCandidate.Pc -> "${need.feature} needs a model that can call tools, and ${candidate.facts.toolCallingDetail.ifBlank { "this model is not reported to" }}"
             is RouteCandidate.Cloud -> selectorReason.orEmpty()
         }

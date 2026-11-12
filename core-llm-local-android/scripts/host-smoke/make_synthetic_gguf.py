@@ -6,7 +6,9 @@ It is a real llama.cpp model in every respect the app's code path cares about (G
 template, a stated context length), so loading, prompt evaluation, token streaming, stopping and context limits run for
 real through llama.cpp. Its replies are meaningless: the weights are noise. It proves nothing about answer quality.
 
-Usage: make_synthetic_gguf.py <llama.cpp checkout> <out.gguf> [--context N] [--no-template] [--split-count N]
+Usage: make_synthetic_gguf.py <llama.cpp checkout> <out.gguf> [--context N] [--no-template] [--tool-template] [--split-count N]
+--tool-template stores llama.cpp's own copy of the Qwen 2.5 chat template (ChatML with <tool_call> blocks) instead of
+the plain ChatML one, so the file reads as a tool-capable model. The weights are still noise.
 Needs numpy and the checkout's own gguf-py (no network).
 """
 import argparse
@@ -18,6 +20,7 @@ parser.add_argument("llama_cpp")
 parser.add_argument("out")
 parser.add_argument("--context", type=int, default=2048)
 parser.add_argument("--no-template", action="store_true")
+parser.add_argument("--tool-template", action="store_true")
 parser.add_argument("--split-count", type=int, default=0)
 args = parser.parse_args()
 
@@ -60,7 +63,9 @@ w.add_token_types(field("tokenizer.ggml.token_type"))
 w.add_bos_token_id(1)
 w.add_eos_token_id(2)
 w.add_unk_token_id(0)
-if not args.no_template:
+if args.tool_template:
+    w.add_chat_template((Path(args.llama_cpp) / "models" / "templates" / "Qwen-Qwen2.5-7B-Instruct.jinja").read_text())
+elif not args.no_template:
     w.add_chat_template(
         "{% for message in messages %}<|im_start|>{{ message['role'] }}\n{{ message['content'] }}<|im_end|>\n{% endfor %}"
         "{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}"

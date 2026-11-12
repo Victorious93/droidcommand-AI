@@ -3,7 +3,7 @@ package ai.droidcommand.llm.openai
 import ai.droidcommand.agent.Message
 import ai.droidcommand.agent.RetryPolicy
 import ai.droidcommand.agent.Role
-import ai.droidcommand.agent.ToolParameterSchema
+import ai.droidcommand.agent.ToolArgumentCodec
 import ai.droidcommand.agent.ToolSpec
 import ai.droidcommand.llm.LlmConfig
 import ai.droidcommand.llm.LlmError
@@ -47,7 +47,8 @@ import kotlinx.serialization.json.buildJsonObject
  * [stream] (ROADMAP-058) sends the same request with `"stream": true` and
  * reads the server-sent `data:` chunks until `[DONE]`: `delta.content`
  * goes to the caller as it arrives, and `delta.tool_calls` fragments are
- * accumulated into the first tool call's name and arguments.
+ * joined per call index into every tool call of the response, each with
+ * its id, name and arguments.
  *
  * Structured output (ROADMAP-060) maps [LlmRequest.responseFormat] onto
  * the API's own `response_format`: [ResponseFormat.Json] becomes
@@ -68,15 +69,6 @@ class OpenAiLlmProvider(
      * providers behave as before; a self-hosted server that can be switched off mid-reply turns it on.
      */
     private val requireStreamEnd: Boolean = false,
-    /**
-     * When true, tool calls are handled in OpenAI's native structured form instead of the lossy default: every call
-     * of a reply is returned (the first, with the rest in [LlmResponse.ToolCall.more]) with the server's own call id
-     * and exact argument text; a call that cannot be run (no name, arguments that are not a JSON object) is returned
-     * with [LlmResponse.ToolCall.problem] rather than failing the whole reply; messages that carry
-     * [Message.toolCalls] / [Message.toolCallId] are sent as assistant `tool_calls` and `tool` results paired by id;
-     * and a tool's declared parameter schema is sent. Off by default, so existing callers are unaffected.
-     */
-    private val structuredToolCalls: Boolean = false,
 ) : StreamingLlmProvider {
     private val remoteClient = RemoteClient(
         RemoteEndpoint(config.endpoint ?: DEFAULT_BASE_URL, requireHttps = requireHttps),
@@ -137,10 +129,10 @@ class OpenAiLlmProvider(
 
         val chatRequest = OpenAiChatRequest(
             model = config.model,
-            messages = toOpenAiMessages(request.systemPrompt, request.messages, structuredToolCalls),
+            messages = toOpenAiMessages(request.systemPrompt, request.messages),
             temperature = request.temperature ?: config.temperature,
             maxTokens = request.maxOutputTokens ?: config.maxOutputTokens,
-            tools = request.tools.takeIf { it.isNotEmpty() }?.map { it.toOpenAiToolDefinition(structuredToolCalls) },
+            tools = request.tools.takeIf { it.isNotEmpty() }?.map { it.toOpenAiToolDefinition() },
             stream = stream.takeIf { it },
             responseFormat = responseFormat,
         )
@@ -191,12 +183,21 @@ class OpenAiLlmProvider(
         return if (parsed != null) this else LlmResponse.Error(LlmError.InvalidResponse("Structured output requested, but the response was not a JSON object"))
     }
 
-    /** Builds the final [LlmResponse] from streamed chunks, mirroring [parseResponse]'s rules (a tool call wins over text). */
+    /**
+     * Builds the final [LlmResponse] from streamed chunks, mirroring [parseResponse]'s rules (tool calls win over
+     * text). Call fragments are joined per `index`. A fragment that carries a different `id` than the call already
+     * collected at its index starts a new call instead of being glued onto the old one: some self-hosted servers
+     * send every call whole with the same index.
+     */
     private inner class StreamAccumulator(private val onTextDelta: (String) -> Unit) {
+        private inner class PendingCall(var id: String?) {
+            val name = StringBuilder()
+            val arguments = StringBuilder()
+        }
+
         private val text = StringBuilder()
-        private val toolNames = sortedMapOf<Int, StringBuilder>()
-        private val toolArguments = mutableMapOf<Int, StringBuilder>()
-        private val toolIds = mutableMapOf<Int, String>()
+        private val calls = mutableListOf<PendingCall>()
+        private val callAtIndex = mutableMapOf<Int, PendingCall>()
         private var sawChoice = false
         private var done = false
         private var finished = false
@@ -225,13 +226,19 @@ class OpenAiLlmProvider(
                 text.append(it)
                 onTextDelta(it)
             }
-            delta.toolCalls?.forEach { call ->
-                // The id arrives once, on the fragment that opens the call; later fragments carry only the index.
-                call.id?.takeIf { it.isNotEmpty() }?.let { toolIds.putIfAbsent(call.index, it) }
-                if (structuredToolCalls) toolArguments.getOrPut(call.index) { StringBuilder() }
-                if (structuredToolCalls) toolNames.getOrPut(call.index) { StringBuilder() }
-                call.function?.name?.let { toolNames.getOrPut(call.index) { StringBuilder() }.append(it) }
-                call.function?.arguments?.let { toolArguments.getOrPut(call.index) { StringBuilder() }.append(it) }
+            delta.toolCalls?.forEach { fragment ->
+                val id = fragment.id?.takeIf { it.isNotEmpty() }
+                var call = callAtIndex[fragment.index]
+                if (call == null || (id != null && call.id != null && call.id != id)) {
+                    call = PendingCall(id).also {
+                        calls += it
+                        callAtIndex[fragment.index] = it
+                    }
+                } else if (call.id == null) {
+                    call.id = id
+                }
+                fragment.function?.name?.let { call.name.append(it) }
+                fragment.function?.arguments?.let { call.arguments.append(it) }
             }
         }
 
@@ -240,21 +247,8 @@ class OpenAiLlmProvider(
             if (requireStreamEnd && !done && !finished) {
                 return LlmResponse.Error(LlmError.Network(STREAM_ENDED_EARLY))
             }
-            if (structuredToolCalls && toolNames.isNotEmpty()) {
-                val calls = toolNames.entries.map { (index, name) ->
-                    structuredCall(toolIds[index], name.toString(), toolArguments[index]?.toString().orEmpty())
-                }
-                return calls.first().copy(more = calls.drop(1))
-            }
-            toolNames.entries.firstOrNull()?.let { (index, name) ->
-                val raw = toolArguments[index]?.toString().orEmpty().ifBlank { "{}" }
-                val arguments = try {
-                    json.parseToJsonElement(raw) as? JsonObject
-                        ?: return LlmResponse.Error(LlmError.InvalidResponse("tool_call arguments was not a JSON object"))
-                } catch (e: SerializationException) {
-                    return LlmResponse.Error(LlmError.InvalidResponse("Malformed tool_call arguments: ${e.message}"))
-                }
-                return LlmResponse.ToolCall(name.toString(), arguments.flatten())
+            if (calls.isNotEmpty()) {
+                return toolCalls(calls.map { Triple(it.id, it.name.toString(), it.arguments.toString()) }, text.toString())
             }
             if (!sawChoice) return LlmResponse.Error(LlmError.InvalidResponse("Stream contained no choices"))
             return LlmResponse.Text(text.toString())
@@ -271,19 +265,9 @@ class OpenAiLlmProvider(
         val message = decoded.choices.firstOrNull()?.message
             ?: return LlmResponse.Error(LlmError.InvalidResponse("Response contained no choices"))
 
-        if (structuredToolCalls && !message.toolCalls.isNullOrEmpty()) {
-            val calls = message.toolCalls.map { structuredCall(it.id, it.function.name, it.function.arguments) }
-            return calls.first().copy(more = calls.drop(1))
-        }
-        val toolCall = message.toolCalls?.firstOrNull()
-        if (toolCall != null) {
-            val arguments = try {
-                json.parseToJsonElement(toolCall.function.arguments) as? JsonObject
-                    ?: return LlmResponse.Error(LlmError.InvalidResponse("tool_call arguments was not a JSON object"))
-            } catch (e: SerializationException) {
-                return LlmResponse.Error(LlmError.InvalidResponse("Malformed tool_call arguments: ${e.message}"))
-            }
-            return LlmResponse.ToolCall(toolCall.function.name, arguments.flatten())
+        val calls = message.toolCalls.orEmpty()
+        if (calls.isNotEmpty()) {
+            return toolCalls(calls.map { Triple(it.id, it.function.name, it.function.arguments) }, message.content.orEmpty())
         }
 
         val content = message.content
@@ -291,26 +275,20 @@ class OpenAiLlmProvider(
         return LlmResponse.Text(content)
     }
 
-    /** One call in structured form. Never throws and never drops a call: what cannot be run is marked with a problem. */
-    private fun structuredCall(id: String?, name: String, rawArguments: String): LlmResponse.ToolCall {
-        val raw = rawArguments.ifBlank { "{}" }
-        val parsed = try {
-            json.parseToJsonElement(raw) as? JsonObject
-        } catch (e: SerializationException) {
-            null
+    /**
+     * Every call of one response as (id, name, raw arguments), in order. The whole response is rejected if any call
+     * has no name or arguments that are not a JSON object: the API documents that a model "does not always generate
+     * valid JSON", and a caller must never run the well-formed half of a response it cannot answer in full.
+     */
+    private fun toolCalls(raw: List<Triple<String?, String, String>>, text: String): LlmResponse {
+        val parsed = raw.map { (id, name, arguments) ->
+            if (name.isBlank()) return LlmResponse.Error(LlmError.InvalidResponse("tool_call had no function name"))
+            val argumentsJson = arguments.ifBlank { "{}" }
+            val json = ToolArgumentCodec.parseStrictObject(argumentsJson)
+                ?: return LlmResponse.Error(LlmError.InvalidResponse("Malformed tool_call arguments for '$name': not a JSON object"))
+            LlmResponse.ToolCall(name, json.flatten(), id = id?.takeIf { it.isNotEmpty() }, argumentsJson = argumentsJson)
         }
-        val problem = when {
-            name.isBlank() -> "the call named no tool"
-            parsed == null -> "its arguments were not a JSON object"
-            else -> null
-        }
-        return LlmResponse.ToolCall(
-            toolName = name,
-            input = parsed?.flatten().orEmpty(),
-            id = id?.takeIf { it.isNotBlank() },
-            argumentsJson = raw,
-            problem = problem,
-        )
+        return LlmResponse.ToolCall.of(parsed, text)
     }
 
     private fun classify(failure: RemoteResult.Failure): LlmError = when {
@@ -330,74 +308,74 @@ class OpenAiLlmProvider(
 }
 
 /**
- * OpenAI's chat message roles (`system`/`user`/`assistant`/`tool`) map
- * directly from [Role] except [Role.TOOL]: OpenAI's native `tool` role
- * requires a `tool_call_id` referencing a preceding assistant message's
- * `tool_calls[].id`, which [Message] does not carry, so — matching
- * `core-llm-anthropic`'s documented choice for the same underlying gap —
- * it is mapped to `user` instead of fabricating an id.
+ * OpenAI's chat message roles (`system`/`user`/`assistant`/`tool`) map directly from [Role].
+ *
+ * An assistant [Message] that asked for tools is sent with its `tool_calls` (id, name and the arguments text exactly
+ * as received), and a [Role.TOOL] message that names the call it answers is sent as a `tool` message with that
+ * `tool_call_id`. That is the shape the API requires: every `tool` message must follow an assistant message whose
+ * `tool_calls` contains its id.
+ *
+ * A [Role.TOOL] message with no `toolCallId` (written by a caller that predates call ids, such as
+ * `core-agent.ObjectiveEngine`) cannot be sent as `tool` without inventing an id, so it is still sent as `user`,
+ * as before.
  */
-private fun toOpenAiMessages(systemPrompt: String?, messages: List<Message>, structured: Boolean = false): List<OpenAiChatMessage> {
+private fun toOpenAiMessages(systemPrompt: String?, messages: List<Message>): List<OpenAiChatMessage> {
     val mapped = mutableListOf<OpenAiChatMessage>()
     systemPrompt?.let { mapped += OpenAiChatMessage("system", it) }
 
     for (message in messages) {
-        // Structured form: only for a message that really carries the pairing, so a plain transcript is sent as before.
-        if (structured && message.role == Role.ASSISTANT && message.toolCalls.isNotEmpty()) {
-            mapped += OpenAiChatMessage(
-                role = "assistant",
-                content = message.content,
-                toolCalls = message.toolCalls.map { OpenAiToolCall(id = it.id, type = "function", function = OpenAiFunctionCall(it.name, it.argumentsJson)) },
-            )
-            continue
+        mapped += when (message.role) {
+            Role.SYSTEM -> OpenAiChatMessage("system", message.content)
+            Role.USER -> OpenAiChatMessage("user", message.content)
+            Role.ASSISTANT ->
+                if (message.toolCalls.isEmpty()) {
+                    OpenAiChatMessage("assistant", message.content)
+                } else {
+                    OpenAiChatMessage(
+                        role = "assistant",
+                        content = message.content.ifEmpty { null },
+                        toolCalls = message.toolCalls.map {
+                            OpenAiToolCall(id = it.id, type = "function", function = OpenAiFunctionCall(it.name, it.argumentsJson))
+                        },
+                    )
+                }
+            Role.TOOL ->
+                if (message.toolCallId == null) {
+                    OpenAiChatMessage("user", message.content)
+                } else {
+                    OpenAiChatMessage("tool", message.content, toolCallId = message.toolCallId)
+                }
         }
-        if (structured && message.role == Role.TOOL && message.toolCallId != null) {
-            mapped += OpenAiChatMessage(role = "tool", content = message.content, toolCallId = message.toolCallId)
-            continue
-        }
-        val role = when (message.role) {
-            Role.SYSTEM -> "system"
-            Role.USER -> "user"
-            Role.ASSISTANT -> "assistant"
-            Role.TOOL -> "user"
-        }
-        mapped += OpenAiChatMessage(role, message.content)
     }
 
     return mapped
 }
 
-private fun ToolSpec.toOpenAiToolDefinition(structured: Boolean = false): OpenAiToolDefinition =
-    OpenAiToolDefinition(
-        function = OpenAiFunctionDefinition(
-            name = name,
-            description = description,
-            parameters = parameterSchema?.takeIf { structured }?.toJsonSchema() ?: openObjectSchema(),
-        ),
-    )
+private fun ToolSpec.toOpenAiToolDefinition(): OpenAiToolDefinition =
+    OpenAiToolDefinition(function = OpenAiFunctionDefinition(name = name, description = description, parameters = parametersSchema()))
 
-private fun openObjectSchema(): JsonObject = buildJsonObject { put("type", JsonPrimitive("object")) }
-
-/** The declared parameters as a JSON Schema object, so a model is told the argument names and types. */
-private fun ToolParameterSchema.toJsonSchema(): JsonObject = buildJsonObject {
-    put("type", JsonPrimitive("object"))
-    put(
-        "properties",
-        buildJsonObject {
-            for (parameter in parameters) {
-                put(
-                    parameter.name,
-                    buildJsonObject {
-                        put("type", JsonPrimitive(parameter.type.name.lowercase()))
-                        if (parameter.description.isNotBlank()) put("description", JsonPrimitive(parameter.description))
-                    },
-                )
-            }
-        },
-    )
-    val required = parameters.filter { it.required }.map { JsonPrimitive(it.name) }
-    if (required.isNotEmpty()) put("required", JsonArray(required))
-    if (!additionalProperties) put("additionalProperties", JsonPrimitive(false))
+/** JSON Schema for the tool's arguments: its declared parameters when it has a schema, any object otherwise. */
+private fun ToolSpec.parametersSchema(): JsonObject {
+    val schema = parameterSchema ?: return buildJsonObject { put("type", JsonPrimitive("object")) }
+    return buildJsonObject {
+        put("type", JsonPrimitive("object"))
+        put(
+            "properties",
+            buildJsonObject {
+                for (parameter in schema.parameters) {
+                    put(
+                        parameter.name,
+                        buildJsonObject {
+                            put("type", JsonPrimitive(parameter.type.name.lowercase()))
+                            if (parameter.description.isNotBlank()) put("description", JsonPrimitive(parameter.description))
+                        },
+                    )
+                }
+            },
+        )
+        put("required", JsonArray(schema.parameters.filter { it.required }.map { JsonPrimitive(it.name) }))
+        if (!schema.additionalProperties) put("additionalProperties", JsonPrimitive(false))
+    }
 }
 
 /** Same lossy-but-honest flattening as `core-llm-anthropic`'s tool_use.input handling. */

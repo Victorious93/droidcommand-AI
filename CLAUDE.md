@@ -126,6 +126,15 @@ re-verifying something.
   OpenAI-compatible server) over LAN/VPN: `core-llm-factory`'s `ai.droidcommand.llm.pchost` package,
   `ChatSession.sendPcHost`, Settings → PC-hosted models. It is a different workflow from importing a `.gguf` onto the
   phone; read the doc's first table before touching either. Not run against a real Ollama, not run on a device.
+  **Tools (2026-11-11c):** the shared tool-call protocol was corrected (`Message.toolCalls`/`toolCallId`,
+  `LlmResponse.ToolCall` id/argumentsJson/additionalCalls; the OpenAI and Anthropic adapters replay real tool
+  transcripts, Gemini still replays text). A helper bot's tools are offered to a PC-hosted model only when
+  `PcHostClient.toolSupport` reported support or the owner switched them on, and to an on-device model only for a
+  grammar-capable backend plus a `<tool_call>` chat template (`core-llm-local` `LocalToolProtocol`). Verified against
+  a controlled server that refuses malformed transcripts, a real `llama-server`, and real llama.cpp on a host with
+  RANDOM weights; no trained model has made a tool call here, and nothing ran on a device. Read the 2026-11-11c audit
+  addendum before touching `ChatSession.turn`, and note that Plan, Pilot/Forge, the assist activities and
+  "Remember this chat" still ignore the PC choice (provider routing is a separate, later task).
 
 - **`docs/INFERENCE_POLICY.md`** (2026-11-12a) — the owner's inference policy (this device only / my PC only /
   prefer PC then device / confirmed cloud fallback; default "use the model I pick"), enforced in `ChatSession` and

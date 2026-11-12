@@ -32,6 +32,9 @@ class LlamaCppBackend
             require(kind == BackendKind.CPU || kind == BackendKind.VULKAN) { "$kind backend is not built" }
         }
 
+        /** The shim adds llama.cpp's grammar sampler ahead of the others when a request carries a grammar. */
+        override val supportsGrammar: Boolean get() = true
+
         @Volatile
         private var handle: Long = 0L
 
@@ -64,6 +67,7 @@ class LlamaCppBackend
                 contents,
                 request.maxTokens,
                 request.temperature ?: DEFAULT_TEMPERATURE,
+                request.grammar,
                 object : TokenSink {
                     override fun onToken(bytes: ByteArray): Boolean {
                         // A token may end mid-character; only complete characters are forwarded.
@@ -105,8 +109,8 @@ class LlamaCppBackend
 
         /**
          * llama.cpp's built-in chat templates render "system"/"user"/"assistant" turns; [Role.TOOL]
-         * (a past tool result in conversation history — [ai.droidcommand.llm.local.LocalLlmProvider]
-         * already refuses any request that itself asks for tool calling) has no standard chat-template
+         * (a past tool result without a call id — [ai.droidcommand.llm.local.LocalLlmProvider] rewrites
+         * the ones that have an id into user turns before they get here) has no standard chat-template
          * role, so it is passed through as "tool" best-effort: templates that define a tool role
          * render it, templates that don't will render it however they render an unrecognized role.
          * Not verified against a real template — revisit once Phase E can test this on a device.
@@ -128,6 +132,7 @@ class LlamaCppBackend
             contents: Array<String>,
             maxTokens: Int,
             temperature: Double,
+            grammar: String?,
             sink: TokenSink,
         )
 

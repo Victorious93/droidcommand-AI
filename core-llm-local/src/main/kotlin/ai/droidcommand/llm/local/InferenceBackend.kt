@@ -16,6 +16,12 @@ enum class BackendKind { CPU, OPENCL, VULKAN }
 interface InferenceBackend {
     val kind: BackendKind
 
+    /**
+     * Whether [generate] samples under [GenerationRequest.grammar]. A backend that leaves this false is never given
+     * a grammar, and [LocalLlmProvider] does not offer tools through it.
+     */
+    val supportsGrammar: Boolean get() = false
+
     /** Loads the GGUF at [modelPath]. Throws [InferenceException] on failure. */
     fun load(modelPath: String, contextTokens: Int)
 
@@ -33,11 +39,18 @@ interface InferenceBackend {
     fun unload()
 }
 
-data class GenerationRequest(
-    val systemPrompt: String?,
-    val messages: List<Message>,
-    val maxTokens: Int,
-    val temperature: Double?,
-)
+/**
+ * [grammar], when set, is a GBNF grammar (root rule `root`) every generated token must satisfy. Only sent to a
+ * backend whose [InferenceBackend.supportsGrammar] is true.
+ */
+data class GenerationRequest
+    @JvmOverloads
+    constructor(
+        val systemPrompt: String?,
+        val messages: List<Message>,
+        val maxTokens: Int,
+        val temperature: Double?,
+        val grammar: String? = null,
+    )
 
 class InferenceException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)

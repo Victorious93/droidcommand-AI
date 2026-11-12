@@ -467,10 +467,12 @@ class RoutedChatTest {
             assertEquals(1, add.inputs.size)
             assertNull(reply.notice)
 
-            // The same bot under "this device only": no tool is offered, and the reply says so.
+            // The same bot under "this device only", on a model that cannot call tools (this fake file has no chat
+            // template): no tool is offered, and the reply gives the model's own reason.
             world.settings.save(InferenceSettings(InferencePolicy.DEVICE_ONLY))
             val local = assertIs<ChatResult.Reply>(world.session.sendRouted("add eggs"))
-            assertEquals(ChatSession.LOCAL_TOOLS_NOTICE, local.notice)
+            assertEquals(world.session.localToolSupport("tiny")?.reason, local.notice)
+            assertTrue(local.notice.orEmpty().isNotBlank())
             assertEquals(1, add.inputs.size)
         }
     }

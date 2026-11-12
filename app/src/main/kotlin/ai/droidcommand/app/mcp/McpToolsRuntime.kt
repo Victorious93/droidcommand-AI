@@ -6,10 +6,14 @@ import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.security.ApprovalPrompt
 import ai.droidcommand.skills.mcp.HttpMcpToolSource
+import ai.droidcommand.skills.mcp.McpLoadedTool
+import ai.droidcommand.skills.mcp.McpResolution
 import ai.droidcommand.skills.mcp.McpSecrets
+import ai.droidcommand.skills.mcp.McpSelections
 import ai.droidcommand.skills.mcp.McpServerConfig
 import ai.droidcommand.skills.mcp.McpServerStatus
 import ai.droidcommand.skills.mcp.McpSettings
+import ai.droidcommand.skills.mcp.McpToolBinding
 import ai.droidcommand.skills.mcp.McpToolCatalog
 import android.content.Context
 import androidx.core.content.edit
@@ -91,6 +95,20 @@ class McpToolsRuntime @Inject constructor(
     }
 
     fun loadedToolNames(): List<String> = catalog.toolNames()
+
+    fun loadedTools(): List<McpLoadedTool> = catalog.loadedTools()
+
+    /**
+     * What a helper bot's saved tools mean right now. An MCP tool counts only while the very server entry and
+     * remote tool the owner ticked are loaded; a replacement server or an unclear name is never allowed.
+     */
+    fun resolve(allowedTools: Set<String>, bindings: Map<String, McpToolBinding>): McpResolution = McpSelections.resolve(
+        allowedTools = allowedTools,
+        bindings = bindings,
+        loaded = if (enabled()) catalog.loadedTools() else emptyList(),
+        servers = servers(),
+        answered = catalog.lastStatuses.filterIsInstance<McpServerStatus.Loaded>().map { it.server.instanceId }.toSet(),
+    )
 
     private fun token(serverId: String): String? = try {
         vault.getSecret(McpSecrets.tokenId(serverId))

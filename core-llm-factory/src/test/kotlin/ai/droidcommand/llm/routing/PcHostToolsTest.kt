@@ -136,12 +136,14 @@ class PcHostToolsTest {
 
             assertTrue(add.inputs.isEmpty())
             assertTrue(tools.approvalsAsked.isEmpty(), "no approval is asked for a tool the bot may not use")
-            assertTrue(messages(server.chats[1]).last().jsonObject["content"]!!.jsonPrimitive.content.contains("allowed-tool list"))
+            assertTrue(messages(server.chats[1]).last().jsonObject["content"]!!.jsonPrimitive.content.contains("not available here"))
         }
     }
 
     @Test
-    fun `a malformed call is not run, the rest of the reply's calls are, and the model is told which`() {
+    fun `a reply with a malformed call runs none of its calls and says so`() {
+        // Merge note: the OpenAI adapter (main) rejects a whole reply that has an unreadable call instead of running the
+        // readable ones, so nothing is run and the turn fails; the earlier per-call "problem" behaviour is gone.
         FakeModelServer().use { server ->
             val tools = SecureTools(setOf("note_add", "list_notes"))
             val add = tools.add(SecureTools.Counting("note_add"))
@@ -151,22 +153,14 @@ class PcHostToolsTest {
                 StreamedCall("call_bad", "note_add", listOf("{\"title\": \"mil")),
                 StreamedCall(null, "list_notes", listOf("{}")),
             )
-            server.chat += text("done")
             val chat = session()
             chat.setToolAccess(tools.runner, tools.specs("note_add", "list_notes"))
 
-            assertIs<ChatResult.Reply>(chat.sendPcHost(target(server), "go"))
+            val failure = assertIs<ChatResult.Failure>(chat.sendPcHost(target(server), "go"))
 
+            assertTrue(failure.message.contains("Malformed tool_call arguments"), failure.message)
             assertTrue(add.inputs.isEmpty(), "a call whose arguments cannot be read must not run")
-            assertEquals(1, list.inputs.size)
-            val sent = messages(server.chats[1])
-            val results = sent.takeLast(2).map { it.jsonObject }
-            assertEquals("call_bad", results[0]["tool_call_id"]!!.jsonPrimitive.content)
-            assertTrue(results[0]["content"]!!.jsonPrimitive.content.contains("was not run"), results[0].toString())
-            // A missing id is replaced by one made here, used consistently for the call and its result.
-            val madeId = sent[sent.size - 3].jsonObject["tool_calls"]!!.jsonArray[1].jsonObject["id"]!!.jsonPrimitive.content
-            assertTrue(madeId.isNotBlank())
-            assertEquals(madeId, results[1]["tool_call_id"]!!.jsonPrimitive.content)
+            assertTrue(list.inputs.isEmpty(), "the readable half of an unreadable reply must not run either")
         }
     }
 
@@ -201,7 +195,9 @@ class PcHostToolsTest {
             val chat = session()
             chat.setToolAccess(tools.runner, tools.specs("note_add", "list_notes"))
 
-            assertEquals(ChatResult.Failure(ChatSession.STOPPED_MESSAGE), chat.sendPcHost(target(server), "go", cancelled = stop::get))
+            val stopped = assertIs<ChatResult.Failure>(chat.sendPcHost(target(server), "go", cancelled = stop::get))
+            // The note saying which actions already ran follows the stop message (ChatSession.TOOLS_RAN_NOTE).
+            assertTrue(stopped.message.startsWith(ChatSession.STOPPED_MESSAGE), stopped.message)
 
             assertEquals(1, add.inputs.size)
             assertTrue(list.inputs.isEmpty(), "a call after the stop must not run")

@@ -35,6 +35,29 @@ object PcHostModels {
 }
 
 /**
+ * What is known about whether a PC server's model can call tools. Listing a model proves nothing about this: it is
+ * [UNKNOWN] until the server itself says ([PcHostClient.toolSupport]).
+ */
+enum class PcToolSupport(val id: String) {
+    /** The server reported that this model can call tools. */
+    SUPPORTED("supported"),
+
+    /** The server reported that this model cannot. */
+    UNSUPPORTED("unsupported"),
+
+    /** Not checked, or the server has no way of saying. */
+    UNKNOWN("unknown"),
+    ;
+
+    companion object {
+        fun byId(id: String?): PcToolSupport = entries.firstOrNull { it.id == id } ?: UNKNOWN
+    }
+}
+
+/** Outcome of [PcHostClient.toolSupport]: the verdict and one sentence saying what it rests on. */
+data class PcHostToolCheck(val support: PcToolSupport, val detail: String)
+
+/**
  * What Chat needs to send one turn to a PC server: which kind, where, which model, and what the server said about
  * where that model runs when it was picked.
  */
@@ -44,7 +67,35 @@ data class PcHostTarget(
     val model: String,
     val location: PcModelLocation = PcModelLocation.UNKNOWN,
     val upstream: String? = null,
-)
+    /** What the server said about this model and tools when it was last asked. */
+    val toolSupport: PcToolSupport = PcToolSupport.UNKNOWN,
+    /** The owner's own switch: offer tools to this server's model whatever [toolSupport] says. */
+    val toolsForced: Boolean = false,
+) {
+    /** Whether a helper bot's tools are sent with a turn to this target. */
+    val offersTools: Boolean get() = toolSupport == PcToolSupport.SUPPORTED || toolsForced
+}
+
+/** The sentences Chat and Settings show about tools on a PC-hosted model. */
+object PcHostToolNotices {
+    /** Notice on a reply that was written without the bot's tools because [target] is not offered them. */
+    fun notOffered(target: PcHostTarget): String = when (target.toolSupport) {
+        PcToolSupport.UNSUPPORTED ->
+            "The PC server reports that \"${target.model}\" cannot call tools, so this reply was written without the helper bot's tools."
+        else ->
+            "Whether \"${target.model}\" can call tools has not been confirmed, so this reply was written without the helper bot's tools. " +
+                "Check it in Settings, PC-hosted models."
+    }
+
+    /** One line for Settings and the chat header. */
+    fun status(support: PcToolSupport, forced: Boolean): String = when {
+        support == PcToolSupport.SUPPORTED -> "Tools: supported (reported by the server)"
+        forced && support == PcToolSupport.UNSUPPORTED -> "Tools: offered because you switched them on, although the server reports no tool support"
+        forced -> "Tools: offered because you switched them on (not confirmed by the server)"
+        support == PcToolSupport.UNSUPPORTED -> "Tools: not supported by this model (reported by the server)"
+        else -> "Tools: not confirmed, so helper-bot tools are not offered"
+    }
+}
 
 /** The wording the settings screen shows, kept here so it is tested on the JVM. */
 object PcHostCopy {
@@ -53,6 +104,10 @@ object PcHostCopy {
         "Two different things. PC-hosted: the model stays on your PC and every message is sent to the PC, which writes the reply; " +
             "nothing is copied to this phone, and it works whenever the phone can reach the PC (same Wi-Fi or VPN), with or without internet. " +
             "On-device: you import a .gguf model file onto this phone (Models tab) and the phone itself writes the reply; no PC and no network are involved."
+
+    const val TOOLS =
+        "Helper-bot tools are offered to a PC-hosted model only when the server reports that the model can call tools, or when you " +
+            "switch them on yourself for a server that cannot report it. Every tool call still goes through the bot's allow-list and the usual approval prompt."
 
     const val CHAT_ONLY =
         "Used by AI Chat only. Plans, one-step commands, the assist pop-ups and memory extraction still use the cloud provider or the on-device model."
