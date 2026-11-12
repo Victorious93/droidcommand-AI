@@ -15,6 +15,8 @@
 #
 #   HOST_CHAT_SCENARIO=longprompt  runs only the >512-token prompt, which aborts the process on a JNI shim built
 #                                  before the prompt was decoded in n_batch pieces.
+#   HOST_CHAT_SCENARIO=routed      runs the inference-policy checks (this device only, prefer PC with the PC
+#                                  unreachable, my PC only) on the real engine. host-routed-flow.sh runs it with networking off.
 #   HOST_CHAT_NATIVE_DIR=<dir>     use an already-built libdca_llama_jni.so (and bin/) instead of building.
 set -euo pipefail
 

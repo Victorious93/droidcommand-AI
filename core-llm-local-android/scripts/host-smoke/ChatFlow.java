@@ -4,7 +4,20 @@ import ai.droidcommand.app.localmodels.LocalModelRuntime;
 import ai.droidcommand.config.InMemorySecretsVault;
 import ai.droidcommand.llm.factory.ChatResult;
 import ai.droidcommand.llm.factory.ChatSession;
+import ai.droidcommand.llm.factory.CloudProviderCatalog;
 import ai.droidcommand.llm.local.MemorySnapshot;
+import ai.droidcommand.llm.pchost.InMemoryPcHostSettingsStore;
+import ai.droidcommand.llm.pchost.PcHostClient;
+import ai.droidcommand.llm.pchost.PcHostEndpoint;
+import ai.droidcommand.llm.pchost.PcHostKind;
+import ai.droidcommand.llm.pchost.PcHostSettingsStore;
+import ai.droidcommand.llm.pchost.PcHostTimeouts;
+import ai.droidcommand.llm.pchost.PcModelLocation;
+import ai.droidcommand.llm.routing.CloudChoice;
+import ai.droidcommand.llm.routing.InMemoryInferenceSettingsStore;
+import ai.droidcommand.llm.routing.InferencePolicy;
+import ai.droidcommand.llm.routing.InferenceSettings;
+import ai.droidcommand.llm.routing.RouteResolver;
 import ai.droidcommand.remote.HttpTransport;
 import java.io.File;
 import java.io.FileInputStream;
@@ -24,7 +37,7 @@ import kotlin.Unit;
  * The transport throws on any request and the vault is empty, so a turn that touched the network or needed a key
  * fails loudly. Run through host-chat-flow.sh.
  *
- *   ChatFlow <model.gguf> <workdir> all|longprompt [variants-dir]
+ *   ChatFlow <model.gguf> <workdir> all|longprompt|routed [variants-dir]
  */
 public class ChatFlow {
     static final HttpTransport NO_NETWORK = request -> {
@@ -47,8 +60,83 @@ public class ChatFlow {
         return new ChatSession(
             new InMemorySecretsVault(), new JsonFileConversationStore(conversations.toPath()), "default", null, NO_NETWORK,
             (spec, config) -> { throw new IllegalStateException("CLOUD PROVIDER BUILT"); },
-            null, null, null, null, runtime.getResources(), null, Set.of(), 600, null, "", 0, null);
+            null, null, null, null, runtime.getResources(), null, Set.of(), 600, null, "", 0, null,
+            new PcHostTimeouts(8_000, 180_000), null, (target, key) -> { throw new IllegalStateException("PC INSPECTED"); });
     }
+
+    /** A chat session under the owner's inference [policy], with [transport] for anything the policy lets it contact. */
+    static ChatSession routedChat(LocalModelRuntime runtime, File conversations, InferenceSettings settings, PcHostSettingsStore pcHosts, HttpTransport transport) {
+        InMemorySecretsVault vault = new InMemorySecretsVault();
+        RouteResolver resolver = new RouteResolver(
+            vault, new InMemoryInferenceSettingsStore(settings), pcHosts, runtime::getRepository,
+            () -> new CloudChoice(CloudProviderCatalog.INSTANCE.getAll().get(0), "any"),
+            (target, key) -> new PcHostClient(transport, 2_000, 4_000, null).inspect(target, key),
+            () -> null, () -> null);
+        return new ChatSession(
+            vault, new JsonFileConversationStore(conversations.toPath()), "default", null, transport,
+            (spec, config) -> { throw new IllegalStateException("CLOUD PROVIDER BUILT"); },
+            null, null, null, null, runtime.getResources(), null, Set.of(), 600, null, "", 0, null,
+            new PcHostTimeouts(2_000, 20_000), resolver,
+            (target, key) -> new PcHostClient(transport, 2_000, 4_000, null).inspect(target, key));
+    }
+
+    static String routed(ChatSession chat, String text, AtomicBoolean stop, AtomicInteger deltas) {
+        ChatResult r = chat.sendRouted(text, true, stop::get, () -> Unit.INSTANCE, delta -> {
+            deltas.incrementAndGet();
+            return Unit.INSTANCE;
+        });
+        if (r instanceof ChatResult.Reply) {
+            ChatResult.Reply reply = (ChatResult.Reply) r;
+            return "REPLY:" + reply.getText() + " || ROUTE:" + (reply.getRoute() == null ? "none" : reply.getRoute().summary()) + " || NOTICE:" + reply.getNotice();
+        }
+        return "FAILURE:" + ((ChatResult.Failure) r).getMessage();
+    }
+
+    /**
+     * The inference policy with the REAL on-device engine. Run inside a network namespace with only loopback
+     * (host-routed-flow.sh does that) so "networking disabled" is the machine's state, not only a throwing transport.
+     */
+    static void routedScenario(LocalModelRuntime runtime, String id, File work) {
+        InferenceSettings deviceOnly = new InferenceSettings(InferencePolicy.DEVICE_ONLY, false, id, null);
+        ChatSession chat = routedChat(runtime, new File(work, "routed-device"), deviceOnly, new InMemoryPcHostSettingsStore(), NO_NETWORK);
+
+        AtomicInteger deltas = new AtomicInteger();
+        String r1 = routed(chat, "Hello, who are you?", new AtomicBoolean(false), deltas);
+        check("this device only: the real on-device model answers, nothing uses the network",
+            r1.startsWith("REPLY:") && deltas.get() > 1 && r1.contains("Answered by This device") && r1.contains("Policy: This device only"), r1);
+        check("this device only: web search was asked for and not run", r1.contains("Web search was not run"), "");
+
+        ChatResult cloud = chat.send(CloudProviderCatalog.INSTANCE.getAll().get(0), "m", "hello", false, d -> Unit.INSTANCE);
+        check("this device only: a direct cloud send is refused before a provider is built",
+            cloud instanceof ChatResult.Failure && ((ChatResult.Failure) cloud).getMessage().contains("This device only"), String.valueOf(cloud));
+
+        int before = chat.history().size();
+        AtomicBoolean stop = new AtomicBoolean(false);
+        AtomicInteger seen = new AtomicInteger();
+        ChatResult stopped = chat.sendRouted("Write a very long story.", false, stop::get, () -> Unit.INSTANCE, delta -> {
+            if (seen.incrementAndGet() == 5) stop.set(true);
+            return Unit.INSTANCE;
+        });
+        boolean stoppedOk = stopped instanceof ChatResult.Failure && ((ChatResult.Failure) stopped).getMessage().equals("Stopped.") && chat.history().size() == before;
+        String r3 = routed(chat, "And one more short question?", new AtomicBoolean(false), new AtomicInteger());
+        check("this device only: a stopped reply saves nothing and the next request is answered", stoppedOk && r3.startsWith("REPLY:"), "deltas before stop=" + seen.get());
+
+        // Prefer PC: a PC server is saved, and nothing is listening there. The real transport gets "connection refused".
+        PcHostSettingsStore pcHosts = new InMemoryPcHostSettingsStore();
+        pcHosts.save(PcHostKind.OLLAMA, new PcHostEndpoint("http://127.0.0.1:9", "some-model", PcModelLocation.SERVER_LOCAL, null));
+        ChatSession prefer = routedChat(runtime, new File(work, "routed-prefer"), new InferenceSettings(InferencePolicy.PC_THEN_DEVICE, false, id, PcHostKind.OLLAMA),
+            pcHosts, new ai.droidcommand.remote.HttpUrlConnectionTransport());
+        String r4 = routed(prefer, "Hello again", new AtomicBoolean(false), new AtomicInteger());
+        check("prefer PC: with the PC unreachable the real on-device model answers and the reply says why",
+            r4.startsWith("REPLY:") && r4.contains("Answered by This device") && r4.contains("My PC (Ollama at http://127.0.0.1:9) was not used") && r4.contains("could not reach"), r4);
+
+        ChatSession pcOnly = routedChat(runtime, new File(work, "routed-pconly"), new InferenceSettings(InferencePolicy.PC_ONLY, false, id, PcHostKind.OLLAMA),
+            pcHosts, new ai.droidcommand.remote.HttpUrlConnectionTransport());
+        String r5 = routed(pcOnly, "Hello again", new AtomicBoolean(false), new AtomicInteger());
+        check("my PC only: with the PC unreachable nothing answers, the device model is not used",
+            r5.startsWith("FAILURE:") && r5.contains("My PC only") && pcOnly.history().isEmpty(), r5.substring(0, Math.min(160, r5.length())));
+    }
+
 
     static ImportOutcome importFile(LocalModelRuntime runtime, File file, Long expected) throws Exception {
         try (InputStream in = new FileInputStream(file)) {
@@ -92,6 +180,12 @@ public class ChatFlow {
 
         // ~1,000 tokens: more than n_batch (512), less than the 2,048-token window.
         String longText = "Summarise this note. " + "The quick brown fox jumps over the lazy dog. ".repeat(80);
+
+        if (scenario.equals("routed")) {
+            routedScenario(runtime, id, work);
+            System.out.println(failures == 0 ? "ALL PASS" : failures + " FAILED");
+            System.exit(failures == 0 ? 0 : 1);
+        }
 
         if (scenario.equals("longprompt")) {
             System.out.println("sending one message of about 1,000 tokens...");
