@@ -6,9 +6,24 @@ package ai.droidcommand.app.ux
  * map it, and never replaced with a success.
  */
 object FriendlyErrors {
+    /**
+     * A failed chat turn may end with a note saying which tool actions had already run (`ChatSession.TOOLS_RAN_NOTE`).
+     * That note is kept word for word whatever the rest of the message is mapped to: it is the only thing telling the
+     * owner that sending the message again can repeat an action.
+     */
     fun forUser(raw: String?): String {
-        val text = raw?.trim().orEmpty()
+        val whole = raw?.trim().orEmpty()
+        val note = TOOLS_RAN_NOTE.find(whole)?.value
+        if (note != null) return listOf(forUser(whole.removeSuffix(note)), note).joinToString(" ")
+        return mapped(whole)
+    }
+
+    private val TOOLS_RAN_NOTE = Regex("""\d+ tool actions? had already run in this turn .*$""", RegexOption.DOT_MATCHES_ALL)
+
+    private fun mapped(text: String): String {
         if (text.isEmpty()) return "Something went wrong. Try again."
+        // PC-hosted messages are already written for the owner and say exactly which of several causes applies.
+        if (text.startsWith(PC_HOST_PREFIX)) return text
         val lower = text.lowercase()
         return when {
             looksLikeMissingKey(lower) ->
@@ -41,8 +56,11 @@ object FriendlyErrors {
         }
     }
 
+    /** Same text as `PcHostErrors.PREFIX` (core-llm-factory); pinned by a test so the two cannot drift. */
+    const val PC_HOST_PREFIX = "PC-hosted model: "
+
     fun missingChatSetup(providerLabel: String): String =
-        "Chat needs a model on this phone or a $providerLabel key in Settings before it can answer."
+        "Chat needs a model on this phone, a model server on your PC, or a $providerLabel key in Settings before it can answer."
 
     fun emptyChat(hasSetup: Boolean): String = if (hasSetup) {
         "Ask anything. Replies stay in this chat. Open Models to change the on-device model, or Settings to add a cloud key."
@@ -76,8 +94,11 @@ object FriendlyErrors {
             lower.contains("network") && (lower.contains("fail") || lower.contains("error") || lower.contains("unreachable"))
 
     private fun looksLikeAuth(lower: String) =
-        lower.contains("unauthorized") || lower.contains("401") || lower.contains("invalid api key") ||
+        lower.contains("unauthorized") || HTTP_401.containsMatchIn(lower) || lower.contains("invalid api key") ||
             lower.contains("authentication")
+
+    // "401" as a status code, not as part of a size or count ("1401 MB", "401 of 2000 MB", "4010 tokens").
+    private val HTTP_401 = Regex("""(?<![\d.,])401(?![\d.,])(?! ?(mb|gb|kb|bytes|tokens|of ))""")
 
     private fun looksLikeNotInstalled(lower: String) =
         lower.contains("not installed") || lower.contains("not visible")

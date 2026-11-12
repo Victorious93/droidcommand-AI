@@ -62,7 +62,8 @@ fun ModelsScreen(viewModel: ModelsViewModel = hiltViewModel()) {
     ) {
         ScreenTitleWithHelp("Models", ScreenHelpCatalog.MODELS)
         Text(
-            "Chat uses the model you pick here, on this phone. No paid download, and no Hugging Face token is required.",
+            "Chat uses the model you pick here, on this phone: the file is copied onto the phone and the phone writes the replies. " +
+                "No paid download, and no Hugging Face token is required. To use a model that stays on your PC instead, open Settings, PC-hosted models.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -88,6 +89,11 @@ fun ModelsScreen(viewModel: ModelsViewModel = hiltViewModel()) {
                     modifier = Modifier.fillMaxWidth().testTag("models_pick_gguf"),
                 ) {
                     Text(if (state.importing) "Copying…" else "Pick a .gguf from storage")
+                }
+                if (state.importing) {
+                    DroidSecondaryButton(onClick = viewModel::cancelImport, modifier = Modifier.testTag("models_cancel_import")) {
+                        Text("Cancel import")
+                    }
                 }
                 Text(
                     "Opens the system file picker (any type; only .gguf files are kept). The app takes a persistable read grant and copies the file into its own storage, or opens it from shared storage when a copy will not fit.",

@@ -2,7 +2,27 @@ package ai.droidcommand.agent
 
 enum class Role { SYSTEM, USER, ASSISTANT, TOOL }
 
-data class Message(val role: Role, val content: String)
+/**
+ * One tool call an assistant message asked for, kept exactly as the model sent it so the same call can be shown
+ * back to the provider on the next request. [id] is the provider's own call id (OpenAI `tool_calls[].id`,
+ * Anthropic `tool_use.id`); [argumentsJson] is the arguments as JSON object text, unflattened.
+ */
+data class ToolCallRequest(val id: String, val name: String, val argumentsJson: String)
+
+/**
+ * [toolCalls] is set only on an [Role.ASSISTANT] message that asked for tools ([content] is then whatever text
+ * came with the calls, often empty). [toolCallId] is set only on a [Role.TOOL] message and names the call that
+ * message answers. Both default to "none", which is what every message written before they existed is: a
+ * [Role.TOOL] message without an id is still accepted, and a provider adapter sends it the way it always did.
+ */
+data class Message
+    @JvmOverloads
+    constructor(
+        val role: Role,
+        val content: String,
+        val toolCalls: List<ToolCallRequest> = emptyList(),
+        val toolCallId: String? = null,
+    )
 
 /**
  * A rough, provider-agnostic token estimate (~4 characters per token, the

@@ -16,11 +16,13 @@ import ai.droidcommand.app.documents.DownloadOutcome
 import ai.droidcommand.app.documents.EmbedderDownloadSupervisor
 import ai.droidcommand.app.localmodels.ImportOutcome
 import ai.droidcommand.app.localmodels.ImportedModel
+import ai.droidcommand.app.localmodels.LocalModelImporter
 import ai.droidcommand.app.localmodels.LocalModelRuntime
 import ai.droidcommand.app.mcp.McpToolsRuntime
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prompts.PromptLibrary
 import ai.droidcommand.app.skills.SkillFilesPrompt
+import ai.droidcommand.app.ui.pchost.PcHostChoice
 import ai.droidcommand.app.voice.VoiceRuntime
 import ai.droidcommand.config.AssistantCapability
 import ai.droidcommand.config.AssistantCapabilitySettingsStore
@@ -41,6 +43,10 @@ import ai.droidcommand.llm.local.GgufFileName
 import ai.droidcommand.llm.local.ModelInstallResult
 import ai.droidcommand.llm.local.RamFit
 import ai.droidcommand.llm.local.RamFitVerdict
+import ai.droidcommand.llm.pchost.PcHostEndpoint
+import ai.droidcommand.llm.pchost.PcHostKind
+import ai.droidcommand.llm.pchost.PcHostSettingsStore
+import ai.droidcommand.llm.pchost.PcHostToolNotices
 import ai.droidcommand.notes.NoteDraft
 import ai.droidcommand.rag.AttachResult
 import ai.droidcommand.rag.DocumentInfo
@@ -86,6 +92,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 data class ChatLine(val fromUser: Boolean, val text: String)
@@ -143,6 +150,15 @@ data class ChatUiState(
     val localStatus: String? = null,
     /** True while the delete-model confirmation is open. */
     val confirmDeleteLocalModel: Boolean = false,
+    /** Model servers saved in Settings, PC-hosted models. */
+    val pcHosts: Map<PcHostKind, PcHostEndpoint> = emptyMap(),
+    /** The PC server turns are sent to, or null. When set, [activeLocalModelId] is null. */
+    val activePcHost: PcHostKind? = null,
+    /**
+     * While a helper bot runs on a PC-hosted or on-device model: whether its tools are offered to that model, and why
+     * not when they are not. Null with no bot, and on a cloud provider (tools are always offered there).
+     */
+    val botToolStatus: String? = null,
     val conversationId: String = ChatSession.DEFAULT_CONVERSATION_ID,
     val savedChats: List<SavedChat> = emptyList(),
     val templates: List<PromptTemplate> = emptyList(),
@@ -188,6 +204,7 @@ class ChatViewModel @Inject constructor(
     private val toolRunner: ToolRunner,
     private val toolRegistry: ToolRegistry,
     private val mcpTools: McpToolsRuntime,
+    private val pcHostStore: PcHostSettingsStore,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
@@ -226,6 +243,17 @@ class ChatViewModel @Inject constructor(
     private var wake: WakeWordController? = null
     private var sendJob: Job? = null
 
+    /** Set by [stopSending] for the turn in flight; the on-device generation polls it after every token. */
+    @Volatile private var stopRequested = AtomicBoolean(false)
+
+    /** The text of the turn in flight, given back to the input box when it is stopped. */
+    @Volatile private var inFlightText: String? = null
+
+    @Volatile private var importCancelled = AtomicBoolean(false)
+
+    /** The running helper bot, kept so its MCP tools can be loaded once a cloud provider is chosen. */
+    private var activeBot: HelperBot? = null
+
     @Volatile private var handsFreeRound = false
 
     /** Chat is on screen and may run the wake-word listener if the user setting is on. */
@@ -251,6 +279,7 @@ class ChatViewModel @Inject constructor(
             micAvailable = voice.sttAvailable,
             toolbar = advanced.toolbarToggles(),
             activeLocalModelId = prefs.getString(KEY_LOCAL_MODEL, null),
+            activePcHost = PcHostKind.byId(prefs.getString(PcHostChoice.KEY_PC_HOST, null)),
             cloudKeyReady = keyReady(provider),
         )
     }
@@ -270,13 +299,8 @@ class ChatViewModel @Inject constructor(
                 }
             }
         }
-        // Imported models are read from disk: load them off the main thread, and drop a saved choice that no longer exists.
-        viewModelScope.launch(Dispatchers.IO) {
-            val models = onDeviceModels.list()
-            mutableState.update { state ->
-                state.copy(localModels = models, activeLocalModelId = state.activeLocalModelId?.takeIf { id -> models.any { it.id == id } })
-            }
-        }
+        // Imported models are read from disk: load them off the main thread.
+        viewModelScope.launch(Dispatchers.IO) { refreshLocalModels() }
         // The document index is a Room database: open and read it off the main thread.
         viewModelScope.launch(Dispatchers.IO) {
             val docs = runCatching { documentRuntime.attacher.list() }.getOrDefault(emptyList())
@@ -311,28 +335,96 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Re-reads the on-device choice and the installed models. The Models screen writes the choice while this view model
+     * stays alive behind it, so without this a model selected there was not used here until the app restarted.
+     *
+     * A saved choice whose file is gone is kept, not replaced by the cloud provider: [send] then refuses with
+     * [ChatRoute.MISSING_MESSAGE] instead of sending the chat off the device.
+     */
+    private fun refreshLocalModels() {
+        val models = onDeviceModels.list()
+        val saved = prefs.getString(KEY_LOCAL_MODEL, null)?.takeIf { it.isNotBlank() }
+        val missing = saved != null && models.none { it.id == saved }
+        // The PC-hosted screen writes its choice and endpoints while this view model stays alive behind it.
+        val pcHosts = PcHostKind.entries.mapNotNull { kind -> runCatching { pcHostStore.load(kind) }.getOrNull()?.let { kind to it } }.toMap()
+        mutableState.update { state ->
+            state.copy(
+                pcHosts = pcHosts,
+                activePcHost = PcHostKind.byId(prefs.getString(PcHostChoice.KEY_PC_HOST, null)),
+                localModels = models,
+                activeLocalModelId = saved,
+                localStatus = if (missing) ChatRoute.MISSING_MESSAGE else state.localStatus?.takeIf { it != ChatRoute.MISSING_MESSAGE },
+            )
+        }
+    }
+
     fun selectProvider(provider: CloudProviderSpec) {
         prefs.edit {
             putString(KEY_PROVIDER, provider.id)
             remove(KEY_LOCAL_MODEL)
+            remove(PcHostChoice.KEY_PC_HOST)
         }
         mutableState.update {
             it.copy(
                 provider = provider,
                 model = prefs.getString(modelKey(provider), null) ?: provider.defaultModel,
                 activeLocalModelId = null,
+                activePcHost = null,
                 error = null,
+                localStatus = null,
                 cloudKeyReady = keyReady(provider),
             )
         }
+        // A helper bot's MCP tools were not loaded while an on-device model was selected (nothing is contacted then).
+        activeBot?.let { loadMcpToolsFor(it) }
     }
 
-    /** Chooses an imported on-device model for the following turns. Switching away from another one frees its memory. */
+    /** Chooses an imported on-device model for the following turns. The previous one is unloaded when the new one loads. */
     fun selectLocalModel(modelId: String) {
-        val previous = mutableState.value.activeLocalModelId
-        prefs.edit { putString(KEY_LOCAL_MODEL, modelId) }
-        mutableState.update { it.copy(activeLocalModelId = modelId, error = null) }
-        if (previous != null && previous != modelId) viewModelScope.launch(Dispatchers.IO) { session.close() }
+        prefs.edit {
+            putString(KEY_LOCAL_MODEL, modelId)
+            remove(PcHostChoice.KEY_PC_HOST)
+        }
+        mutableState.update { it.copy(activeLocalModelId = modelId, activePcHost = null, error = null, localStatus = null) }
+        refreshBotToolStatus()
+    }
+
+    /**
+     * Works out [ChatUiState.botToolStatus] for the model now selected. Off the main thread: it reads the PC-host
+     * settings file or the model file's metadata. It loads no model and makes no network request.
+     */
+    private fun refreshBotToolStatus() {
+        val state = mutableState.value
+        if (state.activeBotName == null || (state.activePcHost == null && state.activeLocalModelId == null)) {
+            mutableState.update { it.copy(botToolStatus = null) }
+            return
+        }
+        viewModelScope.launch {
+            val status = withContext(Dispatchers.IO) {
+                val pc = state.activePcHost
+                val localId = state.activeLocalModelId
+                when {
+                    pc != null -> runCatching { pcHostStore.load(pc) }.getOrNull()?.let { PcHostToolNotices.status(it.toolSupport, it.toolsForced) }
+                    localId != null -> session.localToolSupport(localId)?.let { if (it.supported) "Tools: this on-device model can call them" else it.reason }
+                    else -> null
+                }
+            }
+            val now = mutableState.value
+            if (now.activeBotName == state.activeBotName && now.activePcHost == state.activePcHost && now.activeLocalModelId == state.activeLocalModelId) {
+                mutableState.update { it.copy(botToolStatus = status) }
+            }
+        }
+    }
+
+    /** Sends the following turns to the model server saved for [kind] in Settings, PC-hosted models. */
+    fun selectPcHost(kind: PcHostKind) {
+        prefs.edit {
+            putString(PcHostChoice.KEY_PC_HOST, kind.id)
+            remove(KEY_LOCAL_MODEL)
+        }
+        mutableState.update { it.copy(activePcHost = kind, activeLocalModelId = null, error = null, localStatus = null) }
+        refreshBotToolStatus()
     }
 
     /**
@@ -341,6 +433,8 @@ class ChatViewModel @Inject constructor(
      */
     fun importLocalModel(uri: Uri) {
         if (mutableState.value.localImporting) return
+        val cancel = AtomicBoolean(false)
+        importCancelled = cancel
         mutableState.update { it.copy(localImporting = true, localStatus = "Importing…") }
         viewModelScope.launch(Dispatchers.IO) {
             var reportedBytes = 0L
@@ -355,14 +449,14 @@ class ChatViewModel @Inject constructor(
                 val size = sizeOf(uri)
                 val stream = context.contentResolver.openInputStream(uri) ?: error("The file could not be opened.")
                 val copied = stream.use {
-                    onDeviceModels.importModel(name, it, size) { bytes ->
+                    onDeviceModels.importModel(name, it, size, cancelled = cancel::get) { bytes ->
                         if (bytes - reportedBytes >= PROGRESS_STEP_BYTES) {
                             reportedBytes = bytes
                             mutableState.update { s -> s.copy(localStatus = "Importing… ${bytes / BYTES_PER_MEGABYTE} MB copied") }
                         }
                     }
                 }
-                if (copied is ImportOutcome.Failed && copied.reason.contains("Not enough free storage")) {
+                if (copied is ImportOutcome.Failed && copied.reason.contains(LocalModelImporter.NOT_ENOUGH_STORAGE)) {
                     val path = runCatching {
                         context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
                             Os.readlink("/proc/self/fd/${pfd.fd}").takeIf { it.startsWith("/") && File(it).canRead() }
@@ -378,7 +472,9 @@ class ChatViewModel @Inject constructor(
                 is ImportOutcome.Imported -> selectImported(
                     outcome.model.id,
                     models,
-                    "Imported ${outcome.model.label}. Chat now runs on this device." + ramSuffix(outcome.model.metadata.sizeBytes, outcome.model.metadata.contextTokens),
+                    "Imported ${outcome.model.label}. Chat now runs on this device." +
+                        ramSuffix(outcome.model.metadata.sizeBytes, outcome.model.metadata.contextTokens) +
+                        outcome.note?.let { " $it" }.orEmpty(),
                 )
                 is ImportOutcome.Duplicate -> selectImported(outcome.id, models, "That file is already imported. Selected it.")
                 is ImportOutcome.Rejected -> mutableState.update { it.copy(localImporting = false, localStatus = outcome.reason) }
@@ -387,9 +483,15 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** Stops a running import. The partial copy is deleted; nothing is registered. */
+    fun cancelLocalImport() = importCancelled.set(true)
+
     private fun selectImported(id: String, models: List<ImportedModel>, status: String) {
-        prefs.edit { putString(KEY_LOCAL_MODEL, id) }
-        mutableState.update { it.copy(localImporting = false, localModels = models, activeLocalModelId = id, localStatus = status) }
+        prefs.edit {
+            putString(KEY_LOCAL_MODEL, id)
+            remove(PcHostChoice.KEY_PC_HOST)
+        }
+        mutableState.update { it.copy(localImporting = false, localModels = models, activeLocalModelId = id, activePcHost = null, localStatus = status) }
     }
 
     fun askDeleteLocalModel() = mutableState.update { it.copy(confirmDeleteLocalModel = true) }
@@ -401,8 +503,7 @@ class ChatViewModel @Inject constructor(
         val id = mutableState.value.activeLocalModelId ?: return
         mutableState.update { it.copy(confirmDeleteLocalModel = false, localStatus = "Deleting…") }
         viewModelScope.launch(Dispatchers.IO) {
-            session.close()
-            onDeviceModels.remove(id)
+            onDeviceModels.remove(id) // unloads the model first
             prefs.edit { remove(KEY_LOCAL_MODEL) }
             mutableState.update {
                 it.copy(localModels = onDeviceModels.list(), activeLocalModelId = null, localStatus = "Model file deleted. Chat uses the cloud provider again.")
@@ -446,17 +547,37 @@ class ChatViewModel @Inject constructor(
         val slashProvider = slash?.let { CloudProviderCatalog.byId(it.providerId) }
         mutableState.update { it.copy(sending = true, streaming = "", error = null, notice = null) }
         sendJob?.cancel()
+        val stop = AtomicBoolean(false)
+        stopRequested = stop
+        inFlightText = text
         sendJob = viewModelScope.launch(Dispatchers.IO) {
             applyChatSystemPrompt(current)
-            val localId = if (slashProvider == null) current.activeLocalModelId else null
+            // list() also registers the models with the repository before the first on-device turn.
+            val route = ChatRoute.decide(
+                selectedLocalId = current.activeLocalModelId,
+                installedIds = onDeviceModels.list().map { it.id }.toSet(),
+                slashCommandNamesCloud = slashProvider != null,
+                pcHost = current.activePcHost,
+                // Read fresh: the address or model may have been changed in Settings since this screen last refreshed.
+                pcHostEndpoint = current.activePcHost?.let { kind -> runCatching { pcHostStore.load(kind) }.getOrNull() },
+            )
             val outgoing = slash?.prompt ?: text
-            // Web search sends the message text to a search provider, so it is not used for on-device replies.
-            val localNotice = if (localId != null && current.webSearchEnabled) "Web search is not used for on-device replies." else null
-            val result = if (localId != null) {
-                onDeviceModels.list() // registers the models before the first on-device turn
+            val result = if (route is ChatRoute.OnDeviceMissing) {
+                ChatResult.Failure(route.message)
+            } else if (route is ChatRoute.PcHostNotReady) {
+                ChatResult.Failure(route.message)
+            } else if (route is ChatRoute.PcHosted) {
+                // The message goes to the PC. Stop closes the connection, so the PC stops generating too.
                 runCatching {
-                    session.sendLocal(localId, outgoing, useWebSearch = false) { delta ->
-                        mutableState.update { it.copy(streaming = it.streaming + delta) }
+                    session.sendPcHost(route.target, outgoing, useWebSearch = current.webSearchEnabled, cancelled = stop::get) { delta ->
+                        if (!stop.get()) mutableState.update { it.copy(streaming = it.streaming + delta) }
+                    }
+                }.getOrElse { ChatResult.Failure("PC-hosted model: the request could not be made (${it.message ?: it.javaClass.simpleName}).") }
+            } else if (route is ChatRoute.OnDevice) {
+                // An on-device turn makes no network request: ChatSession skips web search and tools for it and says so.
+                runCatching {
+                    session.sendLocal(route.modelId, outgoing, useWebSearch = current.webSearchEnabled, cancelled = stop::get) { delta ->
+                        if (!stop.get()) mutableState.update { it.copy(streaming = it.streaming + delta) }
                     }
                 }.getOrElse { ChatResult.Failure(it.message ?: "The on-device model could not run this message.") }
             } else {
@@ -473,9 +594,9 @@ class ChatViewModel @Inject constructor(
             // Read the saved-chat list and speak the reply outside the update: the flow may run the lambda more than once
             // (speaking re-enters this flow through the voice callback, which can force exactly such a retry and a second speak).
             val refreshedChats = if (result is ChatResult.Reply) runCatching { savedChats(store) }.getOrNull() else null
-            val cancelled = !isActive
+            val cancelled = !isActive || stop.get()
             if (!cancelled) {
-                mutableState.update { it.afterTurn(result, text, localNotice, refreshedChats) }
+                mutableState.update { it.afterTurn(result, text, null, refreshedChats) }
                 if (result is ChatResult.Reply) {
                     if (handsFreeRound) {
                         voice.speak(result.text)
@@ -483,20 +604,37 @@ class ChatViewModel @Inject constructor(
                         voice.onReply(result.text, mutableState.value.speakMode)
                     }
                 }
-            } else {
-                mutableState.update { it.copy(sending = false, streaming = "", notice = "Stopped.") }
+            } else if (stopRequested === stop) {
+                // Only while this is still the newest turn: a later send must not have its state reset by a stopped one.
+                // A stopped turn that had already run a tool action says so: the owner must know before sending again.
+                val ran = (result as? ChatResult.Failure)?.message?.let { ChatSession.TOOLS_RAN_NOTE.find(it)?.value }
+                mutableState.update { it.copy(sending = false, streaming = "", notice = listOfNotNull("Stopped.", ran).joinToString(" ")) }
             }
-            handsFreeRound = false
-            sendJob = null
+            if (stopRequested === stop) {
+                handsFreeRound = false
+                sendJob = null
+                inFlightText = null
+            }
         }
     }
 
-    /** Stops the in-flight chat reply. The send button comes back so you can try again. */
+    /**
+     * Stops the in-flight chat reply. The send button comes back and the message returns to the input box.
+     *
+     * An on-device reply really stops: the generation is told to end (also while it is still reading the prompt), its
+     * partial text is discarded and nothing is saved. Without that the model kept generating in the background, the
+     * next message waited behind it, and the "stopped" reply was written into the saved chat.
+     */
     fun stopSending() {
+        stopRequested.set(true)
+        session.requestStopLocal()
+        session.requestStopPcHost()
         sendJob?.cancel()
         sendJob = null
         handsFreeRound = false
-        mutableState.update { it.copy(sending = false, streaming = "", notice = "Stopped.") }
+        val text = inFlightText
+        inFlightText = null
+        mutableState.update { it.copy(sending = false, streaming = "", notice = "Stopped.", pendingInput = text ?: it.pendingInput) }
         voice.stopSpeaking()
     }
 
@@ -726,6 +864,8 @@ class ChatViewModel @Inject constructor(
         mutableState.update {
             it.copy(toolbar = advanced.toolbarToggles(), cloudKeyReady = keyReady(it.provider))
         }
+        // The Models screen may have selected, imported or removed a model while this screen was behind it.
+        if (!mutableState.value.sending) viewModelScope.launch(Dispatchers.IO) { refreshLocalModels() }
     }
 
     /** Takes effect on the very next message (unlike Memory, it is a per-request flag, not session wiring). */
@@ -862,7 +1002,7 @@ class ChatViewModel @Inject constructor(
      */
     fun pickUpBot() {
         val bot = HelperBotHandoff.consume() ?: return
-        if (bot.model.isNotBlank() && mutableState.value.activeLocalModelId == null) setModel(bot.model)
+        if (bot.model.isNotBlank() && mutableState.value.activeLocalModelId == null && mutableState.value.activePcHost == null) setModel(bot.model)
         // Only the tools that are, right now, the ones the owner ticked. MCP tools join after they are loaded below.
         val allowed = mcpTools.resolve(bot.allowedTools, bot.mcpBindings).allowed
         session.setToolAccess(
@@ -873,7 +1013,11 @@ class ChatViewModel @Inject constructor(
             it.copy(activeBotName = bot.name, activeBotPrompt = HelperBots.systemPrompt(bot, allowed), notice = "Running helper bot \"${bot.name}\".")
         }
         applyChatSystemPrompt(mutableState.value)
-        loadMcpToolsFor(bot)
+        activeBot = bot
+        refreshBotToolStatus()
+        // With an on-device model selected the bot's MCP servers are not contacted: an on-device chat makes no
+        // network request of its own. Its other tools are offered when the model can call them (see botToolStatus).
+        if (mutableState.value.activeLocalModelId == null) loadMcpToolsFor(bot)
     }
 
     /**
@@ -912,8 +1056,9 @@ class ChatViewModel @Inject constructor(
     }
 
     fun stopBot() {
+        activeBot = null
         session.setToolAccess(null)
-        mutableState.update { it.copy(activeBotName = null, activeBotPrompt = null, notice = null) }
+        mutableState.update { it.copy(activeBotName = null, activeBotPrompt = null, notice = null, botToolStatus = null) }
         applyChatSystemPrompt(mutableState.value)
     }
 
@@ -1044,6 +1189,11 @@ class ChatViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        // A reply still being generated for a screen that is gone would hold the model and the CPU until it ended.
+        stopRequested.set(true)
+        session.requestStopLocal()
+        session.requestStopPcHost()
+        importCancelled.set(true)
         wakeWanted = false
         tearDownWakeWord()
         voice.stopListening()

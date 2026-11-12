@@ -33,6 +33,14 @@ object ScreenHelpCatalog {
             "The file stays on this device. Removing a copy in app storage deletes that copy only.",
     )
 
+    val PC_HOSTS = ScreenHelp(
+        title = "What are PC-hosted models?",
+        body = "Your PC runs the model (with Ollama or another OpenAI-compatible server) and this phone sends each chat message to it. " +
+            "The model file stays on the PC; nothing is imported onto the phone. It works whenever the phone can reach the PC, " +
+            "on the same Wi-Fi or over your VPN, even when the internet is down. A model marked cloud-backed is different: " +
+            "the PC forwards it to an internet service. To run a model on the phone itself, import a .gguf file on the Models tab instead.",
+    )
+
     val SETTINGS = ScreenHelp(
         title = "What is Settings?",
         body = "Everyday setup lives here: look (light, dark, or match the phone), cloud keys, voice, " +

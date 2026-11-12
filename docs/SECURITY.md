@@ -281,3 +281,30 @@ document.
 
 ## Notes Studio LAN viewer and System Toolbox (2026-10-31)
 See `docs/NOTES_STUDIO_SYSTEM_TOOLBOX.md`. The LAN viewer is off by default, needs a password, is LAN-only and read-only. Toolbox actions that change anything need a confirmation that shows the exact command. The AI toolbox gate is off by default and asks on every call.
+
+## Model tool calls in Chat (2026-11-11c)
+
+How a model's tool call reaches a tool from AI Chat, on a cloud provider, a PC-hosted model or an on-device model. One
+path for all three (`core-llm-factory` `ChatSession.turn`); only the provider differs.
+
+- **Nothing is offered by default.** Plain Chat offers no tools. A helper bot offers only its allow-list
+  (`HelperBotTools.offeredTools`). A PC-hosted model is offered them only when the server reported tool support or
+  the owner switched them on for that server; an on-device model only when the runtime can hold the reply to the
+  tool-call grammar and the model's own chat template defines tool calls.
+- **A call is validated before anything runs.** Arguments must be a JSON object under a strict check
+  (`ToolArgumentCodec.parseStrictObject`; a lenient parser accepts `{"a": bare}`); one malformed call rejects the
+  whole response, including its well-formed calls. Duplicate call ids, more than 8 calls in a response, and more
+  than 4 rounds in a turn are refused. On-device output is checked again in Kotlin (`LocalToolProtocol.parse`)
+  whether or not the grammar was applied.
+- **Three independent gates per call**, in order: `ChatSession` answers a call to a tool that was not offered in
+  this request with an error, without calling the runner; the bot's `ScopedToolRunner` refuses a tool not on its
+  list; `SecureToolExecutor` applies mode, initiator (`Initiator.AI`), policy, the approval prompt (shown the exact
+  input) and the audit log. A refusal at any gate is returned to the model as that call's result; it is not retried.
+- **No automatic repeat.** `ChatSession` retries no request on the PC path, re-sends no turn on any path, and stops
+  between two actions when asked. A turn that fails or is stopped after an action ran saves nothing and names the
+  actions that ran, with the warning that sending the message again may repeat them
+  (`ChatSession.TOOLS_RAN_NOTE`; `FriendlyErrors` keeps it through rewording).
+- **Tool results are untrusted text.** They are passed back to the model as `tool` messages and are not written to
+  the saved conversation.
+- **Not changed here:** the MCP revocation rule (2026-11-10d), `externalControlEnabled`, risk tiers and
+  auto-approval policy. Pilot/Forge (`ObjectiveEngine`) does not use this path.

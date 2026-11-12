@@ -18,9 +18,10 @@ import ai.droidcommand.llm.local.Utf8StreamDecoder
  * silently measure the CPU. [create] picks from what the device actually reports. The Vulkan path
  * is compiled only: it has never run on a GPU.
  *
- * Calls into this class are not internally synchronized: [ai.droidcommand.llm.local.LocalLlmProvider]
- * already serializes `load`/`generate`/`unload` (a loaded native context is not safe to share), and
- * this class has no other caller.
+ * `load`/`generate`/`unload` are not internally synchronized: [ai.droidcommand.llm.local.LocalLlmProvider]
+ * already serializes them (a loaded native context is not safe to share), and this class has no other
+ * caller. [requestStop] is the exception: it is meant to be called from another thread while `generate`
+ * runs, and shares a small lock with `unload` so the native context cannot be freed under it.
  */
 class LlamaCppBackend
     @JvmOverloads
@@ -31,8 +32,14 @@ class LlamaCppBackend
             require(kind == BackendKind.CPU || kind == BackendKind.VULKAN) { "$kind backend is not built" }
         }
 
+        /** The shim adds llama.cpp's grammar sampler ahead of the others when a request carries a grammar. */
+        override val supportsGrammar: Boolean get() = true
+
         @Volatile
         private var handle: Long = 0L
+
+        // Held while requestStop touches the native context and while unload takes the handle away.
+        private val handleLock = Any()
 
         override fun load(modelPath: String, contextTokens: Int) {
             check(handle == 0L) { "load() called on an already-loaded backend; call unload() first" }
@@ -60,6 +67,7 @@ class LlamaCppBackend
                 contents,
                 request.maxTokens,
                 request.temperature ?: DEFAULT_TEMPERATURE,
+                request.grammar,
                 object : TokenSink {
                     override fun onToken(bytes: ByteArray): Boolean {
                         // A token may end mid-character; only complete characters are forwarded.
@@ -77,17 +85,32 @@ class LlamaCppBackend
             }
         }
 
+        /**
+         * Ends a [generate] that is running on another thread: between tokens, and also inside the prompt
+         * evaluation that precedes the first token (llama.cpp's abort callback). The stopped call returns
+         * normally with whatever text it had produced.
+         */
+        override fun requestStop() {
+            synchronized(handleLock) {
+                val h = handle
+                if (h != 0L) nativeRequestStop(h)
+            }
+        }
+
         override fun unload() {
-            val h = handle
+            val h = synchronized(handleLock) {
+                val current = handle
+                handle = 0L
+                current
+            }
             if (h == 0L) return
-            handle = 0L
             nativeUnload(h)
         }
 
         /**
          * llama.cpp's built-in chat templates render "system"/"user"/"assistant" turns; [Role.TOOL]
-         * (a past tool result in conversation history — [ai.droidcommand.llm.local.LocalLlmProvider]
-         * already refuses any request that itself asks for tool calling) has no standard chat-template
+         * (a past tool result without a call id — [ai.droidcommand.llm.local.LocalLlmProvider] rewrites
+         * the ones that have an id into user turns before they get here) has no standard chat-template
          * role, so it is passed through as "tool" best-effort: templates that define a tool role
          * render it, templates that don't will render it however they render an unrecognized role.
          * Not verified against a real template — revisit once Phase E can test this on a device.
@@ -109,8 +132,11 @@ class LlamaCppBackend
             contents: Array<String>,
             maxTokens: Int,
             temperature: Double,
+            grammar: String?,
             sink: TokenSink,
         )
+
+        private external fun nativeRequestStop(handle: Long)
 
         private external fun nativeUnload(handle: Long)
 

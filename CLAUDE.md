@@ -122,6 +122,20 @@ re-verifying something.
   **Phase 2 (Core assistant) needs explicit owner go-ahead** before
   implementation starts.
 
+- **`docs/PC_HOSTED_MODELS.md`** (2026-11-11b) — Chat against a model server on the owner's PC (Ollama or an
+  OpenAI-compatible server) over LAN/VPN: `core-llm-factory`'s `ai.droidcommand.llm.pchost` package,
+  `ChatSession.sendPcHost`, Settings → PC-hosted models. It is a different workflow from importing a `.gguf` onto the
+  phone; read the doc's first table before touching either. Not run against a real Ollama, not run on a device.
+  **Tools (2026-11-11c):** the shared tool-call protocol was corrected (`Message.toolCalls`/`toolCallId`,
+  `LlmResponse.ToolCall` id/argumentsJson/additionalCalls; the OpenAI and Anthropic adapters replay real tool
+  transcripts, Gemini still replays text). A helper bot's tools are offered to a PC-hosted model only when
+  `PcHostClient.toolSupport` reported support or the owner switched them on, and to an on-device model only for a
+  grammar-capable backend plus a `<tool_call>` chat template (`core-llm-local` `LocalToolProtocol`). Verified against
+  a controlled server that refuses malformed transcripts, a real `llama-server`, and real llama.cpp on a host with
+  RANDOM weights; no trained model has made a tool call here, and nothing ran on a device. Read the 2026-11-11c audit
+  addendum before touching `ChatSession.turn`, and note that Plan, Pilot/Forge, the assist activities and
+  "Remember this chat" still ignore the PC choice (provider routing is a separate, later task).
+
 ## What's already been verified (don't re-derive)
 
 - This is a 25-module pure-Kotlin/JVM Gradle project (confirmed directly
@@ -569,6 +583,13 @@ mid-conversation switch works via the existing `AiProviderSelector`;
 `./gradlew :core-llm-local:connectedAndroidTest` passes on an emulator
 (loads a tiny test model, one inference call, non-empty output); every
 downloaded model SHA-256-checked before load.
+
+**Update 2026-11-11 (read the audit addendum of that date before trusting the Phase 2 status line above):** local
+inference **is** wired into `:app` (Models → Chat, `LocalModelRuntime`), `:app` is minSdk 28, and the JNI shim was
+changed (prompt decoded in `n_batch` pieces — a prompt over 512 tokens aborted the process —, stop, trained-context
+clamp, load-error detail). The app's real import → chat chain was run on a Linux host against the real llama.cpp
+(`core-llm-local-android/scripts/host-chat-flow.sh`); it has still never run on a device. Device steps:
+`docs/ON_DEVICE_GGUF_CHECKLIST.md`.
 
 ---
 

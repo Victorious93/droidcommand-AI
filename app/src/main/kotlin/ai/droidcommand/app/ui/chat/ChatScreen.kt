@@ -20,6 +20,9 @@ import ai.droidcommand.app.ui.theme.UserBubbleDark
 import ai.droidcommand.app.ux.FriendlyErrors
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.llm.factory.CloudProviderCatalog
+import ai.droidcommand.llm.pchost.PcHostModels
+import ai.droidcommand.llm.pchost.PcHostToolNotices
+import ai.droidcommand.llm.pchost.PcModelLocation
 import ai.droidcommand.voice.SpeakMode
 import android.Manifest
 import android.content.pm.PackageManager
@@ -89,7 +92,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
  * model field is still free text because model ids change and no list here was verified.
  */
 @Composable
-fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> Unit = {}) {
+fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> Unit = {}, onOpenPcHosts: () -> Unit = {}) {
     val state by viewModel.state.collectAsState()
     LaunchedEffect(Unit) { viewModel.pickUpBot() }
     DisposableEffect(Unit) {
@@ -156,7 +159,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
         )
 
         if (optionsOpen) {
-            OptionsPanel(state, viewModel, onImportModel = { modelLauncher.launch(Unit) }, onOpenModels = onOpenModels)
+            OptionsPanel(state, viewModel, onImportModel = { modelLauncher.launch(Unit) }, onOpenModels = onOpenModels, onOpenPcHosts = onOpenPcHosts)
         }
         if (libraryOpen) {
             ChatLibrary(state, viewModel)
@@ -165,7 +168,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (rows.isEmpty()) {
                 Text(
-                    FriendlyErrors.emptyChat(state.activeLocalModelId != null || state.cloudKeyReady),
+                    FriendlyErrors.emptyChat(state.activeLocalModelId != null || state.activePcHost != null || state.cloudKeyReady),
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.align(Alignment.Center).padding(32.dp),
@@ -180,7 +183,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
             }
         }
 
-        if (state.activeLocalModelId == null && !state.cloudKeyReady) {
+        if (state.activeLocalModelId == null && state.activePcHost == null && !state.cloudKeyReady) {
             Text(
                 FriendlyErrors.missingChatSetup(state.provider.label),
                 color = MaterialTheme.colorScheme.error,
@@ -209,6 +212,9 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                 Text("Helper bot: $botName", color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                 DroidTextButton(onClick = viewModel::stopBot) { Text("Stop bot") }
+            }
+            state.botToolStatus?.let {
+                Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 4.dp))
             }
         }
 
@@ -266,6 +272,11 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
 
 /** Header line: the on-device model while one is active, otherwise the cloud provider and its model. */
 private fun subtitleFor(state: ChatUiState): String {
+    state.activePcHost?.let { kind ->
+        val saved = state.pcHosts[kind]
+        val cloud = if (saved?.location == PcModelLocation.CLOUD_BACKED) " (cloud-backed)" else ""
+        return "On your PC · ${kind.label} · ${saved?.model?.ifBlank { null } ?: "no model"}$cloud"
+    }
     if (state.activeLocalModelId == null) return "${state.provider.label} · ${state.model}"
     return "On device · " + (state.localModels.firstOrNull { it.id == state.activeLocalModelId }?.label ?: "model")
 }
@@ -309,14 +320,26 @@ private fun Header(
 }
 
 @Composable
-private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportModel: () -> Unit, onOpenModels: () -> Unit) {
+private fun OptionsPanel(
+    state: ChatUiState,
+    viewModel: ChatViewModel,
+    onImportModel: () -> Unit,
+    onOpenModels: () -> Unit,
+    onOpenPcHosts: () -> Unit,
+) {
     var menuOpen by remember { mutableStateOf(false) }
     val activeLocal = state.localModels.firstOrNull { it.id == state.activeLocalModelId }
     DroidCard(modifier = Modifier.padding(bottom = 12.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Box {
                 DroidSecondaryButton(onClick = { menuOpen = true }) {
-                    Text(if (state.activeLocalModelId != null) "On device: ${activeLocal?.label ?: "model"}" else state.provider.label)
+                    Text(
+                        when {
+                            state.activePcHost != null -> "On your PC: ${state.activePcHost.label}"
+                            state.activeLocalModelId != null -> "On device: ${activeLocal?.label ?: "model"}"
+                            else -> state.provider.label
+                        },
+                    )
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     CloudProviderCatalog.all.forEach { spec ->
@@ -348,9 +371,36 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
                             onOpenModels()
                         },
                     )
+                    HorizontalDivider()
+                    DropdownMenuItem(text = { Text("Models on your PC", color = TextSecondary) }, onClick = {}, enabled = false)
+                    state.pcHosts.filterValues { it.model.isNotBlank() }.forEach { (kind, saved) ->
+                        DropdownMenuItem(text = { Text("On your PC: ${kind.label} · ${saved.model}") }, onClick = {
+                            viewModel.selectPcHost(kind)
+                            menuOpen = false
+                        })
+                    }
+                    DropdownMenuItem(
+                        text = { Text("Set up a PC server…") },
+                        onClick = {
+                            menuOpen = false
+                            onOpenPcHosts()
+                        },
+                    )
                 }
             }
-            if (state.activeLocalModelId == null) {
+            if (state.activePcHost != null) {
+                val saved = state.pcHosts[state.activePcHost]
+                Text(
+                    "Messages are sent to your PC at ${saved?.address ?: "an address that is not saved yet"}, not to a cloud provider. " +
+                        "Model: ${saved?.model?.ifBlank { null } ?: "none"} — ${saved?.let { PcHostModels.locationLabel(it.location, it.upstream) } ?: "not set up"}. " +
+                        "${saved?.takeIf { it.model.isNotBlank() }?.let { PcHostToolNotices.status(it.toolSupport, it.toolsForced) + ". " }.orEmpty()}" +
+                        "This needs the phone to reach the PC (same Wi-Fi or VPN), not internet access. " +
+                        "A later cloud turn sends the whole conversation, including these replies, to that provider.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                )
+                DroidSecondaryButton(onClick = onOpenPcHosts) { Text("PC-hosted models…") }
+            } else if (state.activeLocalModelId == null) {
                 OutlinedTextField(
                     value = state.model,
                     onValueChange = viewModel::setModel,
@@ -367,6 +417,9 @@ private fun OptionsPanel(state: ChatUiState, viewModel: ChatViewModel, onImportM
                 DroidSecondaryButton(onClick = viewModel::askDeleteLocalModel, enabled = !state.sending) { Text("Delete this model file") }
             }
             state.localStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            if (state.localImporting) {
+                DroidSecondaryButton(onClick = viewModel::cancelLocalImport) { Text("Cancel import") }
+            }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Switch(checked = state.memoryEnabled, onCheckedChange = viewModel::setMemoryEnabled)
                 Text("Memory (applies next time you open Chat)", style = MaterialTheme.typography.bodySmall)

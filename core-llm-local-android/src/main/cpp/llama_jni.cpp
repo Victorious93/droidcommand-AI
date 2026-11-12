@@ -13,6 +13,7 @@
 #include <jni.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -30,6 +31,9 @@ struct DcaContext {
     llama_model* model = nullptr;
     llama_context* ctx = nullptr;
     const llama_vocab* vocab = nullptr;
+    // Set from another thread by nativeRequestStop; read by llama.cpp's abort callback (inside a
+    // llama_decode call) and by the generation loop. Cleared when a generation starts.
+    std::atomic<bool> stop{false};
 };
 
 // Separate from DcaContext (chat generation): an embedding context is loaded with
@@ -43,7 +47,39 @@ struct DcaEmbeddingContext {
 
 std::once_flag g_backendInitFlag;
 
+// llama.cpp reports why a load failed only through its log ("unknown model architecture: ...",
+// "tensor ... data is not within the file bounds", "failed to allocate ..."). The error lines since
+// the last load began are kept (the first is usually the specific one, the last a generic "failed to
+// load model"), so a load failure can say why instead of just "failed".
+std::mutex g_lastErrorMutex;
+std::string g_lastError;
+constexpr size_t kMaxErrorChars = 400;
+
+void clearLastError() {
+    std::lock_guard<std::mutex> lock(g_lastErrorMutex);
+    g_lastError.clear();
+}
+
+// " (llama.cpp: <error lines>)", or empty when llama.cpp logged no error.
+std::string lastErrorSuffix() {
+    std::lock_guard<std::mutex> lock(g_lastErrorMutex);
+    if (g_lastError.empty()) return {};
+    return " (llama.cpp: " + g_lastError + ")";
+}
+
 void llamaLog(ggml_log_level level, const char* text, void* /*userData*/) {
+    if (level == GGML_LOG_LEVEL_ERROR && text != nullptr) {
+        std::string line(text);
+        while (!line.empty() && (line.back() == '\n' || line.back() == '\r' || line.back() == ' ')) line.pop_back();
+        if (!line.empty()) {
+            std::lock_guard<std::mutex> lock(g_lastErrorMutex);
+            if (g_lastError.size() < kMaxErrorChars) {
+                if (!g_lastError.empty()) g_lastError += "; ";
+                g_lastError += line;
+                if (g_lastError.size() > kMaxErrorChars) g_lastError.resize(kMaxErrorChars);
+            }
+        }
+    }
 #ifdef __ANDROID__
     int priority = level == GGML_LOG_LEVEL_ERROR ? ANDROID_LOG_ERROR
                  : level == GGML_LOG_LEVEL_WARN  ? ANDROID_LOG_WARN
@@ -196,21 +232,32 @@ Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeLoad(
         return 0;
     }
 
+    clearLastError();
     const char* path = env->GetStringUTFChars(jModelPath, nullptr);
     llama_model* model = llama_model_load_from_file(path, modelParams);
     env->ReleaseStringUTFChars(jModelPath, path);
     if (model == nullptr) {
-        throwInferenceException(env, "llama.cpp failed to load the model file");
+        throwInferenceException(env, "llama.cpp failed to load the model file" + lastErrorSuffix());
+        return 0;
+    }
+    if (llama_model_has_encoder(model) && !llama_model_has_decoder(model)) {
+        llama_model_free(model);
+        throwInferenceException(env, "this is an encoder-only (embedding) model and cannot generate text");
         return 0;
     }
 
     llama_context_params ctxParams = llama_context_default_params();
-    ctxParams.n_ctx = static_cast<uint32_t>(std::max(contextTokens, 1));
+    // Never more than the model was trained with: llama.cpp only warns about a larger window and
+    // the output degrades. The Kotlin side already asks for min(requested, trained).
+    const int32_t trainCtx = llama_model_n_ctx_train(model);
+    const int32_t wanted = std::max(contextTokens, 1);
+    ctxParams.n_ctx = static_cast<uint32_t>(trainCtx > 0 ? std::min(wanted, trainCtx) : wanted);
     ctxParams.n_batch = std::min(ctxParams.n_ctx, static_cast<uint32_t>(512));
     llama_context* ctx = llama_init_from_model(model, ctxParams);
     if (ctx == nullptr) {
         llama_model_free(model);
-        throwInferenceException(env, "llama.cpp failed to create an inference context");
+        throwInferenceException(
+            env, "llama.cpp failed to create an inference context (usually not enough memory)" + lastErrorSuffix());
         return 0;
     }
 
@@ -218,18 +265,32 @@ Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeLoad(
     dca->model = model;
     dca->ctx = ctx;
     dca->vocab = llama_model_get_vocab(model);
+    // Lets a stop request end a llama_decode that is still running (a long prompt on a slow phone
+    // takes many seconds before the first token). The callback only reads an atomic flag.
+    llama_set_abort_callback(
+        ctx, [](void* data) { return static_cast<DcaContext*>(data)->stop.load(std::memory_order_relaxed); }, dca);
     return reinterpret_cast<jlong>(dca);
+}
+
+// May be called from any thread while nativeGenerate runs on another. The Kotlin side guarantees
+// the handle is not freed during this call (LlamaCppBackend.requestStop/unload share a lock).
+JNIEXPORT void JNICALL
+Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeRequestStop(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+    auto* dca = reinterpret_cast<DcaContext*>(handle);
+    if (dca != nullptr) dca->stop.store(true, std::memory_order_relaxed);
 }
 
 JNIEXPORT void JNICALL
 Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeGenerate(
     JNIEnv* env, jobject /*thiz*/, jlong handle, jstring jSystemPrompt, jobjectArray jRoles,
-    jobjectArray jContents, jint maxTokens, jdouble temperature, jobject sink) {
+    jobjectArray jContents, jint maxTokens, jdouble temperature, jstring jGrammar, jobject sink) {
     auto* dca = reinterpret_cast<DcaContext*>(handle);
     if (dca == nullptr) {
         throwInferenceException(env, "generate() called with no loaded model");
         return;
     }
+
+    dca->stop.store(false, std::memory_order_relaxed);
 
     jclass sinkClass = env->GetObjectClass(sink);
     jmethodID onTokenMethod = env->GetMethodID(sinkClass, "onToken", "([B)Z");
@@ -286,14 +347,40 @@ Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeGenerate(
 
     llama_memory_seq_rm(llama_get_memory(dca->ctx), /*seq_id=*/0, -1, -1);
 
-    llama_batch batch = llama_batch_get_one(promptTokens.data(), static_cast<int32_t>(promptTokens.size()));
-    if (llama_decode(dca->ctx, batch) != 0) {
-        throwInferenceException(env, "llama_decode failed on the prompt");
-        return;
+    // The prompt is decoded in pieces of at most n_batch tokens. llama_decode asserts (aborting the
+    // whole process, not an error return) when handed more than n_batch tokens at once, which every
+    // conversation longer than 512 tokens used to do. The pieces are also where a stop is noticed.
+    const int32_t nBatch = static_cast<int32_t>(llama_n_batch(dca->ctx));
+    const int32_t nPrompt = static_cast<int32_t>(promptTokens.size());
+    for (int32_t done = 0; done < nPrompt;) {
+        if (dca->stop.load(std::memory_order_relaxed)) return; // stopped before the first token: no text, no error
+        const int32_t n = std::min(nBatch, nPrompt - done);
+        llama_batch batch = llama_batch_get_one(promptTokens.data() + done, n);
+        if (llama_decode(dca->ctx, batch) != 0) {
+            if (dca->stop.load(std::memory_order_relaxed)) return; // aborted by the stop request
+            throwInferenceException(env, "llama_decode failed on the prompt" + lastErrorSuffix());
+            return;
+        }
+        done += n;
     }
 
     llama_sampler_chain_params chainParams = llama_sampler_chain_default_params();
     llama_sampler* sampler = llama_sampler_chain_init(chainParams);
+    if (jGrammar != nullptr) {
+        // The grammar sampler goes first: it removes every token the grammar forbids, and the samplers
+        // after it choose among what is left. A grammar llama.cpp cannot parse is an error, never ignored:
+        // the caller asked for constrained output and must not get unconstrained text instead.
+        const char* chars = env->GetStringUTFChars(jGrammar, nullptr);
+        std::string grammar(chars);
+        env->ReleaseStringUTFChars(jGrammar, chars);
+        llama_sampler* grammarSampler = llama_sampler_init_grammar(dca->vocab, grammar.c_str(), "root");
+        if (grammarSampler == nullptr) {
+            llama_sampler_free(sampler);
+            throwInferenceException(env, "llama.cpp rejected the output grammar");
+            return;
+        }
+        llama_sampler_chain_add(sampler, grammarSampler);
+    }
     if (temperature > 0.0) {
         llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
         llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.95f, 1));
@@ -306,9 +393,18 @@ Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeGenerate(
     jboolean keepGoing = JNI_TRUE;
     int32_t generated = 0;
     llama_token nextToken = 0;
-    while (generated < maxTokens) {
-        nextToken = llama_sampler_sample(sampler, dca->ctx, -1);
-        llama_sampler_accept(sampler, nextToken);
+    while (generated < maxTokens && !dca->stop.load(std::memory_order_relaxed)) {
+        // llama_sampler_sample already accepts the token it returns. Accepting it a second time here fed every
+        // token to the grammar twice, which a grammar rejects by throwing; nothing else in the chain noticed.
+        // A C++ exception must not leave a JNI function (it aborts the whole process), so it becomes an
+        // InferenceException.
+        try {
+            nextToken = llama_sampler_sample(sampler, dca->ctx, -1);
+        } catch (const std::exception& e) {
+            llama_sampler_free(sampler);
+            throwInferenceException(env, std::string("sampling failed: ") + e.what());
+            return;
+        }
         if (llama_vocab_is_eog(dca->vocab, nextToken)) break;
 
         std::string piece = tokenToPiece(dca->vocab, nextToken);
@@ -327,7 +423,8 @@ Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeGenerate(
         llama_batch nextBatch = llama_batch_get_one(&nextToken, 1);
         if (llama_decode(dca->ctx, nextBatch) != 0) {
             llama_sampler_free(sampler);
-            throwInferenceException(env, "llama_decode failed during generation");
+            if (dca->stop.load(std::memory_order_relaxed)) return; // aborted by the stop request
+            throwInferenceException(env, "llama_decode failed during generation" + lastErrorSuffix());
             return;
         }
     }
@@ -362,7 +459,7 @@ Java_ai_droidcommand_llm_local_android_LlamaCppEmbeddingBackend_nativeLoad(
     llama_model* model = llama_model_load_from_file(path, modelParams);
     env->ReleaseStringUTFChars(jModelPath, path);
     if (model == nullptr) {
-        throwInferenceException(env, "llama.cpp failed to load the embedding model file");
+        throwInferenceException(env, "llama.cpp failed to load the embedding model file" + lastErrorSuffix());
         return 0;
     }
     if (llama_model_has_encoder(model) && llama_model_has_decoder(model)) {

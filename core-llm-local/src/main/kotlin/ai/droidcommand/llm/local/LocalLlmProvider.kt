@@ -5,6 +5,7 @@ import ai.droidcommand.llm.LlmError
 import ai.droidcommand.llm.LlmRequest
 import ai.droidcommand.llm.LlmResponse
 import ai.droidcommand.llm.StreamingLlmProvider
+import java.io.IOException
 
 /**
  * [StreamingLlmProvider] for [ai.droidcommand.llm.ProviderType.LOCAL] models.
@@ -12,9 +13,11 @@ import ai.droidcommand.llm.StreamingLlmProvider
  * has just reported [ModelCheck.Verified]; a missing or tampered model
  * yields [LlmError.ModelUnavailable] and never reaches the backend.
  *
- * Tool calls and structured output are not supported (llama.cpp grammar /
- * tool parsing is not implemented): requests asking for either are refused
- * rather than silently ignored, with [LlmError.ModelUnavailable] — NOT
+ * Tool calls are supported for one combination only ([toolSupport], [LocalToolProtocol]): a backend that samples
+ * under a grammar, and a model whose own chat template defines `<tool_call>` blocks. The reply is then held to
+ * "ordinary text, or up to [LocalToolProtocol.MAX_CALLS] well-formed calls to an offered tool" while it is generated
+ * and checked again before it is returned as [LlmResponse.ToolCall]. Any other combination, and structured output,
+ * is refused rather than silently ignored, with [LlmError.ModelUnavailable] — NOT
  * [LlmError.InvalidResponse]. The distinction matters to
  * [ai.droidcommand.llm.ModelRouter]: it falls back to the next provider on
  * `ModelUnavailable` but never on `InvalidResponse`, and the agent planner
@@ -25,6 +28,12 @@ import ai.droidcommand.llm.StreamingLlmProvider
  * The conversation is fitted to the model's context window before it reaches the backend ([ContextFit]): a chat sends its
  * whole history each turn, and a small window would otherwise refuse every turn once the history grew past it. The oldest
  * turns are left out; a newest message that cannot fit on its own is refused with a message that says why.
+ *
+ * Before the first load the file's own GGUF metadata is read ([GgufMetadataReader]): a file [GgufCompatibility] can name
+ * as not a chat model is refused with what to do instead, the window is never larger than the one the model was trained
+ * with, and the RAM estimate uses the model's real cache cost. A file whose metadata cannot be read is left to
+ * [ModelRepository.verify] and llama.cpp to judge. A load failure reports llama.cpp's own reason with the file's
+ * architecture and GGUF version.
  */
 class LocalLlmProvider(
     private val modelId: String,
@@ -35,74 +44,169 @@ class LocalLlmProvider(
 ) : StreamingLlmProvider {
     private var loaded = false
 
+    /** The file's own metadata, read once per load cycle. `null` inside means unreadable or not parseable. */
+    private var inspected: Inspection? = null
+
+    private class Inspection(val metadata: GgufMetadata?)
+
     override fun complete(request: LlmRequest): LlmResponse {
         val sb = StringBuilder()
         val r = stream(request) { sb.append(it) }
         return if (r is LlmResponse.Text) LlmResponse.Text(sb.toString()) else r
     }
 
+    override fun stream(request: LlmRequest, onTextDelta: (String) -> Unit): LlmResponse = stream(request, { false }, onTextDelta)
+
+    /**
+     * As [stream], but stops when [cancelled] turns true: before the model is loaded, and after any token. What was
+     * generated up to then is returned as [LlmResponse.Text] (possibly empty); the caller, which owns [cancelled],
+     * decides what a stopped reply means. [requestStop] makes a stop take effect while the prompt is still being read.
+     */
     @Synchronized
-    override fun stream(request: LlmRequest, onTextDelta: (String) -> Unit): LlmResponse {
-        if (request.tools.isNotEmpty()) return unsupported("tool calling")
+    fun stream(request: LlmRequest, cancelled: () -> Boolean, onTextDelta: (String) -> Unit): LlmResponse {
         if (request.responseFormat != null) return unsupported("structured output")
         val meta = repository.get(modelId) ?: return LlmResponse.Error(LlmError.ModelUnavailable("Unknown model '$modelId'"))
+        val gguf = inspect()
+        val tools = request.tools
+        if (tools.isNotEmpty()) {
+            if (!LocalToolProtocol.support(gguf, backend).supported) return unsupported("tool calling")
+            LocalToolProtocol.unusableNames(tools).takeIf { it.isNotEmpty() }?.let {
+                return LlmResponse.Error(LlmError.ModelUnavailable("Local provider cannot offer tools with these names: ${it.joinToString(", ")}"))
+            }
+        }
+        // With tools offered, the model is told about them in the system text and sees earlier calls and results as plain turns.
+        val systemPrompt = if (tools.isEmpty()) request.systemPrompt else listOfNotNull(request.systemPrompt, LocalToolProtocol.systemBlock(tools)).joinToString("\n\n")
+        val history = if (tools.isEmpty()) request.messages else LocalToolProtocol.render(request.messages)
+        if (gguf != null) GgufCompatibility.problem(gguf)?.let { return LlmResponse.Error(LlmError.ModelUnavailable(it)) }
+        val contextTokens = GgufCompatibility.contextTokens(meta.contextTokens, gguf)
         // Decided before the model is loaded: loading a multi-gigabyte file only to refuse the message would be wasted work.
-        val maxTokens = ContextFit.replyBudget(meta.contextTokens, request.maxOutputTokens ?: config.maxOutputTokens ?: DEFAULT_MAX_TOKENS)
-        val prompt = ContextFit.fit(request.systemPrompt, request.messages, ContextFit.promptBudget(meta.contextTokens, maxTokens))
+        val maxTokens = ContextFit.replyBudget(contextTokens, request.maxOutputTokens ?: config.maxOutputTokens ?: DEFAULT_MAX_TOKENS)
+        val prompt = ContextFit.fit(systemPrompt, history, ContextFit.promptBudget(contextTokens, maxTokens))
         if (!prompt.fits) {
             return LlmResponse.Error(
                 LlmError.ModelUnavailable(
-                    "This message is too long for the on-device model: its context window is ${meta.contextTokens} tokens. " +
+                    "This message is too long for the on-device model: its context window is $contextTokens tokens. " +
                         "Shorten the message, or use a cloud provider.",
                 ),
             )
         }
+        if (cancelled()) return LlmResponse.Text("")
         try {
             if (!loaded) {
                 val size = meta.sizeBytes
                 if (memory != null && size != null) {
                     val snap = memory.snapshot()
-                    val fit = RamFit.assess(size, meta.contextTokens, snap.totalBytes, snap.availableBytes)
+                    val fit = RamFit.assess(size, contextTokens, snap.totalBytes, snap.availableBytes, gguf?.kvBytesPerToken())
                     if (fit.verdict == RamFitVerdict.TOO_BIG) {
                         return LlmResponse.Error(LlmError.ModelUnavailable(fit.reason))
                     }
                 }
                 when (val check = repository.verify(modelId)) {
-                    is ModelCheck.Missing -> return LlmResponse.Error(LlmError.ModelUnavailable("Model file not found: ${check.path}"))
+                    is ModelCheck.Missing -> return LlmResponse.Error(
+                        LlmError.ModelUnavailable(
+                            "The model file is no longer there (${check.path}). Add the model again.",
+                        ),
+                    )
                     is ModelCheck.Mismatch -> return LlmResponse.Error(
-                        LlmError.ModelUnavailable("SHA-256 mismatch for '$modelId' (got ${check.actual}); refusing to load"),
+                        LlmError.ModelUnavailable(
+                            "The file for '${meta.displayName}' changed after it was added (SHA-256 mismatch, got ${check.actual}); " +
+                                "refusing to load it. Remove the model and add it again.",
+                        ),
                     )
                     is ModelCheck.Rejected -> return LlmResponse.Error(
                         LlmError.ModelUnavailable("Model '$modelId' failed its integrity check (${check.detail}); refusing to load"),
                     )
-                    is ModelCheck.Verified -> backend.load(check.path, meta.contextTokens)
+                    is ModelCheck.Verified -> {
+                        if (cancelled()) return LlmResponse.Text("")
+                        try {
+                            backend.load(check.path, contextTokens)
+                        } catch (e: InferenceException) {
+                            return LlmResponse.Error(LlmError.ModelUnavailable(loadFailure(meta, gguf, e)))
+                        }
+                    }
                 }
                 loaded = true
             }
             val sb = StringBuilder()
+            // With tools offered, text is held back until the reply can no longer be a tool call, so a call is never shown as text.
+            var forwarded = if (tools.isEmpty()) 0 else -1
             backend.generate(
                 GenerationRequest(
-                    systemPrompt = request.systemPrompt,
+                    systemPrompt = systemPrompt,
                     messages = prompt.messages,
                     maxTokens = maxTokens,
                     temperature = request.temperature ?: config.temperature,
+                    grammar = if (tools.isEmpty()) null else LocalToolProtocol.grammar(tools),
                 ),
             ) { delta ->
-                sb.append(delta)
-                onTextDelta(delta)
-                true
+                if (cancelled()) {
+                    false
+                } else {
+                    sb.append(delta)
+                    if (forwarded >= 0) {
+                        onTextDelta(delta)
+                    } else if (!LocalToolProtocol.mayBeCall(sb.toString())) {
+                        forwarded = 0
+                        onTextDelta(sb.toString())
+                    }
+                    true
+                }
             }
-            return LlmResponse.Text(sb.toString())
+            if (tools.isEmpty() || cancelled()) return LlmResponse.Text(sb.toString())
+            val parsed = LocalToolProtocol.parse(sb.toString(), tools)
+            // A reply so short it never stopped looking like the start of a call (e.g. "<") is still text.
+            if (parsed is LlmResponse.Text && forwarded < 0 && sb.isNotEmpty()) onTextDelta(sb.toString())
+            return parsed
         } catch (e: InferenceException) {
             return LlmResponse.Error(LlmError.ModelUnavailable(e.message ?: "inference failed"))
         }
     }
+
+    /**
+     * Whether this model, on this backend, can be offered tools. Reads the file's GGUF metadata (cached per load
+     * cycle); it does not load the model. A caller offers tools only when this says so, and shows [LocalToolSupport.reason]
+     * otherwise.
+     */
+    @Synchronized
+    fun toolSupport(): LocalToolSupport = LocalToolProtocol.support(inspect(), backend)
+
+    /**
+     * Asks a [stream] running on another thread to stop as soon as the backend can, even before its first token.
+     * Not synchronized on purpose: [stream] holds the lock for the whole reply. The caller's `cancelled` must also be
+     * true, or the stopped call is reported as an ordinary (short or empty) reply.
+     */
+    fun requestStop() = backend.requestStop()
 
     /** Releases the native context; the next call reloads (and re-verifies) the model. */
     @Synchronized
     fun close() {
         if (loaded) backend.unload()
         loaded = false
+        inspected = null
+    }
+
+    private fun inspect(): GgufMetadata? {
+        inspected?.let { return it.metadata }
+        val file = repository.fileFor(modelId)
+        val metadata = if (file != null && file.isFile) {
+            try {
+                (GgufMetadataReader.read(file) as? GgufMetadataResult.Valid)?.metadata
+            } catch (_: IOException) {
+                null
+            }
+        } else {
+            null
+        }
+        inspected = Inspection(metadata)
+        return metadata
+    }
+
+    private fun loadFailure(meta: ModelMetadata, gguf: GgufMetadata?, e: InferenceException): String {
+        val what = gguf?.let { " (architecture '${it.architecture ?: "unknown"}', GGUF v${it.version})" }.orEmpty()
+        val native = e.message?.takeIf { it.isNotBlank() } ?: "no reason given"
+        return "Could not load '${meta.displayName}'$what: $native. " +
+            "If the file was copied from a PC, copy it again in case it is incomplete; if it is a very new model, it may need " +
+            "a newer llama.cpp than this app includes. A smaller quantization helps when memory is the limit."
     }
 
     private fun unsupported(what: String) =
@@ -110,5 +214,40 @@ class LocalLlmProvider(
 
     companion object {
         const val DEFAULT_MAX_TOKENS = 512
+    }
+}
+
+/**
+ * The loaded on-device models of one process: at most one at a time, shared by every chat that uses it.
+ *
+ * Without this each `ChatSession` loaded its own copy of the model (the chat screen, an assist request and a recreated
+ * screen would each hold several gigabytes), and nothing freed a copy whose owner simply went away. [provider] closes
+ * any other loaded model first, so switching models frees the previous one before the next loads. Closing waits for a
+ * reply that is being generated on that model.
+ */
+class LocalProviderPool(
+    private val repository: ModelRepository,
+    private val memory: DeviceMemory? = null,
+    private val backendFactory: () -> InferenceBackend,
+) {
+    private val providers = LinkedHashMap<String, LocalLlmProvider>()
+
+    /** The provider for [modelId], created on first use. Throws what [backendFactory] throws (e.g. no native library). */
+    @Synchronized
+    fun provider(modelId: String): LocalLlmProvider {
+        providers.filterKeys { it != modelId }.values.forEach { it.close() }
+        return providers.getOrPut(modelId) { LocalLlmProvider(modelId, repository, backendFactory(), memory = memory) }
+    }
+
+    /** Unloads [modelId] if it is loaded, e.g. before its file is deleted. */
+    @Synchronized
+    fun close(modelId: String) {
+        providers.remove(modelId)?.close()
+    }
+
+    @Synchronized
+    fun closeAll() {
+        providers.values.forEach { it.close() }
+        providers.clear()
     }
 }

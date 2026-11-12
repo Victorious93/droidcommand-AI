@@ -2,10 +2,12 @@ package ai.droidcommand.app.ui.models
 
 import ai.droidcommand.app.localmodels.ImportOutcome
 import ai.droidcommand.app.localmodels.ImportedModel
+import ai.droidcommand.app.localmodels.LocalModelImporter
 import ai.droidcommand.app.localmodels.LocalModelRuntime
 import ai.droidcommand.app.localmodels.download.EnqueueResult
 import ai.droidcommand.app.localmodels.download.ModelDownloadScheduler
 import ai.droidcommand.app.localmodels.download.ModelDownloadState
+import ai.droidcommand.app.ui.pchost.PcHostChoice
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.llm.local.ChatModelCatalog
 import ai.droidcommand.llm.local.ChatModelCatalogEntry
@@ -41,6 +43,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 data class CatalogRow(
@@ -92,6 +95,8 @@ class ModelsViewModel @Inject constructor(
     private val mutableState = MutableStateFlow(ModelsUiState())
     val state: StateFlow<ModelsUiState> = mutableState.asStateFlow()
     private val downloadJobs = mutableMapOf<String, Job>()
+
+    @Volatile private var importCancelled = AtomicBoolean(false)
 
     init {
         refresh(scan = true)
@@ -196,16 +201,24 @@ class ModelsViewModel @Inject constructor(
 
     fun importUri(uri: Uri) {
         if (mutableState.value.importing) return
+        val cancel = AtomicBoolean(false)
+        importCancelled = cancel
         mutableState.update { it.copy(importing = true, status = "Importing…") }
         viewModelScope.launch(Dispatchers.IO) {
-            takePersistable(uri)
-            val name = GgufFileName.resolve(displayName(uri), uri.lastPathSegment, uri.toString())
-                ?: (displayName(uri) ?: "model.gguf")
-            val size = sizeOf(uri)
-            val outcome = copyOrOpen(uri, name, size)
+            // Anything unexpected (a provider that throws on open, a revoked grant) ends as a message, not a stuck "Copying…".
+            val outcome = runCatching {
+                takePersistable(uri)
+                val name = GgufFileName.resolve(displayName(uri), uri.lastPathSegment, uri.toString())
+                    ?: (displayName(uri) ?: "model.gguf")
+                val size = sizeOf(uri)
+                copyOrOpen(uri, name, size, cancel)
+            }.getOrElse { ImportOutcome.Failed("The import was interrupted (${it.message ?: it.javaClass.simpleName}). Nothing was kept. Pick the file again.") }
             applyImport(outcome)
         }
     }
+
+    /** Stops a running import. The partial copy is deleted; nothing is registered. */
+    fun cancelImport() = importCancelled.set(true)
 
     fun importScanned(path: String) {
         if (mutableState.value.importing) return
@@ -216,7 +229,7 @@ class ModelsViewModel @Inject constructor(
     }
 
     fun select(id: String) {
-        prefs.edit { putString(KEY_LOCAL_MODEL, id) }
+        selectForChat(id)
         mutableState.update { it.copy(activeId = id, status = "Selected. Chat will run this model on the device.") }
     }
 
@@ -308,14 +321,15 @@ class ModelsViewModel @Inject constructor(
         val models = runtime.list()
         when (outcome) {
             is ImportOutcome.Imported -> {
-                prefs.edit { putString(KEY_LOCAL_MODEL, outcome.model.id) }
-                val suffix = ramSuffix(outcome.model.metadata.sizeBytes, outcome.model.metadata.contextTokens)
+                selectForChat(outcome.model.id)
+                val suffix = ramSuffix(outcome.model.metadata.sizeBytes, outcome.model.metadata.contextTokens) +
+                    outcome.note?.let { " $it" }.orEmpty()
                 mutableState.update {
                     it.copy(importing = false, installed = models, activeId = outcome.model.id, status = "Imported ${outcome.model.label}. Chat now runs on this device.$suffix")
                 }
             }
             is ImportOutcome.Duplicate -> {
-                prefs.edit { putString(KEY_LOCAL_MODEL, outcome.id) }
+                selectForChat(outcome.id)
                 mutableState.update {
                     it.copy(importing = false, installed = models, activeId = outcome.id, status = "That file is already imported. Selected it.")
                 }
@@ -326,11 +340,20 @@ class ModelsViewModel @Inject constructor(
         refresh(scan = false)
     }
 
-    private fun copyOrOpen(uri: Uri, name: String, size: Long?): ImportOutcome {
+    private fun copyOrOpen(uri: Uri, name: String, size: Long?, cancel: AtomicBoolean): ImportOutcome {
         val stream = context.contentResolver.openInputStream(uri)
             ?: return ImportOutcome.Failed("The file could not be opened.")
-        val copied = stream.use { runtime.importModel(name, it, size) { } }
-        if (copied !is ImportOutcome.Failed || !copied.reason.contains("Not enough free storage")) return copied
+        var reported = 0L
+        val copied = stream.use {
+            runtime.importModel(name, it, size, cancelled = cancel::get) { bytes ->
+                if (bytes - reported >= PROGRESS_STEP_BYTES) {
+                    reported = bytes
+                    val of = size?.takeIf { total -> total > 0 }?.let { total -> " of ${total / MEGABYTE}" }.orEmpty()
+                    mutableState.update { ui -> ui.copy(status = "Importing… ${bytes / MEGABYTE}$of MB copied") }
+                }
+            }
+        }
+        if (copied !is ImportOutcome.Failed || !copied.reason.contains(LocalModelImporter.NOT_ENOUGH_STORAGE)) return copied
         val path = realPathFromFd(uri)
         if (path != null) return runtime.importExisting(File(path))
         return ImportOutcome.Failed(
@@ -404,9 +427,17 @@ class ModelsViewModel @Inject constructor(
         else -> "Shared-storage scan needs all-files access (optional). The picker below works without it."
     }
 
+    /** Choosing an on-device model ends a PC-hosted choice: Chat has exactly one place it sends a message. */
+    private fun selectForChat(id: String) = prefs.edit {
+        putString(KEY_LOCAL_MODEL, id)
+        remove(PcHostChoice.KEY_PC_HOST)
+    }
+
     private companion object {
         const val KEY_LOCAL_MODEL = "local_model_id"
         const val DEFAULT_CONTEXT = 2048
+        const val MEGABYTE = 1024L * 1024L
+        const val PROGRESS_STEP_BYTES = 64L * MEGABYTE
 
         fun hubId(file: HuggingFaceGgufFile): String = "hf-" + (file.sha256 ?: file.fileName).take(16)
     }

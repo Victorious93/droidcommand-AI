@@ -34,9 +34,9 @@ class JdkHttpTransport(
     private val certificatePinner: CertificatePinner? = null,
     private val mutualTls: MutualTlsConfig? = null,
 ) : StreamingHttpTransport {
-    override fun send(request: HttpRequestSpec): HttpResponseSpec {
+    override fun send(request: HttpRequestSpec): HttpResponseSpec = cancellable(request) {
         val response = buildClient(request).send(buildRequest(request), HttpResponse.BodyHandlers.ofString())
-        return HttpResponseSpec(response.statusCode(), headersOf(response), response.body())
+        HttpResponseSpec(response.statusCode(), headersOf(response), response.body())
     }
 
     /**
@@ -46,7 +46,31 @@ class JdkHttpTransport(
      * apply it to reading the body — so a server that stops sending
      * mid-stream is only bounded by the connection itself.
      */
-    override fun sendStreaming(request: HttpRequestSpec, onLine: (String) -> Unit): HttpResponseSpec {
+    override fun sendStreaming(request: HttpRequestSpec, onLine: (String) -> Unit): HttpResponseSpec =
+        cancellable(request) { streamLines(request, onLine) }
+
+    /**
+     * Runs [block] so that [RequestCancellation.cancel] interrupts this thread: `HttpClient.send` and a blocked
+     * body read both end on an interrupt. The outcome is [RequestCancelled], and the interrupt flag is cleared.
+     */
+    private fun <T> cancellable(request: HttpRequestSpec, block: () -> T): T {
+        val cancellation = request.cancellation ?: return block()
+        val thread = Thread.currentThread()
+        try {
+            cancellation.attach(thread::interrupt)
+            return block()
+        } catch (e: InterruptedException) {
+            throw RequestCancelled()
+        } catch (e: java.io.IOException) {
+            if (cancellation.isCancelled) throw RequestCancelled()
+            throw e
+        } finally {
+            cancellation.detach()
+            if (cancellation.isCancelled) Thread.interrupted()
+        }
+    }
+
+    private fun streamLines(request: HttpRequestSpec, onLine: (String) -> Unit): HttpResponseSpec {
         val response = buildClient(request).send(buildRequest(request), HttpResponse.BodyHandlers.ofLines())
         val headers = headersOf(response)
         response.body().use { lines ->
@@ -54,7 +78,10 @@ class JdkHttpTransport(
                 return HttpResponseSpec(response.statusCode(), headers, lines.toList().joinToString("\n"))
             }
             try {
-                lines.forEach(onLine)
+                lines.forEach { line ->
+                    request.cancellation?.throwIfCancelled()
+                    onLine(line)
+                }
             } catch (e: java.io.UncheckedIOException) {
                 // Stream<String> can only surface a read failure unchecked; restore the
                 // IOException the StreamingHttpTransport contract promises.

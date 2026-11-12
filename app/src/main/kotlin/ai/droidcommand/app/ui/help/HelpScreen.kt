@@ -53,6 +53,7 @@ fun HelpScreen() {
             body = "A .gguf file on this phone lets Chat work without a cloud key. You can pick a file you already have " +
                 "or download a free one from the catalog. Cloud keys are stored encrypted and are never shown again after you save them.",
         )
+        HelpCard(title = "A model on your PC, or a model on this phone", body = ai.droidcommand.llm.pchost.PcHostCopy.TWO_WORKFLOWS)
         HelpCard(
             title = "What this app will not do without asking",
             body = "Wipe, power-off, lock, flashing, and security-tool runs still show a confirmation. " +
