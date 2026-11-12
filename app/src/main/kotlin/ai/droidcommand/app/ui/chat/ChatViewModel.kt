@@ -45,6 +45,10 @@ import ai.droidcommand.llm.local.RamFitVerdict
 import ai.droidcommand.llm.pchost.PcHostEndpoint
 import ai.droidcommand.llm.pchost.PcHostKind
 import ai.droidcommand.llm.pchost.PcHostSettingsStore
+import ai.droidcommand.llm.routing.InferencePolicy
+import ai.droidcommand.llm.routing.InferenceSettings
+import ai.droidcommand.llm.routing.InferenceSettingsStore
+import ai.droidcommand.llm.routing.RouteResolver
 import ai.droidcommand.notes.NoteDraft
 import ai.droidcommand.rag.AttachResult
 import ai.droidcommand.rag.DocumentInfo
@@ -151,6 +155,14 @@ data class ChatUiState(
     val pcHosts: Map<PcHostKind, PcHostEndpoint> = emptyMap(),
     /** The PC server turns are sent to, or null. When set, [activeLocalModelId] is null. */
     val activePcHost: PcHostKind? = null,
+    /** The owner's inference policy. [InferencePolicy.MANUAL] is the behaviour from before policies existed. */
+    val inferencePolicy: InferencePolicy = InferencePolicy.MANUAL,
+    /** True once the owner said yes to cloud fallback; without it that policy never reaches a cloud provider. */
+    val cloudFallbackConfirmed: Boolean = false,
+    /** True while the owner is being asked to confirm cloud fallback. */
+    val confirmCloudFallback: Boolean = false,
+    /** Where the last routed reply came from (endpoint, model, fallback reason, request size), or why nothing answered. */
+    val routeSummary: String? = null,
     val conversationId: String = ChatSession.DEFAULT_CONVERSATION_ID,
     val savedChats: List<SavedChat> = emptyList(),
     val templates: List<PromptTemplate> = emptyList(),
@@ -197,6 +209,8 @@ class ChatViewModel @Inject constructor(
     private val toolRegistry: ToolRegistry,
     private val mcpTools: McpToolsRuntime,
     private val pcHostStore: PcHostSettingsStore,
+    private val inferenceSettings: InferenceSettingsStore,
+    private val routeResolver: RouteResolver,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
@@ -214,6 +228,8 @@ class ChatViewModel @Inject constructor(
         local = onDeviceModels.resources,
         autoRememberEveryTurns = if (autoRemember) AUTO_REMEMBER_TURNS else 0,
         brain = if (brainEnabled) { query -> brainRuntime.librarian().retrieveContext(query) } else null,
+        // The owner's inference policy: enforced inside the session on every send, search and remember.
+        router = routeResolver,
     )
 
     private val tts = AndroidTextToSpeech(context)
@@ -276,6 +292,61 @@ class ChatViewModel @Inject constructor(
         )
     }
 
+    /** Reads the saved policy. Runs off the main thread (it is a file). */
+    private fun refreshInferencePolicy() {
+        val saved = routeResolver.settings()
+        mutableState.update { it.copy(inferencePolicy = saved.policy, cloudFallbackConfirmed = saved.cloudFallbackConfirmed) }
+    }
+
+    /**
+     * Chooses where replies may come from. Cloud fallback is not saved here: it opens a confirmation first
+     * ([confirmCloudFallback]), because it lets the conversation leave the owner's own devices.
+     */
+    fun setInferencePolicy(policy: InferencePolicy) {
+        if (policy == InferencePolicy.CLOUD_FALLBACK && !mutableState.value.cloudFallbackConfirmed) {
+            mutableState.update { it.copy(confirmCloudFallback = true) }
+            return
+        }
+        saveInferencePolicy(policy, mutableState.value.cloudFallbackConfirmed && policy == InferencePolicy.CLOUD_FALLBACK)
+    }
+
+    fun confirmCloudFallback() = saveInferencePolicy(InferencePolicy.CLOUD_FALLBACK, confirmed = true)
+
+    fun dismissCloudFallback() = mutableState.update { it.copy(confirmCloudFallback = false) }
+
+    private fun saveInferencePolicy(policy: InferencePolicy, confirmed: Boolean) {
+        // Choosing any other policy withdraws the cloud confirmation, so it has to be given again next time.
+        mutableState.update { it.copy(inferencePolicy = policy, cloudFallbackConfirmed = confirmed, confirmCloudFallback = false, routeSummary = null, error = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val current = routeResolver.settings()
+            val saved = runCatching {
+                inferenceSettings.save(
+                    current.copy(
+                        policy = policy,
+                        cloudFallbackConfirmed = confirmed,
+                        deviceModelId = current.deviceModelId ?: prefs.getString(KEY_LOCAL_MODEL, null)?.takeIf { it.isNotBlank() },
+                        pcKind = current.pcKind ?: PcHostKind.byId(prefs.getString(PcHostChoice.KEY_PC_HOST, null)),
+                    ),
+                )
+            }
+            if (saved.isFailure) {
+                // What is in force is what is on disk, so show that again rather than a choice that was not saved.
+                refreshInferencePolicy()
+                mutableState.update { it.copy(error = "The policy could not be saved, so it was not changed.") }
+            }
+        }
+    }
+
+    /** Remembers the on-device model / PC server a policy routes to, next to Chat's own single pick. */
+    private fun rememberRouteChoice(deviceModelId: String? = null, pcKind: PcHostKind? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val current = routeResolver.settings()
+                inferenceSettings.save(current.copy(deviceModelId = deviceModelId ?: current.deviceModelId, pcKind = pcKind ?: current.pcKind))
+            }
+        }
+    }
+
     init {
         viewModelScope.launch {
             while (true) {
@@ -335,6 +406,7 @@ class ChatViewModel @Inject constructor(
      * [ChatRoute.MISSING_MESSAGE] instead of sending the chat off the device.
      */
     private fun refreshLocalModels() {
+        refreshInferencePolicy()
         val models = onDeviceModels.list()
         val saved = prefs.getString(KEY_LOCAL_MODEL, null)?.takeIf { it.isNotBlank() }
         val missing = saved != null && models.none { it.id == saved }
@@ -379,6 +451,8 @@ class ChatViewModel @Inject constructor(
             remove(PcHostChoice.KEY_PC_HOST)
         }
         mutableState.update { it.copy(activeLocalModelId = modelId, activePcHost = null, error = null, localStatus = null) }
+        // Only under a policy: an install that never chose one keeps no policy file (see FileInferenceSettingsStore).
+        if (mutableState.value.inferencePolicy.routed) rememberRouteChoice(deviceModelId = modelId)
     }
 
     /** Sends the following turns to the model server saved for [kind] in Settings, PC-hosted models. */
@@ -388,6 +462,7 @@ class ChatViewModel @Inject constructor(
             remove(KEY_LOCAL_MODEL)
         }
         mutableState.update { it.copy(activePcHost = kind, activeLocalModelId = null, error = null, localStatus = null) }
+        if (mutableState.value.inferencePolicy.routed) rememberRouteChoice(pcKind = kind)
     }
 
     /**
@@ -508,7 +583,7 @@ class ChatViewModel @Inject constructor(
         }
         val slash = command as? AiSlashCommands.Parsed.Command
         val slashProvider = slash?.let { CloudProviderCatalog.byId(it.providerId) }
-        mutableState.update { it.copy(sending = true, streaming = "", error = null, notice = null) }
+        mutableState.update { it.copy(sending = true, streaming = "", error = null, notice = null, routeSummary = null) }
         sendJob?.cancel()
         val stop = AtomicBoolean(false)
         stopRequested = stop
@@ -525,18 +600,33 @@ class ChatViewModel @Inject constructor(
                 pcHostEndpoint = current.activePcHost?.let { kind -> runCatching { pcHostStore.load(kind) }.getOrNull() },
             )
             val outgoing = slash?.prompt ?: text
-            val result = if (route is ChatRoute.OnDeviceMissing) {
+            // Read fresh: the policy may have been changed since this screen last refreshed.
+            val policy = routeResolver.policy()
+            val result = if (policy.routed && slashProvider == null) {
+                // The owner's policy decides where this goes. A place that fails is followed by the next allowed one;
+                // text already shown from the failed place is cleared first.
+                runCatching {
+                    session.sendRouted(
+                        outgoing,
+                        useWebSearch = current.webSearchEnabled,
+                        cancelled = stop::get,
+                        onRestart = { mutableState.update { it.copy(streaming = "") } },
+                    ) { delta ->
+                        if (!stop.get()) mutableState.update { it.copy(streaming = it.streaming + delta) }
+                    }
+                }.getOrElse { ChatResult.Failure(it.message ?: "The message could not be sent.") }
+            } else if (route is ChatRoute.OnDeviceMissing && !policy.routed) {
                 ChatResult.Failure(route.message)
-            } else if (route is ChatRoute.PcHostNotReady) {
+            } else if (route is ChatRoute.PcHostNotReady && !policy.routed) {
                 ChatResult.Failure(route.message)
-            } else if (route is ChatRoute.PcHosted) {
+            } else if (route is ChatRoute.PcHosted && !policy.routed) {
                 // The message goes to the PC. Stop closes the connection, so the PC stops generating too.
                 runCatching {
                     session.sendPcHost(route.target, outgoing, useWebSearch = current.webSearchEnabled, cancelled = stop::get) { delta ->
                         if (!stop.get()) mutableState.update { it.copy(streaming = it.streaming + delta) }
                     }
                 }.getOrElse { ChatResult.Failure("PC-hosted model: the request could not be made (${it.message ?: it.javaClass.simpleName}).") }
-            } else if (route is ChatRoute.OnDevice) {
+            } else if (route is ChatRoute.OnDevice && !policy.routed) {
                 // An on-device turn makes no network request: ChatSession skips web search and tools for it and says so.
                 runCatching {
                     session.sendLocal(route.modelId, outgoing, useWebSearch = current.webSearchEnabled, cancelled = stop::get) { delta ->
@@ -559,7 +649,11 @@ class ChatViewModel @Inject constructor(
             val refreshedChats = if (result is ChatResult.Reply) runCatching { savedChats(store) }.getOrNull() else null
             val cancelled = !isActive || stop.get()
             if (!cancelled) {
-                mutableState.update { it.afterTurn(result, text, null, refreshedChats) }
+                val routeSummary = when (result) {
+                    is ChatResult.Reply -> result.route?.summary()
+                    is ChatResult.Failure -> result.route?.summary()
+                }
+                mutableState.update { it.afterTurn(result, text, null, refreshedChats).copy(routeSummary = routeSummary) }
                 if (result is ChatResult.Reply) {
                     if (handsFreeRound) {
                         voice.speak(result.text)

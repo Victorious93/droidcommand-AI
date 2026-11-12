@@ -8,6 +8,7 @@ import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.llm.factory.ChatResult
 import ai.droidcommand.llm.factory.ChatSession
 import ai.droidcommand.llm.factory.CloudPromptClient
+import ai.droidcommand.llm.routing.PolicyInference
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.security.CompanionAssist
@@ -64,6 +65,10 @@ class CompanionAssistActivity : ComponentActivity() {
 
     @Inject
     lateinit var localModels: LocalModelRuntime
+
+    /** The owner's inference policy. When one is set, the request goes where it says instead of to Chat's last pick. */
+    @Inject
+    lateinit var inference: PolicyInference
 
     @Inject
     lateinit var pairing: PasswordPairingService
@@ -238,7 +243,9 @@ class CompanionAssistActivity : ComponentActivity() {
         val prompt = CompanionAssist.buildPrompt(request)
         val prefs = getSharedPreferences(CHAT_PREFS, MODE_PRIVATE)
         val localId = prefs.getString(KEY_LOCAL_MODEL, null)?.takeIf { it.isNotBlank() }
-        val result = if (localId != null) {
+        val result = if (inference.policy().routed) {
+            inference.ask("Companion assist", prompt)
+        } else if (localId != null) {
             localModels.list()
             val session = ChatSession(
                 vault,

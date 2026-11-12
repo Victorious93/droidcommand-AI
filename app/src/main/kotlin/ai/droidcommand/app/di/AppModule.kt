@@ -49,9 +49,19 @@ import ai.droidcommand.fleet.messenger.PairedNodeStore
 import ai.droidcommand.hackerai.HackerAiTool
 import ai.droidcommand.knowledge.android.RoomKnowledgeGraph
 import ai.droidcommand.llm.factory.CloudPromptClient
+import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.llm.pchost.FilePcHostSettingsStore
+import ai.droidcommand.app.localmodels.LocalModelRuntime
+import ai.droidcommand.llm.pchost.PcHostClient
+import ai.droidcommand.llm.pchost.PcHostKind
 import ai.droidcommand.llm.pchost.PcHostSettingsStore
+import ai.droidcommand.llm.routing.CloudChoice
+import ai.droidcommand.llm.routing.FileInferenceSettingsStore
+import ai.droidcommand.llm.routing.InferenceSettingsStore
+import ai.droidcommand.llm.routing.PolicyInference
+import ai.droidcommand.llm.routing.RouteResolver
+import ai.droidcommand.llm.ProviderType
 import ai.droidcommand.metasploit.MetasploitExecutor
 import ai.droidcommand.metasploit.MetasploitTool
 import ai.droidcommand.metasploit.TermuxMetasploitExecutor
@@ -179,7 +189,14 @@ object AppModule {
         approvalPrompt: ApprovalPrompt,
     ): ToolRegistry = ToolRegistry().apply {
         register(AutomationShellTool(AllowlistShellExecutor { advanced.shellAllowlist() }))
-        register(AiPromptTool(CloudPromptClient(vault, transport)) { spec -> chatModelFor(context, spec) })
+        register(
+            AiPromptTool(
+                CloudPromptClient(vault, transport),
+                modelFor = { spec -> chatModelFor(context, spec) },
+                // The tool only ever calls a cloud provider, so the owner's inference policy is asked first.
+                policyRefusal = { provider -> inferenceSettingsRefusal(context, "Asking ${provider.label}") },
+            ),
+        )
         register(RootTool(NullRootExecutor()))
         register(TermuxTool(termux))
         ShizukuTool.all(privilegedShell).forEach { register(it) }
@@ -257,6 +274,8 @@ object AppModule {
         backupStore: UnifiedLocalBackupStore,
     ): RemoteControlSettingsController = RemoteControlSettingsController(store, dispatcher, statusTray, backupStore)
 
+    private const val INFERENCE_SETTINGS_FILE = "inference-policy.properties"
+
     /** The model chat uses for [spec], read from the same preference chat writes. Falls back to the provider's suggestion. */
     private fun chatModelFor(context: Context, spec: CloudProviderSpec): String =
         context.getSharedPreferences(CHAT_PREFS, Context.MODE_PRIVATE).getString("model.${spec.id}", null) ?: spec.defaultModel
@@ -268,6 +287,69 @@ object AppModule {
         FileAssistantCapabilitySettingsStore(context.filesDir.toPath().resolve("assistant-capabilities.settings"))
 
     /** Saved PC model servers (address and model; not secret). The optional key is in the vault. */
+    /**
+     * The owner's inference policy ("this device only", "my PC only", ...). A missing file is an install from before
+     * policies existed and keeps the old behaviour; see [FileInferenceSettingsStore] for the migration rules.
+     */
+    @Provides
+    @Singleton
+    fun provideInferenceSettingsStore(@ApplicationContext context: Context): InferenceSettingsStore = inferenceSettingsStore(context)
+
+    private fun inferenceSettingsStore(context: Context): InferenceSettingsStore =
+        FileInferenceSettingsStore(context.filesDir.toPath().resolve(INFERENCE_SETTINGS_FILE))
+
+    /** For the tool registry, which is built before the resolver: the same file, the same rule. */
+    private fun inferenceSettingsRefusal(context: Context, feature: String): String? {
+        val policy = runCatching { inferenceSettingsStore(context).load().effective }
+            .getOrDefault(ai.droidcommand.llm.routing.InferencePolicy.DEVICE_ONLY)
+        if (policy.permits(ProviderType.CLOUD)) return null
+        return "$feature uses an internet service, which the policy \"${policy.label}\" does not allow. Nothing was sent. " +
+            "Change it in Chat, Options, Where replies come from."
+    }
+
+    /**
+     * Turns the policy and the saved choices into the places a request may go. Chat, Plan, the assist pop-ups and
+     * remembering all use this one resolver, so they all obey the same policy.
+     */
+    @Provides
+    @Singleton
+    fun provideRouteResolver(
+        @ApplicationContext context: Context,
+        vault: EncryptedSecretsVault,
+        settings: InferenceSettingsStore,
+        pcHosts: PcHostSettingsStore,
+        localModels: LocalModelRuntime,
+        transport: HttpTransport,
+    ): RouteResolver {
+        val prefs = context.getSharedPreferences(CHAT_PREFS, Context.MODE_PRIVATE)
+        return RouteResolver(
+            vault = vault,
+            settings = settings,
+            pcHosts = pcHosts,
+            deviceModels = {
+                // list() registers the imported models with the repository, which is what makes them selectable.
+                runCatching { localModels.list() }
+                localModels.repository
+            },
+            cloudChoice = {
+                val spec = CloudProviderCatalog.byId(prefs.getString("provider", null).orEmpty()) ?: CloudProviderCatalog.all.first()
+                CloudChoice(spec, chatModelFor(context, spec))
+            },
+            inspectPc = { target, key -> PcHostClient(transport, connectTimeoutMillis = 4_000, requestTimeoutMillis = 8_000).inspect(target, key) },
+            fallbackDeviceModelId = { prefs.getString("local_model_id", null)?.takeIf { it.isNotBlank() } },
+            fallbackPcKind = { PcHostKind.byId(prefs.getString("pc_host_kind", null)) },
+        )
+    }
+
+    @Provides
+    @Singleton
+    fun providePolicyInference(
+        resolver: RouteResolver,
+        vault: EncryptedSecretsVault,
+        transport: HttpTransport,
+        localModels: LocalModelRuntime,
+    ): PolicyInference = PolicyInference(resolver, vault, transport, local = { localModels.resources })
+
     @Provides
     @Singleton
     fun providePcHostSettingsStore(@ApplicationContext context: Context): PcHostSettingsStore =

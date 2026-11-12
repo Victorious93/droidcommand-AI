@@ -24,6 +24,8 @@ import ai.droidcommand.shell.ShellTool
 class AiPromptTool(
     private val client: CloudPromptClient,
     private val modelFor: (CloudProviderSpec) -> String = { it.defaultModel },
+    /** Non-null when the owner's inference policy does not allow a cloud request: the text to return instead of sending. */
+    private val policyRefusal: (CloudProviderSpec) -> String? = { null },
 ) : Tool {
     override val spec = ToolSpec(
         name = NAME,
@@ -37,6 +39,7 @@ class AiPromptTool(
         val providerId = input["provider"] ?: return ToolResult.Failure("Missing required input 'provider'")
         val prompt = input["prompt"] ?: return ToolResult.Failure("Missing required input 'prompt'")
         val provider = CloudProviderCatalog.byId(providerId) ?: return ToolResult.Failure("Unknown AI provider '$providerId'")
+        policyRefusal(provider)?.let { return ToolResult.Failure(it) }
         return when (val result = client.ask(provider, modelFor(provider), prompt)) {
             is ChatResult.Reply -> ToolResult.Success(result.text)
             is ChatResult.Failure -> ToolResult.Failure(result.message)

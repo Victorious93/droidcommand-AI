@@ -21,6 +21,7 @@ import ai.droidcommand.app.ux.FriendlyErrors
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.pchost.PcHostModels
+import ai.droidcommand.llm.routing.InferencePolicy
 import ai.droidcommand.llm.pchost.PcModelLocation
 import ai.droidcommand.voice.SpeakMode
 import android.Manifest
@@ -48,6 +49,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -218,6 +220,16 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
             Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
 
+        // Under an inference policy: which device or endpoint and model answered, and why an earlier one did not.
+        state.routeSummary?.let {
+            Text(
+                it,
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(vertical = 4.dp).testTag("chat_route_summary"),
+            )
+        }
+
         state.documentStatus?.let {
             Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
@@ -266,8 +278,12 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
     }
 }
 
-/** Header line: the on-device model while one is active, otherwise the cloud provider and its model. */
+/** Header line: the policy when one is set; otherwise the on-device model while one is active, or the cloud provider and its model. */
 private fun subtitleFor(state: ChatUiState): String {
+    if (state.inferencePolicy.routed) {
+        val unconfirmed = state.inferencePolicy == InferencePolicy.CLOUD_FALLBACK && !state.cloudFallbackConfirmed
+        return "Policy · " + (if (unconfirmed) InferencePolicy.PC_THEN_DEVICE.label else state.inferencePolicy.label)
+    }
     state.activePcHost?.let { kind ->
         val saved = state.pcHosts[kind]
         val cloud = if (saved?.location == PcModelLocation.CLOUD_BACKED) " (cloud-backed)" else ""
@@ -311,6 +327,44 @@ private fun Header(
             DroidTextButton(onClick = onNewChat, enabled = newChatEnabled) {
                 Text("New chat", color = TextSecondary)
             }
+        }
+    }
+}
+
+/**
+ * "Where replies come from": the owner's inference policy. It applies to Chat, helper bots, voice requests, Plan, the
+ * assist pop-ups, web search and remembering. Cloud fallback asks for confirmation before it is saved.
+ */
+@Composable
+private fun InferencePolicyPicker(state: ChatUiState, viewModel: ChatViewModel) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.testTag("inference_policy_picker")) {
+        Text("Where replies come from", style = MaterialTheme.typography.titleSmall)
+        InferencePolicy.entries.forEach { policy ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().testTag("inference_policy_${policy.id}"),
+            ) {
+                RadioButton(
+                    selected = state.inferencePolicy == policy,
+                    onClick = { viewModel.setInferencePolicy(policy) },
+                    enabled = !state.sending,
+                )
+                Column {
+                    Text(policy.label, style = MaterialTheme.typography.bodyMedium)
+                    Text(policy.description, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                }
+            }
+        }
+        if (state.inferencePolicy.routed) {
+            val device = state.localModels.firstOrNull { it.id == state.activeLocalModelId }?.label
+            Text(
+                "Applies to Chat, helper bots, voice requests, Plan, the assist pop-ups, web search and remembering. " +
+                    "This device uses the model picked in Models" + (device?.let { " ($it)" } ?: "") +
+                    "; the PC uses the server and model saved in Settings, PC-hosted models. " +
+                    "A slash command that names a cloud provider is refused unless cloud fallback is on.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
         }
     }
 }
@@ -412,6 +466,7 @@ private fun OptionsPanel(
                 DroidSecondaryButton(onClick = viewModel::askDeleteLocalModel, enabled = !state.sending) { Text("Delete this model file") }
             }
             state.localStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            InferencePolicyPicker(state, viewModel)
             if (state.localImporting) {
                 DroidSecondaryButton(onClick = viewModel::cancelLocalImport) { Text("Cancel import") }
             }
@@ -465,6 +520,25 @@ private fun OptionsPanel(
                 state.brainStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
         }
+    }
+    if (state.confirmCloudFallback) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissCloudFallback,
+            title = { Text("Allow cloud fallback?") },
+            text = {
+                Text(
+                    "When neither your PC nor this device can answer, the whole conversation, with any attached excerpts and " +
+                        "notes added to a message, will be sent to ${state.provider.label} (the cloud provider picked here). " +
+                        "Web search, if you switch it on, also becomes possible. Every reply says where it came from.",
+                )
+            },
+            confirmButton = {
+                DroidTextButton(onClick = viewModel::confirmCloudFallback, modifier = Modifier.testTag("cloud_fallback_confirm")) { Text("Yes, allow cloud") }
+            },
+            dismissButton = {
+                DroidTextButton(onClick = viewModel::dismissCloudFallback, modifier = Modifier.testTag("cloud_fallback_cancel")) { Text("No") }
+            },
+        )
     }
     if (state.pendingRiskySend != null) {
         AlertDialog(
