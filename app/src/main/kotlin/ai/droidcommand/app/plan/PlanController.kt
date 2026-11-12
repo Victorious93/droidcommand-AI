@@ -12,6 +12,8 @@ import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.llm.factory.CloudPlannerFactory
 import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.llm.factory.PlannerResult
+import ai.droidcommand.llm.routing.PolicyInference
+import ai.droidcommand.llm.routing.RoutedPlanner
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.security.ApprovalPrompt
 import ai.droidcommand.security.JsonFileAuditLog
@@ -40,6 +42,8 @@ data class PlanUiState(
     val runs: List<PlanRun> = emptyList(),
     val running: Boolean = false,
     val error: String? = null,
+    /** Under an inference policy: where this run's planning requests go. */
+    val route: String? = null,
 )
 
 /**
@@ -64,6 +68,7 @@ class PlanController @Inject constructor(
     private val vault: EncryptedSecretsVault,
     private val transport: HttpTransport,
     private val modes: EngineModes,
+    private val inference: PolicyInference,
 ) {
     private val history = PlanHistoryFile(context.filesDir.toPath().resolve("plans").resolve("history.json"))
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -80,16 +85,31 @@ class PlanController @Inject constructor(
             return
         }
         cancelled.set(false)
-        mutableState.update { it.copy(running = true, error = null) }
+        mutableState.update { it.copy(running = true, error = null, route = null) }
 
         scope.launch {
             try {
-                val planner = when (val result = CloudPlannerFactory.create(vault, spec, model, transport)) {
-                    is PlannerResult.MissingKey -> {
-                        mutableState.update { it.copy(error = result.message) }
-                        return@launch
+                // Under an inference policy the planner comes from the places the policy allows (a planner needs a
+                // tool-calling model, so an on-device model never qualifies). Otherwise: the cloud provider picked in Chat.
+                val planner = if (inference.policy().routed) {
+                    when (val routed = inference.planner("Plan")) {
+                        is RoutedPlanner.Refused -> {
+                            mutableState.update { it.copy(error = routed.message) }
+                            return@launch
+                        }
+                        is RoutedPlanner.Ready -> {
+                            mutableState.update { it.copy(route = "Policy: ${routed.plan.policy.label}. Planning on: " + routed.plan.candidates.joinToString(", then ") { c -> c.endpoint.describe() } + ".") }
+                            routed.planner
+                        }
                     }
-                    is PlannerResult.Ready -> result.planner
+                } else {
+                    when (val result = CloudPlannerFactory.create(vault, spec, model, transport)) {
+                        is PlannerResult.MissingKey -> {
+                            mutableState.update { it.copy(error = result.message) }
+                            return@launch
+                        }
+                        is PlannerResult.Ready -> result.planner
+                    }
                 }
                 val runner = PlanRunner(
                     registry = registry,

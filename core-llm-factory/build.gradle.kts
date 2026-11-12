@@ -22,6 +22,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation(testFixtures(project(":core-llm-openai")))
     testImplementation(kotlin("test"))
+    // The routed-chat and PC tool tests go through the real allow-list, secure executor, approval and audit path.
+    testImplementation(project(":core-security"))
+    testImplementation(project(":core-bots"))
 }
 
 kotlin {

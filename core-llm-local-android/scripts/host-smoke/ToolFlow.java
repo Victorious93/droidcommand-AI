@@ -140,7 +140,8 @@ public class ToolFlow {
             ChatSession chat = new ChatSession(
                 new InMemorySecretsVault(), new InMemoryConversationStore(), "default", null, NO_NETWORK,
                 (spec, config) -> { throw new IllegalStateException("CLOUD PROVIDER BUILT"); },
-                null, null, null, null, new LocalProviderResources(repository(model, "m"), null, null, LlamaCppBackend::new), null, Set.of(), 600, null, "", 0, null, new ai.droidcommand.llm.pchost.PcHostTimeouts(8_000, 180_000));
+                null, null, null, null, new LocalProviderResources(repository(model, "m"), null, null, LlamaCppBackend::new), null, Set.of(), 600, null, "", 0, null, new ai.droidcommand.llm.pchost.PcHostTimeouts(8_000, 180_000),
+                null, (target, key) -> { throw new IllegalStateException("PC INSPECTED"); });
             chat.setToolAccess(runner, tools);
             ran.clear();
             ChatResult r = chat.sendLocal("m", "What time is it?", false, () -> false, delta -> Unit.INSTANCE);

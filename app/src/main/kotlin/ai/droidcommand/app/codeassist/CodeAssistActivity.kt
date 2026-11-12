@@ -9,6 +9,7 @@ import ai.droidcommand.llm.factory.ChatResult
 import ai.droidcommand.llm.factory.ChatSession
 import ai.droidcommand.llm.factory.CloudPromptClient
 import ai.droidcommand.llm.factory.CloudProviderCatalog
+import ai.droidcommand.llm.routing.PolicyInference
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.security.CodeAssist
 import ai.droidcommand.security.CodeAssistParse
@@ -55,6 +56,10 @@ class CodeAssistActivity : ComponentActivity() {
 
     @Inject
     lateinit var localModels: LocalModelRuntime
+
+    /** The owner's inference policy. When one is set, the request goes where it says instead of to Chat's last pick. */
+    @Inject
+    lateinit var inference: PolicyInference
 
     private var running by mutableStateOf(false)
     private var finished = false
@@ -150,7 +155,9 @@ class CodeAssistActivity : ComponentActivity() {
         val prompt = CodeAssist.buildPrompt(request)
         val prefs = getSharedPreferences(CHAT_PREFS, MODE_PRIVATE)
         val localId = prefs.getString(KEY_LOCAL_MODEL, null)?.takeIf { it.isNotBlank() }
-        val result = if (localId != null) {
+        val result = if (inference.policy().routed) {
+            inference.ask("Code assist", prompt)
+        } else if (localId != null) {
             localModels.list()
             val session = ChatSession(
                 vault,

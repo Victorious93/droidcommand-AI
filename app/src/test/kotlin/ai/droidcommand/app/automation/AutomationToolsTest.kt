@@ -53,4 +53,13 @@ class AutomationToolsTest {
         assertIs<ToolResult.Failure>(tool.execute(mapOf("provider" to "anthropic")))
         assertIs<ToolResult.Failure>(tool.execute(mapOf("provider" to "nosuch", "prompt" to "ping")))
     }
+
+    @Test
+    fun `under a policy without cloud the AI tool sends nothing and returns the refusal`() {
+        val provider = ScriptedProvider { LlmResponse.Text("pong") }
+        val tool = AiPromptTool(clientFor(provider), policyRefusal = { spec -> "Asking ${spec.label} is not allowed by the policy. Nothing was sent." })
+        val result = assertIs<ToolResult.Failure>(tool.execute(mapOf("provider" to "anthropic", "prompt" to "ping")))
+        assertTrue(result.reason.contains("Nothing was sent"), result.reason)
+        assertTrue(provider.requests.isEmpty(), "the cloud provider must receive nothing")
+    }
 }

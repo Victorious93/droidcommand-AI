@@ -137,9 +137,11 @@ tool calls; `--chat-template-file` can supply one.
 
 In every case nothing is saved and the message returns to the input box, so it can be sent again.
 
-## Limits of this first version
+## Limits
 
-- AI Chat only. Plan, Pilot/Forge, the assist pop-ups and "Remember this chat" do not use the PC server.
+- Plan, the assist pop-ups and "Remember this chat" use the PC only under an inference policy
+  (`docs/INFERENCE_POLICY.md`: "My PC only", "Prefer PC, then this device", …). With "Use the model I pick" they
+  behave as before and do not use the PC server.
 - Tool support cannot be confirmed for servers that do not report it; those need the owner's switch.
 - With llama.cpp's server the report describes the model the server has loaded, not the model name the phone sends.
 - No model download/pull from the phone, no server discovery on the network: you type the address.

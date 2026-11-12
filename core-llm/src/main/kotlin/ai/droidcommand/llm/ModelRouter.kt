@@ -28,7 +28,7 @@ class ModelRouter(private val providers: List<LlmProvider>) : LlmProvider {
             val response = provider.complete(request)
             if (response !is LlmResponse.Error) return response
             lastError = response
-            if (!isRetryable(response.error)) return response
+            if (!fallsBackOn(response.error)) return response
         }
         // Unreachable in practice (the loop above always returns on a non-retryable
         // error or exhausts providers having set lastError every time — providers is
@@ -37,8 +37,15 @@ class ModelRouter(private val providers: List<LlmProvider>) : LlmProvider {
         return lastError ?: LlmResponse.Error(LlmError.ModelUnavailable("ModelRouter: no providers configured"))
     }
 
-    private fun isRetryable(error: LlmError): Boolean = when (error) {
-        is LlmError.Network, is LlmError.Timeout, is LlmError.ModelUnavailable -> true
-        is LlmError.Authentication, is LlmError.InvalidResponse, is LlmError.Cancelled -> false
+    companion object {
+        /**
+         * The one fallback rule, shared with callers that walk a provider list themselves (a chat turn, which also has
+         * to carry tool results and streamed text across the switch): only a transient, provider-level failure moves
+         * on to the next provider.
+         */
+        fun fallsBackOn(error: LlmError): Boolean = when (error) {
+            is LlmError.Network, is LlmError.Timeout, is LlmError.ModelUnavailable -> true
+            is LlmError.Authentication, is LlmError.InvalidResponse, is LlmError.Cancelled -> false
+        }
     }
 }

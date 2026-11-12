@@ -27,18 +27,29 @@ import ai.droidcommand.llm.LlmProvider
 import ai.droidcommand.llm.LlmRequest
 import ai.droidcommand.llm.LlmResponse
 import ai.droidcommand.llm.MemoryExtractionService
+import ai.droidcommand.llm.ModelRouter
 import ai.droidcommand.llm.ProviderType
 import ai.droidcommand.llm.StreamingLlmProvider
 import ai.droidcommand.llm.completeStreaming
 import ai.droidcommand.llm.local.LocalLlmProvider
 import ai.droidcommand.llm.local.LocalToolSupport
 import ai.droidcommand.llm.pchost.PcHostChatProvider
+import ai.droidcommand.llm.pchost.PcHostClient
 import ai.droidcommand.llm.pchost.PcHostErrors
 import ai.droidcommand.llm.pchost.PcHostModels
 import ai.droidcommand.llm.pchost.PcHostTarget
 import ai.droidcommand.llm.pchost.PcHostTimeouts
 import ai.droidcommand.llm.pchost.PcHostToolNotices
+import ai.droidcommand.llm.pchost.PcModelFacts
 import ai.droidcommand.llm.pchost.PcModelLocation
+import ai.droidcommand.llm.routing.InferencePolicy
+import ai.droidcommand.llm.routing.RequestBudget
+import ai.droidcommand.llm.routing.RouteAttempt
+import ai.droidcommand.llm.routing.RouteCandidate
+import ai.droidcommand.llm.routing.RouteEndpoint
+import ai.droidcommand.llm.routing.RouteNeed
+import ai.droidcommand.llm.routing.RouteReport
+import ai.droidcommand.llm.routing.RouteResolver
 import ai.droidcommand.rag.DocumentRetriever
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.remote.RequestCancellation
@@ -49,10 +60,14 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /** Outcome of one chat turn. [Failure.message] never contains the API key. */
 sealed class ChatResult {
-    /** [notice] is a non-fatal heads-up (e.g. web search was requested but failed, so the reply is not grounded in it). */
-    data class Reply(val text: String, val notice: String? = null) : ChatResult()
+    /**
+     * [notice] is a non-fatal heads-up (e.g. web search was requested but failed, so the reply is not grounded in it).
+     * [route] says where a routed turn's reply came from and why (null for a turn that was not routed by a policy).
+     */
+    data class Reply(val text: String, val notice: String? = null, val route: RouteReport? = null) : ChatResult()
 
-    data class Failure(val message: String) : ChatResult()
+    /** [route] lists the places a routed turn considered and why none answered (null when the turn was not routed). */
+    data class Failure(val message: String, val route: RouteReport? = null) : ChatResult()
 }
 
 /**
@@ -165,7 +180,46 @@ class ChatSession(
     private val autoRememberEveryTurns: Int = 0,
     private val brain: ((String) -> String?)? = null,
     private val pcHostTimeouts: PcHostTimeouts = PcHostTimeouts(),
+    /**
+     * The owner's inference policy and saved choices (off when `null`, the default: the session then behaves as it
+     * did before policies existed). When set, [sendRouted] sends a turn where the policy says, and every other method
+     * that would send text somewhere the policy does not allow refuses before sending: [send] (a cloud provider),
+     * [sendLocal], [sendPcHost], web search, and remembering.
+     */
+    private val router: RouteResolver? = null,
+    /** Asks a PC server about a model before tools are offered to it. Injectable for tests. */
+    private val inspectPc: (PcHostTarget, String?) -> PcModelFacts = { target, key ->
+        PcHostClient(transport, connectTimeoutMillis = INSPECT_CONNECT_MILLIS, requestTimeoutMillis = INSPECT_REQUEST_MILLIS).inspect(target, key)
+    },
 ) {
+    /**
+     * Tool calls that already ran in a turn that then failed or was stopped, kept so that sending the same message
+     * again reuses their results instead of running the actions a second time. In memory only: cleared by a
+     * successful turn, a different message, [open] and [reset].
+     */
+    private var pendingTools: PendingTools? = null
+
+    private class PendingTools(val conversationId: String, val text: String, val rounds: List<ToolRound>)
+
+    /** One assistant message's tool calls with their results, in the order the model asked for them. */
+    private class ToolRound(val calls: List<CompletedCall>)
+
+    private class CompletedCall(val id: String, val name: String, val input: Map<String, String>, val argumentsJson: String, val result: String, val text: String = "")
+
+    /** One place a turn may be sent, with how to talk to it. */
+    private class Attempt(
+        val endpoint: RouteEndpoint?,
+        val provider: () -> LlmProvider,
+        /** The secret to scrub from this place's errors. */
+        val key: String?,
+        val offerTools: Boolean,
+        /** Send and read tool calls in the structured form (ids kept), instead of the flat text form. */
+        val structuredTools: Boolean,
+        val windowTokens: Int?,
+        val notice: String?,
+        val onSuccess: () -> Unit,
+    )
+
     // Successful cloud turns since the conversation was opened or last auto-remembered.
     private var turnsSinceRemember = 0
 
@@ -184,9 +238,6 @@ class ChatSession(
     private var toolRunner: ToolRunner? = null
     private var offeredTools: List<ToolSpec> = emptyList()
 
-    // Names of the tool actions handed to the runner in the turn that is running or just ended, in order.
-    private val ranTools = mutableListOf<String>()
-
     // The provider+model of the most recent successful turn. rememberConversation() extracts with the
     // SAME provider, which already received the full conversation in that turn, so remembering adds no
     // new recipient of the user's text. null until the first successful send.
@@ -194,6 +245,7 @@ class ChatSession(
     private var lastModel: String? = null
     private var usedLocal = false
     private var usedPcHost = false
+    private var usedRouted = false
 
     // The PC-hosted request in flight, for requestStopPcHost (another thread).
     @Volatile
@@ -229,6 +281,8 @@ class ChatSession(
         lastModel = null
         usedLocal = false
         usedPcHost = false
+        usedRouted = false
+        pendingTools = null
         turnsSinceRemember = 0
     }
 
@@ -258,6 +312,8 @@ class ChatSession(
         onDelta: (String) -> Unit = {},
     ): ChatResult {
         if (userText.isBlank()) return ChatResult.Failure("Message is empty.")
+        // Before the key is read or anything is built: a policy without cloud never reaches a cloud provider from here.
+        router?.refusalFor(ProviderType.CLOUD, "Sending this message to ${spec.label}")?.let { return ChatResult.Failure(it) }
         val key = vault.getSecret(spec.secretId)
         if (key.isNullOrBlank()) return ChatResult.Failure("No API key for ${spec.label}. Add one in Settings.")
 
@@ -267,6 +323,7 @@ class ChatSession(
             lastModel = config.model
             usedLocal = false
             usedPcHost = false
+            usedRouted = false
         }
         return if (result is ChatResult.Reply) withAutoRemember(result) else result
     }
@@ -317,6 +374,7 @@ class ChatSession(
         onDelta: (String) -> Unit = {},
     ): ChatResult {
         if (userText.isBlank()) return ChatResult.Failure("Message is empty.")
+        router?.refusalFor(ProviderType.LOCAL, "Answering on this device")?.let { return ChatResult.Failure(it) }
         val resources = local ?: return ChatResult.Failure("On-device models are not available on this device.")
         if (resources.repository.get(modelId) == null) return ChatResult.Failure("Unknown on-device model '$modelId'.")
         if (cancelled()) return ChatResult.Failure(STOPPED_MESSAGE)
@@ -354,6 +412,7 @@ class ChatSession(
                 lastModel = null
                 usedLocal = true
                 usedPcHost = false
+                usedRouted = false
             }
         } finally {
             generatingLocal = null
@@ -423,6 +482,7 @@ class ChatSession(
     ): ChatResult {
         if (userText.isBlank()) return ChatResult.Failure("Message is empty.")
         if (target.model.isBlank()) return ChatResult.Failure(PcHostErrors.noModel(target.kind))
+        router?.refusalFor(ProviderType.SELF_HOSTED, "Sending this message to your PC")?.let { return ChatResult.Failure(it) }
         target.address.cleartextProblem()?.let { return ChatResult.Failure(PcHostErrors.cleartextRefused(it)) }
         val key = vault.getSecret(target.kind.secretId)?.takeIf { it.isNotBlank() }
         val request = RequestCancellation()
@@ -430,31 +490,212 @@ class ChatSession(
         pcHostRequest = request
         try {
             if (stopped()) return ChatResult.Failure(STOPPED_MESSAGE)
-            val notices = listOfNotNull(
-                PcHostModels.locationLabel(target.location, target.upstream).plus(". It needs internet on the PC.")
-                    .takeIf { target.location == PcModelLocation.CLOUD_BACKED },
-                PcHostToolNotices.notOffered(target).takeIf { toolRunner != null && offeredTools.isNotEmpty() && !target.offersTools },
-            )
-            val result = turn(
-                { PcHostChatProvider(target, key, transport, pcHostTimeouts, request) },
-                key,
-                userText.trim(),
-                useWebSearch,
-                onDelta = { delta -> if (!stopped()) onDelta(delta) },
-                offerTools = target.offersTools,
-                cancelled = stopped,
-                presetNotice = notices.joinToString(" ").ifBlank { null },
-            ) {
-                lastSpec = null
-                lastModel = null
-                usedLocal = false
-                usedPcHost = true
+            val wantsTools = toolRunner != null && offeredTools.isNotEmpty()
+            // A policy without cloud needs the server to establish that the model runs on the PC before anything is sent.
+            val strictLocation = router?.let { it.policy().routed && !it.policy().permits(ProviderType.CLOUD) } == true
+            // The server is asked about the model only when the answer changes what is sent: plain chat sends as before,
+            // and tools already confirmed in Settings (PcHostTarget.offersTools) need no probe before every turn.
+            val facts = if (strictLocation || (wantsTools && !target.offersTools)) {
+                try {
+                    inspectPc(target, key)
+                } catch (e: Exception) {
+                    PcModelFacts(problem = PcHostErrors.unreachable(target.address, e.message))
+                }
+            } else {
+                null
             }
+            if (stopped()) return ChatResult.Failure(STOPPED_MESSAGE)
+            // A probe that fails is fatal only where it is the evidence a policy needs; for tools alone the turn goes on
+            // with what Settings recorded, and the notice says the tools were not offered.
+            if (strictLocation) facts?.problem?.let { return ChatResult.Failure(scrub(it, key)) }
+            val usable = facts?.takeIf { it.problem == null }
+            val location = if (usable != null && target.location != PcModelLocation.CLOUD_BACKED) usable.location else target.location
+            if (strictLocation && location != PcModelLocation.SERVER_LOCAL) {
+                return ChatResult.Failure(
+                    PcHostErrors.PREFIX + "nothing was sent. " + PcHostModels.locationLabel(location, usable?.upstream ?: target.upstream) +
+                        ", and the policy \"${router?.policy()?.label}\" only allows a model established to run on your PC.",
+                )
+            }
+            // What Settings recorded (the server reported support, or the owner switched tools on) or, under a policy
+            // that probes, what the server just reported.
+            val offerTools = wantsTools && (target.offersTools || usable?.toolCalling == true)
+            val notices = listOfNotNull(
+                PcHostModels.locationLabel(location, usable?.upstream ?: target.upstream).plus(". It needs internet on the PC.")
+                    .takeIf { location == PcModelLocation.CLOUD_BACKED },
+                (usable?.let { pcToolsNotice(it) } ?: PcHostToolNotices.notOffered(target)).takeIf { wantsTools && !offerTools },
+            )
+            val prepared = prepare(userText.trim(), useWebSearch, key, notices.joinToString(" ").ifBlank { null })
+            val attempt = Attempt(
+                endpoint = null,
+                provider = { PcHostChatProvider(target, key, transport, pcHostTimeouts, request) },
+                key = key,
+                offerTools = offerTools,
+                structuredTools = true,
+                windowTokens = usable?.contextTokens,
+                notice = null,
+                onSuccess = {
+                    lastSpec = null
+                    lastModel = null
+                    usedLocal = false
+                    usedPcHost = true
+                    usedRouted = false
+                },
+            )
+            val result = converse(prepared, listOf(attempt), onDelta = { delta -> if (!stopped()) onDelta(delta) }, cancelled = stopped)
             // A request aborted by the stop surfaces as a transport failure; report it as what it was.
-            return if (result is ChatResult.Failure && stopped()) ChatResult.Failure(withRanNote(STOPPED_MESSAGE)) else result
+            return if (result is ChatResult.Failure && stopped()) {
+                ChatResult.Failure(listOfNotNull(STOPPED_MESSAGE, TOOLS_RAN_NOTE.find(result.message)?.value).joinToString(" "), result.route)
+            } else {
+                result
+            }
         } finally {
             pcHostRequest = null
         }
+    }
+
+    /** Why a helper's tools were not offered to a PC model, and what to do about it. */
+    private fun pcToolsNotice(facts: PcModelFacts): String {
+        val why = facts.toolCallingDetail?.takeIf { it.isNotBlank() } ?: "the server did not say whether it can call tools"
+        return "$PC_HOST_TOOLS_NOTICE: $why. This reply was written without them. $PC_HOST_TOOLS_ACTION"
+    }
+
+    /**
+     * One turn sent where the owner's inference policy says ([router]): this device, the PC, or (only with confirmed
+     * cloud fallback) the cloud provider picked in Chat, in the policy's order. Same history as the other send
+     * methods. The reply carries a [RouteReport]: where it came from, the model, and why any earlier place was not
+     * used.
+     *
+     * Before anything is sent, each allowed place is checked: is a model set up, is the PC reachable and does it
+     * establish that the model runs there, and does the whole request (system text, history, retrieved content, the
+     * new message, tool schemas, tool results, and room for the reply) fit the model's window. History is shortened
+     * oldest-first for a smaller window; a request that cannot fit even without history is not sent to that place.
+     * Nothing is contacted for a place the policy does not allow.
+     *
+     * A place that fails with a transient error (unreachable, timed out, connection lost) is followed by the next
+     * allowed place. If text had already been shown, [onRestart] is called first so the caller clears it. Tool calls
+     * that already ran are not run again by the next place: it is given their results, and an identical call from it
+     * reuses the stored result. The same holds for sending the same message again after a failed or stopped turn.
+     *
+     * A helper's tools are offered only to a place that can call them (a PC model whose server reports tool support,
+     * or the cloud provider); otherwise the reply says they were not. Web search runs only when the policy allows
+     * cloud, because it sends the message to an internet search service.
+     *
+     * [cancelled] is polled throughout; [requestStopLocal] and [requestStopPcHost] interrupt the wait. A stopped or
+     * failed turn saves nothing.
+     */
+    @Synchronized
+    fun sendRouted(
+        userText: String,
+        useWebSearch: Boolean = false,
+        cancelled: () -> Boolean = { false },
+        onRestart: () -> Unit = {},
+        onDelta: (String) -> Unit = {},
+    ): ChatResult {
+        if (userText.isBlank()) return ChatResult.Failure("Message is empty.")
+        val resolver = router ?: return ChatResult.Failure("No inference policy is set up for this chat.")
+        if (!resolver.policy().routed) return ChatResult.Failure("The policy is \"${InferencePolicy.MANUAL.label}\": pick a model in Chat.")
+        val request = RequestCancellation()
+        val stopped = { cancelled() || request.isCancelled }
+        pcHostRequest = request
+        try {
+            if (stopped()) return ChatResult.Failure(STOPPED_MESSAGE)
+            val wantsTools = toolRunner != null && offeredTools.isNotEmpty()
+            val prepared = prepare(userText.trim(), useWebSearch, searchKey = null, presetNotice = null)
+            val budget = RequestBudget.of(prepared.system, context.messages, prepared.text, prepared.outgoing, emptyList(), emptyList(), OUTPUT_RESERVE_TOKENS)
+            val plan = resolver.plan(RouteNeed("Chat", minimumWindowTokens = budget.minimumWindowTokens()))
+            if (stopped()) return ChatResult.Failure(STOPPED_MESSAGE)
+            // The resolver already filtered by policy; this is the same rule checked again at the point of dispatch.
+            val allowed = plan.candidates.filter { plan.policy.permits(it.type) }
+            if (allowed.isEmpty()) {
+                return ChatResult.Failure(plan.refusal("This message"), RouteReport(plan.policy, null, plan.skipped, budget))
+            }
+            val attempts = allowed.map { attemptFor(it, wantsTools, request, stopped) }
+            val result = converse(
+                prepared,
+                attempts,
+                onDelta = { delta -> if (!stopped()) onDelta(delta) },
+                cancelled = stopped,
+                onRestart = onRestart,
+                policy = plan.policy,
+                skipped = plan.skipped,
+            )
+            return when {
+                result is ChatResult.Failure && stopped() -> ChatResult.Failure(STOPPED_MESSAGE)
+                result is ChatResult.Reply -> withAutoRemember(result)
+                else -> result
+            }
+        } finally {
+            pcHostRequest = null
+            generatingLocal = null
+        }
+    }
+
+    private fun attemptFor(candidate: RouteCandidate, wantsTools: Boolean, request: RequestCancellation, stopped: () -> Boolean): Attempt {
+        val routedSuccess = {
+            lastSpec = null
+            lastModel = null
+            usedLocal = false
+            usedPcHost = false
+            usedRouted = true
+        }
+        return when (candidate) {
+            is RouteCandidate.Device -> {
+                // The same rule as sendLocal: tools are offered when this model and runtime can call them
+                // (LocalLlmProvider.toolSupport); otherwise the reply carries the model's own reason.
+                val support = if (wantsTools) localToolSupport(candidate.modelId) else null
+                Attempt(
+                    endpoint = candidate.endpoint,
+                    provider = {
+                        val provider = localProvider(candidate.modelId)
+                        generatingLocal = provider
+                        Stoppable(provider, stopped)
+                    },
+                    key = null,
+                    offerTools = support?.supported == true,
+                    structuredTools = false,
+                    windowTokens = candidate.contextTokens,
+                    notice = if (wantsTools && support?.supported != true) support?.reason ?: LOCAL_TOOLS_NOTICE else null,
+                    onSuccess = routedSuccess,
+                )
+            }
+            is RouteCandidate.Pc -> {
+                val key = vault.getSecret(candidate.target.kind.secretId)?.takeIf { it.isNotBlank() }
+                val offerTools = wantsTools && candidate.toolCalling
+                Attempt(
+                    endpoint = candidate.endpoint,
+                    provider = { PcHostChatProvider(candidate.target, key, transport, pcHostTimeouts, request) },
+                    key = key,
+                    offerTools = offerTools,
+                    structuredTools = true,
+                    windowTokens = candidate.contextTokens,
+                    notice = listOfNotNull(
+                        PcHostModels.locationLabel(candidate.target.location, candidate.target.upstream).plus(". It needs internet on the PC.")
+                            .takeIf { candidate.target.location == PcModelLocation.CLOUD_BACKED },
+                        pcToolsNotice(candidate.facts).takeIf { wantsTools && !offerTools },
+                    ).joinToString(" ").ifBlank { null },
+                    onSuccess = routedSuccess,
+                )
+            }
+            is RouteCandidate.Cloud -> {
+                val config = LlmConfig(provider = candidate.spec.id, model = candidate.model, authToken = { vault.getSecret(candidate.spec.secretId) })
+                Attempt(
+                    endpoint = candidate.endpoint,
+                    provider = { providerFor(candidate.spec, config) },
+                    key = vault.getSecret(candidate.spec.secretId),
+                    offerTools = true,
+                    structuredTools = false,
+                    windowTokens = null,
+                    notice = "This reply came from the cloud provider ${candidate.spec.label}: the conversation was sent to it because cloud fallback is on.",
+                    onSuccess = routedSuccess,
+                )
+            }
+        }
+    }
+
+    private fun localProvider(modelId: String): LocalLlmProvider {
+        val resources = local ?: throw IllegalStateException("On-device models are not available on this device.")
+        return resources.pool?.provider(modelId)
+            ?: localProviders.getOrPut(modelId) { LocalLlmProvider(modelId, resources.repository, resources.backendFactory(), memory = resources.memory) }
     }
 
     /**
@@ -481,7 +722,7 @@ class ChatSession(
         override fun stream(request: LlmRequest, onTextDelta: (String) -> Unit): LlmResponse = delegate.stream(request, cancelled, onTextDelta)
     }
 
-    /** Shared turn logic. [key] is the secret to scrub from errors and to withhold from search (null for local). */
+    /** Shared turn logic for one place. [key] is the secret to scrub from errors and to withhold from search (null for local). */
     private fun turn(
         provider: () -> LlmProvider,
         key: String?,
@@ -492,7 +733,17 @@ class ChatSession(
         cancelled: () -> Boolean = { false },
         presetNotice: String? = null,
         onSuccess: () -> Unit,
-    ): ChatResult {
+    ): ChatResult = converse(
+        prepare(text, useWebSearch, key, presetNotice),
+        listOf(Attempt(null, provider, key, offerTools, structuredTools = true, windowTokens = null, notice = null, onSuccess = onSuccess)),
+        onDelta,
+        cancelled,
+    )
+
+    /** What a turn sends besides history. Gathered once, whichever place ends up answering. */
+    private class Prepared(val text: String, val outgoing: String, val system: String?, val notice: String?)
+
+    private fun prepare(text: String, useWebSearch: Boolean, searchKey: String?, presetNotice: String?): Prepared {
         // Exception, not Throwable: an Error (e.g. OutOfMemoryError) should not be silently swallowed.
         val notes = try {
             knowledge?.retrieveContext(text)
@@ -516,11 +767,13 @@ class ChatSession(
         }
         var notice: String? = presetNotice
         val web = if (useWebSearch) {
+            // A search sends the message text to an internet service, so the policy is asked before the client is touched.
+            val refused = router?.refusalFor(ProviderType.CLOUD, "Web search")
             // A notice the caller already has (e.g. "this model is cloud-backed") is kept next to a search failure.
-            val (block, failure) = if (webSearch == null) {
-                null to "Web search is not available; answered without it."
-            } else {
-                searchBlock(webSearch, text, key)
+            val (block, failure) = when {
+                refused != null -> null to WEB_SEARCH_POLICY_NOTICE
+                webSearch == null -> null to "Web search is not available; answered without it."
+                else -> searchBlock(webSearch, text, searchKey)
             }
             notice = listOfNotNull(presetNotice, failure).joinToString(" ").ifBlank { null }
             block
@@ -529,93 +782,168 @@ class ChatSession(
         }
         val outgoing = listOfNotNull(web, excerpts, memories, notes, brainNotes, text).joinToString("\n\n")
         val system = listOfNotNull(requestPrompt, context.systemPrompt).filter { it.isNotBlank() }.joinToString("\n\n").ifBlank { null }
-        val tools = if (offerTools) offeredTools else emptyList()
-        val runner = if (offerTools) toolRunner else null
-        var messages = context.messages + Message(Role.USER, outgoing)
-        ranTools.clear()
-        var response = try {
-            provider().completeStreaming(LlmRequest(systemPrompt = system, messages = messages, tools = tools), onDelta)
-        } catch (e: Exception) {
-            return ChatResult.Failure(scrub("Request failed: ${e.message ?: e.javaClass.simpleName}", key))
-        }
-
-        var rounds = 0
-        while (response is LlmResponse.ToolCall) {
-            if (runner == null) {
-                return ChatResult.Failure("The model asked to call a tool, which chat does not support.")
-            }
-            if (rounds >= MAX_TOOL_ROUNDS) {
-                return ChatResult.Failure(withRanNote("The model asked for too many tool calls in one turn."))
-            }
-            rounds += 1
-            val calls = response.calls
-            if (calls.size > MAX_CALLS_PER_RESPONSE) {
-                return ChatResult.Failure(withRanNote("The model asked for ${calls.size} tool calls at once (the limit is $MAX_CALLS_PER_RESPONSE). None of them was run."))
-            }
-            // Every call gets the id its result will be filed under: the provider's own, or one made here when the
-            // provider has none (nothing else could be matched against). Checked before anything runs.
-            val requests = calls.mapIndexed { index, call ->
-                ToolCallRequest(
-                    id = call.id?.takeIf { it.isNotBlank() } ?: "call_dca_${rounds}_$index",
-                    name = call.toolName,
-                    argumentsJson = call.argumentsJson ?: ToolArgumentsJson.encode(call.input),
-                )
-            }
-            if (requests.map { it.id }.toSet().size != requests.size) {
-                return ChatResult.Failure(withRanNote("The model sent two tool calls with the same id. Neither was run."))
-            }
-            val results = mutableListOf<Message>()
-            for ((index, call) in calls.withIndex()) {
-                // Stop is honoured between actions: what already ran is reported, the rest is not started.
-                if (cancelled()) return ChatResult.Failure(withRanNote(STOPPED_MESSAGE))
-                val result = if (tools.none { it.name == call.toolName }) {
-                    // Never reaches the runner: the model can only use what it was offered in this request.
-                    ToolResult.Failure("Tool '${call.toolName.take(MAX_TOOL_NAME_CHARS)}' is not available here")
-                } else {
-                    ranTools += call.toolName
-                    try {
-                        runner.run(toolName = call.toolName, input = call.input, isCancelled = cancelled, initiator = Initiator.AI)
-                    } catch (e: Exception) {
-                        ToolResult.Failure(e.message ?: e.javaClass.simpleName, e)
-                    }
-                }
-                results += Message(Role.TOOL, result.describe(), toolCallId = requests[index].id)
-            }
-            if (cancelled()) return ChatResult.Failure(withRanNote(STOPPED_MESSAGE))
-            messages = messages + Message(Role.ASSISTANT, response.text, toolCalls = requests) + results
-            response = try {
-                provider().completeStreaming(LlmRequest(systemPrompt = system, messages = messages, tools = tools), onDelta)
-            } catch (e: Exception) {
-                return ChatResult.Failure(withRanNote(scrub("Request failed: ${e.message ?: e.javaClass.simpleName}", key)))
-            }
-        }
-
-        // A stopped reply is partial (or empty): it is not saved, so the transcript never holds half an answer.
-        if (cancelled()) return ChatResult.Failure(withRanNote(STOPPED_MESSAGE))
-        return when (response) {
-            is LlmResponse.Text -> {
-                if (response.content.isBlank()) return ChatResult.Failure(withRanNote("The model returned an empty reply."))
-                context.append(Role.USER, text).append(Role.ASSISTANT, response.content)
-                store.save(activeConversationId, context)
-                onSuccess()
-                ChatResult.Reply(response.content, notice)
-            }
-            is LlmResponse.ToolCall -> ChatResult.Failure("The model asked to call a tool, which chat does not support.")
-            is LlmResponse.Error -> ChatResult.Failure(withRanNote(scrub(response.error.message, key)))
-        }
+        return Prepared(text, outgoing, system, notice)
     }
 
     /**
-     * Appends, to a failure that ends a turn, which tool actions had already been run in it. A failed or stopped
-     * turn saves nothing and is never sent again by this class; the person decides, and has to know that sending the
-     * same message again can repeat those actions.
+     * Runs one turn against [attempts] in order and saves it on success. With one attempt this is a plain turn; with
+     * several, a transient failure of one place moves on to the next ([ModelRouter.fallsBackOn], the same rule the
+     * model router uses), carrying the tool calls that already ran.
+     *
+     * Tool calls go through [toolRunner] (a helper bot's scoped runner in front of the secure executor), one at a
+     * time, in the order the model asked. A call the provider marked as unusable is answered with an error and not
+     * run. A call identical to one completed before the current place was tried, or in an earlier failed attempt at
+     * the same message, is answered with the stored result and not run again.
      */
-    private fun withRanNote(message: String): String {
-        if (ranTools.isEmpty()) return message
-        val names = ranTools.distinct().joinToString(", ")
-        val count = if (ranTools.size == 1) "1 tool action had" else "${ranTools.size} tool actions had"
-        return "$message $count already run in this turn ($names) and ${if (ranTools.size == 1) "was" else "were"} not undone. " +
-            "Nothing is repeated automatically; sending the message again may run ${if (ranTools.size == 1) "it" else "them"} again."
+    private fun converse(
+        prepared: Prepared,
+        attempts: List<Attempt>,
+        onDelta: (String) -> Unit,
+        cancelled: () -> Boolean,
+        onRestart: () -> Unit = {},
+        policy: InferencePolicy? = null,
+        skipped: List<RouteAttempt> = emptyList(),
+    ): ChatResult {
+        val text = prepared.text
+        val rounds = pendingTools?.takeIf { it.conversationId == activeConversationId && it.text == text }?.rounds.orEmpty().toMutableList()
+        pendingTools = null
+        val tried = skipped.toMutableList()
+        var newRounds = 0
+        var budget: RequestBudget? = null
+
+        fun report(chosen: RouteEndpoint?, window: Int?, dropped: Int): RouteReport? =
+            policy?.let { RouteReport(it, chosen, tried.toList(), budget, window, dropped) }
+
+        fun fail(message: String, key: String?, window: Int? = null): ChatResult.Failure {
+            // Whatever already ran stays known, so the same message sent again does not run it a second time.
+            if (rounds.isNotEmpty()) pendingTools = PendingTools(activeConversationId, text, rounds.toList())
+            // Which actions already ran, in the wording the screens look for (TOOLS_RAN_NOTE), then what resending does.
+            val ran = rounds.flatMap { it.calls }.map { it.name }
+            val kept = if (ran.isNotEmpty()) {
+                val count = if (ran.size == 1) "1 tool action had" else "${ran.size} tool actions had"
+                " $count already run in this turn (${ran.distinct().joinToString(", ")}) and ${if (ran.size == 1) "was" else "were"} not undone. $TOOLS_KEPT_NOTICE"
+            } else {
+                ""
+            }
+            return ChatResult.Failure(scrub(message, key) + kept, report(null, window, 0))
+        }
+
+        places@ for ((index, attempt) in attempts.withIndex()) {
+            if (cancelled()) return fail(STOPPED_MESSAGE, null)
+            val hasNext = index < attempts.lastIndex
+            // Calls completed before this place was tried: an identical call from it is a replay, not a new request.
+            val replayable = rounds.flatMap { it.calls }
+            val tools = if (attempt.offerTools) offeredTools else emptyList()
+            val runner = if (attempt.offerTools) toolRunner else null
+            var sawText = false
+            var provider: LlmProvider? = null
+            while (true) {
+                val exchange = render(rounds, attempt.structuredTools)
+                val sized = RequestBudget.of(prepared.system, context.messages, text, prepared.outgoing, tools, exchange, OUTPUT_RESERVE_TOKENS)
+                budget = sized
+                val window = attempt.windowTokens
+                val history = if (window == null) context.messages else RequestBudget.fitHistory(sized, context.messages, window)
+                if (history == null) {
+                    val reason = "the request needs a window of about ${sized.minimumWindowTokens()} tokens even with no earlier messages, and this model's is $window"
+                    attempt.endpoint?.let { tried += RouteAttempt(it, RouteAttempt.Outcome.SKIPPED, reason) }
+                    if (hasNext) continue@places
+                    return fail("This message is too large for ${attempt.endpoint?.describe() ?: "the model"}: $reason. Shorten it, attach less, or start a new chat.", attempt.key, window)
+                }
+                val dropped = context.messages.size - history.size
+                val messages = history + Message(Role.USER, prepared.outgoing) + exchange
+                val response = try {
+                    val active = provider ?: attempt.provider().also { provider = it }
+                    active.completeStreaming(LlmRequest(systemPrompt = prepared.system, messages = messages, tools = tools)) { delta ->
+                        sawText = true
+                        onDelta(delta)
+                    }
+                } catch (e: Exception) {
+                    return fail("Request failed: ${e.message ?: e.javaClass.simpleName}", attempt.key, window)
+                }
+                when (response) {
+                    is LlmResponse.Error -> {
+                        if (cancelled()) return fail(STOPPED_MESSAGE, null)
+                        attempt.endpoint?.let { tried += RouteAttempt(it, RouteAttempt.Outcome.FAILED, scrub(response.error.message, attempt.key)) }
+                        if (hasNext && ModelRouter.fallsBackOn(response.error)) {
+                            // Text from the place that failed is not part of the reply the next place writes.
+                            if (sawText) onRestart()
+                            continue@places
+                        }
+                        return fail(response.error.message, attempt.key, window)
+                    }
+                    is LlmResponse.ToolCall -> {
+                        if (runner == null) return fail("The model asked to call a tool, which chat does not support.", attempt.key, window)
+                        if (newRounds >= MAX_TOOL_ROUNDS) return fail("The model asked for too many tool calls in one turn.", attempt.key, window)
+                        newRounds += 1
+                        // A provider that does not pair calls by id sends one call at a time; the others send them all.
+                        val calls = if (attempt.structuredTools) response.calls else listOf(response)
+                        if (calls.size > MAX_CALLS_PER_RESPONSE) {
+                            return fail("The model asked for ${calls.size} tool calls at once (the limit is $MAX_CALLS_PER_RESPONSE). None of them was run.", attempt.key, window)
+                        }
+                        // Every call gets the id its result is filed under: the provider's own, or one made here when it
+                        // has none. Checked before anything runs.
+                        val ids = calls.mapIndexed { index, call -> call.id?.takeIf { it.isNotBlank() } ?: "call_dca_${newRounds}_$index" }
+                        if (ids.toSet().size != ids.size) {
+                            return fail("The model sent two tool calls with the same id. Neither was run.", attempt.key, window)
+                        }
+                        val done = mutableListOf<CompletedCall>()
+                        for ((index, call) in calls.withIndex()) {
+                            if (cancelled()) {
+                                if (done.isNotEmpty()) rounds += ToolRound(done)
+                                return fail(STOPPED_MESSAGE, null)
+                            }
+                            val earlier = replayable.firstOrNull { it.name == call.toolName && it.input == call.input }
+                            val result = when {
+                                // Never reaches the runner: the model can only use what it was offered in this request.
+                                tools.none { it.name == call.toolName } ->
+                                    ToolResult.Failure("Tool '${call.toolName.take(MAX_TOOL_NAME_CHARS)}' is not available here").describe()
+                                earlier != null -> earlier.result
+                                else -> try {
+                                    runner.run(toolName = call.toolName, input = call.input, isCancelled = cancelled, initiator = Initiator.AI)
+                                } catch (e: Exception) {
+                                    ToolResult.Failure(e.message ?: e.javaClass.simpleName, e)
+                                }.describe()
+                            }
+                            done += CompletedCall(
+                                id = ids[index],
+                                name = call.toolName,
+                                input = call.input,
+                                argumentsJson = call.argumentsJson ?: ToolArgumentsJson.encode(call.input),
+                                result = result,
+                                text = if (index == 0) response.text else "",
+                            )
+                        }
+                        rounds += ToolRound(done)
+                    }
+                    is LlmResponse.Text -> {
+                        // A stopped reply is partial (or empty): it is not saved, so the transcript never holds half an answer.
+                        if (cancelled()) return fail(STOPPED_MESSAGE, null)
+                        if (response.content.isBlank()) return fail("The model returned an empty reply.", attempt.key, window)
+                        context.append(Role.USER, text).append(Role.ASSISTANT, response.content)
+                        store.save(activeConversationId, context)
+                        attempt.onSuccess()
+                        attempt.endpoint?.let { tried += RouteAttempt(it, RouteAttempt.Outcome.ANSWERED, null) }
+                        val notice = listOfNotNull(prepared.notice, attempt.notice).joinToString(" ").ifBlank { null }
+                        return ChatResult.Reply(response.content, notice, report(attempt.endpoint, window, dropped))
+                    }
+                }
+            }
+        }
+        return fail("Nothing could answer this message.", null)
+    }
+
+    /**
+     * This turn's tool calls and results as messages. Structured: one assistant message per round carrying every call
+     * with its id and exact arguments, then one tool message per call with the matching id. Flat (providers that are
+     * not given the pairing): the wording chat has always used.
+     */
+    private fun render(rounds: List<ToolRound>, structured: Boolean): List<Message> = rounds.flatMap { round ->
+        if (structured) {
+            listOf(Message(Role.ASSISTANT, round.calls.firstOrNull()?.text.orEmpty(), toolCalls = round.calls.map { ToolCallRequest(it.id, it.name, it.argumentsJson) })) +
+                round.calls.map { Message(Role.TOOL, it.result, toolCallId = it.id) }
+        } else {
+            round.calls.flatMap { listOf(Message(Role.ASSISTANT, "Called tool ${it.name}"), Message(Role.TOOL, it.result)) }
+        }
     }
 
     /**
@@ -632,6 +960,8 @@ class ChatSession(
     @Synchronized
     fun rememberConversation(): MemoryResult {
         if (memoryWriter == null && knowledgeGraph == null) return MemoryResult.NothingToRemember
+        // Under a policy, extraction goes where the policy says (it is one more request holding the whole conversation).
+        router?.takeIf { it.policy().routed }?.let { return rememberRouted(it) }
         val spec = lastSpec
         val model = lastModel
         if (spec == null || model == null || context.messages.isEmpty()) {
@@ -647,7 +977,42 @@ class ChatSession(
         if (key.isNullOrBlank()) return MemoryResult.Failure("No API key for ${spec.label}. Add one in Settings.")
 
         val config = LlmConfig(provider = spec.id, model = model, authToken = { vault.getSecret(spec.secretId) })
-        val extractor = LlmGraphExtractor(providerFor(spec, config))
+        return rememberWith(LlmGraphExtractor(providerFor(spec, config)), key)
+    }
+
+    /**
+     * Remembering under a policy: the same places, in the same order and with the same checks, as a chat turn. No
+     * cloud provider is contacted unless the policy allows cloud; when no allowed place can do it, the result says
+     * which and why.
+     */
+    private fun rememberRouted(resolver: RouteResolver): MemoryResult {
+        if (context.messages.isEmpty()) return MemoryResult.NothingToRemember
+        val plan = resolver.plan(RouteNeed("Remember this chat"))
+        val allowed = plan.candidates.filter { plan.policy.permits(it.type) }
+        if (allowed.isEmpty()) return MemoryResult.Failure(plan.refusal("Remembering this chat"))
+        val keys = mutableListOf<String>()
+        val providers = try {
+            allowed.map { candidate ->
+                when (candidate) {
+                    is RouteCandidate.Device -> localProvider(candidate.modelId)
+                    is RouteCandidate.Pc -> {
+                        val key = vault.getSecret(candidate.target.kind.secretId)?.takeIf { it.isNotBlank() }?.also { keys += it }
+                        PcHostChatProvider(candidate.target, key, transport, pcHostTimeouts, RequestCancellation())
+                    }
+                    is RouteCandidate.Cloud -> {
+                        vault.getSecret(candidate.spec.secretId)?.let { keys += it }
+                        providerFor(candidate.spec, LlmConfig(provider = candidate.spec.id, model = candidate.model, authToken = { vault.getSecret(candidate.spec.secretId) }))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            return MemoryResult.Failure("Could not save memory: ${e.message ?: e.javaClass.simpleName}")
+        }
+        val result = rememberWith(LlmGraphExtractor(ModelRouter(providers)), null)
+        return if (result is MemoryResult.Failure) MemoryResult.Failure(keys.fold(result.message) { message, key -> scrub(message, key) }) else result
+    }
+
+    private fun rememberWith(extractor: LlmGraphExtractor, key: String?): MemoryResult {
         if (memoryWriter != null) return rememberViaMemoryWriter(extractor, memoryWriter, key)
         val service = GraphExtractionService(extractor, knowledgeGraph!!)
         val result = try {
@@ -667,7 +1032,7 @@ class ChatSession(
         }
     }
 
-    private fun rememberViaMemoryWriter(extractor: LlmGraphExtractor, writer: MemoryWriter, key: String): MemoryResult {
+    private fun rememberViaMemoryWriter(extractor: LlmGraphExtractor, writer: MemoryWriter, key: String?): MemoryResult {
         if (memoryWriteScope.isBlank()) return MemoryResult.Failure("No memory scope is configured.")
         val (result, outcome) = try {
             MemoryExtractionService(extractor, writer, memoryWriteScope).extractAndStore(context, source = activeConversationId)
@@ -695,6 +1060,8 @@ class ChatSession(
         lastModel = null
         usedLocal = false
         usedPcHost = false
+        usedRouted = false
+        pendingTools = null
     }
 
     /** Returns (formatted block or null, failure notice or null). Never throws for a provider failure. */
@@ -736,6 +1103,21 @@ class ChatSession(
          */
         val TOOLS_RAN_NOTE = Regex("""\d+ tool actions? had already run in this turn .*$""", RegexOption.DOT_MATCHES_ALL)
         const val LOCAL_WEB_SEARCH_NOTICE = "Web search is not used for on-device replies."
+        const val LOCAL_TOOLS_NOTICE = "On-device models cannot use tools, so this reply was written without them."
+
+        /** Start of the notice on a PC reply whose model could not be offered the helper's tools; the reason follows. */
+        const val PC_HOST_TOOLS_NOTICE = "This PC model was not offered the helper's tools"
+        const val PC_HOST_TOOLS_ACTION =
+            "To use tools, pick a model the server reports as tool-capable (Ollama: a model whose capabilities list tools; llama.cpp: a model with a tool-capable chat template)."
+        const val WEB_SEARCH_POLICY_NOTICE =
+            "Web search was not run: it sends your message to an internet search service, which the selected policy does not allow."
+        const val TOOLS_KEPT_NOTICE =
+            "Nothing is repeated automatically; if you send the same message again, the results of the calls that already ran are reused and they are not run a second time."
+
+        /** Tokens kept free for the reply when a request is sized (the on-device default). */
+        const val OUTPUT_RESERVE_TOKENS = 512
+        private const val INSPECT_CONNECT_MILLIS = 4_000L
+        private const val INSPECT_REQUEST_MILLIS = 8_000L
         private const val MAX_TOOL_ROUNDS = 4
         private const val MAX_CALLS_PER_RESPONSE = 8
         private const val MAX_TOOL_NAME_CHARS = 64

@@ -137,6 +137,27 @@ DroidCommand AI
 │                            CloudProviderCatalog — the JVM-tested chat core used
 │                            by the app's ChatViewModel.
 │
+├── Inference policy (2026-11-12a) — the owner's rule for where text may go:
+│                            this device only / my PC only / prefer PC then
+│                            device / + confirmed cloud fallback; default
+│                            "use the model I pick" (unchanged behaviour).
+│                            core-llm-factory `ai.droidcommand.llm.routing`:
+│                            InferencePolicy + FileInferenceSettingsStore,
+│                            RouteResolver (candidates -> core-llm
+│                            DefaultAiProviderSelector.explain; fallback by
+│                            ModelRouter.fallsBackOn), RequestBudget,
+│                            PolicyInference (planner / one prompt over
+│                            ModelRouter), ChatSession.sendRouted. PC tool
+│                            calls: structured ids/arguments in
+│                            core-llm-openai (opt-in), PcHostClient.inspect
+│                            (tools, window, location). :app: policy picker
+│                            and route line in Chat; Plan, assist pop-ups,
+│                            ask_ai, web search and remembering obey it.
+│                            JVM-tested with fake backends; run against real
+│                            Ollama and llama.cpp on a host; APK assembles;
+│                            NOT run on a device or emulator.
+│                            See docs/INFERENCE_POLICY.md.
+│
 ├── PC-hosted models (2026-11-11b) — Chat against a model server on the owner's
 │                            own PC (Ollama, or any OpenAI-compatible server)
 │                            over a LAN or VPN address. No new module:

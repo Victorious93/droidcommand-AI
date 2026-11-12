@@ -147,6 +147,9 @@ fun PlanScreen(viewModel: PlanViewModel = hiltViewModel()) {
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text("Run objective") }
                     }
+                    state.route?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall)
+                    }
                     state.error?.let {
                         Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
