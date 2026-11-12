@@ -281,3 +281,24 @@ document.
 
 ## Notes Studio LAN viewer and System Toolbox (2026-10-31)
 See `docs/NOTES_STUDIO_SYSTEM_TOOLBOX.md`. The LAN viewer is off by default, needs a password, is LAN-only and read-only. Toolbox actions that change anything need a confirmation that shows the exact command. The AI toolbox gate is off by default and asks on every call.
+
+## Inference policy and PC tool calls (2026-11-12)
+
+Full description: `docs/INFERENCE_POLICY.md`. Security-relevant rules, each covered by a JVM test that asserts on what a
+recording transport actually sent:
+
+- **The policy is checked before any request, at the point of dispatch.** `ChatSession.send` (cloud) refuses before the
+  key is read or a provider is built; web search is refused before the search client is called; `sendRouted`,
+  `rememberConversation` and `PolicyInference` only ever build providers for places the policy allows. A place the
+  policy does not allow is not contacted at all, including for reachability.
+- **Fail closed on unknown state.** A policy file that cannot be read or names an unknown policy is "This device only".
+  Cloud fallback needs a separate confirmation flag; the policy value alone never enables it.
+- **Recipient is decided by evidence, not by address.** A PC model is treated as local only when the server
+  establishes it. Cloud-backed and unestablished models are cloud recipients. A model saved as cloud-backed stays
+  refused even if the server later reports nothing about it.
+- **Tool calls on PC models use the existing gate unchanged**: `ScopedToolRunner` → `SecureToolExecutor` → approval →
+  audit. Tool-call arguments from the model are untrusted; a call that is not a well-formed JSON object is not run.
+- **No double execution.** A completed call is never re-run by a fallback place or by re-sending the same message
+  after a failure (in-memory, per conversation and message).
+
+Not changed: `externalControlEnabled`, `allowUiActions`, cert gating, the cleartext rule for PC addresses, MCP gating.

@@ -16,6 +16,7 @@ import ai.droidcommand.app.deviceconnect.VaultDeviceConnectStore
 import ai.droidcommand.app.fleet.AndroidMessengerChannel
 import ai.droidcommand.app.fleet.AndroidPackageIdentityResolver
 import ai.droidcommand.app.fleet.SharedPreferencesPairedNodeStore
+import ai.droidcommand.app.localmodels.LocalModelRuntime
 import ai.droidcommand.app.mode.AdvancedModeStore
 import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.prefs.AdvancedPrefs
@@ -48,11 +49,11 @@ import ai.droidcommand.fleet.messenger.PairedNodeGateway
 import ai.droidcommand.fleet.messenger.PairedNodeStore
 import ai.droidcommand.hackerai.HackerAiTool
 import ai.droidcommand.knowledge.android.RoomKnowledgeGraph
+import ai.droidcommand.llm.ProviderType
 import ai.droidcommand.llm.factory.CloudPromptClient
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.CloudProviderSpec
 import ai.droidcommand.llm.pchost.FilePcHostSettingsStore
-import ai.droidcommand.app.localmodels.LocalModelRuntime
 import ai.droidcommand.llm.pchost.PcHostClient
 import ai.droidcommand.llm.pchost.PcHostKind
 import ai.droidcommand.llm.pchost.PcHostSettingsStore
@@ -61,7 +62,6 @@ import ai.droidcommand.llm.routing.FileInferenceSettingsStore
 import ai.droidcommand.llm.routing.InferenceSettingsStore
 import ai.droidcommand.llm.routing.PolicyInference
 import ai.droidcommand.llm.routing.RouteResolver
-import ai.droidcommand.llm.ProviderType
 import ai.droidcommand.metasploit.MetasploitExecutor
 import ai.droidcommand.metasploit.MetasploitTool
 import ai.droidcommand.metasploit.TermuxMetasploitExecutor
@@ -286,7 +286,6 @@ object AppModule {
     fun provideAssistantCapabilitySettingsStore(@ApplicationContext context: Context): AssistantCapabilitySettingsStore =
         FileAssistantCapabilitySettingsStore(context.filesDir.toPath().resolve("assistant-capabilities.settings"))
 
-    /** Saved PC model servers (address and model; not secret). The optional key is in the vault. */
     /**
      * The owner's inference policy ("this device only", "my PC only", ...). A missing file is an install from before
      * policies existed and keeps the old behaviour; see [FileInferenceSettingsStore] for the migration rules.
@@ -350,6 +349,7 @@ object AppModule {
         localModels: LocalModelRuntime,
     ): PolicyInference = PolicyInference(resolver, vault, transport, local = { localModels.resources })
 
+    /** Saved PC model servers (address and model; not secret). The optional key is in the vault. */
     @Provides
     @Singleton
     fun providePcHostSettingsStore(@ApplicationContext context: Context): PcHostSettingsStore =

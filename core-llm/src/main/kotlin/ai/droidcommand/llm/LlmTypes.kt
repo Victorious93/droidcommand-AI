@@ -39,6 +39,7 @@ sealed class ResponseFormat {
 
 sealed class LlmResponse {
     data class Text(val content: String) : LlmResponse()
+
     /**
      * [id], [argumentsJson], [more] and [problem] are filled only by a provider asked for structured tool calls (they
      * stay at their defaults otherwise, so existing callers see the same value as before). [id] is the provider's own

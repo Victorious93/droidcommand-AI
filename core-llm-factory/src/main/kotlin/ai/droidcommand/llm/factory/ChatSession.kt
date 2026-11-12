@@ -9,8 +9,8 @@ import ai.droidcommand.agent.JsonFileConversationStore
 import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.agent.Message
 import ai.droidcommand.agent.Role
-import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolCallRecord
+import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.agent.ToolSpec
 import ai.droidcommand.agent.describe
@@ -58,8 +58,10 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /** Outcome of one chat turn. [Failure.message] never contains the API key. */
 sealed class ChatResult {
-    /** [notice] is a non-fatal heads-up (e.g. web search was requested but failed, so the reply is not grounded in it). */
-    /** [route] says where a routed turn's reply came from and why (null for a turn that was not routed by a policy). */
+    /**
+     * [notice] is a non-fatal heads-up (e.g. web search was requested but failed, so the reply is not grounded in it).
+     * [route] says where a routed turn's reply came from and why (null for a turn that was not routed by a policy).
+     */
     data class Reply(val text: String, val notice: String? = null, val route: RouteReport? = null) : ChatResult()
 
     /** [route] lists the places a routed turn considered and why none answered (null when the turn was not routed). */
@@ -1024,6 +1026,7 @@ class ChatSession(
         const val STOPPED_MESSAGE = "Stopped."
         const val LOCAL_WEB_SEARCH_NOTICE = "Web search is not used for on-device replies."
         const val LOCAL_TOOLS_NOTICE = "On-device models cannot use tools, so this reply was written without them."
+
         /** Start of the notice on a PC reply whose model could not be offered the helper's tools; the reason follows. */
         const val PC_HOST_TOOLS_NOTICE = "This PC model was not offered the helper's tools"
         const val PC_HOST_TOOLS_ACTION =

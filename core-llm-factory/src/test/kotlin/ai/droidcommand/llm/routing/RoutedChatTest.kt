@@ -18,7 +18,6 @@ import ai.droidcommand.llm.factory.LocalProviderResources
 import ai.droidcommand.llm.factory.MemoryResult
 import ai.droidcommand.llm.local.ModelMetadata
 import ai.droidcommand.llm.local.ModelRepository
-import ai.droidcommand.llm.pchost.FakePcServer
 import ai.droidcommand.llm.pchost.FilePcHostSettingsStore
 import ai.droidcommand.llm.pchost.InMemoryPcHostSettingsStore
 import ai.droidcommand.llm.pchost.PcHostClient
@@ -593,7 +592,10 @@ class RoutedChatTest {
             history = listOf(ai.droidcommand.agent.Message(Role.USER, "a".repeat(3000)), ai.droidcommand.agent.Message(Role.ASSISTANT, "b".repeat(3000))),
             userText = "c".repeat(30),
             outgoing = "excerpt ".repeat(40) + "c".repeat(30),
-            tools = SecureTools(setOf("note_add")).let { it.add(SecureTools.Counting("note_add")); it.specs("note_add") },
+            tools = SecureTools(setOf("note_add")).let {
+                it.add(SecureTools.Counting("note_add"))
+                it.specs("note_add")
+            },
             exchange = listOf(ai.droidcommand.agent.Message(Role.TOOL, "r".repeat(90), toolCallId = "c1")),
             outputReserveTokens = 512,
         )
@@ -646,8 +648,9 @@ class RoutedChatTest {
         FakeModelServer().use { pc ->
             pc.chat += text("first")
             pc.chat += text("second")
+            // The policy argument is ignored here: the file store below is what is read.
             fun start(): World = World(
-                InferencePolicy.MANUAL, // ignored: the file store below is what is read
+                InferencePolicy.MANUAL,
                 pc = pc,
                 store = JsonFileConversationStore(files.resolve("chats")),
                 settings = FileInferenceSettingsStore(files.resolve("inference.properties")),

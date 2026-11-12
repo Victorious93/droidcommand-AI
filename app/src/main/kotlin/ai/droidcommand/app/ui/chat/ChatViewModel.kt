@@ -46,7 +46,6 @@ import ai.droidcommand.llm.pchost.PcHostEndpoint
 import ai.droidcommand.llm.pchost.PcHostKind
 import ai.droidcommand.llm.pchost.PcHostSettingsStore
 import ai.droidcommand.llm.routing.InferencePolicy
-import ai.droidcommand.llm.routing.InferenceSettings
 import ai.droidcommand.llm.routing.InferenceSettingsStore
 import ai.droidcommand.llm.routing.RouteResolver
 import ai.droidcommand.notes.NoteDraft

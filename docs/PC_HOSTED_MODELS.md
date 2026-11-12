@@ -98,10 +98,28 @@ LM Studio, vLLM and similar servers use the same two endpoints; their own setup 
 
 In every case nothing is saved and the message returns to the input box, so it can be sent again.
 
-## Limits of this first version
+## Helper-bot tools on a PC model (2026-11-12)
 
-- AI Chat only. Plan, Pilot/Forge, the assist pop-ups and "Remember this chat" do not use the PC server.
-- No tool calls on PC-hosted turns (a helper bot's tools are not offered; the reply says so).
+A helper bot's tools are offered to a PC model when the server reports that the model can call them: Ollama lists
+`tools` in `/api/show` `capabilities`; a llama.cpp server reports `chat_template_caps.supports_tools` in `/props`.
+The server is asked only when a bot with tools is running (plain chat sends exactly what it sent before).
+
+- Calls and results are sent in OpenAI's structured form: the assistant message carries every call with the server's
+  own id and its argument text exactly as streamed; each result is a `tool` message with the matching `tool_call_id`.
+  Several calls in one reply are run in order. A call with no id gets one made on the phone.
+- A call whose arguments are not a JSON object, or that names no tool, is not run; the model is told.
+- Every call goes through the bot's allow-list, then the normal approval dialog and audit log. Denied, refused and
+  revoked calls run nothing and the model is told.
+- Stop during a tool round: no further call is run, nothing is saved.
+- Not offered, with the reason in the reply: a model Ollama lists no `tools` for; a llama.cpp model whose chat
+  template has no tool support; any other OpenAI-compatible server (it does not report this).
+
+Policies ("My PC only", "Prefer PC, then this device", …) are in `docs/INFERENCE_POLICY.md`.
+
+## Limits
+
+- Plan, the assist pop-ups and "Remember this chat" use the PC only under an inference policy
+  (`docs/INFERENCE_POLICY.md`); with "Use the model I pick" they behave as before.
 - No model download/pull from the phone, no server discovery on the network: you type the address.
 - Reasoning-only output (a model that returns no `content`) is shown as an empty reply.
 

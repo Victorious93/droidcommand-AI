@@ -146,9 +146,10 @@ class PcHostToolsTest {
             val tools = SecureTools(setOf("note_add", "list_notes"))
             val add = tools.add(SecureTools.Counting("note_add"))
             val list = tools.add(SecureTools.Counting("list_notes"))
+            // The first call's arguments are cut off (not a JSON object); the server sent no id for the second.
             server.chat += toolCalls(
-                StreamedCall("call_bad", "note_add", listOf("{\"title\": \"mil")), // cut off: not a JSON object
-                StreamedCall(null, "list_notes", listOf("{}")), // the server sent no id for this one
+                StreamedCall("call_bad", "note_add", listOf("{\"title\": \"mil")),
+                StreamedCall(null, "list_notes", listOf("{}")),
             )
             server.chat += text("done")
             val chat = session()
