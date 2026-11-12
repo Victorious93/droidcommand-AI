@@ -6,6 +6,7 @@ import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.agent.Role
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolRunner
+import ai.droidcommand.app.bots.HelperBot
 import ai.droidcommand.app.bots.HelperBotHandoff
 import ai.droidcommand.app.bots.HelperBotTools
 import ai.droidcommand.app.bots.HelperBots
@@ -51,6 +52,7 @@ import ai.droidcommand.rag.AttachResult
 import ai.droidcommand.rag.DocumentInfo
 import ai.droidcommand.remote.HttpTransport
 import ai.droidcommand.skills.mcp.McpBridgedTool
+import ai.droidcommand.skills.mcp.McpSelections
 import ai.droidcommand.templates.PromptTemplate
 import ai.droidcommand.templates.Skill
 import ai.droidcommand.voice.SpeakMode
@@ -249,8 +251,8 @@ class ChatViewModel @Inject constructor(
 
     @Volatile private var importCancelled = AtomicBoolean(false)
 
-    /** Tools the running helper bot may use, kept so its MCP tools can be loaded once a cloud provider is chosen. */
-    private var activeBotTools: Set<String> = emptySet()
+    /** The running helper bot, kept so its MCP tools can be loaded once a cloud provider is chosen. */
+    private var activeBot: HelperBot? = null
 
     @Volatile private var handsFreeRound = false
 
@@ -375,7 +377,7 @@ class ChatViewModel @Inject constructor(
             )
         }
         // A helper bot's MCP tools were not loaded while an on-device model was selected (nothing is contacted then).
-        mutableState.value.activeBotName?.let { loadMcpToolsFor(it, activeBotTools) }
+        activeBot?.let { loadMcpToolsFor(it) }
     }
 
     /** Chooses an imported on-device model for the following turns. The previous one is unloaded when the new one loads. */
@@ -1001,51 +1003,60 @@ class ChatViewModel @Inject constructor(
     fun pickUpBot() {
         val bot = HelperBotHandoff.consume() ?: return
         if (bot.model.isNotBlank() && mutableState.value.activeLocalModelId == null && mutableState.value.activePcHost == null) setModel(bot.model)
+        // Only the tools that are, right now, the ones the owner ticked. MCP tools join after they are loaded below.
+        val allowed = mcpTools.resolve(bot.allowedTools, bot.mcpBindings).allowed
         session.setToolAccess(
-            HelperBotTools.scopedRunner(toolRunner, bot.allowedTools),
-            HelperBotTools.offeredTools(toolRegistry, bot.allowedTools),
+            HelperBotTools.scopedRunner(toolRunner, allowed),
+            HelperBotTools.offeredTools(toolRegistry, allowed),
         )
         mutableState.update {
-            it.copy(activeBotName = bot.name, activeBotPrompt = HelperBots.systemPrompt(bot), notice = "Running helper bot \"${bot.name}\".")
+            it.copy(activeBotName = bot.name, activeBotPrompt = HelperBots.systemPrompt(bot, allowed), notice = "Running helper bot \"${bot.name}\".")
         }
         applyChatSystemPrompt(mutableState.value)
-        activeBotTools = bot.allowedTools
+        activeBot = bot
         refreshBotToolStatus()
         // With an on-device model selected the bot's MCP servers are not contacted: an on-device chat makes no
         // network request of its own. Its other tools are offered when the model can call them (see botToolStatus).
-        if (mutableState.value.activeLocalModelId == null) loadMcpToolsFor(bot.name, bot.allowedTools)
+        if (mutableState.value.activeLocalModelId == null) loadMcpToolsFor(bot)
     }
 
     /**
      * A bot that lists MCP tools (`mcp_…`) needs them loaded from the owner's MCP servers first. This only runs
      * when MCP is turned on; the tools still go through the same allow-list and approval prompts as above.
+     *
+     * A saved MCP tool is allowed only while it is the very server entry and remote tool the owner ticked. A
+     * server added later under the same label, or a name that is no longer clear, is not offered and not callable.
      */
-    private fun loadMcpToolsFor(botName: String, allowedTools: Set<String>) {
-        if (allowedTools.none { McpBridgedTool.isMcpTool(it) }) return
+    private fun loadMcpToolsFor(bot: HelperBot) {
+        if (bot.allowedTools.none { McpBridgedTool.isMcpTool(it) }) return
         viewModelScope.launch {
-            val ready = withContext(Dispatchers.IO) {
+            val now = withContext(Dispatchers.IO) {
                 mcpTools.refreshIfNeeded()
-                if (mcpTools.enabled()) mcpTools.loadedToolNames().toSet() else emptySet()
+                mcpTools.resolve(bot.allowedTools, bot.mcpBindings)
             }
-            if (mutableState.value.activeBotName != botName) return@launch
+            if (mutableState.value.activeBotName != bot.name) return@launch
             session.setToolAccess(
-                HelperBotTools.scopedRunner(toolRunner, allowedTools),
-                HelperBotTools.offeredTools(toolRegistry, allowedTools),
+                HelperBotTools.scopedRunner(toolRunner, now.allowed),
+                HelperBotTools.offeredTools(toolRegistry, now.allowed),
             )
-            val missing = allowedTools.filter { McpBridgedTool.isMcpTool(it) && it !in ready }
-            if (missing.isNotEmpty()) {
-                val words = if (!mcpTools.enabled()) {
-                    "Extra AI tools (MCP) are off, so this bot cannot use its MCP tools."
-                } else {
-                    "Some MCP tools for this bot are not available right now: ${missing.sorted().joinToString(", ")}."
-                }
-                mutableState.update { it.copy(notice = words) }
+            val words = when {
+                now.needsReselect.isNotEmpty() -> McpSelections.reselectWords(now.needsReselect)?.replace("Tap Edit", "In Bot maker, tap Edit")
+                now.unavailable.isEmpty() -> null
+                !mcpTools.enabled() -> "Extra AI tools (MCP) are off, so this bot cannot use its MCP tools."
+                else -> "Some MCP tools for this bot are not available right now: ${now.unavailable.sorted().joinToString(", ")}."
+            }
+            if (words != null) mutableState.update { it.copy(notice = words) }
+            // The prompt names the bot's tools; say only the ones it can really use now.
+            val prompt = HelperBots.systemPrompt(bot, now.allowed)
+            if (prompt != mutableState.value.activeBotPrompt) {
+                mutableState.update { it.copy(activeBotPrompt = prompt) }
+                applyChatSystemPrompt(mutableState.value)
             }
         }
     }
 
     fun stopBot() {
-        activeBotTools = emptySet()
+        activeBot = null
         session.setToolAccess(null)
         mutableState.update { it.copy(activeBotName = null, activeBotPrompt = null, notice = null, botToolStatus = null) }
         applyChatSystemPrompt(mutableState.value)

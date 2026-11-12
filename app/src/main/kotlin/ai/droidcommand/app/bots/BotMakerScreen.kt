@@ -7,6 +7,7 @@ import ai.droidcommand.app.ui.theme.DroidDangerButton
 import ai.droidcommand.app.ui.theme.DroidPrimaryButton
 import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.app.ui.theme.DroidTextButton
+import ai.droidcommand.skills.mcp.McpSelections
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -118,16 +119,27 @@ fun BotMakerScreen(viewModel: BotMakerViewModel = hiltViewModel(), onRunInChat: 
         SectionLabel("Your bots")
         if (ui.bots.isEmpty()) Text("No bots yet.", style = MaterialTheme.typography.bodySmall)
         ui.bots.forEach { bot ->
+            val toolState = ui.toolState[bot.id]
+            val pickAgain = toolState?.needsReselect.orEmpty()
+            val shownTools = (bot.allowedTools - pickAgain.toSet()).map { toolState?.current?.get(it) ?: it }.sorted()
             DroidCard {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(bot.name, style = MaterialTheme.typography.titleMedium)
                     Text(bot.instructions, style = MaterialTheme.typography.bodySmall, maxLines = 3)
                     Text(
-                        (if (bot.allowedTools.isEmpty()) "No tools" else "Tools: " + bot.allowedTools.sorted().joinToString(", ")) +
+                        (if (shownTools.isEmpty()) "No tools" else "Tools: " + shownTools.joinToString(", ")) +
                             (if (bot.model.isBlank()) "" else " · Model: ${bot.model}"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    McpSelections.reselectWords(pickAgain)?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.testTag("bot_pick_again_${bot.id}"),
+                        )
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         DroidPrimaryButton(onClick = {
                             viewModel.run(bot)
@@ -138,7 +150,7 @@ fun BotMakerScreen(viewModel: BotMakerViewModel = hiltViewModel(), onRunInChat: 
                             name = bot.name
                             instructions = bot.instructions
                             model = bot.model
-                            selected = bot.allowedTools.toList()
+                            selected = viewModel.tickedFor(bot)
                         }) { Text("Edit") }
                         DroidTextButton(onClick = { viewModel.askDelete(bot) }) { Text("Delete") }
                     }

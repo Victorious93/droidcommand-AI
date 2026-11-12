@@ -83,8 +83,18 @@ class McpServersViewModel @Inject constructor(
             return false
         }
         val name = label.trim().ifBlank { "MCP server" }.take(40)
-        val server = McpServerConfig(McpServerConfig.newId(name, servers.map { it.id }.toSet()), name, ok.url)
-        if (token.isNotBlank() && !saveTokenFor(server.id, token)) return false
+        // A fresh instance id: bots that picked tools from an earlier server with this label do not get this one.
+        val server = McpServerConfig(
+            id = McpServerConfig.newId(name, servers.map { it.id }.toSet()),
+            label = name,
+            url = ok.url,
+            instanceId = McpServerConfig.newInstanceId(),
+        )
+        if (token.isNotBlank()) {
+            if (!saveTokenFor(server.id, token)) return false
+        } else if (!dropLeftoverToken(server.id)) {
+            return false
+        }
         runtime.saveServers(servers + server)
         mutable.update { it.copy(urlProblem = null, urlWarning = null, message = "Added ${server.label}.") }
         if (runtime.enabled()) refresh() else reloadRows()
@@ -165,6 +175,18 @@ class McpServersViewModel @Inject constructor(
         true
     } catch (_: Exception) {
         mutable.update { it.copy(message = "Could not save the token in the phone's key storage.") }
+        false
+    }
+
+    /**
+     * The id can be one a removed server had. If that server's token could not be deleted back then, it must not
+     * be sent to this new address.
+     */
+    private fun dropLeftoverToken(id: String): Boolean = try {
+        vault.revokeSecret(McpSecrets.tokenId(id))
+        true
+    } catch (_: Exception) {
+        mutable.update { it.copy(message = "Could not reach the phone's key storage, so the server was not added.") }
         false
     }
 

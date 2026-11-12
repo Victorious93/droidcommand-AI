@@ -9,6 +9,9 @@ import ai.droidcommand.bots.ScopedToolRunner
  * Wires a helper bot's tool allow-list to the phone Chat path.
  * Tools not on the list are refused by [ScopedToolRunner] before the
  * delegate (the app's approval-gated [ToolRunner]) is called.
+ *
+ * Pass the bot's tools as they resolve right now ([ai.droidcommand.skills.mcp.McpResolution.allowed]), not its
+ * raw saved names: a saved MCP name only counts while it still stands for the server and tool the owner ticked.
  */
 object HelperBotTools {
     fun scopedRunner(delegate: ToolRunner, allowedTools: Set<String>): ToolRunner =
