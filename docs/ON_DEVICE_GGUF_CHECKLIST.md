@@ -81,8 +81,14 @@ slower: the file is re-checked (SHA-256) before it loads. Note the seconds.
 
 Pass: every turn is answered. With web search on, the reply carries
 `Web search is not used for on-device replies.` and nothing fails. A helper
-bot answers with `On-device models cannot use tools…`. No "add an API key"
-prompt blocks sending.
+bot shows, under its name, whether this model can call its tools. With a model
+whose chat template does not define tool calls the reply carries `This
+on-device model's chat template does not define tool calls (<tool_call>)…`
+and is written without them. With one that does (Qwen 2.5 Instruct, a Hermes
+model) the line reads `Tools: this on-device model can call them`; ask for
+something a tool answers and expect the usual approval prompt for anything
+that is not read-only, then a reply that uses the result. The bot's MCP tools
+are never used on-device. No "add an API key" prompt blocks sending.
 
 Optional, stronger: with networking **on**, watch the app's traffic
 (`adb shell dumpsys netstats detail`, or a firewall app set to log) during

@@ -1,10 +1,22 @@
 package ai.droidcommand.llm.pchost
 
+import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.InMemoryConversationStore
+import ai.droidcommand.agent.Initiator
+import ai.droidcommand.agent.Message
+import ai.droidcommand.agent.RetryPolicy
+import ai.droidcommand.agent.Role
+import ai.droidcommand.agent.ToolCallRequest
+import ai.droidcommand.agent.ToolResult
+import ai.droidcommand.agent.ToolRunner
+import ai.droidcommand.agent.ToolSpec
 import ai.droidcommand.config.InMemorySecretsVault
+import ai.droidcommand.llm.LlmRequest
+import ai.droidcommand.llm.LlmResponse
 import ai.droidcommand.llm.factory.ChatResult
 import ai.droidcommand.llm.factory.ChatSession
 import ai.droidcommand.remote.HttpUrlConnectionTransport
+import ai.droidcommand.remote.RequestCancellation
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -143,5 +155,52 @@ class PcHostLiveServerTest {
         assertTrue(s.history().isEmpty())
         // The server is free again: a new turn is answered.
         assertIs<ChatResult.Reply>(s.sendPcHost(target, "Say ok."))
+    }
+
+    /**
+     * Tools, against the real server. Needs a model the server reports as tool-capable; skipped otherwise. The
+     * metadata check and the transcript the app sends are real; whether the model then *chooses* to call a tool is
+     * the model's business and is only reported, not asserted.
+     */
+    @Test
+    fun `the real server reports tool support and accepts the tool transcript the app sends`() {
+        val target = target(address())
+        val check = PcHostClient(transport).toolSupport(kind, target.address, target.model, key)
+        println("LIVE tool support: $check")
+        assumeTrue(check.support == PcToolSupport.SUPPORTED, "this server/model does not report tool support: ${check.detail}")
+
+        val clock = ToolSpec(name = "clock", description = "Tells the current time. Call it whenever the user asks for the time.")
+        val provider = PcHostChatProvider(target.copy(toolSupport = check.support), key, transport, PcHostTimeouts(), RequestCancellation())
+        val history = listOf(
+            Message(Role.USER, "What time is it?"),
+            Message(Role.ASSISTANT, "", toolCalls = listOf(ToolCallRequest("call_live_1", "clock", """{"zone":"UTC"}"""))),
+            Message(Role.TOOL, "12:00 UTC", toolCallId = "call_live_1"),
+        )
+        val afterTool = provider.complete(LlmRequest(systemPrompt = null, messages = history, tools = listOf(clock), maxOutputTokens = 48))
+        println("LIVE reply after a tool result: ${afterTool.toString().take(200)}")
+        assertFalse(afterTool is LlmResponse.Error, "the server refused a valid tool transcript: $afterTool")
+
+        val runner = object : ToolRunner {
+            val calls = mutableListOf<String>()
+
+            override fun run(
+                toolName: String,
+                input: Map<String, String>,
+                retryPolicy: RetryPolicy,
+                isCancelled: () -> Boolean,
+                mode: AgentMode?,
+                initiator: Initiator?,
+                grantId: String?,
+            ): ToolResult {
+                calls += "$toolName$input"
+                return ToolResult.Success("12:00 UTC")
+            }
+        }
+        val s = session()
+        s.setToolAccess(runner, listOf(clock))
+        val result = s.sendPcHost(target.copy(toolSupport = check.support), "What time is it right now? Use the clock tool.")
+        println("LIVE helper-bot turn: tools run=${runner.calls} result=${result.toString().take(240)}")
+        // Either outcome is a correct exchange; a failure must be the model's reply being unusable, not a refused request.
+        if (result is ChatResult.Failure) assertFalse(result.message.contains("refused a request that offered"), result.message)
     }
 }

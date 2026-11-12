@@ -2,7 +2,9 @@ package ai.droidcommand.llm.anthropic
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Wire types for Anthropic's Messages API (`POST /v1/messages`), kept
@@ -26,8 +28,15 @@ data class AnthropicRequest(
 @Serializable
 data class AnthropicToolChoice(val type: String, val name: String? = null)
 
+/**
+ * [content] is either plain text (a JSON string) or a list of content blocks. Blocks are used only where the API
+ * needs them: an assistant turn that called tools (`tool_use` blocks) and the user turn that answers it
+ * (`tool_result` blocks).
+ */
 @Serializable
-data class AnthropicMessage(val role: String, val content: String)
+data class AnthropicMessage(val role: String, val content: JsonElement) {
+    constructor(role: String, text: String) : this(role, JsonPrimitive(text))
+}
 
 /**
  * [inputSchema] is a permissive `{"type":"object"}` for every tool: nothing

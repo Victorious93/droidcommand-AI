@@ -54,7 +54,7 @@ internal class PcHostChatProvider(
             onTextDelta(delta)
         }
         if (response !is LlmResponse.Error) return response
-        val (_, message) = PcHostErrors.forChat(target, response.error, sawText, keySaved = key != null, readTimeoutSeconds = timeouts.readMillis / 1_000)
+        val (_, message) = PcHostErrors.forChat(target, response.error, sawText, keySaved = key != null, readTimeoutSeconds = timeouts.readMillis / 1_000, toolsOffered = request.tools.isNotEmpty())
         return LlmResponse.Error(response.error.withMessage(message))
     }
 

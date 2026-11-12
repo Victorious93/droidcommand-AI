@@ -45,6 +45,7 @@ import ai.droidcommand.llm.local.RamFitVerdict
 import ai.droidcommand.llm.pchost.PcHostEndpoint
 import ai.droidcommand.llm.pchost.PcHostKind
 import ai.droidcommand.llm.pchost.PcHostSettingsStore
+import ai.droidcommand.llm.pchost.PcHostToolNotices
 import ai.droidcommand.notes.NoteDraft
 import ai.droidcommand.rag.AttachResult
 import ai.droidcommand.rag.DocumentInfo
@@ -151,6 +152,11 @@ data class ChatUiState(
     val pcHosts: Map<PcHostKind, PcHostEndpoint> = emptyMap(),
     /** The PC server turns are sent to, or null. When set, [activeLocalModelId] is null. */
     val activePcHost: PcHostKind? = null,
+    /**
+     * While a helper bot runs on a PC-hosted or on-device model: whether its tools are offered to that model, and why
+     * not when they are not. Null with no bot, and on a cloud provider (tools are always offered there).
+     */
+    val botToolStatus: String? = null,
     val conversationId: String = ChatSession.DEFAULT_CONVERSATION_ID,
     val savedChats: List<SavedChat> = emptyList(),
     val templates: List<PromptTemplate> = emptyList(),
@@ -379,6 +385,34 @@ class ChatViewModel @Inject constructor(
             remove(PcHostChoice.KEY_PC_HOST)
         }
         mutableState.update { it.copy(activeLocalModelId = modelId, activePcHost = null, error = null, localStatus = null) }
+        refreshBotToolStatus()
+    }
+
+    /**
+     * Works out [ChatUiState.botToolStatus] for the model now selected. Off the main thread: it reads the PC-host
+     * settings file or the model file's metadata. It loads no model and makes no network request.
+     */
+    private fun refreshBotToolStatus() {
+        val state = mutableState.value
+        if (state.activeBotName == null || (state.activePcHost == null && state.activeLocalModelId == null)) {
+            mutableState.update { it.copy(botToolStatus = null) }
+            return
+        }
+        viewModelScope.launch {
+            val status = withContext(Dispatchers.IO) {
+                val pc = state.activePcHost
+                val localId = state.activeLocalModelId
+                when {
+                    pc != null -> runCatching { pcHostStore.load(pc) }.getOrNull()?.let { PcHostToolNotices.status(it.toolSupport, it.toolsForced) }
+                    localId != null -> session.localToolSupport(localId)?.let { if (it.supported) "Tools: this on-device model can call them" else it.reason }
+                    else -> null
+                }
+            }
+            val now = mutableState.value
+            if (now.activeBotName == state.activeBotName && now.activePcHost == state.activePcHost && now.activeLocalModelId == state.activeLocalModelId) {
+                mutableState.update { it.copy(botToolStatus = status) }
+            }
+        }
     }
 
     /** Sends the following turns to the model server saved for [kind] in Settings, PC-hosted models. */
@@ -388,6 +422,7 @@ class ChatViewModel @Inject constructor(
             remove(KEY_LOCAL_MODEL)
         }
         mutableState.update { it.copy(activePcHost = kind, activeLocalModelId = null, error = null, localStatus = null) }
+        refreshBotToolStatus()
     }
 
     /**
@@ -569,7 +604,9 @@ class ChatViewModel @Inject constructor(
                 }
             } else if (stopRequested === stop) {
                 // Only while this is still the newest turn: a later send must not have its state reset by a stopped one.
-                mutableState.update { it.copy(sending = false, streaming = "", notice = "Stopped.") }
+                // A stopped turn that had already run a tool action says so: the owner must know before sending again.
+                val ran = (result as? ChatResult.Failure)?.message?.let { ChatSession.TOOLS_RAN_NOTE.find(it)?.value }
+                mutableState.update { it.copy(sending = false, streaming = "", notice = listOfNotNull("Stopped.", ran).joinToString(" ")) }
             }
             if (stopRequested === stop) {
                 handsFreeRound = false
@@ -973,7 +1010,9 @@ class ChatViewModel @Inject constructor(
         }
         applyChatSystemPrompt(mutableState.value)
         activeBotTools = bot.allowedTools
-        // With an on-device model selected the bot cannot use tools at all, so its MCP servers are not contacted.
+        refreshBotToolStatus()
+        // With an on-device model selected the bot's MCP servers are not contacted: an on-device chat makes no
+        // network request of its own. Its other tools are offered when the model can call them (see botToolStatus).
         if (mutableState.value.activeLocalModelId == null) loadMcpToolsFor(bot.name, bot.allowedTools)
     }
 
@@ -1008,7 +1047,7 @@ class ChatViewModel @Inject constructor(
     fun stopBot() {
         activeBotTools = emptySet()
         session.setToolAccess(null)
-        mutableState.update { it.copy(activeBotName = null, activeBotPrompt = null, notice = null) }
+        mutableState.update { it.copy(activeBotName = null, activeBotPrompt = null, notice = null, botToolStatus = null) }
         applyChatSystemPrompt(mutableState.value)
     }
 

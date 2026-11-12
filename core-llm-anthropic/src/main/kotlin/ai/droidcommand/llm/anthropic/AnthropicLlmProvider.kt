@@ -19,6 +19,7 @@ import ai.droidcommand.remote.ServerSentEventParser
 import ai.droidcommand.remote.isTimeoutFailure
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -170,6 +171,7 @@ class AnthropicLlmProvider(
         private val text = StringBuilder()
         private val toolNames = sortedMapOf<Int, String>()
         private val toolInputs = mutableMapOf<Int, StringBuilder>()
+        private val toolIds = mutableMapOf<Int, String?>()
         private var sawContentBlock = false
         private var error: LlmError? = null
 
@@ -188,6 +190,7 @@ class AnthropicLlmProvider(
                     if (block?.type == "tool_use") {
                         val index = event.index ?: 0
                         toolNames[index] = block.name ?: ""
+                        toolIds[index] = block.id
                         toolInputs[index] = StringBuilder()
                     }
                 }
@@ -212,16 +215,19 @@ class AnthropicLlmProvider(
         fun result(): LlmResponse {
             error?.let { return LlmResponse.Error(it) }
             if (structured) return structuredResult()
-            toolNames.entries.firstOrNull()?.let { (index, name) ->
-                if (name.isEmpty()) return LlmResponse.Error(LlmError.InvalidResponse("tool_use content block missing 'name'"))
-                val raw = toolInputs[index]?.toString().orEmpty().ifBlank { "{}" }
-                val input = try {
-                    json.parseToJsonElement(raw) as? JsonObject
-                        ?: return LlmResponse.Error(LlmError.InvalidResponse("tool_use input was not a JSON object"))
-                } catch (e: SerializationException) {
-                    return LlmResponse.Error(LlmError.InvalidResponse("Malformed tool_use input: ${e.message}"))
+            if (toolNames.isNotEmpty()) {
+                val calls = toolNames.entries.map { (index, name) ->
+                    if (name.isEmpty()) return LlmResponse.Error(LlmError.InvalidResponse("tool_use content block missing 'name'"))
+                    val raw = toolInputs[index]?.toString().orEmpty().ifBlank { "{}" }
+                    val input = try {
+                        json.parseToJsonElement(raw) as? JsonObject
+                            ?: return LlmResponse.Error(LlmError.InvalidResponse("tool_use input was not a JSON object"))
+                    } catch (e: SerializationException) {
+                        return LlmResponse.Error(LlmError.InvalidResponse("Malformed tool_use input: ${e.message}"))
+                    }
+                    LlmResponse.ToolCall(name, input.flatten(), id = toolIds[index], argumentsJson = input.toString())
                 }
-                return LlmResponse.ToolCall(name, input.flatten())
+                return LlmResponse.ToolCall.of(calls, text.toString())
             }
             if (!sawContentBlock) return LlmResponse.Error(LlmError.InvalidResponse("Stream contained no content blocks"))
             return LlmResponse.Text(text.toString())
@@ -264,9 +270,13 @@ class AnthropicLlmProvider(
             return LlmResponse.Text(input.toString())
         }
         if (toolUse != null) {
-            val name = toolUse.name
-                ?: return LlmResponse.Error(LlmError.InvalidResponse("tool_use content block missing 'name'"))
-            return LlmResponse.ToolCall(name, toolUse.input?.flatten() ?: emptyMap())
+            val calls = decoded.content.filter { it.type == "tool_use" }.map { block ->
+                val name = block.name?.takeIf { it.isNotEmpty() }
+                    ?: return LlmResponse.Error(LlmError.InvalidResponse("tool_use content block missing 'name'"))
+                val input = block.input ?: JsonObject(emptyMap())
+                LlmResponse.ToolCall(name, input.flatten(), id = block.id, argumentsJson = input.toString())
+            }
+            return LlmResponse.ToolCall.of(calls, decoded.content.filter { it.type == "text" }.joinToString("") { it.text ?: "" })
         }
 
         if (decoded.content.isEmpty()) {
@@ -307,27 +317,73 @@ class AnthropicLlmProvider(
  * `messages` — so a [Role.SYSTEM] message found mid-conversation (never
  * produced by [ai.droidcommand.agent.ConversationContext] today, but not
  * ruled out by the [Message] type) is folded into that field instead of
- * being dropped. [Role.TOOL] is mapped to a `user` message: Anthropic's
- * native `tool_result` block requires a `tool_use_id` back-reference that
- * [Message] does not carry, so a full multi-turn tool-calling transcript
- * cannot be replayed faithfully yet — this is a known, documented gap, not
- * a fabricated id.
+ * being dropped.
+ *
+ * An assistant [Message] that asked for tools is sent as `tool_use` blocks (after its text, if any) with the ids
+ * the API gave them, and the [Role.TOOL] messages that answer it are sent as `tool_result` blocks in one `user`
+ * message, each naming its `tool_use_id`: the API requires all results of one assistant turn together in the
+ * very next message. A [Role.TOOL] message with no `toolCallId` (from a caller that predates call ids) is still
+ * sent as plain `user` text, as before.
  */
 private fun toAnthropicMessages(systemPrompt: String?, messages: List<Message>): Pair<String?, List<AnthropicMessage>> {
     val systemParts = mutableListOf<String>()
     systemPrompt?.let { systemParts += it }
     val mapped = mutableListOf<AnthropicMessage>()
+    val pendingResults = mutableListOf<JsonObject>()
+
+    fun flushResults() {
+        if (pendingResults.isEmpty()) return
+        mapped += AnthropicMessage("user", JsonArray(pendingResults.toList()))
+        pendingResults.clear()
+    }
 
     for (message in messages) {
+        if (message.role == Role.TOOL && message.toolCallId != null) {
+            pendingResults += buildJsonObject {
+                put("type", JsonPrimitive("tool_result"))
+                put("tool_use_id", JsonPrimitive(message.toolCallId))
+                put("content", JsonPrimitive(message.content))
+            }
+            continue
+        }
+        flushResults()
         when (message.role) {
             Role.SYSTEM -> systemParts += message.content
             Role.USER -> mapped += AnthropicMessage("user", message.content)
-            Role.ASSISTANT -> mapped += AnthropicMessage("assistant", message.content)
+            Role.ASSISTANT ->
+                mapped += if (message.toolCalls.isEmpty()) {
+                    AnthropicMessage("assistant", message.content)
+                } else {
+                    AnthropicMessage("assistant", JsonArray(message.toolUseBlocks()))
+                }
             Role.TOOL -> mapped += AnthropicMessage("user", message.content)
         }
     }
+    flushResults()
 
     return systemParts.joinToString("\n\n").ifBlank { null } to mapped
+}
+
+private fun Message.toolUseBlocks(): List<JsonObject> = buildList {
+    if (content.isNotBlank()) {
+        add(
+            buildJsonObject {
+                put("type", JsonPrimitive("text"))
+                put("text", JsonPrimitive(content))
+            },
+        )
+    }
+    for (call in toolCalls) {
+        add(
+            buildJsonObject {
+                put("type", JsonPrimitive("tool_use"))
+                put("id", JsonPrimitive(call.id))
+                put("name", JsonPrimitive(call.name))
+                // Stored as text; anything that is not a JSON object is sent as an empty one rather than as invalid input.
+                put("input", runCatching { Json.parseToJsonElement(call.argumentsJson) as? JsonObject }.getOrNull() ?: JsonObject(emptyMap()))
+            },
+        )
+    }
 }
 
 private fun ToolSpec.toAnthropicToolDefinition(): AnthropicToolDefinition =
