@@ -39,7 +39,24 @@ sealed class ResponseFormat {
 
 sealed class LlmResponse {
     data class Text(val content: String) : LlmResponse()
-    data class ToolCall(val toolName: String, val input: Map<String, String>) : LlmResponse()
+    /**
+     * [id], [argumentsJson], [more] and [problem] are filled only by a provider asked for structured tool calls (they
+     * stay at their defaults otherwise, so existing callers see the same value as before). [id] is the provider's own
+     * call id, [argumentsJson] its argument text exactly as sent, [more] the further calls of the same assistant
+     * message in order, and [problem] says why this call cannot be run as sent (for example arguments that are not a
+     * JSON object); a call with a [problem] must not be executed.
+     */
+    data class ToolCall(
+        val toolName: String,
+        val input: Map<String, String>,
+        val id: String? = null,
+        val argumentsJson: String? = null,
+        val more: List<ToolCall> = emptyList(),
+        val problem: String? = null,
+    ) : LlmResponse() {
+        /** This call followed by [more], each without its own [more]. */
+        fun all(): List<ToolCall> = listOf(copy(more = emptyList())) + more
+    }
     data class Error(val error: LlmError) : LlmResponse()
 }
 

@@ -2,7 +2,23 @@ package ai.droidcommand.agent
 
 enum class Role { SYSTEM, USER, ASSISTANT, TOOL }
 
-data class Message(val role: Role, val content: String)
+/**
+ * One tool call a model asked for, kept exactly as the provider sent it: [id] pairs the call with its result on the
+ * next request, [argumentsJson] is the provider's own argument text (not re-encoded).
+ */
+data class ToolCallRecord(val id: String, val name: String, val argumentsJson: String)
+
+/**
+ * [toolCalls] (on an [Role.ASSISTANT] message) and [toolCallId] (on a [Role.TOOL] message) carry a structured tool
+ * exchange for providers that need calls and results paired by id. Both are empty by default: a message built with
+ * only [role] and [content] behaves exactly as before, and providers that do not understand the pairing ignore it.
+ */
+data class Message(
+    val role: Role,
+    val content: String,
+    val toolCalls: List<ToolCallRecord> = emptyList(),
+    val toolCallId: String? = null,
+)
 
 /**
  * A rough, provider-agnostic token estimate (~4 characters per token, the

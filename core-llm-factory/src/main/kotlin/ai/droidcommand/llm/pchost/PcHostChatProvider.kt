@@ -34,6 +34,8 @@ internal class PcHostChatProvider(
     transport: HttpTransport,
     private val timeouts: PcHostTimeouts,
     cancellation: RequestCancellation,
+    /** Tool calls in OpenAI's structured form (ids, exact arguments, several calls per reply). See [OpenAiLlmProvider]. */
+    structuredTools: Boolean = false,
 ) : StreamingLlmProvider {
     private val delegate = OpenAiLlmProvider(
         LlmConfig(provider = target.kind.id, model = target.model, endpoint = target.address.base, authToken = { key }),
@@ -41,6 +43,7 @@ internal class PcHostChatProvider(
         RetryPolicy(maxAttempts = 1),
         requireHttps = false,
         requireStreamEnd = true,
+        structuredToolCalls = structuredTools,
     )
 
     override val config: LlmConfig get() = delegate.config

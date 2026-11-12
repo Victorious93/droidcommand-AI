@@ -28,7 +28,14 @@ data class OpenAiChatRequest(
 )
 
 @Serializable
-data class OpenAiChatMessage(val role: String, val content: String)
+data class OpenAiChatMessage(
+    val role: String,
+    val content: String,
+    /** Set on an assistant message that asked for tools; each entry keeps the id the server gave the call. */
+    @SerialName("tool_calls") val toolCalls: List<OpenAiToolCall>? = null,
+    /** Set on a `tool` message: the id of the call this is the result of. */
+    @SerialName("tool_call_id") val toolCallId: String? = null,
+)
 
 /**
  * [parameters] is a permissive `{"type":"object"}` for every tool, for the

@@ -24,7 +24,22 @@ data class ProviderPreferences(
     val maxCostPerMillionInputTokens: Double? = null,
     /** A provider with no [AiProviderInfo.measuredTokensPerSecond] cannot be verified to meet this and is excluded. */
     val minTokensPerSecond: Double? = null,
+    /** When set, only providers of these types are eligible. Null (the default) allows every type. */
+    val allowedTypes: Set<ProviderType>? = null,
+    /**
+     * When set, eligible providers are ranked in this type order instead of [ProviderType]'s local-first declaration
+     * order (for example "the PC first, then this device"). A type missing from the list ranks after the listed ones.
+     */
+    val typeOrder: List<ProviderType>? = null,
 )
+
+/**
+ * What [DefaultAiProviderSelector.explain] decided about one registered provider. [excludedBecause] is null for an
+ * eligible provider, otherwise the first requirement it failed, in words a person can act on.
+ */
+data class ProviderDecision(val registered: RegisteredProvider, val excludedBecause: String?) {
+    val eligible: Boolean get() = excludedBecause == null
+}
 
 /**
  * Selects an [LlmProvider] from a caller-declared, registered set by
@@ -72,30 +87,49 @@ class DefaultAiProviderSelector(
 ) : AiProviderSelector {
     override fun listProviders(): List<AiProviderInfo> = providers.map { it.info }
 
-    override fun selectProvider(task: Task, preferences: ProviderPreferences): LlmProvider? {
+    override fun selectProvider(task: Task, preferences: ProviderPreferences): LlmProvider? =
+        explain(task, preferences).firstOrNull { it.eligible }?.registered?.provider
+
+    /**
+     * Every registered provider with the reason it was left out, eligible ones first in the order they would be
+     * tried: [ProviderPreferences.preferredProviderId] if eligible, then by [ProviderPreferences.typeOrder] (or
+     * local-first), ties in registration order. [selectProvider] returns the first eligible entry of this list, so a
+     * caller that needs a fallback chain, or has to say why a provider was skipped, reads the same decision.
+     */
+    fun explain(task: Task, preferences: ProviderPreferences = ProviderPreferences()): List<ProviderDecision> {
         val minContext = preferences.minContextTokens
             ?: tokenBudgetManager?.selectBudget(task)?.tokens
 
-        val eligible = providers.filter { registered ->
+        val decisions = providers.map { registered ->
             val info = registered.info
-            info.available &&
-                info.capabilities.containsAll(preferences.requiredCapabilities) &&
-                (minContext == null || info.maxContextTokens >= minContext) &&
-                (!preferences.requireLocal || info.type != ProviderType.CLOUD) &&
-                (
-                    preferences.maxCostPerMillionInputTokens == null ||
-                        (info.cost != null && info.cost.inputPerMillionTokens <= preferences.maxCostPerMillionInputTokens)
-                ) &&
-                (
-                    preferences.minTokensPerSecond == null ||
-                        (info.measuredTokensPerSecond != null && info.measuredTokensPerSecond >= preferences.minTokensPerSecond)
-                )
+            val missing = preferences.requiredCapabilities - info.capabilities
+            val reason = when {
+                preferences.allowedTypes != null && info.type !in preferences.allowedTypes -> "its location (${info.type}) is not allowed by the selected policy"
+                preferences.requireLocal && info.type == ProviderType.CLOUD -> "it is a cloud provider and a local one is required"
+                !info.available -> "it is not available"
+                missing.isNotEmpty() -> "it does not support ${missing.joinToString(", ")}"
+                minContext != null && info.maxContextTokens < minContext ->
+                    "its context window (${info.maxContextTokens} tokens) is smaller than the request needs ($minContext)"
+                preferences.maxCostPerMillionInputTokens != null &&
+                    (info.cost == null || info.cost.inputPerMillionTokens > preferences.maxCostPerMillionInputTokens) ->
+                    "its cost is unknown or above the limit"
+                preferences.minTokensPerSecond != null &&
+                    (info.measuredTokensPerSecond == null || info.measuredTokensPerSecond < preferences.minTokensPerSecond) ->
+                    "its speed is unmeasured or below the minimum"
+                else -> null
+            }
+            ProviderDecision(registered, reason)
         }
-
-        preferences.preferredProviderId
-            ?.let { id -> eligible.firstOrNull { it.info.id == id } }
-            ?.let { return it.provider }
-
-        return eligible.minByOrNull { it.info.type.ordinal }?.provider
+        val order = preferences.typeOrder
+        val rank: (ProviderDecision) -> Int = { decision ->
+            val type = decision.registered.info.type
+            when {
+                decision.registered.info.id == preferences.preferredProviderId -> -1
+                order == null -> type.ordinal
+                else -> order.indexOf(type).let { if (it < 0) order.size + type.ordinal else it }
+            }
+        }
+        val (eligible, excluded) = decisions.partition { it.eligible }
+        return eligible.sortedBy(rank) + excluded
     }
 }
