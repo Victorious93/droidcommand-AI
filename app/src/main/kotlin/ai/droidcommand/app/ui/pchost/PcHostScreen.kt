@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -52,6 +53,7 @@ fun PcHostScreen(viewModel: PcHostViewModel = hiltViewModel(), onOpenModels: () 
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(PcHostCopy.TWO_WORKFLOWS, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(PcHostCopy.TOOLS, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(PcHostCopy.CHAT_ONLY, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 DroidSecondaryButton(onClick = onOpenModels, modifier = Modifier.fillMaxWidth()) { Text("Import a model file onto this phone instead") }
             }
@@ -140,6 +142,22 @@ private fun ServerCard(card: PcHostCard, viewModel: PcHostViewModel) {
                     },
                     enabled = typedModel.isNotBlank(),
                 ) { Text("Use this name") }
+
+                card.toolStatus?.let { status ->
+                    Text(status, style = MaterialTheme.typography.bodyMedium)
+                    card.toolDetail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
+                    DroidSecondaryButton(onClick = { viewModel.checkTools(kind) }, enabled = !card.checkingTools) {
+                        Text(if (card.checkingTools) "Asking the server…" else "Check tool support")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Switch(checked = card.toolsForced, onCheckedChange = { viewModel.setToolsForced(kind, it) })
+                        Text(
+                            "Offer tools anyway. For a server that cannot report tool support. If the model cannot use them, the reply says so.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = muted,
+                        )
+                    }
+                }
 
                 if (card.usedByChat) {
                     Text("AI Chat sends its messages to this server.", style = MaterialTheme.typography.bodyMedium)

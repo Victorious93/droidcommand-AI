@@ -6,8 +6,21 @@ package ai.droidcommand.app.ux
  * map it, and never replaced with a success.
  */
 object FriendlyErrors {
+    /**
+     * A failed chat turn may end with a note saying which tool actions had already run (`ChatSession.TOOLS_RAN_NOTE`).
+     * That note is kept word for word whatever the rest of the message is mapped to: it is the only thing telling the
+     * owner that sending the message again can repeat an action.
+     */
     fun forUser(raw: String?): String {
-        val text = raw?.trim().orEmpty()
+        val whole = raw?.trim().orEmpty()
+        val note = TOOLS_RAN_NOTE.find(whole)?.value
+        if (note != null) return listOf(forUser(whole.removeSuffix(note)), note).joinToString(" ")
+        return mapped(whole)
+    }
+
+    private val TOOLS_RAN_NOTE = Regex("""\d+ tool actions? had already run in this turn .*$""", RegexOption.DOT_MATCHES_ALL)
+
+    private fun mapped(text: String): String {
         if (text.isEmpty()) return "Something went wrong. Try again."
         // PC-hosted messages are already written for the owner and say exactly which of several causes applies.
         if (text.startsWith(PC_HOST_PREFIX)) return text

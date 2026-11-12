@@ -109,6 +109,90 @@ class ChatSessionToolAccessTest {
         assertTrue(chat.history().isEmpty())
     }
 
+    @Test
+    fun `several calls in one response run in order and each result is filed under its call's id`() {
+        val script = ScriptedProvider(
+            listOf(
+                {
+                    LlmResponse.ToolCall.of(
+                        listOf(
+                            LlmResponse.ToolCall("echo", mapOf("text" to "a"), id = "call_a", argumentsJson = """{"text":"a"}"""),
+                            LlmResponse.ToolCall("echo", mapOf("text" to "b"), id = "call_b", argumentsJson = """{"text":"b"}"""),
+                        ),
+                        text = "Two echoes.",
+                    )
+                },
+                { req ->
+                    val (user, assistant, first, second) = req.messages
+                    assertEquals(Role.USER, user.role)
+                    assertEquals("Two echoes.", assistant.content)
+                    assertEquals(listOf("call_a" to """{"text":"a"}""", "call_b" to """{"text":"b"}"""), assistant.toolCalls.map { it.id to it.argumentsJson })
+                    assertEquals(listOf("call_a" to "pong", "call_b" to "pong"), listOf(first, second).map { it.toolCallId to it.content })
+                    LlmResponse.Text("done")
+                },
+            ),
+        )
+        val runner = RecordingRunner()
+        val chat = session(script)
+        chat.setToolAccess(runner, listOf(echo))
+
+        assertEquals(ChatResult.Reply("done"), chat.send(groq, "m", "echo twice"))
+        assertEquals(listOf("echo" to mapOf("text" to "a"), "echo" to mapOf("text" to "b")), runner.calls)
+        assertTrue(chat.history().all { it.toolCalls.isEmpty() && it.toolCallId == null }, "tool turns are not stored")
+    }
+
+    @Test
+    fun `a provider that gives no call id gets one made here, the same on the call and on its result`() {
+        val script = ScriptedProvider(
+            listOf(
+                { LlmResponse.ToolCall("echo", mapOf("text" to "hi", "n" to "2")) },
+                { req ->
+                    val call = req.messages[1].toolCalls.single()
+                    assertEquals("call_dca_1_0", call.id)
+                    assertEquals("""{"text":"hi","n":"2"}""", call.argumentsJson)
+                    assertEquals("call_dca_1_0", req.messages[2].toolCallId)
+                    LlmResponse.Text("done")
+                },
+            ),
+        )
+        val chat = session(script)
+        chat.setToolAccess(RecordingRunner(), listOf(echo))
+        assertEquals(ChatResult.Reply("done"), chat.send(groq, "m", "go"))
+    }
+
+    @Test
+    fun `duplicate ids or too many calls in one response run nothing`() {
+        val twin = LlmResponse.ToolCall("echo", emptyMap(), id = "same")
+        for (calls in listOf(listOf(twin, twin), List(9) { LlmResponse.ToolCall("echo", emptyMap(), id = "c$it") })) {
+            val script = ScriptedProvider(listOf { LlmResponse.ToolCall.of(calls) })
+            val runner = RecordingRunner()
+            val chat = session(script)
+            chat.setToolAccess(runner, listOf(echo))
+            assertIs<ChatResult.Failure>(chat.send(groq, "m", "go"))
+            assertTrue(runner.calls.isEmpty())
+            assertEquals(1, script.requests.size)
+            assertTrue(chat.history().isEmpty())
+        }
+    }
+
+    @Test
+    fun `a call to a tool that was not offered never reaches the runner`() {
+        val script = ScriptedProvider(
+            listOf(
+                { LlmResponse.ToolCall("wipe_phone", emptyMap(), id = "c1") },
+                { req ->
+                    assertEquals("ERROR: Tool 'wipe_phone' is not available here", req.messages.last().content)
+                    LlmResponse.Text("I cannot do that.")
+                },
+            ),
+        )
+        val runner = RecordingRunner(mapOf("wipe_phone" to ToolResult.Success("wiped")))
+        val chat = session(script)
+        chat.setToolAccess(runner, listOf(echo))
+        assertEquals(ChatResult.Reply("I cannot do that."), chat.send(groq, "m", "go"))
+        assertTrue(runner.calls.isEmpty())
+    }
+
     private class ScriptedProvider(
         replies: List<(LlmRequest) -> LlmResponse>,
     ) : LlmProvider {

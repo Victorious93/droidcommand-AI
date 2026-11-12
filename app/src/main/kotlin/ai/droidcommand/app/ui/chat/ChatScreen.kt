@@ -22,6 +22,7 @@ import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.pchost.PcHostModels
 import ai.droidcommand.llm.routing.InferencePolicy
+import ai.droidcommand.llm.pchost.PcHostToolNotices
 import ai.droidcommand.llm.pchost.PcModelLocation
 import ai.droidcommand.voice.SpeakMode
 import android.Manifest
@@ -213,6 +214,9 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                 Text("Helper bot: $botName", color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                 DroidTextButton(onClick = viewModel::stopBot) { Text("Stop bot") }
+            }
+            state.botToolStatus?.let {
+                Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 4.dp))
             }
         }
 
@@ -443,6 +447,7 @@ private fun OptionsPanel(
                 Text(
                     "Messages are sent to your PC at ${saved?.address ?: "an address that is not saved yet"}, not to a cloud provider. " +
                         "Model: ${saved?.model?.ifBlank { null } ?: "none"} — ${saved?.let { PcHostModels.locationLabel(it.location, it.upstream) } ?: "not set up"}. " +
+                        "${saved?.takeIf { it.model.isNotBlank() }?.let { PcHostToolNotices.status(it.toolSupport, it.toolsForced) + ". " }.orEmpty()}" +
                         "This needs the phone to reach the PC (same Wi-Fi or VPN), not internet access. " +
                         "A later cloud turn sends the whole conversation, including these replies, to that provider.",
                     style = MaterialTheme.typography.bodySmall,

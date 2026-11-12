@@ -283,7 +283,7 @@ Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeRequestStop(JNIEnv*
 JNIEXPORT void JNICALL
 Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeGenerate(
     JNIEnv* env, jobject /*thiz*/, jlong handle, jstring jSystemPrompt, jobjectArray jRoles,
-    jobjectArray jContents, jint maxTokens, jdouble temperature, jobject sink) {
+    jobjectArray jContents, jint maxTokens, jdouble temperature, jstring jGrammar, jobject sink) {
     auto* dca = reinterpret_cast<DcaContext*>(handle);
     if (dca == nullptr) {
         throwInferenceException(env, "generate() called with no loaded model");
@@ -366,6 +366,21 @@ Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeGenerate(
 
     llama_sampler_chain_params chainParams = llama_sampler_chain_default_params();
     llama_sampler* sampler = llama_sampler_chain_init(chainParams);
+    if (jGrammar != nullptr) {
+        // The grammar sampler goes first: it removes every token the grammar forbids, and the samplers
+        // after it choose among what is left. A grammar llama.cpp cannot parse is an error, never ignored:
+        // the caller asked for constrained output and must not get unconstrained text instead.
+        const char* chars = env->GetStringUTFChars(jGrammar, nullptr);
+        std::string grammar(chars);
+        env->ReleaseStringUTFChars(jGrammar, chars);
+        llama_sampler* grammarSampler = llama_sampler_init_grammar(dca->vocab, grammar.c_str(), "root");
+        if (grammarSampler == nullptr) {
+            llama_sampler_free(sampler);
+            throwInferenceException(env, "llama.cpp rejected the output grammar");
+            return;
+        }
+        llama_sampler_chain_add(sampler, grammarSampler);
+    }
     if (temperature > 0.0) {
         llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
         llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.95f, 1));
@@ -379,8 +394,17 @@ Java_ai_droidcommand_llm_local_android_LlamaCppBackend_nativeGenerate(
     int32_t generated = 0;
     llama_token nextToken = 0;
     while (generated < maxTokens && !dca->stop.load(std::memory_order_relaxed)) {
-        nextToken = llama_sampler_sample(sampler, dca->ctx, -1);
-        llama_sampler_accept(sampler, nextToken);
+        // llama_sampler_sample already accepts the token it returns. Accepting it a second time here fed every
+        // token to the grammar twice, which a grammar rejects by throwing; nothing else in the chain noticed.
+        // A C++ exception must not leave a JNI function (it aborts the whole process), so it becomes an
+        // InferenceException.
+        try {
+            nextToken = llama_sampler_sample(sampler, dca->ctx, -1);
+        } catch (const std::exception& e) {
+            llama_sampler_free(sampler);
+            throwInferenceException(env, std::string("sampling failed: ") + e.what());
+            return;
+        }
         if (llama_vocab_is_eog(dca->vocab, nextToken)) break;
 
         std::string piece = tokenToPiece(dca->vocab, nextToken);

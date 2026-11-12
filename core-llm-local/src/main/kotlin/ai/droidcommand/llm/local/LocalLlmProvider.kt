@@ -13,9 +13,11 @@ import java.io.IOException
  * has just reported [ModelCheck.Verified]; a missing or tampered model
  * yields [LlmError.ModelUnavailable] and never reaches the backend.
  *
- * Tool calls and structured output are not supported (llama.cpp grammar /
- * tool parsing is not implemented): requests asking for either are refused
- * rather than silently ignored, with [LlmError.ModelUnavailable] — NOT
+ * Tool calls are supported for one combination only ([toolSupport], [LocalToolProtocol]): a backend that samples
+ * under a grammar, and a model whose own chat template defines `<tool_call>` blocks. The reply is then held to
+ * "ordinary text, or up to [LocalToolProtocol.MAX_CALLS] well-formed calls to an offered tool" while it is generated
+ * and checked again before it is returned as [LlmResponse.ToolCall]. Any other combination, and structured output,
+ * is refused rather than silently ignored, with [LlmError.ModelUnavailable] — NOT
  * [LlmError.InvalidResponse]. The distinction matters to
  * [ai.droidcommand.llm.ModelRouter]: it falls back to the next provider on
  * `ModelUnavailable` but never on `InvalidResponse`, and the agent planner
@@ -62,15 +64,24 @@ class LocalLlmProvider(
      */
     @Synchronized
     fun stream(request: LlmRequest, cancelled: () -> Boolean, onTextDelta: (String) -> Unit): LlmResponse {
-        if (request.tools.isNotEmpty()) return unsupported("tool calling")
         if (request.responseFormat != null) return unsupported("structured output")
         val meta = repository.get(modelId) ?: return LlmResponse.Error(LlmError.ModelUnavailable("Unknown model '$modelId'"))
         val gguf = inspect()
+        val tools = request.tools
+        if (tools.isNotEmpty()) {
+            if (!LocalToolProtocol.support(gguf, backend).supported) return unsupported("tool calling")
+            LocalToolProtocol.unusableNames(tools).takeIf { it.isNotEmpty() }?.let {
+                return LlmResponse.Error(LlmError.ModelUnavailable("Local provider cannot offer tools with these names: ${it.joinToString(", ")}"))
+            }
+        }
+        // With tools offered, the model is told about them in the system text and sees earlier calls and results as plain turns.
+        val systemPrompt = if (tools.isEmpty()) request.systemPrompt else listOfNotNull(request.systemPrompt, LocalToolProtocol.systemBlock(tools)).joinToString("\n\n")
+        val history = if (tools.isEmpty()) request.messages else LocalToolProtocol.render(request.messages)
         if (gguf != null) GgufCompatibility.problem(gguf)?.let { return LlmResponse.Error(LlmError.ModelUnavailable(it)) }
         val contextTokens = GgufCompatibility.contextTokens(meta.contextTokens, gguf)
         // Decided before the model is loaded: loading a multi-gigabyte file only to refuse the message would be wasted work.
         val maxTokens = ContextFit.replyBudget(contextTokens, request.maxOutputTokens ?: config.maxOutputTokens ?: DEFAULT_MAX_TOKENS)
-        val prompt = ContextFit.fit(request.systemPrompt, request.messages, ContextFit.promptBudget(contextTokens, maxTokens))
+        val prompt = ContextFit.fit(systemPrompt, history, ContextFit.promptBudget(contextTokens, maxTokens))
         if (!prompt.fits) {
             return LlmResponse.Error(
                 LlmError.ModelUnavailable(
@@ -117,27 +128,47 @@ class LocalLlmProvider(
                 loaded = true
             }
             val sb = StringBuilder()
+            // With tools offered, text is held back until the reply can no longer be a tool call, so a call is never shown as text.
+            var forwarded = if (tools.isEmpty()) 0 else -1
             backend.generate(
                 GenerationRequest(
-                    systemPrompt = request.systemPrompt,
+                    systemPrompt = systemPrompt,
                     messages = prompt.messages,
                     maxTokens = maxTokens,
                     temperature = request.temperature ?: config.temperature,
+                    grammar = if (tools.isEmpty()) null else LocalToolProtocol.grammar(tools),
                 ),
             ) { delta ->
                 if (cancelled()) {
                     false
                 } else {
                     sb.append(delta)
-                    onTextDelta(delta)
+                    if (forwarded >= 0) {
+                        onTextDelta(delta)
+                    } else if (!LocalToolProtocol.mayBeCall(sb.toString())) {
+                        forwarded = 0
+                        onTextDelta(sb.toString())
+                    }
                     true
                 }
             }
-            return LlmResponse.Text(sb.toString())
+            if (tools.isEmpty() || cancelled()) return LlmResponse.Text(sb.toString())
+            val parsed = LocalToolProtocol.parse(sb.toString(), tools)
+            // A reply so short it never stopped looking like the start of a call (e.g. "<") is still text.
+            if (parsed is LlmResponse.Text && forwarded < 0 && sb.isNotEmpty()) onTextDelta(sb.toString())
+            return parsed
         } catch (e: InferenceException) {
             return LlmResponse.Error(LlmError.ModelUnavailable(e.message ?: "inference failed"))
         }
     }
+
+    /**
+     * Whether this model, on this backend, can be offered tools. Reads the file's GGUF metadata (cached per load
+     * cycle); it does not load the model. A caller offers tools only when this says so, and shows [LocalToolSupport.reason]
+     * otherwise.
+     */
+    @Synchronized
+    fun toolSupport(): LocalToolSupport = LocalToolProtocol.support(inspect(), backend)
 
     /**
      * Asks a [stream] running on another thread to stop as soon as the backend can, even before its first token.

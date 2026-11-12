@@ -16,12 +16,16 @@ data class PcHostEndpoint(
     val model: String = "",
     val location: PcModelLocation = PcModelLocation.UNKNOWN,
     val upstream: String? = null,
+    /** What the server said about [model] and tools; belongs to that model, so picking another resets it. */
+    val toolSupport: PcToolSupport = PcToolSupport.UNKNOWN,
+    /** The owner's switch to offer tools anyway. */
+    val toolsForced: Boolean = false,
 ) {
     /** What Chat sends a turn to, or null while the address no longer parses or no model is picked. */
     fun target(kind: PcHostKind): PcHostTarget? {
         val parsed = (PcHostAddress.parse(kind, address) as? PcHostAddressParse.Ok)?.address ?: return null
         if (model.isBlank()) return null
-        return PcHostTarget(kind, parsed, model.trim(), location, upstream)
+        return PcHostTarget(kind, parsed, model.trim(), location, upstream, toolSupport, toolsForced)
     }
 }
 
@@ -59,18 +63,22 @@ class FilePcHostSettingsStore(private val file: Path) : PcHostSettingsStore {
             model = props.getProperty("${kind.id}.model").orEmpty(),
             location = PcModelLocation.byId(props.getProperty("${kind.id}.location")),
             upstream = props.getProperty("${kind.id}.upstream")?.takeIf { it.isNotBlank() },
+            toolSupport = PcToolSupport.byId(props.getProperty("${kind.id}.tools")),
+            toolsForced = props.getProperty("${kind.id}.tools_forced") == "true",
         )
     }
 
     @Synchronized
     override fun save(kind: PcHostKind, endpoint: PcHostEndpoint?) {
         val props = read()
-        listOf("address", "model", "location", "upstream").forEach { props.remove("${kind.id}.$it") }
+        listOf("address", "model", "location", "upstream", "tools", "tools_forced").forEach { props.remove("${kind.id}.$it") }
         if (endpoint != null) {
             props.setProperty("${kind.id}.address", endpoint.address)
             props.setProperty("${kind.id}.model", endpoint.model)
             props.setProperty("${kind.id}.location", endpoint.location.id)
             endpoint.upstream?.let { props.setProperty("${kind.id}.upstream", it) }
+            props.setProperty("${kind.id}.tools", endpoint.toolSupport.id)
+            props.setProperty("${kind.id}.tools_forced", endpoint.toolsForced.toString())
         }
         file.parent?.let(Files::createDirectories)
         val tmp = file.resolveSibling("${file.fileName}.tmp")

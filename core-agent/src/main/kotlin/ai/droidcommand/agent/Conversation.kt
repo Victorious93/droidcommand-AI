@@ -3,22 +3,26 @@ package ai.droidcommand.agent
 enum class Role { SYSTEM, USER, ASSISTANT, TOOL }
 
 /**
- * One tool call a model asked for, kept exactly as the provider sent it: [id] pairs the call with its result on the
- * next request, [argumentsJson] is the provider's own argument text (not re-encoded).
+ * One tool call an assistant message asked for, kept exactly as the model sent it so the same call can be shown
+ * back to the provider on the next request. [id] is the provider's own call id (OpenAI `tool_calls[].id`,
+ * Anthropic `tool_use.id`); [argumentsJson] is the arguments as JSON object text, unflattened.
  */
-data class ToolCallRecord(val id: String, val name: String, val argumentsJson: String)
+data class ToolCallRequest(val id: String, val name: String, val argumentsJson: String)
 
 /**
- * [toolCalls] (on an [Role.ASSISTANT] message) and [toolCallId] (on a [Role.TOOL] message) carry a structured tool
- * exchange for providers that need calls and results paired by id. Both are empty by default: a message built with
- * only [role] and [content] behaves exactly as before, and providers that do not understand the pairing ignore it.
+ * [toolCalls] is set only on an [Role.ASSISTANT] message that asked for tools ([content] is then whatever text
+ * came with the calls, often empty). [toolCallId] is set only on a [Role.TOOL] message and names the call that
+ * message answers. Both default to "none", which is what every message written before they existed is: a
+ * [Role.TOOL] message without an id is still accepted, and a provider adapter sends it the way it always did.
  */
-data class Message(
-    val role: Role,
-    val content: String,
-    val toolCalls: List<ToolCallRecord> = emptyList(),
-    val toolCallId: String? = null,
-)
+data class Message
+    @JvmOverloads
+    constructor(
+        val role: Role,
+        val content: String,
+        val toolCalls: List<ToolCallRequest> = emptyList(),
+        val toolCallId: String? = null,
+    )
 
 /**
  * A rough, provider-agnostic token estimate (~4 characters per token, the

@@ -240,9 +240,24 @@ class GeminiLlmProvider(
     }
 }
 
+/**
+ * Tool calls are still replayed to Gemini as text, not as `functionCall`/`functionResponse` parts: an assistant
+ * message that asked for tools is described in a sentence, and its results follow as `user` text. Known gap (this
+ * adapter's request types have no `functionResponse` part); the structured fields on [Message] are ignored here
+ * rather than half-sent.
+ */
 private fun Message.toGeminiContent() = GeminiContent(
     role = if (role == Role.ASSISTANT) "model" else "user",
-    parts = listOf(GeminiPart(text = content)),
+    parts = listOf(
+        GeminiPart(
+            text = if (toolCalls.isEmpty()) {
+                content
+            } else {
+                listOf(content, toolCalls.joinToString("\n") { "Called tool ${it.name} with arguments ${it.argumentsJson}" })
+                    .filter { it.isNotBlank() }.joinToString("\n")
+            },
+        ),
+    ),
 )
 
 private fun ToolSpec.toDeclaration() = GeminiFunctionDeclaration(name = name, description = description)

@@ -39,24 +39,34 @@ sealed class ResponseFormat {
 
 sealed class LlmResponse {
     data class Text(val content: String) : LlmResponse()
+
     /**
-     * [id], [argumentsJson], [more] and [problem] are filled only by a provider asked for structured tool calls (they
-     * stay at their defaults otherwise, so existing callers see the same value as before). [id] is the provider's own
-     * call id, [argumentsJson] its argument text exactly as sent, [more] the further calls of the same assistant
-     * message in order, and [problem] says why this call cannot be run as sent (for example arguments that are not a
-     * JSON object); a call with a [problem] must not be executed.
+     * The model asked for one or more tools. This object is the first call; any further calls made in the same
+     * response are in [additionalCalls], in the order the model gave them, and [calls] is all of them. A caller
+     * that only reads [toolName] and [input] keeps seeing the first call, as before these fields existed.
+     *
+     * [id] is the provider's id for the call and must be sent back unchanged with its result; it is null when the
+     * provider has none (Gemini, some self-hosted servers). [argumentsJson] is the arguments exactly as received,
+     * as JSON object text; [input] is the same arguments flattened to strings for [ai.droidcommand.agent.Tool].
+     * [text] is assistant text that arrived with the calls. [additionalCalls] is only read on the first call.
      */
     data class ToolCall(
         val toolName: String,
         val input: Map<String, String>,
         val id: String? = null,
         val argumentsJson: String? = null,
-        val more: List<ToolCall> = emptyList(),
-        val problem: String? = null,
+        val additionalCalls: List<ToolCall> = emptyList(),
+        val text: String = "",
     ) : LlmResponse() {
-        /** This call followed by [more], each without its own [more]. */
-        fun all(): List<ToolCall> = listOf(copy(more = emptyList())) + more
+        val calls: List<ToolCall> get() = listOf(this) + additionalCalls
+
+        companion object {
+            /** One response from [calls] (at least one), the rest carried as [additionalCalls]. */
+            fun of(calls: List<ToolCall>, text: String = ""): ToolCall =
+                calls.first().copy(additionalCalls = calls.drop(1).map { it.copy(additionalCalls = emptyList()) }, text = text)
+        }
     }
+
     data class Error(val error: LlmError) : LlmResponse()
 }
 

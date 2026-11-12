@@ -23,6 +23,14 @@ dependencies {
     testImplementation(project(":core-tools-setoolkit"))
     testImplementation(project(":core-pentest-swarm"))
     testImplementation(project(":core-remotecontrol"))
+    // Helper-bot tool execution end to end: ChatSession (core-llm-factory) driving the real SecureToolExecutor
+    // (core-security) behind a bot's ScopedToolRunner (core-bots), against the strict controlled chat server.
+    testImplementation(project(":core-llm"))
+    testImplementation(project(":core-llm-factory"))
+    testImplementation(project(":core-bots"))
+    testImplementation(project(":core-config"))
+    testImplementation(project(":core-remote"))
+    testImplementation(testFixtures(project(":core-llm-openai")))
     testImplementation(kotlin("test"))
 }
 

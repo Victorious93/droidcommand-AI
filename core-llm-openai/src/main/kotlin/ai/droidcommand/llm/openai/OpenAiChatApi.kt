@@ -27,21 +27,23 @@ data class OpenAiChatRequest(
     @SerialName("response_format") val responseFormat: JsonObject? = null,
 )
 
+/**
+ * One request message. [content] has no default on purpose: an assistant message that only carries [toolCalls] is
+ * sent with `"content": null`, which the API defines for that case. [toolCalls] is only set on an `assistant`
+ * message and [toolCallId] only on a `tool` message (where it is required and must match one of the preceding
+ * assistant message's `tool_calls[].id`).
+ */
 @Serializable
 data class OpenAiChatMessage(
     val role: String,
-    val content: String,
-    /** Set on an assistant message that asked for tools; each entry keeps the id the server gave the call. */
+    val content: String?,
     @SerialName("tool_calls") val toolCalls: List<OpenAiToolCall>? = null,
-    /** Set on a `tool` message: the id of the call this is the result of. */
     @SerialName("tool_call_id") val toolCallId: String? = null,
 )
 
 /**
- * [parameters] is a permissive `{"type":"object"}` for every tool, for the
- * same reason as `core-llm-anthropic.AnthropicToolDefinition.inputSchema`:
- * nothing in core-agent's [ai.droidcommand.agent.ToolSpec] models a tool's
- * parameter shape yet.
+ * [parameters] is the tool's own [ai.droidcommand.agent.ToolParameterSchema] as JSON Schema when it declares one,
+ * and a permissive `{"type":"object"}` otherwise (most tools still take an untyped string map).
  */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
@@ -100,7 +102,10 @@ data class OpenAiStreamDelta(
     @SerialName("tool_calls") val toolCalls: List<OpenAiStreamToolCall>? = null,
 )
 
-/** Tool calls arrive in fragments keyed by [index]: [function] name first, then [OpenAiStreamFunction.arguments] in pieces. */
+/**
+ * Tool calls arrive in fragments keyed by [index]: the first fragment of a call carries its [id] and the
+ * [function] name, later ones append to [OpenAiStreamFunction.arguments]. Several calls interleave by [index].
+ */
 @Serializable
 data class OpenAiStreamToolCall(
     val index: Int = 0,
