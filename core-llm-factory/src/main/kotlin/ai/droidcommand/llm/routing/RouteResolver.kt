@@ -269,7 +269,7 @@ class RouteResolver(
                 PcModelFacts(),
                 ProviderType.SELF_HOSTED,
                 "no PC server and model are saved (Settings, PC-hosted models)",
-            ).let { it.copy(target = placeholder) }
+            )
         }
         val key = runCatching { vault.getSecret(kind.secretId) }.getOrNull()?.takeIf { it.isNotBlank() }
         val facts = try {
