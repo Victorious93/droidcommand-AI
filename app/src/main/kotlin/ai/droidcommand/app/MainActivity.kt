@@ -6,7 +6,6 @@ import ai.droidcommand.app.fleet.AndroidFleetThemeClient
 import ai.droidcommand.app.navigation.DroidCommandNavHost
 import ai.droidcommand.app.shortcuts.QuickAction
 import ai.droidcommand.app.shortcuts.QuickActionInbox
-import ai.droidcommand.app.shortcuts.ShortcutPublisher
 import ai.droidcommand.app.theme.AppThemeSettings
 import ai.droidcommand.app.ui.theme.DroidCommandTheme
 import ai.droidcommand.app.ui.theme.FleetThemeTrustHint
@@ -51,7 +50,6 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
-        ShortcutPublisher.publish(this)
         offerQuickAction(intent)
         setContent {
             val fleetTheme by fleetThemeClient.state.collectAsState()
