@@ -1,0 +1,3 @@
+scenario	start	result	detail
+none	1	FAIL	resume_ms=none MainActivity never resumed; MainActivity not resumed;
+fake.victorlaunch-slow	1	FAIL	resume_ms=none MainActivity never resumed;
