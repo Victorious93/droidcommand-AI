@@ -1,0 +1,3 @@
+INSTRUMENTATION_STATUS: Error=Unable to find instrumentation info for: ComponentInfo{ai.droidcommand.app.test/androidx.test.runner.AndroidJUnitRunner}
+INSTRUMENTATION_STATUS_CODE: -1
+android.util.AndroidException: INSTRUMENTATION_FAILED: ai.droidcommand.app.test/androidx.test.runner.AndroidJUnitRunner

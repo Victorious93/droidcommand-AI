@@ -1,8 +1,10 @@
 name: Emulator Smoke Test
 
-# Launches the :app debug APK on a real Android emulator and runs instrumented
-# tests: MainActivityLaunchTest (RESUMED) and PrimaryScreensScreenshotTest
-# (walks Chat/Tools/Notes/Memory/Settings/Pilot/Forge/Logs and dumps PNGs).
+# Launches the :app debug APK on a real Android emulator. MANDATORY (gates the job and any release):
+# the instrumented tests listed in scripts/ci/emulator-smoke.sh (launch, corrupt persisted state, recreation and
+# background/resume, every primary tab, repeated launches) judged by scripts/ci/verify-instrumentation.py, and the
+# cold-start fault matrix (scripts/qa/startup-matrix.sh). BEST-EFFORT, never gating: PrimaryScreensScreenshotTest
+# (walks Chat/Tools/Notes/Memory/Settings/Pilot/Forge/Logs and dumps PNGs for the README).
 # This is the first thing in this repo that actually RUNS the app on an Android
 # runtime — every :app addendum in docs/AUDIT_2026-09-05.md through slice 3 ends
 # with "no device or emulator". A green run here moves the app launch path past
@@ -18,6 +20,9 @@ name: Emulator Smoke Test
 
 on:
   workflow_dispatch:
+  # android-apk.yml calls this workflow before it will publish a pre-release, so the validation below runs on the
+  # exact commit being released.
+  workflow_call:
   push:
     branches:
       - main
@@ -141,17 +146,30 @@ jobs:
           # Screenshots are pulled while the emulator is still up.
           script: bash scripts/ci/emulator-smoke.sh
 
-      - name: Upload instrumentation test report
+      # Raw runner output, verdicts, the fault-matrix table and (on failure) sanitized crash/ANR logcat.
+      - name: Upload emulator evidence
         if: always()
         uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
-          name: connected-test-report
+          name: emulator-evidence
           path: |
-            app/build/reports/androidTests/connected/**
-            app/build/outputs/androidTest-results/connected/**
+            emulator-logs/*.log
+            emulator-logs/*.md
+            emulator-logs/*.tsv
+            emulator-logs/*.txt
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 14
+
+      # Only a run that reached "VALIDATION PASSED" writes this file; the release job reads it for its notes.
+      - name: Upload validation summary
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-summary
+          path: emulator-logs/validation-summary.md
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Upload emulator screenshots
         if: always()

@@ -35,6 +35,11 @@ jobs:
             exit 1
           fi
 
+      # The emulator gate (scripts/ci/verify-instrumentation.py) must itself be proven to reject a crashed runner,
+      # a zero-test run and an assertion failure, and to accept a real pass. Pure Python, runs in a second.
+      - name: Release-gate harness self-test
+        run: python3 -I scripts/ci/test_verify_instrumentation.py
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:

@@ -22,3 +22,7 @@ local.properties
 /app/build/shizuku-payload/
 **/adbkey
 **/adbkey.pub
+
+# emulator gate evidence (scripts/ci/emulator-smoke.sh)
+emulator-logs/
+emulator-screenshots/
