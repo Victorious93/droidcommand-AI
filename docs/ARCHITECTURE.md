@@ -1823,3 +1823,21 @@ module.
 **Verified B1 session (no Android SDK, no live LLM):** `./gradlew :core-bots:test :core-config:test` and `./gradlew :core-bots:ktlintCheck :core-config:ktlintCheck` — **BUILD SUCCESSFUL**, 18 new `core-bots` tests, 0 failures. Full `./gradlew test ktlintCheck --continue` (no `-PincludeAndroid`) run for regressions; see `docs/AUDIT_2026-09-05.md`'s matching addendum for the exact pass/fail counts.
 
 **Verified B2 session (no Android SDK, no live LLM):** `./gradlew :core-bots:test :core-security:test` and `./gradlew :core-bots:ktlintCheck :core-security:ktlintCheck` — **BUILD SUCCESSFUL**, 6 new `BotLifecycleTest` tests (24 total in `core-bots`), 0 failures. Full `./gradlew test ktlintCheck --continue` (no `-PincludeAndroid`): **BUILD SUCCESSFUL** — 2743 tests, 0 failures/errors, 20 pre-existing device-only skips, zero regressions.
+
+## 20. Launch-crash repair and the release gate (2026-11-13)
+
+Supersedes the statement in the `app (Android shell)` row of §6 that "CI still gates on `MainActivityLaunchTest`": that
+gate could not fail on a crash. Full record: `docs/CRASH_REPAIR_REPORT.md` and the 2026-11-13b audit addendum.
+
+| Component | Status | Notes |
+|---|---|---|
+| `:app` launch path (`MainActivity`, `res/xml/shortcuts.xml`) | FIXED, EMULATOR-VERIFIED (API 28 x86_64, software emulation) | v0.1.4 to v0.1.6 crashed on every cold start: `ShortcutPublisher` set dynamic shortcuts whose ids (`chat`, `toolbox`, `notes`) are the manifest shortcuts' ids. The three launcher shortcuts are now the manifest ones only; `QuickAction` still routes their intents. `LauncherShortcutsTest` pins this. Not run on a physical device or on arm64. |
+| `:app` `AndroidFleetThemeClient` | FIXED, EMULATOR-VERIFIED | A missing VictorLaunch authority is "not installed", not "denied" (the denial path showed the trust hint over the tab bar). The query to VictorLaunch's provider runs on one daemon thread, not on the main thread inside `Application.onCreate`. |
+| Emulator gate: `scripts/ci/verify-instrumentation.py`, `scripts/ci/emulator-smoke.sh` | IMPLEMENTED, HARNESS-TESTED (`scripts/ci/test_verify_instrumentation.py`, 14 tests, run in `ci.yml`), RUN ON AN EMULATOR | Passes only on affirmative evidence: final `INSTRUMENTATION_CODE -1`, no `shortMsg`/`longMsg`/`Error`, every started test finished with code 0, at least one test, `numtests` and `OK (N tests)` agree, every required test passed. adb's exit status and `FAILURES!!!` are not used as evidence. Screenshots are separate and never gate. Required tests are listed once in `emulator-smoke.sh`. |
+| Cold-start fault matrix: `scripts/qa/startup-matrix.sh`, `scripts/qa/fake-provider/` | IMPLEMENTED, RUN ON AN EMULATOR | Installs a fixture "VictorLaunch" / "VictorSuite" provider that throws, returns null, malformed or blob rows, or blocks for 45 s; cold starts the app and requires: process alive, `MainActivity` resumed, time-to-resumed under a limit, no `FATAL EXCEPTION`, no ANR, and a Home-then-relaunch round trip. The fixtures are QA-only and never shipped. |
+| `android-apk.yml` publishing | WIRED, NOT YET RUN ON ACTIONS | `publish-release` needs the `apk` job and a `validate` job (this repo's `android-emulator.yml` called on the same commit), a successful `ci.yml` run for the commit, and a validation summary naming the commit. Release notes are generated from that summary. `scripts/ci/verify-apk-identity.sh` checks package, tag == versionName, versionCode scheme, the pinned signer and 16 KB alignment. |
+| App version | versionCode 107 / versionName 0.1.7 | versionCode = major*10000 + minor*100 + patch. Every earlier release shipped versionCode 1. |
+
+Known gap, not fixed here: `DeviceConnectRuntime.startIfKeptOn()` can never resume the LAN listener after a process
+restart, because the pairing password it needs lives only in memory (`DeviceConnectTransport.pendingPassword`). "Keep
+waiting" therefore silently does nothing after a restart. It does not crash.
