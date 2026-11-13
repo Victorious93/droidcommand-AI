@@ -77,6 +77,34 @@ class Verdicts(unittest.TestCase):
         self.assertTrue(problems("success_one.txt", [LAUNCH], 2))
 
 
+GATE_TESTS = [
+    "ai.droidcommand.app.MainActivityLaunchTest#launchesToResumedWithoutCrashing",
+    "ai.droidcommand.app.StartupResilienceTest#survivesCorruptPersistedState",
+    "ai.droidcommand.app.StartupResilienceTest#survivesRecreationAndBackgroundResume",
+    "ai.droidcommand.app.StartupResilienceTest#everyPrimaryTabOpensAndStaysUsable",
+    "ai.droidcommand.app.StartupResilienceTest#noTrustHintCoversTheTabBarWithoutVictorLaunch",
+    "ai.droidcommand.app.StartupResilienceTest#repeatedActivityLaunchesStayAlive",
+]
+
+
+class RealCapturedRuns(unittest.TestCase):
+    """Raw runner output captured from real emulator runs (API 28 x86_64), not hand-built."""
+
+    def test_real_launch_crash_is_rejected_although_adb_exited_zero(self):
+        # Clean install of main 25c202c: MainActivity.onCreate threw IllegalArgumentException (manifest shortcut id clash).
+        p = problems("real_launch_crash_25c202c.txt", GATE_TESTS, len(GATE_TESTS))
+        self.assertTrue(any("crash" in x for x in p), p)
+        self.assertTrue(old_gate_accepts("real_launch_crash_25c202c.txt"), "the old grep gate would have passed this run")
+
+    def test_real_passing_gate_run_is_accepted(self):
+        # Final 0.1.7 build: all six required tests, OK (6 tests), INSTRUMENTATION_CODE -1.
+        self.assertEqual(problems("real_gate_pass_0.1.7.txt", GATE_TESTS, len(GATE_TESTS)), [])
+
+    def test_real_passing_run_fails_if_a_required_test_is_added_that_did_not_run(self):
+        p = problems("real_gate_pass_0.1.7.txt", GATE_TESTS + ["ai.droidcommand.app.Nope#missing"])
+        self.assertTrue(any("Nope#missing" in x for x in p), p)
+
+
 class OldGateRegression(unittest.TestCase):
     """These all printed no FAILURES!!! line, so the old gate called them green."""
 
