@@ -12,8 +12,14 @@ name: Build APK
 #
 # The produced APK is debug-signed. A separate workflow
 # (.github/workflows/android-emulator.yml) launches an x86_64-only build and
-# runs the instrumented smoke test; see the 2026-10-13 / 2026-10-14 audit
-# addenda. Push/PR builds are the 4-ABI artifact, not a launch proof.
+# runs the mandatory instrumented tests and the cold-start fault matrix. Push/PR
+# builds are the 4-ABI artifact, not a launch proof.
+#
+# PUBLISHING IS GATED (docs/CRASH_REPAIR_REPORT.md): a release_tag run first calls
+# android-emulator.yml on the same commit (job `validate`), and `publish-release`
+# needs both `apk` and `validate`. Before v0.1.7 publishing depended only on the build
+# succeeding, and the emulator gate accepted a crashed app, so v0.1.4-v0.1.6 shipped
+# an APK that dies on launch.
 # workflow_dispatch can pass abi=arm64-v8a for a smaller phone APK
 # (artifact app-arm64-debug-apk) that drops x86 / x86_64 / armeabi-v7a.
 
@@ -154,6 +160,14 @@ jobs:
             echo "APK_ARTIFACT=app-debug-apk" >> "$GITHUB_ENV"
           fi
 
+      # Package id, versionName == tag, versionCode scheme, the pinned signer, and 16 KB native alignment.
+      # Fails the build (and so the release) if any differ.
+      - name: Verify APK identity
+        if: success()
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+        run: bash scripts/ci/verify-apk-identity.sh "app/build/outputs/apk/debug/${APK_FILE}" "${RELEASE_TAG}"
+
       - name: Show APK identity
         if: success()
         run: |
@@ -188,22 +202,48 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # Only when publishing: run the mandatory emulator validation on this exact commit (the called workflow checks out
+  # and builds GITHUB_SHA and uploads `validation-summary` only if every required test and the fault matrix passed).
+  validate:
+    name: Validate on emulator (same commit)
+    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    uses: ./.github/workflows/android-emulator.yml
+    permissions:
+      contents: read
+
   # Manual only (workflow_dispatch with release_tag). The only job with write access: it publishes the
-  # exact APK the apk job just built. If that job fails or its artifact is missing, nothing is published.
+  # exact APK the apk job just built, and only after `validate` passed for the same commit and ci.yml was green for
+  # it. If any of that fails or the artifact is missing, nothing is published.
   publish-release:
     name: Publish pre-release
-    needs: apk
-    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    needs: [apk, validate]
+    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && needs.validate.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
+      actions: read
     steps:
       - name: Download APK artifact
         uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.abi == 'arm64-v8a' && 'app-arm64-debug-apk' || 'app-debug-apk' }}
           path: dist
+
+      - name: Download emulator validation summary
+        uses: actions/download-artifact@v4
+        with:
+          name: validation-summary
+          path: validation
+
+      # JVM tests and ktlint run in ci.yml. Refuse to publish a commit that has no successful ci.yml run.
+      - name: Require green CI for this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          n="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" --status success --json databaseId --jq length)"
+          [ "$n" -ge 1 ] || { echo "::error::no successful ci.yml run for $GITHUB_SHA; not publishing" >&2; exit 1; }
 
       - name: Publish GitHub pre-release
         env:
@@ -214,17 +254,26 @@ jobs:
           set -euo pipefail
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.]+)?$ ]] || { echo "bad tag: $TAG" >&2; exit 1; }
           (cd dist && sha256sum -c SHA256SUMS)
-          cat > notes.md <<NOTES
-          Debug-signed pre-release built by CI from commit ${GITHUB_SHA} (ABIs: ${ABI}). Sideload only,
-          not Play Store or production-signed.
-          **Not device-tested**: CI built the APK, ran JVM/\`:app\` unit tests and launched it on an API 28 emulator.
-          Many backends are still stubs; expect incomplete or placeholder behaviour.
-
-          Fleet note: this build recognises Victorious File Manager by its package \`ai.victorious.filemanager\`
-          (debug: \`ai.victorious.filemanager.debug\`). Victorious File Manager's bridge is still a stub, so DroidCommand
-          can find it but cannot control it yet.
-          Verify the download with \`sha256sum -c SHA256SUMS\`.
-          NOTES
+          # The summary is written only by a run that passed every required check, and it names the commit it ran on.
+          grep -q "$GITHUB_SHA" validation/validation-summary.md || { echo "::error::validation summary is not for $GITHUB_SHA" >&2; exit 1; }
+          {
+            echo "Debug-signed pre-release built by CI from commit ${GITHUB_SHA} (ABIs: ${ABI:-all}). Sideload only,"
+            echo "not Play Store or production-signed (signer: DroidCommand's own debug identity, docs/SIGNING.md)."
+            echo
+            echo "**Checks executed for this exact commit before publishing:**"
+            echo "- ci.yml (JVM tests, ktlint, release-gate harness self-test): green."
+            echo "- APK identity: package, versionName == tag, versionCode scheme, pinned signing certificate, 16 KB native alignment."
+            cat validation/validation-summary.md
+            echo
+            echo "**Not executed:** the APK attached here was not run on any device or emulator. The emulator checks above ran an"
+            echo "x86_64 build of the same commit; ARM-specific behaviour (native libraries on arm64, GPU backends) is unverified."
+            echo "Many backends are still stubs; expect incomplete or placeholder behaviour."
+            echo
+            echo "Fleet note: this build recognises Victorious File Manager by its package \`ai.victorious.filemanager\`"
+            echo "(debug: \`ai.victorious.filemanager.debug\`). Victorious File Manager's bridge is still a stub, so DroidCommand"
+            echo "can find it but cannot control it yet."
+            echo "Verify the download with \`sha256sum -c SHA256SUMS\`."
+          } > notes.md
           gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --prerelease --title "DroidCommand AI ${TAG} (debug-signed pre-release)" \
             --notes-file notes.md --generate-notes

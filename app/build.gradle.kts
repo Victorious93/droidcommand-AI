@@ -46,8 +46,12 @@ android {
         applicationId = "ai.droidcommand.app"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0-phase0"
+        // versionCode = major * 10000 + minor * 100 + patch, so it rises with every release tag. Every release up to
+        // v0.1.6 shipped versionCode 1 / "0.1.0-phase0" (docs/CRASH_REPAIR_REPORT.md); the package installer and
+        // `adb install -r` cannot tell those builds apart or order them. scripts/ci/verify-apk-identity.sh enforces
+        // that a published tag, versionName and versionCode agree.
+        versionCode = 107
+        versionName = "0.1.7"
         // Instrumented (on-device/emulator) tests. The default runner launches the real
         // @HiltAndroidApp application, so MainActivityLaunchTest exercises the production
         // DI graph — no HiltTestApplication needed.
