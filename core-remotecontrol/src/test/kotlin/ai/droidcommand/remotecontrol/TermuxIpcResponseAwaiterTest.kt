@@ -11,7 +11,10 @@ class TermuxIpcResponseAwaiterTest {
     @Test
     fun `returns the reply delivered from another thread`() {
         val awaiter = TermuxIpcResponseAwaiter(pollMs = 5)
-        thread { Thread.sleep(30); awaiter.deliver("""{"ok":true}""") }
+        thread {
+            Thread.sleep(30)
+            awaiter.deliver("""{"ok":true}""")
+        }
         val out = assertIs<TermuxIpcResponseAwaiter.Outcome.Delivered>(awaiter.await(2_000))
         assertEquals("""{"ok":true}""", out.raw)
     }

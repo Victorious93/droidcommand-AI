@@ -1,12 +1,12 @@
 package ai.droidcommand.app.fleet
 
-import ai.droidcommand.rootforge.BridgeResponse
 import ai.droidcommand.remotecontrol.RemoteErrorCategory
 import ai.droidcommand.remotecontrol.TermuxIpcRemoteBinding
 import ai.droidcommand.remotecontrol.TermuxIpcRequest
 import ai.droidcommand.remotecontrol.TermuxIpcResponseAwaiter
 import ai.droidcommand.remotecontrol.TermuxIpcResult
 import ai.droidcommand.remotecontrol.TermuxIpcSender
+import ai.droidcommand.rootforge.BridgeResponse
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.ComponentName
@@ -37,7 +37,6 @@ class AndroidTermuxIpcSender(
     private val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
     private val isCancelled: () -> Boolean = { false },
 ) : TermuxIpcSender {
-
     override fun send(request: TermuxIpcRequest): TermuxIpcResult {
         val requestId = try {
             TermuxIpcRemoteBinding.decodeBlob(request.envelopeJson).requestId
@@ -128,7 +127,8 @@ class AndroidTermuxIpcSender(
         TermuxIpcResult.Rejected(category, reason).let { it.copy(response = it.asBridgeResponse(requestId)) }
 
     private fun isInstalled(pkg: String): Boolean = try {
-        context.packageManager.getPackageInfo(pkg, 0); true
+        context.packageManager.getPackageInfo(pkg, 0)
+        true
     } catch (_: PackageManager.NameNotFoundException) {
         false
     }
