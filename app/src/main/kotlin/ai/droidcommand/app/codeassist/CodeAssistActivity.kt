@@ -35,7 +35,7 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
- * Inbound CODE_ASSIST entry point for VictorFiles. Thin Android shell:
+ * Inbound CODE_ASSIST entry point for Victorious File Manager. Thin Android shell:
  * request parse / 60k cap / result JSON live in [CodeAssist] (JVM-tested);
  * caller package+cert uses [NodeSignatureGuard] with
  * [CodeAssist.callerVerifier]. This Activity shows a real Allow/Deny

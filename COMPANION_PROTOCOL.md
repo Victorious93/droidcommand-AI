@@ -107,9 +107,9 @@ EXTERNAL_NODE. Catalog id `kyc-auditlab`; tool `kyc_auditlab_status`
 - Do not log identity-document contents.
 - Status: **PLANNED**. Wiring order: last.
 
-### VictorFiles — EXTERNAL_NODE (Messenger)
+### Victorious File Manager — EXTERNAL_NODE (Messenger)
 
-VictorFiles (`Victorious93/File-Manager`) is an independent
+Victorious File Manager (`Victorious93/File-Manager`) is an independent
 product, the same class as RootForge. It is **not** a companion.
 
 - Package: `ai.victorious.filemanager` (debug: `ai.victorious.filemanager.debug`).
@@ -287,7 +287,7 @@ host-tool-only.
 ## EXTERNAL_NODE Messenger transport (implemented)
 
 Reusable client for **any** EXTERNAL_NODE that speaks the shared envelope over
-a bound Messenger (`RootForge-on-device`, VictorFiles, Victorious
+a bound Messenger (`RootForge-on-device`, Victorious File Manager, Victorious
 Keyboard, Victorious Mesh, …). It is **not** AIDL, **not** `DependencyGuard`,
 and does **not** assume a shared signing key.
 

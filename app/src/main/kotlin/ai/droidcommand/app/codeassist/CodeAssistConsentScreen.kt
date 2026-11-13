@@ -75,7 +75,7 @@ fun CodeAssistConsentScreen(
                     if (request.truncated) {
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "VictorFiles marked this code as truncated.",
+                            "Victorious File Manager marked this code as truncated.",
                             color = AccentRed,
                             style = MaterialTheme.typography.bodyMedium,
                         )

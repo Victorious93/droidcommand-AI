@@ -247,7 +247,7 @@ object InboundEntryPointCatalog {
 
     val FILE_MANAGER_CODE_ASSIST = InboundEntryPoint(
         id = "file-manager-code-assist",
-        displayName = "VictorFiles (CODE_ASSIST)",
+        displayName = "Victorious File Manager (CODE_ASSIST)",
         packages = listOf("ai.victorious.filemanager", "ai.victorious.filemanager.debug"),
         capability = CompanionAssist.CODE_ASSIST_CAPABILITY,
         certStatus = InboundCertStatus.ENFORCED,

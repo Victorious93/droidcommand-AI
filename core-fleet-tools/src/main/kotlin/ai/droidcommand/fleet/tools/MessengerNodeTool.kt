@@ -45,12 +45,12 @@ abstract class MessengerNodeTool(
     }
 }
 
-/** `filemanager.status` — VictorFiles' only documented read op besides capabilities. */
+/** `filemanager.status` — Victorious File Manager's only documented read op besides capabilities. */
 class FileManagerStatusTool(controller: FleetMessengerController) :
     MessengerNodeTool(controller, CATALOG_ID) {
     override val spec = ToolSpec(
         name = "filemanager_status",
-        description = "Reads VictorFiles' (File-Manager) live status over the paired Messenger bridge " +
+        description = "Reads Victorious File Manager's (File-Manager) live status over the paired Messenger bridge " +
             "(action ai.victorious.filemanager.action.BRIDGE). Pair the node on Tools -> Fleet first; " +
             "if it is not paired this returns a plain 'not paired' result rather than binding anything.",
         securityLevel = SecurityLevel.SENSITIVE,
@@ -65,12 +65,12 @@ class FileManagerStatusTool(controller: FleetMessengerController) :
     }
 }
 
-/** `filemanager.capabilities.get` — VictorFiles' advertised version/ops. */
+/** `filemanager.capabilities.get` — Victorious File Manager's advertised version/ops. */
 class FileManagerCapabilitiesTool(controller: FleetMessengerController) :
     MessengerNodeTool(controller, FileManagerStatusTool.CATALOG_ID) {
     override val spec = ToolSpec(
         name = "filemanager_capabilities",
-        description = "Reads VictorFiles' (File-Manager) advertised version and operations over the paired " +
+        description = "Reads Victorious File Manager's (File-Manager) advertised version and operations over the paired " +
             "Messenger bridge. Pair the node on Tools -> Fleet first.",
         securityLevel = SecurityLevel.SENSITIVE,
         requiresConfirmation = true,

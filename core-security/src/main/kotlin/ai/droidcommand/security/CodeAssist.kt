@@ -9,7 +9,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 
 /**
- * Contract v1 for inbound code assist from VictorFiles (Victorious93/File-Manager
+ * Contract v1 for inbound code assist from Victorious File Manager (Victorious93/File-Manager
  * `docs/PHASE17.md` §1). Field names and extras are that document's, not invented.
  *
  * JVM-testable: request parse, 60 000-char cap, caller pin, result JSON. The
@@ -166,7 +166,7 @@ object CodeAssist {
     )
 
     /**
-     * PHASE17: if `revisedCode` is missing, VictorFiles takes the largest
+     * PHASE17: if `revisedCode` is missing, Victorious File Manager takes the largest
      * fenced code block in `explanation`. We fill `revisedCode` ourselves:
      * largest fenced block when present, otherwise the full model text.
      */

@@ -73,7 +73,16 @@ class AndroidFleetThemeClient @Inject constructor(
 
     fun refresh(reason: String) {
         Log.i(TAG, "Re-querying fleet theme ($reason)")
-        applyDecision(reader.evaluate(query()))
+        // This runs from Application.onCreate. The provider is another app's code, so anything it throws besides
+        // SecurityException (unknown URI, provider crash, bad cursor) must not stop this app from starting.
+        // The theme is optional: on failure keep the current one.
+        val source = try {
+            query()
+        } catch (error: RuntimeException) {
+            Log.w(TAG, "Fleet theme query failed; keeping current theme", error)
+            return
+        }
+        applyDecision(reader.evaluate(source))
     }
 
     fun dismissTrustHint() {
