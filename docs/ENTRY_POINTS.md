@@ -1,7 +1,7 @@
 # Inbound droidcommand-AI companion entry points
 
 This is the inbound direction: a fleet app starts
-`ai.droidcommand.action.COMPANION_ASSIST` (or, for VictorFiles,
+`ai.droidcommand.action.COMPANION_ASSIST` (or, for Victorious File Manager,
 `ai.droidcommand.action.CODE_ASSIST` in PR #255) and this app owns the
 model, keys, and network.
 
@@ -99,7 +99,7 @@ probes them. This is not a second inbound allow-list.
 
 | App | Package id | Cert status | Capability |
 |---|---|---|---|
-| VictorFiles CODE_ASSIST (PR #255) | `ai.victorious.filemanager` / `.debug` | inbound **enforced** via `FILE_MANAGER_DEBUG_UNSTABLE_CI_SECRETS`; outbound Messenger stays fail-open | `code-assist` |
+| Victorious File Manager CODE_ASSIST (PR #255) | `ai.victorious.filemanager` / `.debug` | inbound **enforced** via `FILE_MANAGER_DEBUG_UNSTABLE_CI_SECRETS`; outbound Messenger stays fail-open | `code-assist` |
 
 ## TODOs (do not invent fingerprints)
 

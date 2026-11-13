@@ -58,7 +58,7 @@ object ExternalNodeCatalog {
 
     val FILE_MANAGER = ExternalNodeSpec(
         id = "file-manager",
-        displayName = "VictorFiles",
+        displayName = "Victorious File Manager",
         nodeId = "file-manager",
         packages = listOf("ai.victorious.filemanager", "ai.victorious.filemanager.debug"),
         capabilitiesOperation = "filemanager.capabilities.get",

@@ -87,7 +87,7 @@ object FleetCatalog {
     /** Debug applicationId for RootForge OS. Catalogued for Messenger pairing / trust checks. */
     const val ROOTFORGE_DEBUG_PACKAGE = "ai.rootforge.os.debug"
 
-    /** Debug applicationId for VictorFiles. */
+    /** Debug applicationId for Victorious File Manager. */
     const val FILEMANAGER_DEBUG_PACKAGE = "ai.victorious.filemanager.debug"
 
     /** Debug applicationId for Victorious Keyboard. */
@@ -156,7 +156,7 @@ object FleetCatalog {
 
     val FILE_MANAGER = FleetMember(
         id = "file-manager",
-        name = "VictorFiles",
+        name = "Victorious File Manager",
         packageName = FILEMANAGER_PACKAGE,
         kind = FleetKind.EXTERNAL_NODE,
         summary = "EXTERNAL_NODE, PLANNED. Messenger action ai.victorious.filemanager.action.BRIDGE " +

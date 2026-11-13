@@ -215,7 +215,7 @@ object KnownNodeSigningCatalog {
         "9E:A7:B3:14:94:5B:0A:62:97:15:6F:F7:06:E7:0C:0A:B1:B7:24:DE:06:D5:09:9C:A5:12:8A:B4:43:F7:2D:8D"
 
     /**
-     * File-Manager / VictorFiles DEBUG, supplied by the fleet custodian
+     * File-Manager / Victorious File Manager DEBUG, supplied by the fleet custodian
      * (`ai.victorious.filemanager` / `.debug`).
      *
      * Outbound Messenger binds stay fail-open: this value is **not** in

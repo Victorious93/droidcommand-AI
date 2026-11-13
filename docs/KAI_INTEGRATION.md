@@ -23,7 +23,7 @@ directly).
   named `ba1deea41a22f516ea22cffadfcefc098550d8e1` as a 2026-10-07
   navigation anchor, not a downgrade target. Recent `main` commits
   reviewed before branching include inbound COMPANION_ASSIST (#256),
-  VictorFiles CODE_ASSIST (#255), cert-pin fail-close (#254), HackerAI
+  Victorious File Manager CODE_ASSIST (#255), cert-pin fail-close (#254), HackerAI
   `executeEnvelope` (#252), and bugsweep #257.
 - Kai `main`: `3818b2fccc0fb9bc977ab198b8bdb4a647dbab47` (prompt
   anchor; still HEAD on 2026-10-30). Cloned read-only, `--depth 1`,

@@ -204,7 +204,7 @@
                 android:resource="@xml/status_widget_info" />
         </receiver>
 
-        <!-- Inbound CODE_ASSIST for VictorFiles (File-Manager PHASE17 §1).
+        <!-- Inbound CODE_ASSIST for Victorious File Manager (File-Manager PHASE17 §1).
              Exported so startActivityForResult from ai.victorious.filemanager
              can reach it. Caller package + signing cert are checked in
              CodeAssistActivity before any UI or model call; deny / mismatch
@@ -226,7 +226,7 @@
              CompanionAssistActivity before any UI or model call; deny /
              excluded / pending-refused / mismatch / bad input return
              RESULT_CANCELED. Never auto-approves. CODE_ASSIST for
-             VictorFiles is a separate activity (CodeAssistActivity). -->
+             Victorious File Manager is a separate activity (CodeAssistActivity). -->
         <activity
             android:name=".companionassist.CompanionAssistActivity"
             android:excludeFromRecents="true"

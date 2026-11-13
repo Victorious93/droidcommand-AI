@@ -370,7 +370,7 @@ object KnownFleet {
 
     val FILE_MANAGER = FleetMemberDescriptor(
         id = "file-manager",
-        displayName = "VictorFiles",
+        displayName = "Victorious File Manager",
         repo = "Victorious93/File-Manager",
         packageOrBinary = "ai.victorious.filemanager (debug: ai.victorious.filemanager.debug)",
         integrationClass = FleetIntegrationClass.EXTERNAL_NODE,
@@ -398,7 +398,7 @@ object KnownFleet {
             "(Tools -> Fleet) and have the owner confirm a live call; cli has no device-free path to this " +
             "node at all (Android Messenger only) and explicitly says so rather than silently omitting it. " +
             "Never DependencyGuard, never shared signing key.",
-        refusalMessage = "VictorFiles is PARTIAL EXTERNAL_NODE — core-fleet-tools now calls " +
+        refusalMessage = "Victorious File Manager is PARTIAL EXTERNAL_NODE — core-fleet-tools now calls " +
             "ai.victorious.filemanager.action.BRIDGE (protocol_major 1) through the real Messenger client, " +
             "but only from inside :app; this binding has not run on a device yet (no device/emulator in " +
             "this environment, and no owner device test recorded). From the device-free cli, this node has " +
