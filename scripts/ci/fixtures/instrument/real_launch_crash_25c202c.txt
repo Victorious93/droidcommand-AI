@@ -1,0 +1,82 @@
+INSTRUMENTATION_STATUS: class=ai.droidcommand.app.MainActivityLaunchTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=5
+INSTRUMENTATION_STATUS: stream=
+ai.droidcommand.app.MainActivityLaunchTest:
+INSTRUMENTATION_STATUS: test=launchesToResumedWithoutCrashing
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=ai.droidcommand.app.MainActivityLaunchTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=5
+INSTRUMENTATION_STATUS: stack=java.lang.IllegalArgumentException: Manifest shortcut ID=notes may not be manipulated via APIs
+	at android.os.Parcel.createException(Parcel.java:1946)
+	at android.os.Parcel.readException(Parcel.java:1910)
+	at android.os.Parcel.readException(Parcel.java:1860)
+	at android.content.pm.IShortcutService$Stub$Proxy.setDynamicShortcuts(IShortcutService.java:423)
+	at android.content.pm.ShortcutManager.setDynamicShortcuts(ShortcutManager.java:326)
+	at ai.droidcommand.app.shortcuts.ShortcutPublisher.publish(ShortcutPublisher.kt:30)
+	at ai.droidcommand.app.MainActivity.onCreate(MainActivity.kt:54)
+	at android.app.Activity.performCreate(Activity.java:7136)
+	at android.app.Activity.performCreate(Activity.java:7127)
+	at android.app.Instrumentation.callActivityOnCreate(Instrumentation.java:1271)
+	at androidx.test.runner.MonitoringInstrumentation.callActivityOnCreate(MonitoringInstrumentation.java:766)
+	at android.app.ActivityThread.performLaunchActivity(ActivityThread.java:2893)
+	at android.app.ActivityThread.handleLaunchActivity(ActivityThread.java:3048)
+	at android.app.servertransaction.LaunchActivityItem.execute(LaunchActivityItem.java:78)
+	at android.app.servertransaction.TransactionExecutor.executeCallbacks(TransactionExecutor.java:108)
+	at android.app.servertransaction.TransactionExecutor.execute(TransactionExecutor.java:68)
+	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:1808)
+	at android.os.Handler.dispatchMessage(Handler.java:106)
+	at android.os.Looper.loop(Looper.java:193)
+	at android.app.ActivityThread.main(ActivityThread.java:6669)
+	at java.lang.reflect.Method.invoke(Native Method)
+	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:493)
+	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:858)
+Caused by: android.os.RemoteException: Remote stack trace:
+	at com.android.server.pm.ShortcutPackage.ensureNotImmutable(ShortcutPackage.java:206)
+	at com.android.server.pm.ShortcutPackage.ensureNotImmutable(ShortcutPackage.java:212)
+	at com.android.server.pm.ShortcutPackage.ensureImmutableShortcutsNotIncluded(ShortcutPackage.java:225)
+	at com.android.server.pm.ShortcutService.setDynamicShortcuts(ShortcutService.java:1753)
+	at android.content.pm.IShortcutService$Stub.onTransact(IShortcutService.java:63)
+
+
+INSTRUMENTATION_STATUS: stream=
+Process crashed while executing launchesToResumedWithoutCrashing(ai.droidcommand.app.MainActivityLaunchTest):
+java.lang.IllegalArgumentException: Manifest shortcut ID=notes may not be manipulated via APIs
+	at android.os.Parcel.createException(Parcel.java:1946)
+	at android.os.Parcel.readException(Parcel.java:1910)
+	at android.os.Parcel.readException(Parcel.java:1860)
+	at android.content.pm.IShortcutService$Stub$Proxy.setDynamicShortcuts(IShortcutService.java:423)
+	at android.content.pm.ShortcutManager.setDynamicShortcuts(ShortcutManager.java:326)
+	at ai.droidcommand.app.shortcuts.ShortcutPublisher.publish(ShortcutPublisher.kt:30)
+	at ai.droidcommand.app.MainActivity.onCreate(MainActivity.kt:54)
+	at android.app.Activity.performCreate(Activity.java:7136)
+	at android.app.Activity.performCreate(Activity.java:7127)
+	at android.app.Instrumentation.callActivityOnCreate(Instrumentation.java:1271)
+	at androidx.test.runner.MonitoringInstrumentation.callActivityOnCreate(MonitoringInstrumentation.java:766)
+	at android.app.ActivityThread.performLaunchActivity(ActivityThread.java:2893)
+	at android.app.ActivityThread.handleLaunchActivity(ActivityThread.java:3048)
+	at android.app.servertransaction.LaunchActivityItem.execute(LaunchActivityItem.java:78)
+	at android.app.servertransaction.TransactionExecutor.executeCallbacks(TransactionExecutor.java:108)
+	at android.app.servertransaction.TransactionExecutor.execute(TransactionExecutor.java:68)
+	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:1808)
+	at android.os.Handler.dispatchMessage(Handler.java:106)
+	at android.os.Looper.loop(Looper.java:193)
+	at android.app.ActivityThread.main(ActivityThread.java:6669)
+	at java.lang.reflect.Method.invoke(Native Method)
+	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:493)
+	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:858)
+Caused by: android.os.RemoteException: Remote stack trace:
+	at com.android.server.pm.ShortcutPackage.ensureNotImmutable(ShortcutPackage.java:206)
+	at com.android.server.pm.ShortcutPackage.ensureNotImmutable(ShortcutPackage.java:212)
+	at com.android.server.pm.ShortcutPackage.ensureImmutableShortcutsNotIncluded(ShortcutPackage.java:225)
+	at com.android.server.pm.ShortcutService.setDynamicShortcuts(ShortcutService.java:1753)
+	at android.content.pm.IShortcutService$Stub.onTransact(IShortcutService.java:63)
+
+
+INSTRUMENTATION_STATUS: test=launchesToResumedWithoutCrashing
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: shortMsg=Process crashed.
+INSTRUMENTATION_CODE: 0

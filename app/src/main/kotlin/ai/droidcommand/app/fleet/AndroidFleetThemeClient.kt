@@ -19,6 +19,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -49,6 +52,10 @@ class AndroidFleetThemeClient @Inject constructor(
         }
     }
 
+    private val refreshExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "fleet-theme-refresh").apply { isDaemon = true }
+    }
+
     private val _state = MutableStateFlow(FleetThemeUiState.DEFAULT)
     val state: StateFlow<FleetThemeUiState> = _state.asStateFlow()
 
@@ -62,8 +69,13 @@ class AndroidFleetThemeClient @Inject constructor(
                 context.contentResolver.registerContentObserver(THEME_URI, true, observer)
             } catch (error: SecurityException) {
                 Log.i(TAG, "Could not register fleet-theme observer: ${error.message}")
-                applyDecision(reader.evaluate(FleetThemeSource.SecurityDenied))
-                return
+                // Some Android versions throw SecurityException ("Failed to find provider") when the authority does not
+                // exist at all. That is "VictorLaunch is not installed", not "VictorLaunch refused us": reporting it as a
+                // denial showed the trust hint over the bottom tab bar on every launch for anyone without VictorLaunch.
+                if (isProviderInstalled()) {
+                    applyDecision(reader.evaluate(FleetThemeSource.SecurityDenied))
+                    return
+                }
             } catch (error: IllegalArgumentException) {
                 Log.i(TAG, "Fleet-theme observer not registered (provider absent): ${error.message}")
             }
@@ -71,11 +83,25 @@ class AndroidFleetThemeClient @Inject constructor(
         refresh("start")
     }
 
+    /**
+     * Re-reads the theme without blocking the caller. Callers are Application.onCreate, the ContentObserver (main
+     * looper) and the broadcast receiver, all on the main thread, and the provider is another app's process: a slow or
+     * hung VictorLaunch must not freeze this app (measured on an API 28 emulator: a provider that held the query for
+     * 20 s kept this app's main thread inside Application.onCreate for 20.3 s). One daemon thread serialises the
+     * queries, so a burst of change notifications cannot run them concurrently.
+     */
     fun refresh(reason: String) {
         Log.i(TAG, "Re-querying fleet theme ($reason)")
-        // This runs from Application.onCreate. The provider is another app's code, so anything it throws besides
-        // SecurityException (unknown URI, provider crash, bad cursor) must not stop this app from starting.
-        // The theme is optional: on failure keep the current one.
+        try {
+            refreshExecutor.execute { refreshNow() }
+        } catch (_: RejectedExecutionException) {
+            // Executor is never shut down; nothing to do if the runtime refuses.
+        }
+    }
+
+    private fun refreshNow() {
+        // The provider is another app's code, so anything it throws besides SecurityException (unknown URI, provider
+        // crash, bad cursor) must not take this app down. The theme is optional: on failure keep the current one.
         val source = try {
             query()
         } catch (error: RuntimeException) {
@@ -83,6 +109,12 @@ class AndroidFleetThemeClient @Inject constructor(
             return
         }
         applyDecision(reader.evaluate(source))
+    }
+
+    private fun isProviderInstalled(): Boolean = try {
+        context.packageManager.resolveContentProvider(FleetThemeContract.AUTHORITY, 0) != null
+    } catch (_: RuntimeException) {
+        false
     }
 
     fun dismissTrustHint() {

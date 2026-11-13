@@ -1,0 +1,3 @@
+INSTRUMENTATION_RESULT: shortMsg=java.lang.IllegalStateException
+INSTRUMENTATION_RESULT: longMsg=java.lang.IllegalStateException: boom
+INSTRUMENTATION_CODE: 0

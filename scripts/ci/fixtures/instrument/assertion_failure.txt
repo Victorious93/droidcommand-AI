@@ -1,0 +1,27 @@
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+ai.droidcommand.app.MainActivityLaunchTest:
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=launchesToResumedWithoutCrashing
+INSTRUMENTATION_STATUS: class=ai.droidcommand.app.MainActivityLaunchTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=E
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=launchesToResumedWithoutCrashing
+INSTRUMENTATION_STATUS: class=ai.droidcommand.app.MainActivityLaunchTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: stream=
+
+Time: 2.0
+There was 1 failure:
+1) launchesToResumedWithoutCrashing(ai.droidcommand.app.MainActivityLaunchTest)
+java.lang.AssertionError: expected:<RESUMED> but was:<DESTROYED>
+
+FAILURES!!!
+Tests run: 1,  Failures: 1
+
+
+INSTRUMENTATION_CODE: -1
