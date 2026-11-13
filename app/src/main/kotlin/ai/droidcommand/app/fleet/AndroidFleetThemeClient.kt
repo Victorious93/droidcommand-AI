@@ -62,8 +62,13 @@ class AndroidFleetThemeClient @Inject constructor(
                 context.contentResolver.registerContentObserver(THEME_URI, true, observer)
             } catch (error: SecurityException) {
                 Log.i(TAG, "Could not register fleet-theme observer: ${error.message}")
-                applyDecision(reader.evaluate(FleetThemeSource.SecurityDenied))
-                return
+                // Some Android versions throw SecurityException ("Failed to find provider") when the authority does not
+                // exist at all. That is "VictorLaunch is not installed", not "VictorLaunch refused us": reporting it as a
+                // denial showed the trust hint over the bottom tab bar on every launch for anyone without VictorLaunch.
+                if (isProviderInstalled()) {
+                    applyDecision(reader.evaluate(FleetThemeSource.SecurityDenied))
+                    return
+                }
             } catch (error: IllegalArgumentException) {
                 Log.i(TAG, "Fleet-theme observer not registered (provider absent): ${error.message}")
             }
@@ -83,6 +88,12 @@ class AndroidFleetThemeClient @Inject constructor(
             return
         }
         applyDecision(reader.evaluate(source))
+    }
+
+    private fun isProviderInstalled(): Boolean = try {
+        context.packageManager.resolveContentProvider(FleetThemeContract.AUTHORITY, 0) != null
+    } catch (_: RuntimeException) {
+        false
     }
 
     fun dismissTrustHint() {
