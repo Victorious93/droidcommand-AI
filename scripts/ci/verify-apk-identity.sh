@@ -33,20 +33,33 @@ else
   bad "versionName '$vname' is not x.y.z"
 fi
 
+# apksigner's wording differs between build-tools versions ("Signer #1 certificate SHA-256 digest: ..." and
+# "Signer (minSdkVersion=28, maxSdkVersion=2147483647) certificate SHA-256 digest: ..."), so take the 64-hex digest
+# from every line that mentions it instead of matching one prefix.
 certs="$("$BT"apksigner verify --print-certs "$APK" 2>&1 | grep -v '^Picked up' || true)"
-signers="$(grep -c 'certificate SHA-256 digest' <<<"$certs" || true)"
-cert="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$certs")"
-echo "signer-sha256: $cert (signers: $signers)"
+digests="$(grep 'certificate SHA-256 digest' <<<"$certs" | grep -oiE '[0-9a-f]{64}' | tr 'A-F' 'a-f' | sort -u)"
+signers="$(grep -c . <<<"$digests" || true)"
+echo "signer-sha256: ${digests:-none} (distinct signers: $signers)"
 [[ "$signers" == "1" ]] || bad "expected exactly one signer, saw $signers"
-[[ "$cert" == "$EXPECTED_CERT" ]] || bad "signing certificate $cert is not the pinned DroidCommand debug certificate"
+[[ "$digests" == "$EXPECTED_CERT" ]] || bad "signing certificate '${digests:-none}' is not the pinned DroidCommand debug certificate"
 
+# 16 KB pages: Android 15+ phones may use them, and only 64-bit ARM phones do. A 4 KB emulator cannot show this, so check
+# the files. arm64-v8a is a hard requirement (the phone APK); other ABIs in a multi-ABI build are reported, not enforced.
 if READELF="$(ls "$SDK"/ndk/*/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf 2>/dev/null | head -1)" && [[ -n "$READELF" ]]; then
   tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
   unzip -q -o "$APK" 'lib/*' -d "$tmp" 2>/dev/null || true
+  checked=0
   while IFS= read -r so; do
+    abi="$(basename "$(dirname "$so")")"
     align="$("$READELF" -lW "$so" | awk '/LOAD/ {print $NF}' | sort -u | tr '\n' ' ')"
-    for a in $align; do [[ "$a" == "0x4000" || "$a" == "0x10000" ]] || bad "$(basename "$so") has LOAD alignment $a (needs 0x4000 or more for 16 KB pages)"; done
+    for a in $align; do
+      if [[ "$a" != "0x4000" && "$a" != "0x10000" ]]; then
+        if [[ "$abi" == "arm64-v8a" ]]; then bad "$abi/$(basename "$so") has LOAD alignment $a (needs 0x4000 or more for 16 KB pages)"
+        else echo "note: $abi/$(basename "$so") has LOAD alignment $a (not enforced for $abi)"; fi
+      fi
+    done
+    [[ "$abi" == "arm64-v8a" ]] && checked=$(( checked + 1 ))
   done < <(find "$tmp" -name '*.so')
-  echo "native-alignment: checked $(find "$tmp" -name '*.so' | wc -l) libraries"
+  echo "native-alignment: checked $checked arm64-v8a libraries"
 fi
 exit $fail

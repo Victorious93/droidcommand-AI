@@ -26,3 +26,4 @@ local.properties
 # emulator gate evidence (scripts/ci/emulator-smoke.sh)
 emulator-logs/
 emulator-screenshots/
+dist/
