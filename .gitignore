@@ -27,3 +27,4 @@ local.properties
 emulator-logs/
 emulator-screenshots/
 dist/
+__pycache__/
