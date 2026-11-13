@@ -306,7 +306,7 @@ class ExternalAndTermuxTransportTest {
         val t = TermuxFleetTransport(
             NullTermuxExecutor(),
             isInstalled = { true },
-            remote = TermuxIpcTransport(),
+            remoteFactory = { TermuxIpcTransport() },
         )
         val r = t.probe(termux)
         assertEquals(FleetReachability.UNKNOWN, r.reachability)
@@ -316,7 +316,7 @@ class ExternalAndTermuxTransportTest {
             TermuxFleetTransport(
                 NullTermuxExecutor(),
                 isInstalled = { false },
-                remote = TermuxIpcTransport(),
+                remoteFactory = { TermuxIpcTransport() },
             ).probe(termux).reachability,
         )
         assertIs<ToolResult.Failure>(t.sendCommand(termux, "x", "{}"))
@@ -336,7 +336,7 @@ class FleetOrchestratorWiringTest {
             FleetIntegrationClass.TERMUX_IPC to TermuxFleetTransport(
                 NullTermuxExecutor(),
                 isInstalled = { true },
-                remote = TermuxIpcTransport(),
+                remoteFactory = { TermuxIpcTransport() },
             ),
         ),
     )
@@ -413,5 +413,70 @@ class FleetOrchestratorWiringTest {
     @Test
     fun `the app policy does not auto-approve sensitive tools`() {
         assertFalse(SecurityLevel.SENSITIVE in AppModule.provideSecurityPolicy().autoApprove)
+    }
+}
+
+/** TERMUX_IPC command path with an injected sender: gates stay in front of the sender, the switch is read per command. */
+class TermuxFleetTransportSenderTest {
+    private val termux = FleetNodes.nodes().single { it.id == "termux" }
+    private val now = 50_000_000L
+
+    private fun blob(action: String, ts: Long = now) = ai.droidcommand.remotecontrol.RemoteCommandEnvelopeCodec.encodeTermuxBlob(
+        ai.droidcommand.remotecontrol.FleetRemoteEnvelope(
+            requestId = "req-1",
+            targetNodeRef = "com.termux",
+            actionRef = action,
+            nonce = "00112233445566778899aabbccddeeff",
+            timestampMs = ts,
+        ),
+    )
+
+    private fun transport(enabled: Boolean, sent: MutableList<ai.droidcommand.remotecontrol.TermuxIpcRequest>) = TermuxFleetTransport(
+        NullTermuxExecutor(),
+        isInstalled = { true },
+        remoteFactory = {
+            TermuxIpcTransport(
+                nowMs = { now },
+                externalControlEnabled = enabled,
+                sender = ai.droidcommand.remotecontrol.TermuxIpcSender { req ->
+                    sent += req
+                    ai.droidcommand.remotecontrol.TermuxIpcResult.Accepted(
+                        ai.droidcommand.rootforge.BridgeResponse(
+                            protocolMajor = 1,
+                            requestId = "req-1",
+                            nodeId = "victorsuite-x",
+                            ok = true,
+                            result = kotlinx.serialization.json.buildJsonObject { },
+                        ),
+                    )
+                },
+            )
+        },
+    )
+
+    @Test
+    fun `external control off never reaches the sender`() {
+        val sent = mutableListOf<ai.droidcommand.remotecontrol.TermuxIpcRequest>()
+        val r = assertIs<ToolResult.Failure>(transport(false, sent).sendCommand(termux, "capabilities.get", blob("capabilities.get")))
+        assertTrue(r.reason.contains("external_control_disabled"), r.reason)
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun `enabled control sends a safe read once and returns the reply`() {
+        val sent = mutableListOf<ai.droidcommand.remotecontrol.TermuxIpcRequest>()
+        assertIs<ToolResult.Success>(transport(true, sent).sendCommand(termux, "capabilities.get", blob("capabilities.get")))
+        assertEquals(1, sent.size)
+    }
+
+    @Test
+    fun `destructive and expired envelopes are blocked before the sender even when control is on`() {
+        val sent = mutableListOf<ai.droidcommand.remotecontrol.TermuxIpcRequest>()
+        val t = transport(true, sent)
+        val shell = assertIs<ToolResult.Failure>(t.sendCommand(termux, "remote.command", blob("shell.exec")))
+        assertTrue(shell.reason.contains("confirmation_required"), shell.reason)
+        val old = assertIs<ToolResult.Failure>(t.sendCommand(termux, "capabilities.get", blob("capabilities.get", ts = now - 400_000)))
+        assertTrue(old.reason.contains("expired"), old.reason)
+        assertTrue(sent.isEmpty())
     }
 }

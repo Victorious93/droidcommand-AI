@@ -220,15 +220,19 @@ class ExternalNodeTransport(
 
 /**
  * TERMUX_IPC. Probe still reads the existing [TermuxExecutor]. Commands go
- * through [TermuxIpcTransport] (envelope extras + response parser). The
- * default sender is unwired: nothing is broadcast, destructive and
- * `config.import` apply stay `confirmation_required`, and the row stays
- * PENDING / not device-tested.
+ * through [TermuxIpcTransport] (envelope extras + response parser). `FleetModule` supplies
+ * [AndroidTermuxIpcSender]; with the default factory nothing is broadcast. Destructive and
+ * `config.import` apply stay `confirmation_required` either way, external control stays OFF until the
+ * user turns it on, and the path is NOT device-tested.
  */
 class TermuxFleetTransport(
     private val executor: TermuxExecutor,
     private val isInstalled: (String) -> Boolean,
-    private val remote: TermuxIpcTransport = TermuxIpcTransport(),
+    /**
+     * Built per command so the user's current external-control switch (OFF by default) is read at send time,
+     * not frozen at app start. The default keeps the old unwired, always-rejecting behaviour for tests.
+     */
+    private val remoteFactory: () -> TermuxIpcTransport = { TermuxIpcTransport() },
 ) : FleetNodeTransport {
     override fun probe(node: FleetNode): FleetProbeResult {
         val pkg = node.packageName ?: return FleetProbeResult(FleetReachability.UNKNOWN, "No package to probe")
@@ -248,11 +252,11 @@ class TermuxFleetTransport(
             ?: return ToolResult.Failure(
                 "${node.displayName}: TERMUX_IPC input is not a remote envelope JSON object",
             )
-        return when (val result = remote.submit(envelope, capabilityId.ifBlank { TermuxIpcTransport.resolveOperation(envelope) })) {
+        return when (val result = remoteFactory().submit(envelope, capabilityId.ifBlank { TermuxIpcTransport.resolveOperation(envelope) })) {
             is TermuxIpcResult.Rejected ->
                 ToolResult.Failure("${result.category.wire}: ${result.reason}")
             is TermuxIpcResult.Ready ->
-                ToolResult.Failure("PENDING: TERMUX_IPC extras built, not device-tested")
+                ToolResult.Failure("PENDING: TERMUX_IPC extras built but not sent (prepare-only result)")
             is TermuxIpcResult.Accepted ->
                 if (result.response.ok) {
                     ToolResult.Success(result.response.result?.toString() ?: "{}")
