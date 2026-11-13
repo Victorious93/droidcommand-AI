@@ -33,7 +33,7 @@ public class FakeProvider extends ContentProvider {
             case "throw_security": throw new SecurityException("fake: caller not allowed");
             case "null_cursor": return null;
             case "slow":
-                try { Thread.sleep(20000); } catch (InterruptedException ignored) { }
+                try { Thread.sleep(45000); } catch (InterruptedException ignored) { }
                 return new MatrixCursor(new String[] {"schemaVersion"});
             case "malformed": {
                 MatrixCursor c = new MatrixCursor(new String[] {"schemaVersion", "primary", "pc_name", "host", "port", "profile_id"});
