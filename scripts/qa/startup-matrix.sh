@@ -8,7 +8,7 @@
 #   - the app process is alive,
 #   - MainActivity is the resumed activity,
 #   - logcat has no "FATAL EXCEPTION" for the app's process and no "ANR in <app>".
-# Also requires time-to-resumed (activity manager START to MainActivity's onResume, from the events log) within
+# Also requires time-to-resumed (activity manager START to MainActivity's onResume, from the events log; the event is am_on_resume_called up to Android 14 and wm_on_resume_called on Android 15) within
 # RESUME_LIMIT_MS (default 40 s). A software-emulated cold start takes ~11 s here and the blocking fake provider holds a
 # query for 45 s, so a main-thread wait on another app's provider is a FAIL even though the app eventually comes up.
 # (`am start -W` and the "Displayed" log line were tried and cannot show this: both are satisfied by the splash window.)
@@ -34,9 +34,9 @@ for sc in "${scenarios[@]}"; do
     # Wait for MainActivity's onResume (only possible after Application.onCreate and Activity.onCreate returned on the main thread).
     t_start=""; t_resume=""; waited=0
     while [ -z "$t_resume" ] && [ "$waited" -le $(( RESUME_LIMIT_MS / 1000 + 30 )) ]; do
-      ev="$(adb logcat -b all -d -v threadtime | tr -d '\r' | grep -E "START u0 .*cmp=$ACT|am_on_resume_called: .*ai.droidcommand.app.MainActivity")"
+      ev="$(adb logcat -b all -d -v threadtime | tr -d '\r' | grep -E "START u0 .*cmp=$ACT|(am|wm)_on_resume_called: .*ai.droidcommand.app.MainActivity")"
       t_start="$(grep -m1 "START u0" <<<"$ev" | awk '{print $2}')"
-      t_resume="$(grep -m1 "am_on_resume_called" <<<"$ev" | awk '{print $2}')"
+      t_resume="$(grep -m1 "_on_resume_called" <<<"$ev" | awk '{print $2}')"
       [ -n "$t_resume" ] || { sleep 2; waited=$(( waited + 2 )); }
     done
     sleep "$SETTLE"
