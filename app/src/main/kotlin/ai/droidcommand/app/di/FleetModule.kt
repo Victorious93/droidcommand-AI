@@ -2,12 +2,15 @@ package ai.droidcommand.app.di
 
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.app.fleet.AndroidCompanionLink
+import ai.droidcommand.app.fleet.AndroidTermuxIpcSender
 import ai.droidcommand.app.fleet.BoundCompanionTransport
 import ai.droidcommand.app.fleet.FleetNodes
 import ai.droidcommand.app.fleet.MessengerFleetTransport
 import ai.droidcommand.app.fleet.PackageFleetProbe
 import ai.droidcommand.app.fleet.TermuxFleetTransport
 import ai.droidcommand.fleet.messenger.PairedNodeGateway
+import ai.droidcommand.remotecontrol.RemoteControlStore
+import ai.droidcommand.remotecontrol.TermuxIpcTransport
 import ai.droidcommand.security.FleetCommandOutcomes
 import ai.droidcommand.security.FleetCommandTool
 import ai.droidcommand.security.FleetControlPolicy
@@ -59,13 +62,19 @@ object FleetModule {
         @ApplicationContext context: Context,
         termux: TermuxExecutor,
         messengerGateway: PairedNodeGateway,
+        remoteStore: RemoteControlStore,
     ): FleetNodeTransport {
         val probe = PackageFleetProbe(context)
         return FleetTransportRouter(
             mapOf(
                 FleetIntegrationClass.BOUND_COMPANION to BoundCompanionTransport(AndroidCompanionLink(context)),
                 FleetIntegrationClass.EXTERNAL_NODE to MessengerFleetTransport(messengerGateway, probe::isInstalled),
-                FleetIntegrationClass.TERMUX_IPC to TermuxFleetTransport(termux, probe::isInstalled),
+                FleetIntegrationClass.TERMUX_IPC to TermuxFleetTransport(termux, probe::isInstalled) {
+                    TermuxIpcTransport(
+                        externalControlEnabled = remoteStore.load().externalControlEnabled,
+                        sender = AndroidTermuxIpcSender(context),
+                    )
+                },
             ),
         )
     }
