@@ -1,0 +1,18 @@
+{
+  "msg_id": "m-node-1",
+  "payload": {
+    "body": {
+      "note": "output ready"
+    },
+    "to_device": "dev-ba9876543210",
+    "topic": "hint"
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "sender": "dev-0123456789ab",
+  "sent_at": 1790000000000,
+  "target": "coordinator",
+  "type": "node_message"
+}

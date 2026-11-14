@@ -1,0 +1,20 @@
+{
+  "msg_id": "m-fail-1",
+  "payload": {
+    "attempt": 1,
+    "error": {
+      "code": "executor_unavailable",
+      "message": "storage permission revoked"
+    },
+    "job_id": "plan-x.hash0",
+    "side_effects": "none"
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "sender": "dev-0123456789ab",
+  "sent_at": 1790000000000,
+  "target": "coordinator",
+  "type": "fail"
+}

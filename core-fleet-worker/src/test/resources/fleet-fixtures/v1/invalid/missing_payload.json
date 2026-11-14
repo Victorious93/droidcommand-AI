@@ -1,0 +1,14 @@
+{
+  "envelope": {
+    "msg_id": "m-hb-1",
+    "protocol": {
+      "major": 1,
+      "minor": 0
+    },
+    "sender": "dev-0123456789ab",
+    "sent_at": 1790000000000,
+    "target": "coordinator",
+    "type": "heartbeat"
+  },
+  "expect_error": "bad_request"
+}

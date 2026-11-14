@@ -1,0 +1,272 @@
+{
+  "generated_utc": "2026-11-14T21:40:15Z",
+  "host": {
+    "cpus": 4,
+    "mem_kb": 16473776
+  },
+  "sources": {
+    "VictorLinux": {
+      "commit": "1b9e32b5d10d0d4d9b8cdd41257cc20714b92b2e",
+      "branch": "ccr-de199f47-hejjrt",
+      "uncommitted_files": 1,
+      "uncommitted_state_sha256": "855990f8aec6e7e32a7cae7f1b98601e4584dbf5c805cf783973212a7371467a",
+      "submodules": []
+    },
+    "victorious-flash": {
+      "commit": "56c06162d4fe96997141b5b9c3f5467976659df2",
+      "branch": "ccr-de199f47-hejjrt",
+      "uncommitted_files": 0,
+      "uncommitted_state_sha256": null,
+      "submodules": []
+    },
+    "droidcommand-AI": {
+      "commit": "7f891b99076b4410f1a57c305595d35406731f1f",
+      "branch": "ccr-de199f47-hejjrt",
+      "uncommitted_files": 7,
+      "uncommitted_state_sha256": "1667f014b79a9abd353e89675e4e9503ee1d381285e57a9e95fd1adc564a5600",
+      "submodules": []
+    },
+    "rustdeskV": {
+      "commit": "2fe026917dbdc0f715a8ce299da5eaf4e016587e",
+      "branch": "ccr-de199f47-hejjrt",
+      "uncommitted_files": 0,
+      "uncommitted_state_sha256": null,
+      "submodules": [
+        "-fae47e024dd83cef6aaecde0aa7d11731df11649 libs/hbb_common"
+      ]
+    },
+    "VictorSuite": {
+      "commit": "40b260980a8a1dc1e298ff617892c7e6fbe5cb97",
+      "branch": "ccr-de199f47-hejjrt",
+      "uncommitted_files": 0,
+      "uncommitted_state_sha256": null,
+      "submodules": []
+    },
+    "File-Manager": {
+      "commit": "60f458d2852b15da8263239fb9ba4a216d9a3e48",
+      "branch": "ccr-de199f47-hejjrt",
+      "uncommitted_files": 0,
+      "uncommitted_state_sha256": null,
+      "submodules": []
+    },
+    "victorious-mesh": {
+      "commit": "5b9e55adcc9b1e0d57edc2d81d9576f384c0cbc8",
+      "branch": "ccr-de199f47-hejjrt",
+      "uncommitted_files": 0,
+      "uncommitted_state_sha256": null,
+      "submodules": []
+    },
+    "fleet-manifest": {
+      "commit": "8364eacc98d81f6119dcca148b1a929f85fb317a",
+      "branch": "main",
+      "uncommitted_files": 0,
+      "uncommitted_state_sha256": null,
+      "submodules": []
+    }
+  },
+  "jobs": [
+    {
+      "id": "vl-fleet-tests",
+      "repo": "VictorLinux",
+      "command": "PYTHONPATH=tests:. python3 -m unittest discover -s tests",
+      "required": true,
+      "note": null,
+      "status": "PASSED",
+      "exit_code": 0,
+      "seconds": 40.1,
+      "log": "/home/user/work/build-all-out/logs/vl-fleet-tests.log",
+      "artifacts": []
+    },
+    {
+      "id": "vl-debian-logic-tests",
+      "repo": "VictorLinux",
+      "command": "python3 -m unittest tests.test_logic",
+      "required": true,
+      "note": null,
+      "status": "PASSED",
+      "exit_code": 0,
+      "seconds": 0.1,
+      "log": "/home/user/work/build-all-out/logs/vl-debian-logic-tests.log",
+      "artifacts": []
+    },
+    {
+      "id": "vl-arch-render-and-ui",
+      "repo": "VictorLinux",
+      "command": "bash tools/build-all/arch-render-check.sh",
+      "required": true,
+      "note": null,
+      "status": "PASSED",
+      "exit_code": 0,
+      "seconds": 6.4,
+      "log": "/home/user/work/build-all-out/logs/vl-arch-render-and-ui.log",
+      "artifacts": []
+    },
+    {
+      "id": "vl-native-cache-off",
+      "repo": "VictorLinux",
+      "command": "bash tools/build-all/native-cache-check.sh off",
+      "required": false,
+      "note": "ordinary uncached llama.cpp CPU build; needs LLAMA_SRC",
+      "status": "BLOCKED",
+      "reason": "missing: env:LLAMA_SRC"
+    },
+    {
+      "id": "vl-native-cache-on",
+      "repo": "VictorLinux",
+      "command": "bash tools/build-all/native-cache-check.sh on",
+      "required": false,
+      "status": "NOT RUN",
+      "reason": "dependency not PASSED: vl-native-cache-off"
+    },
+    {
+      "id": "vl-image-debian",
+      "repo": "VictorLinux",
+      "command": "sudo ./build.sh --profile amd",
+      "required": false,
+      "note": "ISO build + boot test are NOT run by this runner; needs root + live-build + ~18 GiB",
+      "status": "BLOCKED",
+      "reason": "missing: lb, debootstrap, xorriso, mksquashfs"
+    },
+    {
+      "id": "vl-image-arch",
+      "repo": "VictorLinux",
+      "command": "scripts/build.sh amd gui",
+      "required": false,
+      "note": "needs a running Docker/Podman daemon with --privileged",
+      "status": "BLOCKED",
+      "reason": "missing: container-daemon"
+    },
+    {
+      "id": "flash-rust-tests",
+      "repo": "victorious-flash",
+      "command": "cargo test -p flash-core -p victorious-flash-bridge",
+      "required": true,
+      "note": null,
+      "status": "PASSED",
+      "exit_code": 0,
+      "seconds": 1.2,
+      "log": "/home/user/work/build-all-out/logs/flash-rust-tests.log",
+      "artifacts": []
+    },
+    {
+      "id": "flash-helper-build",
+      "repo": "victorious-flash",
+      "command": "cargo build --release -p victorious-flash-helper -p victorious-flash-bridge",
+      "required": true,
+      "note": null,
+      "status": "PASSED",
+      "exit_code": 0,
+      "seconds": 8.6,
+      "log": "/home/user/work/build-all-out/logs/flash-helper-build.log",
+      "artifacts": [
+        {
+          "path": "/home/user/victorious-flash/./target/release/deps/libserde_derive-ac2767ff0af051f9.so",
+          "bytes": 3996240,
+          "sha256": "4d2b68cdb1f7be96e5821279541c157a368d8c2c087d44a4338a2f49a6a91db3"
+        },
+        {
+          "path": "/home/user/victorious-flash/./target/release/deps/libthiserror_impl-8f73bf5a62da15b7.so",
+          "bytes": 2908672,
+          "sha256": "9abd0e00f0e10fa2c7423e7c407522e4e79b4c3581580826fad41e3417c49dcf"
+        }
+      ]
+    },
+    {
+      "id": "flash-tauri-bundle",
+      "repo": "victorious-flash",
+      "command": "npm ci && npx tauri build --bundles appimage,deb",
+      "required": true,
+      "note": null,
+      "status": "BLOCKED",
+      "reason": "missing: pkg:webkit2gtk-4.1, pkg:gtk+-3.0"
+    },
+    {
+      "id": "dc-jvm-tests",
+      "repo": "droidcommand-AI",
+      "command": "./gradlew --no-daemon -q :core-fleet-worker:test :core-screen-adapter:test :core-remote-pc:test",
+      "required": true,
+      "note": null,
+      "status": "PASSED",
+      "exit_code": 0,
+      "seconds": 10.0,
+      "log": "/home/user/work/build-all-out/logs/dc-jvm-tests.log",
+      "artifacts": []
+    },
+    {
+      "id": "dc-apk",
+      "repo": "droidcommand-AI",
+      "command": "./gradlew --no-daemon -PincludeAndroid=true :app:assembleDebug",
+      "required": true,
+      "note": null,
+      "status": "BLOCKED",
+      "reason": "missing: android-sdk"
+    },
+    {
+      "id": "rustdesk-android-apk",
+      "repo": "rustdeskV",
+      "command": "bash build_android.sh",
+      "required": true,
+      "note": "also needs NDK, vcpkg deps (build_android_deps.sh) and flutter_rust_bridge codegen",
+      "status": "BLOCKED",
+      "reason": "missing: flutter, android-sdk"
+    },
+    {
+      "id": "rustdesk-linux-client",
+      "repo": "rustdeskV",
+      "command": "python3 build.py --flutter",
+      "required": true,
+      "note": null,
+      "status": "BLOCKED",
+      "reason": "missing: flutter"
+    },
+    {
+      "id": "victorsuite-apk",
+      "repo": "VictorSuite",
+      "command": "./gradlew --no-daemon :app:assembleDebug --stacktrace",
+      "required": true,
+      "note": null,
+      "status": "BLOCKED",
+      "reason": "missing: android-sdk"
+    },
+    {
+      "id": "filemanager-apk",
+      "repo": "File-Manager",
+      "command": "./gradlew --no-daemon :app:assembleDebug",
+      "required": true,
+      "note": null,
+      "status": "BLOCKED",
+      "reason": "missing: android-sdk"
+    },
+    {
+      "id": "mesh-apk",
+      "repo": "victorious-mesh",
+      "command": "(cd .. && ANDROID_NDK_HOME=\"$ANDROID_HOME/ndk/$NDK_VERSION\" ./scripts/build-aar.sh) && ./gradlew --no-daemon assembleDebug --stacktrace",
+      "required": true,
+      "note": "gomobile AAR first (needs Go + NDK_VERSION), then Gradle",
+      "status": "BLOCKED",
+      "reason": "missing: android-sdk"
+    },
+    {
+      "id": "manifest-validate",
+      "repo": "fleet-manifest",
+      "command": "python3 -I -c \"import json,sys; from jsonschema import Draft202012Validator as V; s=json.load(open('schema.json')); d=json.load(open('fleet-manifest.json')); e=sorted(V(s).iter_errors(d), key=str); [print(x.message) for x in e]; sys.exit(1 if e else 0)\"",
+      "required": true,
+      "note": "validates the EXISTING feed; nothing is written to it",
+      "status": "PASSED",
+      "exit_code": 0,
+      "seconds": 0.1,
+      "log": "/home/user/work/build-all-out/logs/manifest-validate.log",
+      "artifacts": []
+    }
+  ],
+  "complete": false,
+  "required_not_passed": [
+    "flash-tauri-bundle",
+    "dc-apk",
+    "rustdesk-android-apk",
+    "rustdesk-linux-client",
+    "victorsuite-apk",
+    "filemanager-apk",
+    "mesh-apk"
+  ]
+}

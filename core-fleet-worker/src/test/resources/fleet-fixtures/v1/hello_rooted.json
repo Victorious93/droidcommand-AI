@@ -1,0 +1,45 @@
+{
+  "msg_id": "m-hello-2",
+  "payload": {
+    "app_version": "droidcommand-0.0.0-fixture",
+    "capabilities": {
+      "device_state": {
+        "battery_percent": 77,
+        "charging": false,
+        "foreground_busy": false,
+        "free_storage_bytes": 12345678901,
+        "thermal": "light"
+      },
+      "max_concurrent": 2,
+      "operations": {
+        "fs.read_private": {
+          "available": true,
+          "granted": true
+        },
+        "hash_files": {
+          "available": true,
+          "granted": true
+        }
+      },
+      "root": {
+        "available": true,
+        "grant_expires_ms": 1790003600000,
+        "granted": true
+      }
+    },
+    "running": [
+      {
+        "attempt": 2,
+        "job_id": "plan-x.a"
+      }
+    ]
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "sender": "dev-ba9876543210",
+  "sent_at": 1790000000000,
+  "target": "coordinator",
+  "type": "hello"
+}
