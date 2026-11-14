@@ -238,6 +238,20 @@
             </intent-filter>
         </activity>
 
+        <!-- Inbound COMPANION_EXEC v1 (docs/COMPANION_EXEC.md): a separate contract from the text-only
+             COMPANION_ASSIST. Caller package + cert are checked against the same catalogue/pairing
+             before any UI; execute shows an Allow/Deny screen; discover/receipt run nothing. -->
+        <activity
+            android:name=".companionexec.CompanionExecActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="ai.droidcommand.action.COMPANION_EXEC" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:exported="false"

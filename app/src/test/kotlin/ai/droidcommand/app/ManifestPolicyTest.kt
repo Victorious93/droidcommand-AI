@@ -160,7 +160,7 @@ class ManifestPolicyTest {
     }
 
     @Test
-    fun `exported components are the launcher, CODE_ASSIST, COMPANION_ASSIST, status widget, fleet-theme receiver, and Shizuku`() {
+    fun `exported components are the launcher, CODE_ASSIST, COMPANION_ASSIST, COMPANION_EXEC, status widget, fleet-theme receiver, and Shizuku`() {
         val exported = listOf("activity", "service", "receiver", "provider")
             .flatMap { application.children(it) }
             .filter { it.androidAttr("exported") == "true" }
@@ -170,6 +170,7 @@ class ManifestPolicyTest {
                 ".MainActivity",
                 ".codeassist.CodeAssistActivity",
                 ".companionassist.CompanionAssistActivity",
+                ".companionexec.CompanionExecActivity",
                 ".widget.StatusWidgetProvider",
                 ".fleet.FleetThemeChangedReceiver",
                 "rikka.shizuku.ShizukuProvider",
@@ -214,6 +215,19 @@ class ManifestPolicyTest {
         assertEquals(
             "android.intent.category.DEFAULT",
             filter.children("category").single().androidAttr("name"),
+        )
+    }
+
+    @Test
+    fun `COMPANION_EXEC activity is exported with its own action and is not the text-only assist action`() {
+        val activity = application.children("activity").single {
+            it.androidAttr("name") == ".companionexec.CompanionExecActivity"
+        }
+        assertEquals("true", activity.androidAttr("exported"))
+        val filter = activity.children("intent-filter").single()
+        assertEquals(
+            "ai.droidcommand.action.COMPANION_EXEC",
+            filter.children("action").single().androidAttr("name"),
         )
     }
 
