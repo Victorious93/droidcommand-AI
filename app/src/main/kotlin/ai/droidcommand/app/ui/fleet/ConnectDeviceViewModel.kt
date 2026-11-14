@@ -30,8 +30,8 @@ class ConnectDeviceViewModel @Inject constructor(
     }
 
     fun onScreenOpen() {
-        runtime.startIfKeptOn()
-        refresh()
+        val resumed = runtime.startIfKeptOn()
+        if (resumed != null) publish(resumed) else refresh()
     }
 
     fun onScreenClose() {
