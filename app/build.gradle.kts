@@ -50,8 +50,8 @@ android {
         // v0.1.6 shipped versionCode 1 / "0.1.0-phase0" (docs/CRASH_REPAIR_REPORT.md); the package installer and
         // `adb install -r` cannot tell those builds apart or order them. scripts/ci/verify-apk-identity.sh enforces
         // that a published tag, versionName and versionCode agree.
-        versionCode = 107
-        versionName = "0.1.7"
+        versionCode = 108
+        versionName = "0.1.8"
         // Instrumented (on-device/emulator) tests. The default runner launches the real
         // @HiltAndroidApp application, so MainActivityLaunchTest exercises the production
         // DI graph — no HiltTestApplication needed.
