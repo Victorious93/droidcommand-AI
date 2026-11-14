@@ -1,0 +1,22 @@
+{
+  "envelope": {
+    "msg_id": "m-bad-4",
+    "payload": {
+      "attempt": 1,
+      "error": {
+        "code": "made_up",
+        "message": "m"
+      },
+      "job_id": "j"
+    },
+    "protocol": {
+      "major": 1,
+      "minor": 0
+    },
+    "sender": "dev-0123456789ab",
+    "sent_at": 1790000000000,
+    "target": "coordinator",
+    "type": "fail"
+  },
+  "expect_error": "bad_request"
+}

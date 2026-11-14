@@ -1,0 +1,16 @@
+{
+  "msg_id": "m-cancel-1",
+  "payload": {
+    "attempt": 1,
+    "job_id": "plan-x.hash0",
+    "reason": "owner cancelled"
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "sender": "coordinator",
+  "sent_at": 1790000000000,
+  "target": "dev-0123456789ab",
+  "type": "cancel"
+}

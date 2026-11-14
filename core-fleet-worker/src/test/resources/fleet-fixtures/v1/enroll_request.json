@@ -1,0 +1,18 @@
+{
+  "msg_id": "m-enroll-1",
+  "payload": {
+    "device_name": "Pixel (unrooted)",
+    "nonce": "n-0001",
+    "pairing_proof": "fixture-secret",
+    "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE-fixture-not-a-real-key\n-----END PUBLIC KEY-----\n",
+    "signature_b64": "ZmFrZQ=="
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "sender": "unenrolled",
+  "sent_at": 1790000000000,
+  "target": "coordinator",
+  "type": "enroll_request"
+}
