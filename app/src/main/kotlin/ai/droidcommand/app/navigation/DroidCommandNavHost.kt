@@ -275,6 +275,14 @@ private fun DroidBottomBar(
             NavigationBarItem(
                 selected = selected,
                 onClick = {
+                    // Re-tapping a tab you are already inside (e.g. Advanced while on Brain) must return to that
+                    // tab's root. Plain navigate()+restoreState would restore the saved child screen instead, so
+                    // the tab appeared to do nothing.
+                    if (selected && currentRoute != tab.route &&
+                        navController.popBackStack(tab.route, inclusive = false)
+                    ) {
+                        return@NavigationBarItem
+                    }
                     navController.navigate(tab.route) {
                         popUpTo(Routes.FLEET) { saveState = true }
                         launchSingleTop = true
