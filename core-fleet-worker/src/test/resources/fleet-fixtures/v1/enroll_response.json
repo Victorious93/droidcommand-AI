@@ -1,0 +1,20 @@
+{
+  "in_reply_to": "m-enroll-1",
+  "msg_id": "m-enroll-2",
+  "payload": {
+    "coordinator_fingerprint_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "credential": "FIXTURE-CREDENTIAL",
+    "device_id": "dev-0123456789ab",
+    "heartbeat_s": 15,
+    "lease_s": 90,
+    "protocol_major": 1
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "sender": "coordinator",
+  "sent_at": 1790000000000,
+  "target": "dev-0123456789ab",
+  "type": "enroll_response"
+}

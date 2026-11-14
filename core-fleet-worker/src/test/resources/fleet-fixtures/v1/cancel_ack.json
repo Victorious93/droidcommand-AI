@@ -1,0 +1,16 @@
+{
+  "msg_id": "m-cack-1",
+  "payload": {
+    "attempt": 1,
+    "job_id": "plan-x.hash0",
+    "state": "stopped"
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "sender": "dev-0123456789ab",
+  "sent_at": 1790000000000,
+  "target": "coordinator",
+  "type": "cancel_ack"
+}

@@ -1,0 +1,17 @@
+{
+  "msg_id": "m-prog-1",
+  "payload": {
+    "attempt": 1,
+    "job_id": "plan-x.hash0",
+    "note": "hashing 3/7",
+    "percent": 42.5
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "sender": "dev-0123456789ab",
+  "sent_at": 1790000000000,
+  "target": "coordinator",
+  "type": "progress"
+}

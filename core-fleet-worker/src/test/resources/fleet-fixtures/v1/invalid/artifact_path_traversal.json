@@ -1,0 +1,26 @@
+{
+  "envelope": {
+    "msg_id": "m-bad-2",
+    "payload": {
+      "artifacts": [
+        {
+          "name": "../x",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size": 1
+        }
+      ],
+      "attempt": 1,
+      "job_id": "j",
+      "result": {}
+    },
+    "protocol": {
+      "major": 1,
+      "minor": 0
+    },
+    "sender": "dev-0123456789ab",
+    "sent_at": 1790000000000,
+    "target": "coordinator",
+    "type": "complete"
+  },
+  "expect_error": "bad_request"
+}

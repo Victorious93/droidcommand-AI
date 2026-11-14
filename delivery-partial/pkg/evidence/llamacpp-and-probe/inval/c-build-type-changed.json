@@ -1,0 +1,18 @@
+{
+  "label": "c-build-type-changed",
+  "exit_code": 0,
+  "wall_seconds": 5.8,
+  "llama_server_built": false,
+  "sccache": {
+    "hits": 0,
+    "misses": 9,
+    "requests_executed": 9,
+    "requests_not_cacheable": 0,
+    "non_cacheable_compilations": 0,
+    "compile_requests": 9,
+    "compile_fails": 0,
+    "cache_write_errors": 0,
+    "cache_read_errors": 0,
+    "hit_rate": 0.0
+  }
+}
