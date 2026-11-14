@@ -1,0 +1,18 @@
+{
+  "label": "2-sccache-cold",
+  "exit_code": 0,
+  "wall_seconds": 232.4,
+  "llama_server_built": true,
+  "sccache": {
+    "hits": 0,
+    "misses": 401,
+    "requests_executed": 401,
+    "requests_not_cacheable": 0,
+    "non_cacheable_compilations": 0,
+    "compile_requests": 401,
+    "compile_fails": 0,
+    "cache_write_errors": 0,
+    "cache_read_errors": 0,
+    "hit_rate": 0.0
+  }
+}
