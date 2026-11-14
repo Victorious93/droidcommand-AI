@@ -310,7 +310,7 @@ class PrimaryScreensScreenshotTest {
 
     private fun waitForText(text: String, timeoutMs: Long = 15_000) {
         compose.waitUntil(timeoutMs) {
-            compose.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText(text, substring = true, ignoreCase = true).fetchSemanticsNodes().isNotEmpty()
         }
     }
 
