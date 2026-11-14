@@ -145,13 +145,6 @@ re-verifying something.
   a new inference entry point must go through `RouteResolver` or call `refusalFor` first. Run against real Ollama and
   llama.cpp on a host; never on a device or emulator.
 
-- **`docs/INFERENCE_POLICY.md`** (2026-11-12a) — the owner's inference policy (this device only / my PC only /
-  prefer PC then device / confirmed cloud fallback; default "use the model I pick"), enforced in `ChatSession` and
-  `PolicyInference` through `RouteResolver` (core-llm-factory `ai.droidcommand.llm.routing`), plus helper-bot tool
-  calls on PC models. Read its "What it applies to" table before adding any new place that sends text to a model:
-  a new inference entry point must go through `RouteResolver` or call `refusalFor` first. Run against real Ollama and
-  llama.cpp on a host; never on a device or emulator.
-
 ## What's already been verified (don't re-derive)
 
 - This is a 25-module pure-Kotlin/JVM Gradle project (confirmed directly
