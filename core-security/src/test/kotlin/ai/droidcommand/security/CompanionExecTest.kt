@@ -44,7 +44,10 @@ class CompanionExecTest {
     private fun rig(approvalAllows: Boolean = true, store: ExecReceiptStore = InMemoryExecReceiptStore(), catalog: ExecCatalog = ExecCatalog.DEFAULT): Rig {
         val tool = AppsTool()
         val danger = DangerTool()
-        val registry = ToolRegistry().apply { register(tool); register(danger) }
+        val registry = ToolRegistry().apply {
+            register(tool)
+            register(danger)
+        }
         val sm = AgentStateMachine()
         val audit = InMemoryAuditLog()
         val secure = SecureToolExecutor(
