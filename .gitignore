@@ -28,3 +28,6 @@ emulator-logs/
 emulator-screenshots/
 dist/
 __pycache__/
+
+# JVM crash dumps (a native crash writes one into the working directory)
+hs_err_pid*.log

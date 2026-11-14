@@ -133,8 +133,10 @@ re-verifying something.
   grammar-capable backend plus a `<tool_call>` chat template (`core-llm-local` `LocalToolProtocol`). Verified against
   a controlled server that refuses malformed transcripts, a real `llama-server`, and real llama.cpp on a host with
   RANDOM weights; no trained model has made a tool call here, and nothing ran on a device. Read the 2026-11-11c audit
-  addendum before touching `ChatSession.turn`, and note that Plan, Pilot/Forge, the assist activities and
-  "Remember this chat" still ignore the PC choice (provider routing is a separate, later task).
+  addendum before touching `ChatSession.turn`. Plan (Forge), the assist activities and "Remember this chat" follow the
+  owner's inference policy (`docs/INFERENCE_POLICY.md`) and ignore the PC choice only under "Use the model I pick".
+  Pilot calls no model at all (a tool name plus arguments, in the app, the CLI and the remote path), so it has
+  nothing to route.
 
 - **`docs/INFERENCE_POLICY.md`** (2026-11-12a) — the owner's inference policy (this device only / my PC only /
   prefer PC then device / confirmed cloud fallback; default "use the model I pick"), enforced in `ChatSession` and
