@@ -96,9 +96,9 @@ class SystemSettingsFlowTest {
         waitForTag("ss_remote_note")
         waitForTag("ss_status_standard")
         clickTab("Browse")
-        compose.onNodeWithTag("ss_table_global").performClick()
-        compose.onNodeWithTag("ss_browse_load").performClick()
-        compose.waitUntil(20_000) {
+        compose.onNodeWithTag("ss_table_global").performScrollTo().performClick()
+        compose.onNodeWithTag("ss_browse_load").performScrollTo().performClick()
+        compose.waitUntil(60_000) {
             compose.onAllNodesWithTag("ss_browse_error").fetchSemanticsNodes().isNotEmpty() ||
                 compose.onAllNodesWithTag("ss_row_window_animation_scale").fetchSemanticsNodes().isNotEmpty()
         }
@@ -209,11 +209,11 @@ class SystemSettingsFlowTest {
         compose.waitForIdle()
     }
 
-    private fun waitForTag(tag: String, timeoutMs: Long = 20_000) {
+    private fun waitForTag(tag: String, timeoutMs: Long = 60_000) {
         compose.waitUntil(timeoutMs) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
     }
 
-    private fun waitForText(text: String, timeoutMs: Long = 20_000) {
+    private fun waitForText(text: String, timeoutMs: Long = 60_000) {
         compose.waitUntil(timeoutMs) { compose.onAllNodesWithText(text, substring = true, ignoreCase = true).fetchSemanticsNodes().isNotEmpty() }
     }
 

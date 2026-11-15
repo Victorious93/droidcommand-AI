@@ -61,6 +61,7 @@ class SystemSettingsRuntime @Inject constructor(
         remote = null,
         verifiers = listOf(dnsVerifier),
         audit = auditLog,
+        statusCacheMs = 2_000,
     )
 
     private val profileStore = FileProfileStore(root.resolve("profiles"))

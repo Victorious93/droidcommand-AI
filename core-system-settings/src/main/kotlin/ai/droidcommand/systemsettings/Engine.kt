@@ -209,8 +209,22 @@ class SystemSettingsEngine(
     private val clock: () -> Long = System::currentTimeMillis,
     private val newId: () -> String = { UUID.randomUUID().toString() },
     private val lockWaitMs: Long = 5_000,
+    /** How long a backend's status probe is reused. 0 probes every time (what the tests use). The app uses a couple of seconds so one screen load does not probe Shizuku dozens of times. */
+    private val statusCacheMs: Long = 0,
 ) {
     private val lock = ReentrantLock()
+    private val statusCache = HashMap<AccessKind, Pair<Long, BackendStatus>>()
+
+    private fun statusOf(b: SettingsBackend, fresh: Boolean = false): BackendStatus {
+        if (statusCacheMs <= 0) return b.status()
+        val now = clock()
+        if (!fresh) {
+            synchronized(statusCache) { statusCache[b.kind] }?.let { (at, st) -> if (now - at < statusCacheMs) return st }
+        }
+        val st = b.status()
+        synchronized(statusCache) { statusCache[b.kind] = now to st }
+        return st
+    }
 
     init {
         require(backends.map { it.kind }.toSet().size == backends.size) { "one backend per access kind" }
@@ -218,7 +232,7 @@ class SystemSettingsEngine(
 
     // ---- access ----------------------------------------------------------------------------------------------------------------
 
-    fun statuses(): List<BackendStatus> = backends.sortedBy { it.kind.ordinal }.map { it.status() }
+    fun statuses(): List<BackendStatus> = backends.sortedBy { it.kind.ordinal }.map { statusOf(it, fresh = true) }
 
     /**
      * The least-privileged backend that is allowed by the owner's access settings, ready, and able to do the job. Failing at run time does not
@@ -234,7 +248,7 @@ class SystemSettingsEngine(
                 reasons[b.kind] = "not allowed in your access settings."
                 continue
             }
-            val s = b.status()
+            val s = statusOf(b)
             val reason = when {
                 s.state == BackendState.UNAVAILABLE -> s.detail
                 needsCrossUser && !cfg.allowOtherUsers -> "changing another user's settings is turned off."
@@ -304,7 +318,7 @@ class SystemSettingsEngine(
         if (via != null) {
             val b = backendOf(via) ?: return Selection.None(mapOf(via to "not present in this build."))
             if (via !in access().allowed) return Selection.None(mapOf(via to "not allowed in your access settings."))
-            val s = b.status()
+            val s = statusOf(b)
             if (s.state == BackendState.UNAVAILABLE) return Selection.None(mapOf(via to s.detail))
             return Selection.Chosen(b, s)
         }
@@ -889,7 +903,7 @@ class SystemSettingsEngine(
         val out = mutableListOf<Operation>()
         for (op in pending) {
             val backend = backendOf(op.backend)
-            if (backend == null || backend.status().state == BackendState.UNAVAILABLE) continue
+            if (backend == null || statusOf(backend, fresh = true).state == BackendState.UNAVAILABLE) continue
             var changed = op
             val entries = op.entries.map { e ->
                 if (e.phase == EntryPhase.DONE || e.phase == EntryPhase.PENDING) {
