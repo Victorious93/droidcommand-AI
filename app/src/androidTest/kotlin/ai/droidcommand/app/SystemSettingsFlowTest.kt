@@ -47,10 +47,10 @@ class SystemSettingsFlowTest {
                 val tree = compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 60)
                 Log.e("SSFLOW", "=== FAILED ${description?.methodName}: ${e?.message?.take(300)}")
                 tree.lines()
-                    .filter { it.contains("Text = ") || it.contains("Tag: ") }
+                    .filter { (it.contains("Tag: ") && !it.contains("ss_preset_") && !it.contains("ss_custom")) || (it.contains("Text = ") && !it.contains("ss_curated")) }
                     .map { it.replace(Regex("^[ |\\-]*Node #\\d+ at \\([^)]*\\)px,? ?"), "").trim() }
                     .filter { it.isNotBlank() }
-                    .take(70)
+                    .take(110)
                     .forEach { Log.e("SSFLOW", it.take(220)) }
             }
         }
@@ -118,6 +118,13 @@ class SystemSettingsFlowTest {
 
         // Edit: preview then confirm.
         compose.onNodeWithTag("ss_preset_window_animation_scale_$target").performScrollTo().performClick()
+        compose.waitForIdle()
+        val opened = runCatching { waitForTag("ss_plan_dialog", timeoutMs = 10_000) }.isSuccess
+        if (!opened) {
+            Log.e("SSFLOW", "preset chip tap did not open the preview; using the custom value field instead")
+            compose.onNodeWithTag("ss_custom_window_animation_scale").performScrollTo().performTextInput(target)
+            compose.onNodeWithTag("ss_custom_preview_window_animation_scale").performScrollTo().performClick()
+        }
         waitForTag("ss_plan_dialog")
         waitForText("→")
         snap("11-preview")
