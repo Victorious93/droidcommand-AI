@@ -46,7 +46,12 @@ class SystemSettingsFlowTest {
             runCatching {
                 val tree = compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 60)
                 Log.e("SSFLOW", "=== FAILED ${description?.methodName}: ${e?.message?.take(300)}")
-                tree.chunked(3500).take(14).forEach { Log.e("SSFLOW", it) }
+                tree.lines()
+                    .filter { it.contains("Text = ") || it.contains("Tag: ") }
+                    .map { it.replace(Regex("^[ |\\-]*Node #\\d+ at \\([^)]*\\)px,? ?"), "").trim() }
+                    .filter { it.isNotBlank() }
+                    .take(70)
+                    .forEach { Log.e("SSFLOW", it.take(220)) }
             }
         }
     }
@@ -82,7 +87,7 @@ class SystemSettingsFlowTest {
         waitForTag("ss_unsupported_peak_refresh_rate") // API 28 has no refresh-rate keys: shown as unsupported, not hidden or faked
         waitForTag("ss_private_dns")
         for (tab in listOf("Browse", "Advanced", "Modified", "History", "Profiles", "Access")) {
-            compose.onNodeWithTag("ss_tab_$tab").performClick()
+            clickTab(tab)
             compose.waitForIdle()
             snap("tab-${tab.lowercase()}")
         }
@@ -90,7 +95,7 @@ class SystemSettingsFlowTest {
         waitForText("adb shell pm grant ai.droidcommand.app android.permission.WRITE_SECURE_SETTINGS")
         waitForTag("ss_remote_note")
         waitForTag("ss_status_standard")
-        compose.onNodeWithTag("ss_tab_Browse").performClick()
+        clickTab("Browse")
         compose.onNodeWithTag("ss_table_global").performClick()
         compose.onNodeWithTag("ss_browse_load").performClick()
         compose.waitUntil(20_000) {
@@ -98,7 +103,7 @@ class SystemSettingsFlowTest {
                 compose.onAllNodesWithTag("ss_row_window_animation_scale").fetchSemanticsNodes().isNotEmpty()
         }
         snap("browse-global")
-        compose.onNodeWithTag("ss_tab_Profiles").performClick()
+        clickTab("Profiles")
         waitForText("Quick UI")
         snap("profiles")
     }
@@ -130,11 +135,11 @@ class SystemSettingsFlowTest {
         assertEquals(target, globalValue("window_animation_scale"))
 
         // History shows it; Modified shows the recorded original.
-        compose.onNodeWithTag("ss_tab_Modified").performClick()
+        clickTab("Modified")
         waitForTag("ss_modified_window_animation_scale")
         waitForText("Original: $original")
         snap("13-modified")
-        compose.onNodeWithTag("ss_tab_History").performClick()
+        clickTab("History")
         waitForText("Restore this change")
         snap("14-history")
 
@@ -146,7 +151,7 @@ class SystemSettingsFlowTest {
         waitForTag("ss_outcome_dialog")
         compose.onNodeWithTag("ss_outcome_ok").performClick()
         assertEquals("the exact previous text must come back", original, globalValue("window_animation_scale"))
-        compose.onNodeWithTag("ss_tab_Modified").performClick()
+        clickTab("Modified")
         waitForTag("ss_modified_empty")
         snap("16-after-restore")
     }
@@ -154,7 +159,7 @@ class SystemSettingsFlowTest {
     @Test
     fun advancedAddIsRestoredByDeletingBecauseItWasAbsent() {
         assertEquals("null", globalValue("dca_ss_test_key")) // absent before
-        compose.onNodeWithTag("ss_tab_Advanced").performClick()
+        clickTab("Advanced")
         compose.onNodeWithTag("ss_adv_name").performTextInput("dca_ss_test_key")
         waitForText("Unknown setting")
         compose.onNodeWithTag("ss_adv_value").performTextInput("hello")
@@ -168,7 +173,7 @@ class SystemSettingsFlowTest {
         compose.onNodeWithTag("ss_outcome_ok").performClick()
         assertEquals("hello", globalValue("dca_ss_test_key"))
 
-        compose.onNodeWithTag("ss_tab_History").performClick()
+        clickTab("History")
         waitForText("Restore this change")
         compose.onAllNodesWithText("Restore this change")[0].performScrollTo().performClick()
         waitForTag("ss_restore_dialog")
@@ -191,6 +196,12 @@ class SystemSettingsFlowTest {
             compose.onNodeWithTag("first_run_skip").performClick()
             compose.waitForIdle()
         }
+    }
+
+    /** The tab row scrolls sideways on a small screen, so bring the tab into view before tapping it. */
+    private fun clickTab(name: String) {
+        compose.onNodeWithTag("ss_tab_$name").performScrollTo().performClick()
+        compose.waitForIdle()
     }
 
     private fun tapNav(tag: String) {
