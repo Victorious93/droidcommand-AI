@@ -143,21 +143,21 @@ class SystemSettingsViewModel @Inject constructor(
                         val r = block()
                         Log.i(TAG, "refresh step $name took ${System.currentTimeMillis() - t0} ms")
                         return r
-                }
-                val dev = timed("device") { rt.device() }
-                val st = timed("statuses") { engine.statuses() }
-                val cur = timed("curated") { engine.curated() }
-                val mod = timed("modified") { engine.modified() }
-                val his = timed("history") { engine.history() }
-                val profs = timed("profiles") { rt.profiles() }
-                val rep = timed("replay") { rt.replay.records().associateBy { it.profileId } }
-                val reqs = timed("requirements") { profs.associate { it.id to rt.replay.requirement(it, includeOptional = false) } }
-                val rate = timed("rate") { DeviceFacts.observedRate(context) }
-                val dns = timed("dns") {
-                    rt.dnsVerifier.status()?.let { if (it.active) "Encrypted DNS is in use${it.serverName?.let { n -> " ($n)" } ?: ""}." else "Encrypted DNS is not in use on the active network." }
-                        ?: "No active network, so the active resolver cannot be checked."
-                }
-                Snapshots(dev, st, cur, mod, his, profs, rep, rate, reqs, dns)
+                    }
+                    val dev = timed("device") { rt.device() }
+                    val st = timed("statuses") { engine.statuses() }
+                    val cur = timed("curated") { engine.curated() }
+                    val mod = timed("modified") { engine.modified() }
+                    val his = timed("history") { engine.history() }
+                    val profs = timed("profiles") { rt.profiles() }
+                    val rep = timed("replay") { rt.replay.records().associateBy { it.profileId } }
+                    val reqs = timed("requirements") { profs.associate { it.id to rt.replay.requirement(it, includeOptional = false) } }
+                    val rate = timed("rate") { DeviceFacts.observedRate(context) }
+                    val dns = timed("dns") {
+                        rt.dnsVerifier.status()?.let { if (it.active) "Encrypted DNS is in use${it.serverName?.let { n -> " ($n)" } ?: ""}." else "Encrypted DNS is not in use on the active network." }
+                            ?: "No active network, so the active resolver cannot be checked."
+                    }
+                    Snapshots(dev, st, cur, mod, his, profs, rep, rate, reqs, dns)
                 }
             } catch (t: Throwable) {
                 if (t is kotlinx.coroutines.CancellationException) throw t
