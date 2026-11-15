@@ -5,8 +5,17 @@ It is an independent implementation. The idea of a SetEditPlus-style settings ed
 [kerneldroid/SetEditPlus](https://github.com/kerneldroid/SetEditPlus) (MIT, © 2026 kerneldroid). **No source code from it is copied here**, so no
 reuse attribution is required; this note is the credit. Work attribution: Victorious.
 
-> **Honesty box.** Everything below that says "verified" names what was actually run. See *What was and was not verified* at the end. Nothing
-> here has been run on a physical phone.
+> **Honesty box.** The engine has 91 JVM tests, and the screen and the edit → readback → history → restore → readback flow ran on **one Android 9 (API 28)
+> emulator** in CI. Nothing has been run on a physical phone, on any other Android version, or against a live Shizuku or root. See *What was and was
+> not verified* at the end and the 2026-11-15 audit addendum.
+
+## Screenshots (real, from the CI emulator run; 320×640, Android 9)
+
+| Curated | Preview before changing | After the change | Restore preview |
+|---|---|---|---|
+| ![Curated](images/system-settings/10-before.png) | ![Preview](images/system-settings/11-preview.png) | ![Outcome](images/system-settings/12-outcome.png) | ![Restore](images/system-settings/15-restore-preview.png) |
+
+More in `docs/images/system-settings/` (Modified, History, Browse, Advanced with an unknown key, Profiles, Access).
 
 ## What it does
 
@@ -141,4 +150,10 @@ save, and it never contains the reapply switch.
 
 ## What was and was not verified
 
-See the 2026-11-15 addendum in `docs/AUDIT_2026-09-05.md` for the exact commands, results, and what still needs a physical device.
+* **Ran:** 91 JVM tests; `testDebugUnitTest` + ktlint on all Android modules; an arm64 debug APK build; and three instrumented tests on an API 28 emulator
+  (all tabs; edit/readback/history/restore/readback of `window_animation_scale` with independent `adb shell settings get` checks; add and restore-by-deleting
+  of an absent Global key).
+* **Did not run:** any physical phone; Android 10+ behaviour; OEM keys; live Shizuku or root; Private DNS, refresh-rate and charging changes on a device;
+  reboot reapply; the document picker; TalkBack.
+
+See the 2026-11-15 addendum in `docs/AUDIT_2026-09-05.md` for exact commands, results and the full list.
