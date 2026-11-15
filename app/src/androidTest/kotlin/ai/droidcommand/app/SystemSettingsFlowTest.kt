@@ -121,7 +121,14 @@ class SystemSettingsFlowTest {
         compose.waitForIdle()
         val opened = runCatching { waitForTag("ss_plan_dialog", timeoutMs = 10_000) }.isSuccess
         if (!opened) {
-            Log.e("SSFLOW", "preset chip tap did not open the preview; using the custom value field instead")
+            Log.e("SSFLOW", "preset chip tap (scroll then click) did not open the preview")
+            runCatching { compose.onNodeWithTag("ss_preset_window_animation_scale_$target").performClick() }
+            compose.waitForIdle()
+        }
+        val opened2 = opened || runCatching { waitForTag("ss_plan_dialog", timeoutMs = 10_000) }.isSuccess
+        Log.e("SSFLOW", "chip tap: scroll+click opened=$opened, plain click opened=${!opened && opened2}")
+        if (!opened2) {
+            Log.e("SSFLOW", "plain chip click also did not open the preview; using the custom value field instead")
             compose.onNodeWithTag("ss_custom_window_animation_scale").performScrollTo().performTextInput(target)
             compose.onNodeWithTag("ss_custom_preview_window_animation_scale").performScrollTo().performClick()
         }

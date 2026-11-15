@@ -55,6 +55,13 @@ set -e
 adb shell settings get global window_animation_scale | tee "$OUT/after.txt"
 adb shell settings get global dca_ss_test_key | tee "$OUT/after-test-key.txt"
 adb pull "/sdcard/Android/data/$PKG/files/screenshots-system-settings/." "$SHOTS/" || true
+# Artifact download may be unavailable to the person reading this run, so the PNGs are also printed into the log (base64) and can be rebuilt from it.
+for f in "$SHOTS"/*.png; do
+  [[ -f "$f" ]] || continue
+  echo "SSIMG_BEGIN $(basename "$f") $(sha256sum "$f" | cut -d' ' -f1) $(stat -c%s "$f")"
+  base64 -w0 "$f"; echo
+  echo "SSIMG_END"
+done
 echo "=== SSFLOW (screen dump on failure) ==="; adb logcat -d -s SSFLOW:I 2>/dev/null | cut -c1-260 | head -400 || true
 adb logcat -d -v threadtime 2>/dev/null | grep -E "FATAL EXCEPTION|AndroidRuntime|ANR in|ai\.droidcommand" | head -400 > "$OUT/logcat-excerpt.txt" || true
 
