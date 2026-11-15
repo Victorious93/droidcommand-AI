@@ -55,7 +55,7 @@ set -e
 adb shell settings get global window_animation_scale | tee "$OUT/after.txt"
 adb shell settings get global dca_ss_test_key | tee "$OUT/after-test-key.txt"
 adb pull "/sdcard/Android/data/$PKG/files/screenshots-system-settings/." "$SHOTS/" || true
-echo "=== SSFLOW (screen dump on failure) ==="; adb logcat -d -s SSFLOW:E 2>/dev/null | cut -c1-260 | head -400 || true
+echo "=== SSFLOW (screen dump on failure) ==="; adb logcat -d -s SSFLOW:I 2>/dev/null | cut -c1-260 | head -400 || true
 adb logcat -d -v threadtime 2>/dev/null | grep -E "FATAL EXCEPTION|AndroidRuntime|ANR in|ai\.droidcommand" | head -400 > "$OUT/logcat-excerpt.txt" || true
 
 if [[ $verdict -ne 0 ]]; then

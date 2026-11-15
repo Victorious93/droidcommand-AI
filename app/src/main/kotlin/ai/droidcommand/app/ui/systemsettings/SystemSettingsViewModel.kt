@@ -34,6 +34,7 @@ import ai.droidcommand.systemsettings.SystemSettingsEngine
 import ai.droidcommand.systemsettings.UnsupportedEntry
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -134,13 +135,26 @@ class SystemSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             loading = true
             val snapshot = withContext(Dispatchers.IO) {
-                Snapshots(
-                    rt.device(), engine.statuses(), engine.curated(), engine.modified(), engine.history(),
-                    rt.profiles(), rt.replay.records().associateBy { it.profileId }, DeviceFacts.observedRate(context),
-                    rt.profiles().associate { it.id to rt.replay.requirement(it, includeOptional = false) },
+                fun <T> timed(name: String, block: () -> T): T {
+                    val t0 = System.currentTimeMillis()
+                    val r = block()
+                    Log.i(TAG, "refresh step $name took ${System.currentTimeMillis() - t0} ms")
+                    return r
+                }
+                val dev = timed("device") { rt.device() }
+                val st = timed("statuses") { engine.statuses() }
+                val cur = timed("curated") { engine.curated() }
+                val mod = timed("modified") { engine.modified() }
+                val his = timed("history") { engine.history() }
+                val profs = timed("profiles") { rt.profiles() }
+                val rep = timed("replay") { rt.replay.records().associateBy { it.profileId } }
+                val reqs = timed("requirements") { profs.associate { it.id to rt.replay.requirement(it, includeOptional = false) } }
+                val rate = timed("rate") { DeviceFacts.observedRate(context) }
+                val dns = timed("dns") {
                     rt.dnsVerifier.status()?.let { if (it.active) "Encrypted DNS is in use${it.serverName?.let { n -> " ($n)" } ?: ""}." else "Encrypted DNS is not in use on the active network." }
-                        ?: "No active network, so the active resolver cannot be checked.",
-                )
+                        ?: "No active network, so the active resolver cannot be checked."
+                }
+                Snapshots(dev, st, cur, mod, his, profs, rep, rate, reqs, dns)
             }
             device = snapshot.device
             statuses = snapshot.statuses
@@ -449,6 +463,8 @@ class SystemSettingsViewModel @Inject constructor(
         curated.firstOrNull { it.spec.id == specId }?.let { ((it.current as? ReadResult.Value)?.snapshot) is Snapshot.Present } == true
 
     companion object {
+        private const val TAG = "SSFLOW"
+
         fun outcomeText(o: EntryOutcome): String = when (o) {
             EntryOutcome.NOT_ATTEMPTED -> "Not attempted"
             EntryOutcome.PERMISSION_DENIED -> "Permission failure"
