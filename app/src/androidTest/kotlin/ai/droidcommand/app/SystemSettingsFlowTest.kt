@@ -1,13 +1,16 @@
 package ai.droidcommand.app
 
 import android.graphics.Bitmap
+import android.util.Log
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.printToString
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
@@ -15,6 +18,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
+import org.junit.rules.TestWatcher
+import org.junit.runner.Description
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -33,6 +38,18 @@ import java.io.FileOutputStream
 class SystemSettingsFlowTest {
     @get:Rule
     val compose = createAndroidComposeRule<MainActivity>()
+
+    /** On failure, writes the screen's semantics tree to logcat (tag SSFLOW) so CI logs show what was really on screen. */
+    @get:Rule
+    val dumpOnFailure = object : TestWatcher() {
+        override fun failed(e: Throwable?, description: Description?) {
+            runCatching {
+                val tree = compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 60)
+                Log.e("SSFLOW", "=== FAILED ${description?.methodName}: ${e?.message?.take(300)}")
+                tree.chunked(3500).take(14).forEach { Log.e("SSFLOW", it) }
+            }
+        }
+    }
 
     private lateinit var device: UiDevice
     private lateinit var outDir: File
