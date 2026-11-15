@@ -283,7 +283,16 @@ internal fun AdvancedTab(vm: SystemSettingsViewModel, prefillTable: SettingsTabl
         SettingsTable.entries.forEach { st -> FilterChip(selected = t == st, onClick = { table = st.wire }, label = { Text(st.wire.replaceFirstChar { it.uppercase() }) }, modifier = Modifier.testTag("ss_adv_table_${st.wire}")) }
     }
     Text("Scope: ${if (t.deviceWide) "whole device (Global is not per user)" else "user ${vm.device.userId}"}", style = MaterialTheme.typography.bodySmall)
-    OutlinedTextField(value = name, onValueChange = { name = it.take(128); vm.clearReadout() }, singleLine = true, label = { Text("Setting name") }, modifier = Modifier.fillMaxWidth().testTag("ss_adv_name"))
+    OutlinedTextField(
+        value = name,
+        onValueChange = {
+            name = it.take(128)
+            vm.clearReadout()
+        },
+        singleLine = true,
+        label = { Text("Setting name") },
+        modifier = Modifier.fillMaxWidth().testTag("ss_adv_name"),
+    )
     if (name.isNotBlank()) {
         Text(
             when {
@@ -444,7 +453,12 @@ internal fun ProfilesTab(vm: SystemSettingsViewModel) {
                 if (p.tradeoffs.isNotBlank()) Text("Tradeoffs: ${p.tradeoffs}", style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     DroidPrimaryButton(onClick = { vm.previewProfile(p, includeOptional = false) }, modifier = Modifier.testTag("ss_profile_apply_${p.id}")) { Text("Preview and apply") }
-                    DroidSecondaryButton(onClick = { exporting = p; exporter.launch("${p.name.replace(Regex("[^A-Za-z0-9._-]"), "_")}.profile.json") }) { Text("Export") }
+                    DroidSecondaryButton(
+                        onClick = {
+                            exporting = p
+                            exporter.launch("${p.name.replace(Regex("[^A-Za-z0-9._-]"), "_")}.profile.json")
+                        },
+                    ) { Text("Export") }
                     if (!p.builtIn) DroidTextButton(onClick = { vm.deleteProfile(p) }) { Text("Delete") }
                 }
                 SwitchRow(
@@ -491,7 +505,16 @@ private fun SaveProfileDialog(vm: SystemSettingsViewModel, onClose: () -> Unit) 
                 }
             }
         },
-        confirmButton = { DroidPrimaryButton(onClick = { vm.saveCurrentAsProfile(name, picked); onClose() }, enabled = name.isNotBlank() && picked.isNotEmpty(), modifier = Modifier.testTag("ss_save_profile_ok")) { Text("Save") } },
+        confirmButton = {
+            DroidPrimaryButton(
+                onClick = {
+                    vm.saveCurrentAsProfile(name, picked)
+                    onClose()
+                },
+                enabled = name.isNotBlank() && picked.isNotEmpty(),
+                modifier = Modifier.testTag("ss_save_profile_ok"),
+            ) { Text("Save") }
+        },
         dismissButton = { DroidTextButton(onClick = onClose) { Text("Cancel") } },
     )
 }
@@ -574,7 +597,15 @@ internal fun AccessTab(vm: SystemSettingsViewModel) {
             onDismissRequest = { confirmAssistant = false },
             title = { Text("Let the assistant use System Settings?") },
             text = { Text("It could ask to change reviewed settings. Each request shows the old and new values and waits for you. It cannot touch accounts, credentials, accessibility, keyboards, or settings this app does not know.") },
-            confirmButton = { DroidPrimaryButton(onClick = { vm.setAssistant(true); confirmAssistant = false }, modifier = Modifier.testTag("ss_assistant_confirm")) { Text("Allow") } },
+            confirmButton = {
+                DroidPrimaryButton(
+                    onClick = {
+                        vm.setAssistant(true)
+                        confirmAssistant = false
+                    },
+                    modifier = Modifier.testTag("ss_assistant_confirm"),
+                ) { Text("Allow") }
+            },
             dismissButton = { DroidTextButton(onClick = { confirmAssistant = false }) { Text("Cancel") } },
         )
     }
@@ -583,7 +614,15 @@ internal fun AccessTab(vm: SystemSettingsViewModel) {
             onDismissRequest = { confirmRoot = false },
             title = { Text("Allow root for System Settings?") },
             text = { Text("When Standard permissions and Shizuku cannot do the job, this screen can run the settings command as root. Your root manager still decides each request.") },
-            confirmButton = { DroidPrimaryButton(onClick = { vm.setRootAllowed(true); confirmRoot = false }, modifier = Modifier.testTag("ss_root_confirm")) { Text("Allow root") } },
+            confirmButton = {
+                DroidPrimaryButton(
+                    onClick = {
+                        vm.setRootAllowed(true)
+                        confirmRoot = false
+                    },
+                    modifier = Modifier.testTag("ss_root_confirm"),
+                ) { Text("Allow root") }
+            },
             dismissButton = { DroidTextButton(onClick = { confirmRoot = false }) { Text("Cancel") } },
         )
     }

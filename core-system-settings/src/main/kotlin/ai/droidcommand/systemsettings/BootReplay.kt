@@ -57,9 +57,15 @@ class InMemoryReplayStateStore : ReplayStateStore {
 
     @Synchronized override fun get(profileId: String) = map[profileId]
 
-    @Synchronized override fun save(record: ReplayRecord) { map[record.profileId] = record }
+    @Synchronized
+    override fun save(record: ReplayRecord) {
+        map[record.profileId] = record
+    }
 
-    @Synchronized override fun remove(profileId: String) { map.remove(profileId) }
+    @Synchronized
+    override fun remove(profileId: String) {
+        map.remove(profileId)
+    }
 }
 
 @Serializable
@@ -116,8 +122,10 @@ class FileReplayStateStore(private val file: Path) : ReplayStateStore {
         val dto = ReplayFile(
             1,
             records.map {
-                ReplayDto(it.profileId, it.enabled, it.includeOptional, it.reviewedFingerprint, it.reviewedSdk, it.reviewedProfileHash, it.status.name,
-                    it.consecutiveFailures, it.attemptsThisBoot, it.lastBootId, it.lastAttemptAt, it.lastOutcome, it.enabledAt)
+                ReplayDto(
+                    it.profileId, it.enabled, it.includeOptional, it.reviewedFingerprint, it.reviewedSdk, it.reviewedProfileHash, it.status.name,
+                    it.consecutiveFailures, it.attemptsThisBoot, it.lastBootId, it.lastAttemptAt, it.lastOutcome, it.enabledAt,
+                )
             },
         )
         val tmp = file.resolveSibling(file.fileName.toString() + ".tmp")
@@ -210,7 +218,12 @@ class BootReplayCoordinator(
             }
             // Count the attempt before doing anything, so a crash during the apply still counts toward the bound.
             rec = rec.copy(lastBootId = bootId, attemptsThisBoot = if (sameBoot) rec.attemptsThisBoot + 1 else 1, lastAttemptAt = clock())
-            try { store.save(rec) } catch (e: IOException) { out += ReplayRun(rec.profileId, rec.status, "Could not save state; not applying."); continue }
+            try {
+                store.save(rec)
+            } catch (e: IOException) {
+                out += ReplayRun(rec.profileId, rec.status, "Could not save state, not applying.")
+                continue
+            }
 
             val pp = profileService.plan(profile, RequestSource.BOOT_REPLAY, rec.includeOptional)
             if (pp.unsupported.isNotEmpty()) {

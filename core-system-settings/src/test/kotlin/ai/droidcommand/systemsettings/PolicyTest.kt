@@ -1,3 +1,5 @@
+@file:Suppress("ktlint:standard:property-naming")
+
 package ai.droidcommand.systemsettings
 
 import ai.droidcommand.agent.AgentMode

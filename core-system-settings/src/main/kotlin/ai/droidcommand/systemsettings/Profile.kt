@@ -160,26 +160,47 @@ object ProfileCodec {
     }
 
     private fun parseEntry(n: Int, el: JsonElement, errors: MutableList<String>): ProfileEntry? {
-        val o = el as? JsonObject ?: run { errors += "Entry $n is not an object."; return null }
+        val o = el as? JsonObject ?: run {
+            errors += "Entry $n is not an object."
+            return null
+        }
         (o.keys - ENTRY_KEYS).forEach { errors += "Entry $n has an unknown field \"${it.take(40)}\"." }
         val table = str(o["table"])?.let { SettingsTable.fromWire(it) }
         val key = str(o["key"])
         val value = str(o["value"])
-        if (table == null) { errors += "Entry $n has an unknown table."; return null }
-        if (key == null || !SettingKey.NAME_PATTERN.matches(key)) { errors += "Entry $n has an invalid setting name."; return null }
+        if (table == null) {
+            errors += "Entry $n has an unknown table."
+            return null
+        }
+        if (key == null || !SettingKey.NAME_PATTERN.matches(key)) {
+            errors += "Entry $n has an invalid setting name."
+            return null
+        }
         val scope = str(o["scope"])
         if (scope != null && scope != (if (table.deviceWide) "device" else "current_user")) {
             errors += "Entry $n (${table.wire}/$key) has scope \"${scope.take(20)}\"; ${table.wire} uses ${if (table.deviceWide) "device" else "current_user"}."
             return null
         }
         when (SettingsRisk.classify(table, key)) {
-            RiskClass.HIGH_IMPACT -> { errors += "Entry $n (${table.wire}/$key) is a high-impact setting and cannot be in a profile."; return null }
-            RiskClass.UNREVIEWED -> { errors += "Entry $n (${table.wire}/$key) is not a reviewed setting; profiles only hold reviewed settings."; return null }
+            RiskClass.HIGH_IMPACT -> {
+                errors += "Entry $n (${table.wire}/$key) is a high-impact setting and cannot be in a profile."
+                return null
+            }
+            RiskClass.UNREVIEWED -> {
+                errors += "Entry $n (${table.wire}/$key) is not a reviewed setting, so profiles cannot hold it."
+                return null
+            }
             RiskClass.CURATED -> Unit
         }
-        if (value == null || !VALUE.matches(value)) { errors += "Entry $n (${table.wire}/$key) has a value that is empty, too long, or has characters other than letters, digits and . _ : + -."; return null }
+        if (value == null || !VALUE.matches(value)) {
+            errors += "Entry $n (${table.wire}/$key) has a value that is empty, too long, or has characters other than letters, digits and . _ : + -."
+            return null
+        }
         val spec = SettingsCatalog.find(table, key)!!
-        shapeProblem(spec.type, value)?.let { errors += "Entry $n (${spec.title}): $it"; return null }
+        shapeProblem(spec.type, value)?.let {
+            errors += "Entry $n (${spec.title}): $it"
+            return null
+        }
         val optional = (o["optional"] as? JsonPrimitive)?.booleanOrNull ?: false
         return ProfileEntry(table, key, value, optional)
     }
@@ -246,7 +267,10 @@ class InMemoryProfileStore : ProfileStore {
 
     @Synchronized override fun get(id: String) = map[id]
 
-    @Synchronized override fun save(profile: SettingsProfile) { map[profile.id] = profile }
+    @Synchronized
+    override fun save(profile: SettingsProfile) {
+        map[profile.id] = profile
+    }
 
     @Synchronized override fun delete(id: String) = map.remove(id) != null
 }
@@ -308,7 +332,10 @@ class ProfileService(
         val leftOut = mutableListOf<ProfileEntry>()
         val changes = mutableListOf<Change>()
         for (e in profile.entries) {
-            if (e.optional && !includeOptional) { leftOut += e; continue }
+            if (e.optional && !includeOptional) {
+                leftOut += e
+                continue
+            }
             val spec = SettingsCatalog.find(e.table, e.name)
             val reason = when {
                 spec == null -> "This app does not know this setting."

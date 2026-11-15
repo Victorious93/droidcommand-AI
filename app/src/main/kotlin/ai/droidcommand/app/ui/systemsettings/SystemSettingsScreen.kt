@@ -87,8 +87,15 @@ fun SystemSettingsScreen(viewModel: SystemSettingsViewModel = hiltViewModel()) {
             }
             when (tab) {
                 0 -> CuratedTab(viewModel)
-                1 -> BrowseTab(viewModel) { table, name -> editTable = table.wire; editName = name; tab = 2 }
-                2 -> AdvancedTab(viewModel, editTable?.let { SettingsTable.fromWire(it) }, editName) { editTable = null; editName = "" }
+                1 -> BrowseTab(viewModel) { table, name ->
+                    editTable = table.wire
+                    editName = name
+                    tab = 2
+                }
+                2 -> AdvancedTab(viewModel, editTable?.let { SettingsTable.fromWire(it) }, editName) {
+                    editTable = null
+                    editName = ""
+                }
                 3 -> ModifiedTab(viewModel)
                 4 -> HistoryTab(viewModel)
                 5 -> ProfilesTab(viewModel)

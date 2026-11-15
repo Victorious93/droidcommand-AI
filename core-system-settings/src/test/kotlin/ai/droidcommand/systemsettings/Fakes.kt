@@ -1,3 +1,5 @@
+@file:Suppress("ktlint:standard:property-naming")
+
 package ai.droidcommand.systemsettings
 
 import ai.droidcommand.security.InMemoryAuditLog
@@ -36,7 +38,9 @@ class FakeBackend(
     var afterWrite: (SettingKey, String) -> Unit = { _, _ -> }
     private var writeCount = 0
 
-    fun put(table: SettingsTable, name: String, value: String, user: Int = 0) { rows[SettingKey.of(table, name, user).id] = value }
+    fun put(table: SettingsTable, name: String, value: String, user: Int = 0) {
+        rows[SettingKey.of(table, name, user).id] = value
+    }
     fun get(table: SettingsTable, name: String, user: Int = 0): String? = rows[SettingKey.of(table, name, user).id]
 
     override fun status() = BackendStatus(
@@ -107,7 +111,10 @@ class Harness(
         journal = journal,
         device = { device },
         access = { config },
-        approver = { _, _, lines, _ -> approvals += lines; approve },
+        approver = { _, _, lines, _ ->
+            approvals += lines
+            approve
+        },
         remote = if (withRemote) RemoteSettingsAuthorizer { remoteDecision } else null,
         verifiers = verifiers,
         audit = audit,

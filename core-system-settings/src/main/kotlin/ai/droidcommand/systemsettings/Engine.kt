@@ -35,8 +35,21 @@ data class ChangeRequest(
 )
 
 enum class IssueCode {
-    EMPTY_REQUEST, DUPLICATE_KEY, SOURCE_NOT_ALLOWED, HIGH_IMPACT, NEEDS_MANUAL_REVIEW, INVALID_VALUE, UNSUPPORTED_ON_DEVICE, CROSS_USER,
-    NO_BACKEND, UNREADABLE_CURRENT, CANNOT_CAPTURE, CROSS_FIELD, ALREADY_SET, JOURNAL_PROBLEM, JOURNAL_UNWRITABLE,
+    EMPTY_REQUEST,
+    DUPLICATE_KEY,
+    SOURCE_NOT_ALLOWED,
+    HIGH_IMPACT,
+    NEEDS_MANUAL_REVIEW,
+    INVALID_VALUE,
+    UNSUPPORTED_ON_DEVICE,
+    CROSS_USER,
+    NO_BACKEND,
+    UNREADABLE_CURRENT,
+    CANNOT_CAPTURE,
+    CROSS_FIELD,
+    ALREADY_SET,
+    JOURNAL_PROBLEM,
+    JOURNAL_UNWRITABLE,
 }
 
 data class Issue(val blocking: Boolean, val code: IssueCode, val message: String, val keyId: String? = null)
@@ -322,8 +335,12 @@ class SystemSettingsEngine(
         val dev = device()
         val cfg = access()
         val issues = mutableListOf<Issue>()
-        fun block(code: IssueCode, msg: String, key: SettingKey? = null) { issues += Issue(true, code, msg, key?.id) }
-        fun warn(code: IssueCode, msg: String, key: SettingKey? = null) { issues += Issue(false, code, msg, key?.id) }
+        fun block(code: IssueCode, msg: String, key: SettingKey? = null) {
+            issues += Issue(true, code, msg, key?.id)
+        }
+        fun warn(code: IssueCode, msg: String, key: SettingKey? = null) {
+            issues += Issue(false, code, msg, key?.id)
+        }
 
         if (request.changes.isEmpty()) block(IssueCode.EMPTY_REQUEST, "There is nothing to change.")
         val dup = request.changes.groupBy { it.key.id }.filter { it.value.size > 1 }.keys
@@ -565,7 +582,12 @@ class SystemSettingsEngine(
     /** Runs the recorded entries in order, verifying each. Returns the final recorded operation. */
     private fun runApply(start: Operation, backend: SettingsBackend): Operation {
         var op = start
-        fun persist(): Boolean = try { journal.save(op); true } catch (e: IOException) { false }
+        fun persist(): Boolean = try {
+            journal.save(op)
+            true
+        } catch (e: IOException) {
+            false
+        }
         fun update(i: Int, f: (JournalEntry) -> JournalEntry): Boolean {
             op = op.copy(entries = op.entries.toMutableList().also { it[i] = f(it[i]) })
             return persist()
@@ -805,9 +827,17 @@ class SystemSettingsEngine(
         }
         record(AuditEventType.SETTINGS_RESTORED, preview.title, "started via ${preview.backend.label}: " + run.joinToString { it.key.name })
         var failures = 0
-        fun persist() { try { journal.save(op) } catch (_: IOException) { } }
+        fun persist() {
+            try {
+                journal.save(op)
+            } catch (_: IOException) {
+            }
+        }
         for ((i, item) in run.withIndex()) {
-            fun set(f: (JournalEntry) -> JournalEntry) { op = op.copy(entries = op.entries.toMutableList().also { it[i] = f(it[i]) }); persist() }
+            fun set(f: (JournalEntry) -> JournalEntry) {
+                op = op.copy(entries = op.entries.toMutableList().also { it[i] = f(it[i]) })
+                persist()
+            }
             if (item.state == RestoreState.ALREADY_AT_TARGET) {
                 set { it.copy(phase = EntryPhase.DONE, outcome = EntryOutcome.ALREADY_AT_TARGET, note = "Already had the recorded value.") }
                 markSources(listOf(item), RestoreStatus.RESTORED, "Already had the recorded value.")
@@ -841,7 +871,10 @@ class SystemSettingsEngine(
             val updated = src.entries.toMutableList().also {
                 it[idx] = it[idx].copy(restoreStatus = status, restoreNote = note ?: item.note, restoredAt = clock())
             }
-            try { journal.save(src.copy(entries = updated)) } catch (_: IOException) { }
+            try {
+                journal.save(src.copy(entries = updated))
+            } catch (_: IOException) {
+            }
         }
     }
 
@@ -873,7 +906,11 @@ class SystemSettingsEngine(
                 }
             }
             changed = changed.copy(entries = entries, status = OperationStatus.INTERRUPTED, finishedAt = clock(), note = "Recovered after an interruption. Nothing was replayed.")
-            try { journal.save(changed) } catch (_: IOException) { continue }
+            try {
+                journal.save(changed)
+            } catch (_: IOException) {
+                continue
+            }
             out += changed
         }
         out

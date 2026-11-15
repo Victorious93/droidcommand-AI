@@ -21,7 +21,10 @@ class ScriptedToolbox(
     val calls = mutableListOf<List<String>>()
     override fun isAvailable() = available
     override fun display(command: ToolboxCommand) = command.display
-    override fun run(command: ToolboxCommand): PrivilegedResult { calls += command.argv; return respond(command.argv) }
+    override fun run(command: ToolboxCommand): PrivilegedResult {
+        calls += command.argv
+        return respond(command.argv)
+    }
 }
 
 private fun ok(out: String = "", err: String = "", code: Int = 0) = PrivilegedResult.Success(code, out, err, false)
@@ -75,7 +78,7 @@ class ShellBackendTest {
         assertEquals(FailureKind.PERMISSION_DENIED, (ShellSettingsBackend(AccessKind.SHIZUKU, denied).write(key, "1") as WriteResult.Failed).failure.kind)
         val failure = ScriptedToolbox { PrivilegedResult.Failure("service died") }
         assertEquals(FailureKind.ERROR, (ShellSettingsBackend(AccessKind.SHIZUKU, failure).write(key, "1") as WriteResult.Failed).failure.kind)
-        val vanishing = ScriptedToolbox { it.also { } ; PrivilegedResult.Failure("binder died") }
+        val vanishing = ScriptedToolbox { PrivilegedResult.Failure("binder died") }
         val vb = ShellSettingsBackend(AccessKind.SHIZUKU, vanishing)
         vanishing.available = true
         val r = vb.read(key)
@@ -144,9 +147,15 @@ class StandardBackendTest {
         var canWriteTables = SettingsTable.entries.toSet()
         var throwOnGet: RuntimeException? = null
         var putReturns = true
-        override fun getString(table: SettingsTable, name: String): String? { throwOnGet?.let { throw it }; return rows["${table.wire}/$name"] }
+        override fun getString(table: SettingsTable, name: String): String? {
+            throwOnGet?.let { throw it }
+            return rows["${table.wire}/$name"]
+        }
         override fun listAll(table: SettingsTable): Map<String, String> = throw SecurityException("no")
-        override fun putString(table: SettingsTable, name: String, value: String): Boolean { if (putReturns) rows["${table.wire}/$name"] = value; return putReturns }
+        override fun putString(table: SettingsTable, name: String, value: String): Boolean {
+            if (putReturns) rows["${table.wire}/$name"] = value
+            return putReturns
+        }
         override fun delete(table: SettingsTable, name: String): Int = if (rows.remove("${table.wire}/$name") != null) 1 else 0
         override fun canWrite(table: SettingsTable) = table in canWriteTables
         override fun missingPermissionHint(table: SettingsTable) = "grant it for ${table.wire}"

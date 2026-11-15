@@ -196,7 +196,9 @@ class SystemSettingsViewModel @Inject constructor(
         previewProfile(p, on)
     }
 
-    fun cancelPending() { pending = null }
+    fun cancelPending() {
+        pending = null
+    }
 
     fun confirmPending() {
         val p = pending ?: return
@@ -246,7 +248,10 @@ class SystemSettingsViewModel @Inject constructor(
         }
     }
 
-    fun cancelRestore() { pendingRestore = null; forced = emptySet() }
+    fun cancelRestore() {
+        pendingRestore = null
+        forced = emptySet()
+    }
 
     fun confirmRestore() {
         val p = pendingRestore ?: return
@@ -290,7 +295,9 @@ class SystemSettingsViewModel @Inject constructor(
     private fun failureText(f: SystemSettingsEngine.Listing.Failed) =
         "Could not list this table: ${f.failure.message} You can still read a single setting by name in the Advanced tab."
 
-    fun clearReadout() { readout = null }
+    fun clearReadout() {
+        readout = null
+    }
 
     fun readKey(table: SettingsTable, name: String) {
         val key = SettingKey.parse(table, name.trim(), device.userId)
@@ -404,7 +411,10 @@ class SystemSettingsViewModel @Inject constructor(
 
     fun deleteProfile(profile: SettingsProfile) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { rt.replay.disable(profile.id); rt.deleteProfile(profile.id) }
+            withContext(Dispatchers.IO) {
+                rt.replay.disable(profile.id)
+                rt.deleteProfile(profile.id)
+            }
             refresh()
         }
     }
@@ -418,10 +428,22 @@ class SystemSettingsViewModel @Inject constructor(
 
     // ---- access ----------------------------------------------------------------------------------------------------------------
 
-    fun setShizukuAllowed(on: Boolean) { rt.prefs.setShizukuAllowed(on); refresh() }
-    fun setRootAllowed(on: Boolean) { rt.prefs.setRootAllowed(on); refresh() }
-    fun setOtherUsers(on: Boolean) { rt.prefs.setOtherUsersAllowed(on); refresh() }
-    fun setAssistant(on: Boolean) { rt.prefs.setAssistantEnabled(on); refresh() }
+    fun setShizukuAllowed(on: Boolean) {
+        rt.prefs.setShizukuAllowed(on)
+        refresh()
+    }
+    fun setRootAllowed(on: Boolean) {
+        rt.prefs.setRootAllowed(on)
+        refresh()
+    }
+    fun setOtherUsers(on: Boolean) {
+        rt.prefs.setOtherUsersAllowed(on)
+        refresh()
+    }
+    fun setAssistant(on: Boolean) {
+        rt.prefs.setAssistantEnabled(on)
+        refresh()
+    }
 
     fun hasCuratedValue(specId: String): Boolean =
         curated.firstOrNull { it.spec.id == specId }?.let { ((it.current as? ReadResult.Value)?.snapshot) is Snapshot.Present } == true

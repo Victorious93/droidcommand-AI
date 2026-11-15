@@ -215,7 +215,12 @@ class FileOperationJournal(private val directory: Path) : OperationJournal {
     override fun all(): List<Operation> {
         val bad = mutableListOf<String>()
         val ops = Files.newDirectoryStream(directory, "op-*.json").use { stream ->
-            stream.mapNotNull { f -> readFile(f) ?: run { bad += f.fileName.toString(); null } }
+            stream.mapNotNull { f ->
+                readFile(f) ?: run {
+                    bad += f.fileName.toString()
+                    null
+                }
+            }
         }
         unreadableFiles = bad
         return ops.sortedBy { it.createdAt }

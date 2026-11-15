@@ -1,3 +1,5 @@
+@file:Suppress("ktlint:standard:property-naming")
+
 package ai.droidcommand.systemsettings
 
 import ai.droidcommand.agent.ToolResult
@@ -115,7 +117,9 @@ class ToolsTest {
         val svc = ProfileService(h.engine) { h.device }
         val read = SystemSettingsReadTool(h.engine, { StarterProfiles.all() }, svc, { h.device }) { enabled }
         val change = SystemSettingsChangeTool(h.engine, { StarterProfiles.all() }, svc, { h.device }) { enabled }
-        fun sync() { h.config = AccessConfig(assistantEnabled = enabled) }
+        fun sync() {
+            h.config = AccessConfig(assistantEnabled = enabled)
+        }
     }
 
     @Test
@@ -129,7 +133,8 @@ class ToolsTest {
     @Test
     fun readSharesOnlyReviewedSettingsAndNeverATableDump() {
         val r = Rig()
-        r.enabled = true; r.sync()
+        r.enabled = true
+        r.sync()
         r.h.standard.put(SEC, "android_id", "deadbeef")
         r.h.standard.put(G, "wifi_secret_thing", "hunter2")
         val curated = (r.read.execute(mapOf("action" to "curated")) as ToolResult.Success).output
@@ -144,7 +149,8 @@ class ToolsTest {
     @Test
     fun historyRedactsValuesOfSettingsThatAreNotReviewed() {
         val r = Rig()
-        r.enabled = true; r.sync()
+        r.enabled = true
+        r.sync()
         r.h.standard.put(G, "dca_secret", "supersecret")
         r.h.uiApply(r.h.putReq("manual", RequestSource.UI, Triple(G, "dca_secret", "newsecret"), manual = setOf(r.h.key(G, "dca_secret").id)))
         r.h.uiApply(r.h.putReq("quick", RequestSource.UI, Triple(G, ANIM, "0.5")))
@@ -156,7 +162,8 @@ class ToolsTest {
     @Test
     fun previewChangesNothing() {
         val r = Rig()
-        r.enabled = true; r.sync()
+        r.enabled = true
+        r.sync()
         val out = (r.read.execute(mapOf("action" to "preview_set", "table" to "global", "key" to ANIM, "value" to "0.5")) as ToolResult.Success).output
         assertTrue(out.contains("nothing has been changed") && out.contains("1.0 → 0.5"))
         val bad = (r.read.execute(mapOf("action" to "preview_set", "table" to "secure", "key" to "default_input_method", "value" to "a/b")) as ToolResult.Success).output
@@ -169,7 +176,8 @@ class ToolsTest {
     @Test
     fun changeAsksEveryTimeAndRechecksTheGateAtExecution() {
         val r = Rig()
-        r.enabled = true; r.sync()
+        r.enabled = true
+        r.sync()
         val input = mapOf("action" to "set", "table" to "global", "key" to ANIM, "value" to "0.5")
         r.h.approve = false
         assertTrue((r.change.execute(input) as ToolResult.Failure).reason.contains("said no"))
@@ -178,7 +186,8 @@ class ToolsTest {
         assertIs<ToolResult.Success>(r.change.execute(input))
         assertEquals("0.5", r.h.standard.get(G, ANIM))
         assertEquals(2, r.h.approvals.size)
-        r.enabled = false; r.sync()
+        r.enabled = false
+        r.sync()
         assertIs<ToolResult.Failure>(r.change.execute(input.plus("value" to "0")))
         assertEquals("0.5", r.h.standard.get(G, ANIM))
         assertEquals(2, r.h.approvals.size, "no new prompt is shown when the gate is off")
@@ -187,7 +196,8 @@ class ToolsTest {
     @Test
     fun changeCannotReachUnreviewedOrHighImpactSettingsEvenWhenApproved() {
         val r = Rig()
-        r.enabled = true; r.sync()
+        r.enabled = true
+        r.sync()
         val u = r.change.execute(mapOf("action" to "set", "table" to "global", "key" to "dca_other", "value" to "1"))
         assertTrue((u as ToolResult.Failure).reason.contains("not a reviewed"))
         val hi = r.change.execute(mapOf("action" to "set", "table" to "secure", "key" to "enabled_accessibility_services", "value" to "x/y"))
@@ -199,7 +209,8 @@ class ToolsTest {
     fun assistantCanApplyAProfileAndThenRestoreItThroughTheSameEngine() {
         val r = Rig()
         listOf(SettingsCatalog.TRANSITION_ANIMATION_SCALE, SettingsCatalog.ANIMATOR_DURATION_SCALE).forEach { r.h.standard.put(G, it, "1.0") }
-        r.enabled = true; r.sync()
+        r.enabled = true
+        r.sync()
         assertIs<ToolResult.Success>(r.change.execute(mapOf("action" to "apply_profile", "profile" to "builtin-quick-ui")))
         assertEquals("0.5", r.h.standard.get(G, ANIM))
         val opId = r.h.engine.history().first().id

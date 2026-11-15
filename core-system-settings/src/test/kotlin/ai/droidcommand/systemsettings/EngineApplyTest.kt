@@ -1,3 +1,5 @@
+@file:Suppress("ktlint:standard:property-naming")
+
 package ai.droidcommand.systemsettings
 
 import kotlin.test.Test
@@ -345,7 +347,10 @@ class EngineApplyTest {
         val h = Harness()
         h.standard.put(G, ANIM, "1.0")
         h.standard.afterWrite = { _, _ -> throw SimulatedCrash() }
-        try { h.uiApply(h.putReq("x", RequestSource.UI, Triple(G, ANIM, "0.5"))) } catch (_: SimulatedCrash) { }
+        try {
+            h.uiApply(h.putReq("x", RequestSource.UI, Triple(G, ANIM, "0.5")))
+        } catch (_: SimulatedCrash) {
+        }
         h.standard.state = BackendState.UNAVAILABLE
         assertTrue(h.engine.recoverInterrupted().isEmpty())
         assertEquals(OperationStatus.APPLYING, h.journal.all().single().status)
@@ -358,7 +363,12 @@ class EngineApplyTest {
         h.standard.put(G, TRANS, "1.0")
         val inWrite = java.util.concurrent.CountDownLatch(1)
         val release = java.util.concurrent.CountDownLatch(1)
-        h.standard.beforeWrite = { k, _ -> if (k.name == ANIM) { inWrite.countDown(); release.await(5, java.util.concurrent.TimeUnit.SECONDS) } }
+        h.standard.beforeWrite = { k, _ ->
+            if (k.name == ANIM) {
+                inWrite.countDown()
+                release.await(5, java.util.concurrent.TimeUnit.SECONDS)
+            }
+        }
         var first: ApplyResult? = null
         val t = Thread { first = h.uiApply(h.putReq("one", RequestSource.UI, Triple(G, ANIM, "0.5"))) }
         t.start()
