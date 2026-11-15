@@ -293,7 +293,7 @@ class FileProfileStore(private val directory: Path) : ProfileStore {
     override fun save(profile: SettingsProfile) {
         require(!profile.builtIn) { "built-in profiles are not stored" }
         val tmp = directory.resolve(".tmp-${profile.id}")
-        Files.writeString(tmp, ProfileCodec.encode(profile))
+        tmp.writeUtf8(ProfileCodec.encode(profile))
         Files.move(tmp, fileFor(profile.id), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
     }
 
@@ -302,7 +302,7 @@ class FileProfileStore(private val directory: Path) : ProfileStore {
 
     private fun read(f: Path): SettingsProfile? {
         val id = f.fileName.toString().removePrefix("profile-").removeSuffix(".json")
-        return (ProfileCodec.decode(Files.readString(f), id) as? ProfileImport.Valid)?.profile
+        return (ProfileCodec.decode(f.readUtf8(), id) as? ProfileImport.Valid)?.profile
     }
 
     private fun fileFor(id: String): Path {

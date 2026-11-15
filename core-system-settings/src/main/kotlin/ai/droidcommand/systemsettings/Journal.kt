@@ -229,7 +229,7 @@ class FileOperationJournal(private val directory: Path) : OperationJournal {
     override fun unreadable(): List<String> = unreadableFiles
 
     private fun readFile(f: Path): Operation? = try {
-        json.decodeFromString(OperationDto.serializer(), Files.readString(f)).toOperation()
+        json.decodeFromString(OperationDto.serializer(), f.readUtf8()).toOperation()
     } catch (e: SerializationException) {
         null
     } catch (e: IllegalArgumentException) {

@@ -96,7 +96,7 @@ class FileReplayStateStore(private val file: Path) : ReplayStateStore {
     override fun all(): List<ReplayRecord> {
         if (!Files.isRegularFile(file)) return emptyList()
         return try {
-            json.decodeFromString(ReplayFile.serializer(), Files.readString(file)).records.mapNotNull { d ->
+            json.decodeFromString(ReplayFile.serializer(), file.readUtf8()).records.mapNotNull { d ->
                 runCatching {
                     ReplayRecord(
                         d.profileId, d.enabled, d.includeOptional, d.reviewedFingerprint, d.reviewedSdk, d.reviewedProfileHash,
@@ -129,7 +129,7 @@ class FileReplayStateStore(private val file: Path) : ReplayStateStore {
             },
         )
         val tmp = file.resolveSibling(file.fileName.toString() + ".tmp")
-        Files.writeString(tmp, json.encodeToString(ReplayFile.serializer(), dto))
+        tmp.writeUtf8(json.encodeToString(ReplayFile.serializer(), dto))
         Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING)
     }
 }

@@ -127,19 +127,22 @@ class SystemSettingsViewModel @Inject constructor(
     fun setupSteps() = AccessSetupInstructions.steps(applicationId, device.sdkInt, device.release)
 
     init {
-        viewModelScope.launch(Dispatchers.IO) { rt.recoverInterrupted() }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { rt.recoverInterrupted() }
+        }
         refresh()
     }
 
     fun refresh() {
         viewModelScope.launch {
             loading = true
-            val snapshot = withContext(Dispatchers.IO) {
-                fun <T> timed(name: String, block: () -> T): T {
-                    val t0 = System.currentTimeMillis()
-                    val r = block()
-                    Log.i(TAG, "refresh step $name took ${System.currentTimeMillis() - t0} ms")
-                    return r
+            val snapshot = try {
+                withContext(Dispatchers.IO) {
+                    fun <T> timed(name: String, block: () -> T): T {
+                        val t0 = System.currentTimeMillis()
+                        val r = block()
+                        Log.i(TAG, "refresh step $name took ${System.currentTimeMillis() - t0} ms")
+                        return r
                 }
                 val dev = timed("device") { rt.device() }
                 val st = timed("statuses") { engine.statuses() }
@@ -155,6 +158,13 @@ class SystemSettingsViewModel @Inject constructor(
                         ?: "No active network, so the active resolver cannot be checked."
                 }
                 Snapshots(dev, st, cur, mod, his, profs, rep, rate, reqs, dns)
+                }
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+                Log.e(TAG, "refresh failed", t)
+                banner = "Could not read this phone's settings: ${t.javaClass.simpleName}. ${t.message.orEmpty().take(120)}"
+                loading = false
+                return@launch
             }
             device = snapshot.device
             statuses = snapshot.statuses
@@ -363,8 +373,17 @@ class SystemSettingsViewModel @Inject constructor(
             val text = withContext(Dispatchers.IO) {
                 runCatching {
                     context.contentResolver.openInputStream(uri)?.use { s ->
-                        val bytes = s.readNBytes(ProfileCodec.MAX_BYTES + 1)
-                        String(bytes, Charsets.UTF_8)
+                        // Read at most MAX_BYTES + 1 so an oversized file is detected without loading all of it (readNBytes is Java 11).
+                        val out = java.io.ByteArrayOutputStream()
+                        val chunk = ByteArray(8192)
+                        var total = 0
+                        while (total <= ProfileCodec.MAX_BYTES) {
+                            val n = s.read(chunk, 0, minOf(chunk.size, ProfileCodec.MAX_BYTES + 1 - total))
+                            if (n < 0) break
+                            out.write(chunk, 0, n)
+                            total += n
+                        }
+                        String(out.toByteArray(), Charsets.UTF_8)
                     }
                 }.getOrNull()
             }
