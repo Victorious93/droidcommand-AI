@@ -6,6 +6,9 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -168,6 +171,30 @@ class SystemSettingsFlowTest {
         clickTab("Modified")
         waitForTag("ss_modified_empty")
         snap("16-after-restore")
+    }
+
+    /** Not part of the required gate. Logs (tag SSFLOW) whether a preset chip responds to a semantic click and to a touch click, and where it is on screen. */
+    @Test
+    fun chipDiagnostics() {
+        waitForTag("ss_value_window_animation_scale")
+        val tag = "ss_preset_window_animation_scale_0.5"
+        compose.onNodeWithTag(tag).performScrollTo()
+        compose.waitForIdle()
+        val node = compose.onNodeWithTag(tag)
+        Log.e("SSFLOW", "chip bounds in root: ${node.getBoundsInRoot()} ; root: ${compose.onRoot().getBoundsInRoot()}")
+        node.performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+        val semantic = runCatching { waitForTag("ss_plan_dialog", timeoutMs = 8_000) }.isSuccess
+        Log.e("SSFLOW", "chip semantic OnClick opened preview: $semantic")
+        if (semantic) {
+            compose.onNodeWithTag("ss_plan_cancel").performClick()
+            compose.waitForIdle()
+        }
+        node.performClick()
+        compose.waitForIdle()
+        val touch = runCatching { waitForTag("ss_plan_dialog", timeoutMs = 8_000) }.isSuccess
+        Log.e("SSFLOW", "chip touch click opened preview: $touch")
+        snap("diag-chip")
     }
 
     @Test
