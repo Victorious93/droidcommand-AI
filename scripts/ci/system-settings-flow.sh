@@ -52,10 +52,6 @@ python3 -I scripts/ci/verify-instrumentation.py "$OUT/instrument.log" "${req_arg
 verdict=$?
 set -e
 
-# Best-effort diagnostics (never gates): does a preset chip respond to a semantic click and to a touch click?
-set +e
-adb shell am instrument -w -r -e class ai.droidcommand.app.SystemSettingsFlowTest#chipDiagnostics "$RUNNER" > "$OUT/diag.log" 2>&1
-set -e
 adb shell settings get global window_animation_scale | tee "$OUT/after.txt"
 adb shell settings get global dca_ss_test_key | tee "$OUT/after-test-key.txt"
 adb pull "/sdcard/Android/data/$PKG/files/screenshots-system-settings/." "$SHOTS/" || true

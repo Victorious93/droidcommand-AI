@@ -6,12 +6,12 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.printToString
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -120,21 +120,15 @@ class SystemSettingsFlowTest {
         snap("10-before")
 
         // Edit: preview then confirm.
-        compose.onNodeWithTag("ss_preset_window_animation_scale_$target").performScrollTo().performClick()
-        compose.waitForIdle()
-        val opened = runCatching { waitForTag("ss_plan_dialog", timeoutMs = 10_000) }.isSuccess
-        if (!opened) {
-            Log.e("SSFLOW", "preset chip tap (scroll then click) did not open the preview")
-            runCatching { compose.onNodeWithTag("ss_preset_window_animation_scale_$target").performClick() }
+        // performScrollTo only moves the nearest scroller (the horizontal chip row), so swipe the page until the chip is really on screen.
+        val chip = "ss_preset_window_animation_scale_$target"
+        compose.onNodeWithTag("ss_curated_window_animation_scale").performScrollTo()
+        repeat(6) {
+            if (compose.onNodeWithTag(chip).getBoundsInRoot().width.value > 0f) return@repeat
+            compose.onRoot().performTouchInput { swipeUp(startY = height * 0.75f, endY = height * 0.45f) }
             compose.waitForIdle()
         }
-        val opened2 = opened || runCatching { waitForTag("ss_plan_dialog", timeoutMs = 10_000) }.isSuccess
-        Log.e("SSFLOW", "chip tap: scroll+click opened=$opened, plain click opened=${!opened && opened2}")
-        if (!opened2) {
-            Log.e("SSFLOW", "plain chip click also did not open the preview; using the custom value field instead")
-            compose.onNodeWithTag("ss_custom_window_animation_scale").performScrollTo().performTextInput(target)
-            compose.onNodeWithTag("ss_custom_preview_window_animation_scale").performScrollTo().performClick()
-        }
+        compose.onNodeWithTag(chip).performClick()
         waitForTag("ss_plan_dialog")
         waitForText("→")
         snap("11-preview")
@@ -171,30 +165,6 @@ class SystemSettingsFlowTest {
         clickTab("Modified")
         waitForTag("ss_modified_empty")
         snap("16-after-restore")
-    }
-
-    /** Not part of the required gate. Logs (tag SSFLOW) whether a preset chip responds to a semantic click and to a touch click, and where it is on screen. */
-    @Test
-    fun chipDiagnostics() {
-        waitForTag("ss_value_window_animation_scale")
-        val tag = "ss_preset_window_animation_scale_0.5"
-        compose.onNodeWithTag(tag).performScrollTo()
-        compose.waitForIdle()
-        val node = compose.onNodeWithTag(tag)
-        Log.e("SSFLOW", "chip bounds in root: ${node.getBoundsInRoot()} ; root: ${compose.onRoot().getBoundsInRoot()}")
-        node.performSemanticsAction(SemanticsActions.OnClick)
-        compose.waitForIdle()
-        val semantic = runCatching { waitForTag("ss_plan_dialog", timeoutMs = 8_000) }.isSuccess
-        Log.e("SSFLOW", "chip semantic OnClick opened preview: $semantic")
-        if (semantic) {
-            compose.onNodeWithTag("ss_plan_cancel").performClick()
-            compose.waitForIdle()
-        }
-        node.performClick()
-        compose.waitForIdle()
-        val touch = runCatching { waitForTag("ss_plan_dialog", timeoutMs = 8_000) }.isSuccess
-        Log.e("SSFLOW", "chip touch click opened preview: $touch")
-        snap("diag-chip")
     }
 
     @Test
