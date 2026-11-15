@@ -245,4 +245,17 @@ class ManifestPolicyTest {
         assertEquals(listOf("system"), sources)
         assertTrue(config.children("domain-config").isEmpty(), "domain-config entries must be reviewed against docs/SECURITY.md")
     }
+
+    @Test
+    fun `System Settings reapply receiver is not exported, listens for BOOT_COMPLETED only, and its write permissions are declared`() {
+        val permissions = manifest.children("uses-permission").map { it.androidAttr("name") }
+        assertTrue("android.permission.WRITE_SETTINGS" in permissions)
+        assertTrue("android.permission.WRITE_SECURE_SETTINGS" in permissions)
+        val receiver = application.children("receiver").single {
+            it.androidAttr("name") == ".systemsettings.SystemSettingsBootReceiver"
+        }
+        assertEquals("false", receiver.androidAttr("exported"))
+        val actions = receiver.children("intent-filter").single().children("action").map { it.androidAttr("name") }
+        assertEquals(listOf("android.intent.action.BOOT_COMPLETED"), actions)
+    }
 }

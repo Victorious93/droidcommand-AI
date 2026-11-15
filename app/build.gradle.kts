@@ -134,6 +134,7 @@ dependencies {
     implementation(project(":core-root"))
     implementation(project(":core-termux"))
     implementation(project(":core-shizuku"))
+    implementation(project(":core-system-settings"))
     // Current stable Shizuku/Sui API (same artifacts for both). MIT.
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
