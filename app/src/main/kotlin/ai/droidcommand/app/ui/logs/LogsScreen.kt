@@ -60,6 +60,7 @@ private val problemTypes = setOf(
     AuditEventType.APPROVAL_DENIED,
     AuditEventType.APPROVAL_TIMED_OUT,
     AuditEventType.APPROVAL_UNAVAILABLE,
+    AuditEventType.SETTINGS_REFUSED,
 )
 
 private val okTypes = setOf(
@@ -67,6 +68,8 @@ private val okTypes = setOf(
     AuditEventType.APPROVAL_APPROVED,
     AuditEventType.GRANT_ISSUED,
     AuditEventType.GRANT_CONSUMED,
+    AuditEventType.SETTINGS_CHANGED,
+    AuditEventType.SETTINGS_RESTORED,
 )
 
 private fun typeColor(type: AuditEventType): Color = when (type) {

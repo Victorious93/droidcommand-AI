@@ -145,6 +145,12 @@ re-verifying something.
   a new inference entry point must go through `RouteResolver` or call `refusalFor` first. Run against real Ollama and
   llama.cpp on a host; never on a device or emulator.
 
+- **`docs/SYSTEM_SETTINGS.md`** (2026-11-15) — the native System Settings editor ("Victorious Framework"): `core-system-settings` engine
+  (typed System/Secure/Global access, write-ahead journal, readback, compensating rollback, baselines, conflict-aware restore, profiles, boot
+  reapply, assistant tools) and the Advanced → System Settings screen. Independent implementation inspired by `kerneldroid/SetEditPlus` (MIT);
+  no source copied. Every entry point (UI, assistant, any future remote path) must go through `SystemSettingsEngine`; there is **no** remote
+  settings command, so don't assume `REMOTE_SETTINGS` exists. Read the 2026-11-15 audit addendum for what is and is not verified.
+
 ## What's already been verified (don't re-derive)
 
 - This is a 25-module pure-Kotlin/JVM Gradle project (confirmed directly

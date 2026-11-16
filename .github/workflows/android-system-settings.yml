@@ -1,0 +1,167 @@
+name: System Settings Emulator Flow
+
+# Runs the System Settings instrumented flow on a real Android emulator (API 28 x86_64): navigation through every tab, then
+# Edit -> readback -> history -> restore -> readback on a throwaway emulator, plus add -> restore-by-deleting for an absent key.
+# Independent readbacks use `adb shell settings get`, not the app. It also uploads the screenshots the test captures.
+#
+# Authorized target: this runner's own throwaway emulator. It never touches a physical phone. Manual (workflow_dispatch) and only for
+# changes under the System Settings files, because the native build makes it heavy.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "core-system-settings/**"
+      - "app/src/main/kotlin/ai/droidcommand/app/systemsettings/**"
+      - "app/src/main/kotlin/ai/droidcommand/app/ui/systemsettings/**"
+      - "app/src/androidTest/kotlin/ai/droidcommand/app/SystemSettingsFlowTest.kt"
+      - ".github/workflows/android-system-settings.yml"
+
+concurrency:
+  group: system-settings-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  flow:
+    name: System Settings flow on emulator (API 28, x86_64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ""
+
+      - name: Install SDK packages (compileSdk 36, NDK r28c, CMake 3.22.1)
+        run: bash scripts/ci/install-sdk-packages.sh
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Put SDK CMake ninja on PATH
+        run: echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
+
+      - name: JVM tests and ktlint for the engine
+        run: ./gradlew :core-system-settings:test :core-system-settings:ktlintCheck --no-daemon
+
+      - name: Assemble app + androidTest APKs (retry transient Maven Central errors)
+        run: |
+          set -o pipefail
+          delay=15
+          for attempt in 1 2 3 4 5 6; do
+            log="$(mktemp)"
+            if ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -PincludeAndroid=true \
+                 -Pandroid.injected.build.abi=x86_64 --no-daemon 2>&1 | tee "$log"; then
+              exit 0
+            fi
+            if ! grep -qE 'Could not GET |Could not HEAD |Received status code 429|Connection reset|SocketTimeout|UnknownHostException|Connection timed out|503 Service Unavailable|502 Bad Gateway' "$log"; then
+              echo "Non-transient assemble failure; not retrying"; exit 1
+            fi
+            sleep "$delay"; delay=$((delay * 2)); [ "$delay" -gt 300 ] && delay=300
+          done
+          exit 1
+
+      - name: Run the flow on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 28
+          arch: x86_64
+          target: default
+          ndk: "28.2.13676358"
+          cmake: "3.22.1"
+          force-avd-creation: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: bash scripts/ci/system-settings-flow.sh
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-settings-evidence
+          path: |
+            system-settings-logs/**
+            system-settings-screenshots/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  apk:
+    name: Debug APK for phones (arm64-v8a)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ""
+
+      - name: Install SDK packages (compileSdk 36, NDK r28c, CMake 3.22.1)
+        run: bash scripts/ci/install-sdk-packages.sh
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Put SDK CMake ninja on PATH
+        run: echo "$ANDROID_HOME/cmake/3.22.1/bin" >> "$GITHUB_PATH"
+
+      # Existing signing only: app/build.gradle.kts signs debug builds with signing/droidcommand-debug.keystore. No release key is used or created.
+      - name: Assemble arm64 debug APK (retry transient Maven Central errors)
+        run: |
+          set -o pipefail
+          delay=15
+          for attempt in 1 2 3 4 5 6; do
+            log="$(mktemp)"
+            if ./gradlew :app:assembleDebug -PincludeAndroid=true -PabiFilter=arm64-v8a --no-daemon 2>&1 | tee "$log"; then
+              exit 0
+            fi
+            if ! grep -qE 'Could not GET |Could not HEAD |Received status code 429|Connection reset|SocketTimeout|UnknownHostException|Connection timed out|503 Service Unavailable|502 Bad Gateway' "$log"; then
+              echo "Non-transient assemble failure; not retrying"; exit 1
+            fi
+            sleep "$delay"; delay=$((delay * 2)); [ "$delay" -gt 300 ] && delay=300
+          done
+          exit 1
+
+      - name: Describe the APK
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          ls -l "$APK"
+          echo "APK_SHA256 $(sha256sum "$APK" | cut -d' ' -f1)"
+          echo "APK_BYTES $(stat -c%s "$APK")"
+          AAPT2="$(ls $ANDROID_HOME/build-tools/*/aapt2 | tail -1)"
+          "$AAPT2" dump badging "$APK" | grep -E "^package:|^sdkVersion|^targetSdkVersion|native-code|uses-permission: name='android.permission.WRITE_(SECURE_)?SETTINGS'" || true
+          unzip -l "$APK" | grep -E "lib/[a-z0-9_-]+/" | awk '{print $4}' | cut -d/ -f1,2 | sort | uniq -c
+          keytool -printcert -jarfile "$APK" | grep -E "Owner|SHA256" || true
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: droidcommand-ai-debug-arm64
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

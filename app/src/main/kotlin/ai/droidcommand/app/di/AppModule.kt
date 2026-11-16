@@ -29,6 +29,7 @@ import ai.droidcommand.app.shizuku.embedded.EmbeddedShizukuStarter
 import ai.droidcommand.app.shizuku.embedded.ShizukuStartNotifier
 import ai.droidcommand.app.shizuku.embedded.WirelessAdbClient
 import ai.droidcommand.app.status.PersistingRemoteStatusTray
+import ai.droidcommand.app.systemsettings.SystemSettingsRuntime
 import ai.droidcommand.app.termux.AndroidPendingIntentRunCommandClient
 import ai.droidcommand.app.theme.DataStoreThemePreferenceStore
 import ai.droidcommand.app.widget.StatusWidgetProvider
@@ -101,6 +102,8 @@ import ai.droidcommand.shizuku.ShizukuHost
 import ai.droidcommand.shizuku.ShizukuManager
 import ai.droidcommand.shizuku.ShizukuTool
 import ai.droidcommand.shizuku.toolbox.SystemToolboxTool
+import ai.droidcommand.systemsettings.SystemSettingsChangeTool
+import ai.droidcommand.systemsettings.SystemSettingsReadTool
 import ai.droidcommand.termux.ClientBackedTermuxExecutor
 import ai.droidcommand.termux.TermuxExecutor
 import ai.droidcommand.termux.TermuxTool
@@ -187,6 +190,7 @@ object AppModule {
         remoteActionExecutor: RemoteActionExecutor,
         toolboxRuntime: ToolboxRuntime,
         approvalPrompt: ApprovalPrompt,
+        systemSettings: SystemSettingsRuntime,
     ): ToolRegistry = ToolRegistry().apply {
         register(AutomationShellTool(AllowlistShellExecutor { advanced.shellAllowlist() }))
         register(
@@ -218,6 +222,12 @@ object AppModule {
         // System Toolbox for the assistant: refuses unless the owner turns its gate on (default off), and then still
         // asks through ApprovalPrompt on every call with the exact command. No shell and no reboot for the assistant.
         register(SystemToolboxTool(toolboxRuntime::preferred, advanced::systemToolboxAiEnabled, approvalPrompt))
+        // System Settings for the assistant (Victorious Framework): both tools refuse unless the owner turned assistant access on (default off).
+        // Reads share only reviewed settings; changes go through the shared engine, which re-checks everything and asks with the exact old and
+        // new values at execution time. Remote initiators are excluded by the tool specs.
+        val settingsAiEnabled = { systemSettings.prefs.config().assistantEnabled }
+        register(SystemSettingsReadTool(systemSettings.engine, systemSettings::profiles, systemSettings.profileService, systemSettings::device, settingsAiEnabled))
+        register(SystemSettingsChangeTool(systemSettings.engine, systemSettings::profiles, systemSettings.profileService, systemSettings::device, settingsAiEnabled))
     }
 
     @Provides

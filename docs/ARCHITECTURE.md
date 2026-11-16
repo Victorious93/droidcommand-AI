@@ -1841,3 +1841,15 @@ gate could not fail on a crash. Full record: `docs/CRASH_REPAIR_REPORT.md` and t
 Known gap, not fixed here: `DeviceConnectRuntime.startIfKeptOn()` can never resume the LAN listener after a process
 restart, because the pairing password it needs lives only in memory (`DeviceConnectTransport.pendingPassword`). "Keep
 waiting" therefore silently does nothing after a restart. It does not crash.
+
+## System Settings (Victorious Framework) — added 2026-11-15
+
+`core-system-settings` (JVM) is one typed engine for the Android System/Secure/Global tables. The `:app` screen (Advanced → System Settings), saved
+profiles, the assistant's two tools and the boot receiver all call the same `SystemSettingsEngine`, so validation, the write-ahead journal and
+restoration are identical everywhere. See `docs/SYSTEM_SETTINGS.md` for behaviour and `docs/AUDIT_2026-09-05.md` (2026-11-15) for what was verified.
+
+| Component | Status | Notes |
+|---|---|---|
+| `core-system-settings`: `SystemSettingsEngine`, `SettingsBackend` (Standard / Shizuku / Root), `Catalog`, `Journal`, `Profile`, `BootReplay`, `Tools` | IMPLEMENTED — 91 JVM tests | Fake-provider tests inject permission loss, timeouts, dead services, clamped values, crashes and external changes. Shell backends reuse the System Toolbox transports (`ToolboxBackend`); a real `sh` run proves hostile values stay one argument. |
+| `:app` `systemsettings/` (`AndroidPlatformSettings`, `SystemSettingsRuntime`, `PrivateDnsVerifier`, boot receiver) and `ui/systemsettings/` | COMPILES and unit tests pass on CI; emulator result in the audit addendum | `ContentResolver` access, display refresh rates from `DisplayManager`, Private DNS effect check from `LinkProperties`. Never run on a physical phone. |
+| Remote settings command | NOT PRESENT | No remote settings command or `REMOTE_SETTINGS` permission exists, none was invented. Remote-sourced requests are refused; the engine has a `RemoteSettingsAuthorizer` seam for a future command. |

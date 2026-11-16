@@ -80,6 +80,14 @@ object ScreenHelpCatalog {
             "unless you turn that on here, and it still asks every time.",
     )
 
+    val SYSTEM_SETTINGS = ScreenHelp(
+        title = "What is System Settings?",
+        body = "A native editor for Android's System, Secure and Global settings, with plain-language explanations for the ones this app " +
+            "understands. Nothing changes until you confirm a preview that shows the old and new value. Every change is read back and recorded " +
+            "so you can restore it. It uses standard permissions first, then Shizuku, and root only if you turn that on. The assistant cannot " +
+            "use it unless you allow that in Access, and it still asks every time.",
+    )
+
     val BOT_MAKER = ScreenHelp(
         title = "What is Bot maker?",
         body = "Make small helper bots for one job. Each bot has a name, instructions, and optional tools. " +

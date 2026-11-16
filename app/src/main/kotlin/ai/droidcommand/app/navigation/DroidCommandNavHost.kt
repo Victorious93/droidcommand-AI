@@ -28,6 +28,7 @@ import ai.droidcommand.app.ui.settings.AdvancedScreen
 import ai.droidcommand.app.ui.settings.SettingsScreen
 import ai.droidcommand.app.ui.status.StatusBackupScreen
 import ai.droidcommand.app.ui.studio.NotesStudioScreen
+import ai.droidcommand.app.ui.systemsettings.SystemSettingsScreen
 import ai.droidcommand.app.ui.toolbox.SystemToolboxScreen
 import ai.droidcommand.app.ui.tools.ToolsScreen
 import ai.droidcommand.app.ui.tools.metasploit.MetasploitScreen
@@ -106,6 +107,7 @@ object Routes {
     const val PC_HOSTS = "settings/pc-hosts"
     const val N8N = "advanced/n8n"
     const val SYSTEM_TOOLBOX = "advanced/toolbox"
+    const val SYSTEM_SETTINGS = "advanced/system-settings"
     const val NOTES_STUDIO = "advanced/notes-studio"
     const val BOT_MAKER = "advanced/bot-maker"
     const val SKILL_FILES = "advanced/skill-files"
@@ -212,6 +214,7 @@ fun DroidCommandNavHost(
                     onOpenLogs = { navController.navigate(Routes.LOGS) },
                     onOpenN8n = { navController.navigate(Routes.N8N) },
                     onOpenToolbox = { navController.navigate(Routes.SYSTEM_TOOLBOX) },
+                    onOpenSystemSettings = { navController.navigate(Routes.SYSTEM_SETTINGS) },
                     onOpenStudio = { navController.navigate(Routes.NOTES_STUDIO) },
                     onOpenBotMaker = { navController.navigate(Routes.BOT_MAKER) },
                     onOpenSkillFiles = { navController.navigate(Routes.SKILL_FILES) },
@@ -221,6 +224,7 @@ fun DroidCommandNavHost(
             }
             composable(Routes.N8N) { N8nScreen() }
             composable(Routes.SYSTEM_TOOLBOX) { SystemToolboxScreen() }
+            composable(Routes.SYSTEM_SETTINGS) { SystemSettingsScreen() }
             composable(Routes.NOTES_STUDIO) { NotesStudioScreen() }
             composable(Routes.BOT_MAKER) {
                 BotMakerScreen(onRunInChat = {
@@ -331,6 +335,7 @@ private val advancedChildRoutes = setOf(
     Routes.NOTES,
     Routes.N8N,
     Routes.SYSTEM_TOOLBOX,
+    Routes.SYSTEM_SETTINGS,
     Routes.NOTES_STUDIO,
     Routes.BOT_MAKER,
     Routes.SKILL_FILES,

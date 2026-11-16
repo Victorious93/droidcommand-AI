@@ -46,6 +46,7 @@ fun AdvancedScreen(
     onOpenLogs: () -> Unit = {},
     onOpenN8n: () -> Unit = {},
     onOpenToolbox: () -> Unit = {},
+    onOpenSystemSettings: () -> Unit = {},
     onOpenStudio: () -> Unit = {},
     onOpenBotMaker: () -> Unit = {},
     onOpenSkillFiles: () -> Unit = {},
@@ -62,6 +63,7 @@ fun AdvancedScreen(
         onOpenLogs = onOpenLogs,
         onOpenN8n = onOpenN8n,
         onOpenToolbox = onOpenToolbox,
+        onOpenSystemSettings = onOpenSystemSettings,
         onOpenStudio = onOpenStudio,
         onOpenBotMaker = onOpenBotMaker,
         onOpenSkillFiles = onOpenSkillFiles,
@@ -81,6 +83,7 @@ private fun AdvancedContent(
     onOpenLogs: () -> Unit,
     onOpenN8n: () -> Unit,
     onOpenToolbox: () -> Unit,
+    onOpenSystemSettings: () -> Unit,
     onOpenStudio: () -> Unit,
     onOpenBotMaker: () -> Unit,
     onOpenSkillFiles: () -> Unit,
@@ -123,6 +126,7 @@ private fun AdvancedContent(
                 DroidSecondaryButton(onClick = onOpenN8n, modifier = Modifier.fillMaxWidth().testTag("advanced_n8n")) { Text("n8n (self-hosted)") }
                 DroidSecondaryButton(onClick = onOpenStudio, modifier = Modifier.fillMaxWidth().testTag("advanced_notes_studio")) { Text("Notes Studio") }
                 DroidSecondaryButton(onClick = onOpenToolbox, modifier = Modifier.fillMaxWidth().testTag("advanced_system_toolbox")) { Text("System Toolbox (Shizuku / root)") }
+                DroidSecondaryButton(onClick = onOpenSystemSettings, modifier = Modifier.fillMaxWidth().testTag("advanced_system_settings")) { Text("System Settings (animations, display, Private DNS)") }
                 DroidSecondaryButton(onClick = onOpenBotMaker, modifier = Modifier.fillMaxWidth().testTag("advanced_bot_maker")) { Text("Bot maker") }
                 DroidSecondaryButton(onClick = onOpenSkillFiles, modifier = Modifier.fillMaxWidth().testTag("advanced_skill_files")) { Text("Skill files") }
                 DroidSecondaryButton(onClick = onOpenStatus, modifier = Modifier.fillMaxWidth().testTag("advanced_status_backup")) { Text("Status and backup") }

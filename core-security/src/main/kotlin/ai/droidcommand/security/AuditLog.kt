@@ -20,6 +20,9 @@ enum class AuditEventType {
     BOT_RUN_STARTED,
     BOT_PAUSED,
     BOT_RESUMED,
+    SETTINGS_CHANGED,
+    SETTINGS_RESTORED,
+    SETTINGS_REFUSED,
 }
 
 data class AuditEvent(
