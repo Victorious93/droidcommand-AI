@@ -158,6 +158,7 @@ dependencies {
     // EXTERNAL_NODE Messenger transport: pure envelope/validation/trust logic (api-exposes core-rootforge's
     // BridgeRequest/FailureKind). The Android Messenger plumbing is app/.../fleet/AndroidMessengerChannel.kt.
     implementation(project(":core-fleet-messenger"))
+    implementation(project(":core-fleet-tools"))
     implementation(project(":core-fleet-update"))
 
     // compose-bom, navigation-compose, lifecycle-viewmodel-compose, core-ktx and

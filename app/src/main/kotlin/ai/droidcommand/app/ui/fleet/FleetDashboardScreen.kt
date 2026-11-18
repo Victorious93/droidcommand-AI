@@ -95,6 +95,7 @@ fun FleetDashboardScreen(
         onOpenOrchestrator = onOpenOrchestrator,
         onOpenConnectDevice = onOpenConnectDevice,
         remotePcTile = { RemotePcTile() },
+        botSmsTile = { VictorSmsBotsCard() },
     )
 }
 
@@ -109,6 +110,7 @@ fun FleetDashboardContent(
     onOpenOrchestrator: () -> Unit,
     onOpenConnectDevice: () -> Unit = {},
     remotePcTile: @Composable () -> Unit = {},
+    botSmsTile: @Composable () -> Unit = {},
     install: FleetInstallState = FleetInstallState(),
     onInstall: (String) -> Unit = {},
     onAutoUpdate: (Boolean) -> Unit = {},
@@ -184,6 +186,7 @@ fun FleetDashboardContent(
             }
         }
         install.message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = AccentBlueBright) }
+        botSmsTile()
 
         state.cards.forEach { card ->
             FleetAppCard(
