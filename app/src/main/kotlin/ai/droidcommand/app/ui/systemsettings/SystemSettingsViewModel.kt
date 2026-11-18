@@ -193,6 +193,9 @@ class SystemSettingsViewModel @Inject constructor(
         private set
     private var autoSetupTried = false
 
+    private fun partialSetupMessage(report: AccessAutoSetup.Report): String =
+        "Set up through ${report.via?.label} was only partly done. " + report.failed.entries.joinToString(" ") { (g, why) -> "${g.label}: $why" }
+
     /**
      * Grants the missing Standard-access permissions through Shizuku, or root when the owner turned root on. Runs by itself once per
      * screen open and again whenever the owner taps the button. Only WRITE_SECURE_SETTINGS and WRITE_SETTINGS for this app, nothing else.
@@ -205,8 +208,7 @@ class SystemSettingsViewModel @Inject constructor(
                 banner = when {
                     report.note != null -> report.note
                     report.failed.isEmpty() -> "Set up through ${report.via?.label}: " + report.granted.joinToString { it.label } + " granted."
-                    else -> "Set up through ${report.via?.label} was only partly done. " +
-                        report.failed.entries.joinToString(" ") { (g, why) -> "${g.label}: $why" }
+                    else -> partialSetupMessage(report)
                 }
             }
             if (report.granted.isNotEmpty()) refresh()
