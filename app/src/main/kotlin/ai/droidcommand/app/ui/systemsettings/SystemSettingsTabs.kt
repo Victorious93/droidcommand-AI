@@ -562,6 +562,24 @@ internal fun AccessTab(vm: SystemSettingsViewModel) {
     }
     Text("Remote: no remote settings command exists in this app, so remote requests are refused.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("ss_remote_note"))
     SectionLabel("Set up access for this phone")
+    DroidCard(modifier = Modifier.testTag("ss_auto_setup")) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            val offer = vm.autoSetupOffer
+            Text("Automatic setup", fontWeight = FontWeight.Medium)
+            Text(
+                when {
+                    offer != null -> "Missing: " + offer.joinToString { it.label } + ". Shizuku (or root, if you turned it on) can grant this app those permissions for you. Nothing else is granted."
+                    vm.statuses.firstOrNull { it.kind == AccessKind.STANDARD }?.state == BackendState.READY -> "Standard permissions are already set up."
+                    else -> "Start Shizuku (Advanced), or turn on Root below, and this app will grant its own permissions. No computer needed."
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (offer != null) {
+                DroidPrimaryButton(onClick = { vm.autoConfigure(manual = true) }, modifier = Modifier.testTag("ss_auto_setup_run")) { Text("Set up now") }
+            }
+        }
+    }
+    Text("Manual alternative, from a computer:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     vm.setupSteps().forEach { step ->
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
