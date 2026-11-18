@@ -6,8 +6,12 @@ import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prefs.CodingTunnelChoice
 import ai.droidcommand.app.ui.chat.ToolbarToggle
 import ai.droidcommand.app.ui.components.DroidCard
+import ai.droidcommand.app.ui.components.DroidGroup
+import ai.droidcommand.app.ui.components.DroidListRow
+import ai.droidcommand.app.ui.components.PillTone
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ui.components.StatusPill
 import ai.droidcommand.app.ui.theme.DroidPrimaryButton
 import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.app.ux.ScreenHelpCatalog
@@ -22,6 +26,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -32,6 +47,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,8 +57,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
 /**
- * Phase 1 API-key entry. UNBUILT/UNTESTED (no Android SDK here). Keys go straight to the
- * Keystore-backed vault; this screen never displays a stored key, only its [KeyStatus].
+ * Settings: look, where the AI runs, API keys, voice, pairing and links. Keys go straight to the Keystore-backed
+ * vault; this screen never displays a stored key, only its [KeyStatus]. Written without an Android SDK and not yet
+ * run on a device.
  */
 @Composable
 fun SettingsScreen(
@@ -56,106 +73,104 @@ fun SettingsScreen(
     val status by viewModel.status.collectAsState()
     val searchStatus by viewModel.searchStatus.collectAsState()
     val hfStatus by viewModel.hfStatus.collectAsState()
+    val ready = CloudProviderCatalog.all.count { (status[it] ?: KeyStatus.NOT_SET) == KeyStatus.SAVED }
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ScreenTitleWithHelp("Settings", ScreenHelpCatalog.SETTINGS)
         ThemePickerSection()
-        SectionLabel("Setup")
-        DroidCard {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "See the first-run guide again: what this app is, pick a model, pair your other apps, and optional permissions.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                DroidPrimaryButton(onClick = onReplaySetup, modifier = Modifier.fillMaxWidth()) { Text("Show setup guide again") }
-            }
-        }
-        SectionLabel("API keys (stored encrypted on this device)")
-        DroidCard {
-            Text(
-                "Chat uses the provider last chosen on the Chat screen. " +
-                    "Without a key for that provider — and without an on-device model or a PC-hosted one — Chat cannot send. A key is never shown again after you save it.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+
+        SectionLabel("Where the AI runs")
+        DroidGroup {
+            DroidListRow(
+                title = "On-device models",
+                subtitle = "Import a .gguf file or download one. Works offline.",
+                icon = Icons.Filled.PhoneAndroid,
+                onClick = onOpenModels,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            DroidListRow(
+                title = "PC-hosted models",
+                subtitle = "Ollama or an OpenAI-compatible server on your PC, over Wi-Fi or VPN.",
+                icon = Icons.Filled.Computer,
+                onClick = onOpenPcHosts,
             )
         }
-        SectionLabel("On-device GGUF models")
-        DroidCard {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "Import a .gguf from this device, scan Download/models, or download a free Hugging Face catalog model. Chat uses the selected model on the device.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                DroidPrimaryButton(onClick = onOpenModels, modifier = Modifier.fillMaxWidth()) { Text("On-device models") }
-            }
-        }
-        SectionLabel("PC-hosted models (Ollama or an OpenAI-compatible server)")
-        DroidCard {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "Chat with a model that runs on your own PC, over your Wi-Fi or VPN. Messages are sent to the PC; no model file is copied to this phone, and no internet is needed while the phone can reach the PC.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                DroidPrimaryButton(onClick = onOpenPcHosts, modifier = Modifier.fillMaxWidth()) { Text("PC-hosted models") }
-            }
-        }
-        CloudProviderCatalog.all.forEach { provider ->
-            ApiKeyRow(
-                label = provider.label,
-                status = status[provider] ?: KeyStatus.NOT_SET,
-                onSave = { viewModel.save(provider, it) },
-                onClear = { viewModel.clear(provider) },
-            )
-        }
-        SectionLabel("Web search keys (optional — used only when the chat Web search toggle is on)")
-        SectionLabel("Hugging Face (optional)")
-        ApiKeyRow(
-            label = "Hugging Face token",
-            status = hfStatus,
-            onSave = viewModel::saveHuggingFaceToken,
-            onClear = viewModel::clearHuggingFaceToken,
-        )
+
+        SectionLabel("Cloud providers · $ready of ${CloudProviderCatalog.all.size} ready")
         Text(
-            "Not required. Public GGUF search and download work without it. A token is stored encrypted like the provider keys and is only sent to huggingface.co.",
+            "Stored encrypted on this device and never shown again after you save them. Chat uses the provider picked on the Chat screen; " +
+                "without a key, an on-device model or a PC-hosted one, Chat cannot send.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        WebSearchCatalog.all.forEach { slot ->
+        DroidGroup {
+            CloudProviderCatalog.all.forEachIndexed { index, provider ->
+                if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                ApiKeyRow(
+                    label = provider.label,
+                    status = status[provider] ?: KeyStatus.NOT_SET,
+                    onSave = { viewModel.save(provider, it) },
+                    onClear = { viewModel.clear(provider) },
+                )
+            }
+        }
+
+        SectionLabel("Web search (optional)")
+        Text(
+            "Used only while the Web search toggle in Chat is on. Each message is then sent to the search provider first.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        DroidGroup {
+            WebSearchCatalog.all.forEachIndexed { index, slot ->
+                if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                ApiKeyRow(
+                    label = slot.label,
+                    status = searchStatus[slot] ?: KeyStatus.NOT_SET,
+                    onSave = { viewModel.saveSearchKey(slot, it) },
+                    onClear = { viewModel.clearSearchKey(slot) },
+                )
+            }
+        }
+
+        SectionLabel("Model downloads (optional)")
+        DroidGroup {
             ApiKeyRow(
-                label = slot.label,
-                status = searchStatus[slot] ?: KeyStatus.NOT_SET,
-                onSave = { viewModel.saveSearchKey(slot, it) },
-                onClear = { viewModel.clearSearchKey(slot) },
+                label = "Hugging Face token",
+                status = hfStatus,
+                onSave = viewModel::saveHuggingFaceToken,
+                onClear = viewModel::clearHuggingFaceToken,
+                note = "Not required: public GGUF search and download work without it. The token is only sent to huggingface.co.",
             )
         }
+
         VoiceSettingsSection()
         PasswordPairingSection()
-        SectionLabel("Help")
-        DroidCard {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "What this app is, and what it will never do without asking.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                DroidPrimaryButton(onClick = onOpenHelp, modifier = Modifier.fillMaxWidth()) { Text("Open Help") }
-            }
-        }
-        SectionLabel("Advanced")
-        DroidCard {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "One-step commands, plans, memory, security tools, remote control, and later Kai capabilities live on the Advanced tab.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                DroidSecondaryButton(onClick = onOpenAdvanced, modifier = Modifier.fillMaxWidth()) { Text("Open Advanced") }
-            }
+
+        SectionLabel("More")
+        DroidGroup {
+            DroidListRow(
+                title = "Setup guide",
+                subtitle = "Replay the first-run walkthrough.",
+                icon = Icons.Filled.PlayArrow,
+                onClick = onReplaySetup,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            DroidListRow(
+                title = "Help",
+                subtitle = "What this app is, and what it will never do without asking.",
+                icon = Icons.Filled.Info,
+                onClick = onOpenHelp,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            DroidListRow(
+                title = "Advanced",
+                subtitle = "One-step commands, plans, memory, security tools and remote control.",
+                icon = Icons.Filled.Tune,
+                onClick = onOpenAdvanced,
+            )
         }
     }
 }
@@ -251,29 +266,60 @@ internal fun AdvancedSection(viewModel: SettingsViewModel) {
     }
 }
 
+/**
+ * One key as a collapsed line (name + status pill). Tapping opens the entry field, so ten key boxes are no longer
+ * stacked on the screen at once. Collapses itself after a save.
+ */
 @Composable
-private fun ApiKeyRow(label: String, status: KeyStatus, onSave: (String) -> Unit, onClear: () -> Unit) {
+private fun ApiKeyRow(label: String, status: KeyStatus, onSave: (String) -> Unit, onClear: () -> Unit, note: String? = null) {
     // Not rememberSaveable: a typed-but-unsaved key must not be written into the saved-instance Bundle.
     var input by remember { mutableStateOf("") }
-    DroidCard {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(label, style = MaterialTheme.typography.titleMedium)
-            Text(statusText(status), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            OutlinedTextField(
-                value = input,
-                onValueChange = { input = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text("API key") },
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DroidPrimaryButton(onClick = {
-                    onSave(input)
-                    input = ""
-                }, enabled = input.isNotBlank()) { Text("Save") }
-                DroidSecondaryButton(onClick = onClear, enabled = status != KeyStatus.NOT_SET) { Text("Remove") }
+    var open by rememberSaveable { mutableStateOf(false) }
+    val (pillText, tone) = when (status) {
+        KeyStatus.NOT_SET -> "Not set" to PillTone.Neutral
+        KeyStatus.SAVED -> "Saved" to PillTone.Success
+        KeyStatus.NEEDS_REENTRY -> "Re-enter" to PillTone.Warning
+        KeyStatus.STORAGE_ERROR -> "Error" to PillTone.Error
+    }
+    Column {
+        DroidListRow(
+            title = label,
+            onClick = { open = !open },
+            icon = Icons.Filled.Key,
+            trailing = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    StatusPill(pillText, tone)
+                    Icon(
+                        if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = if (open) "Collapse $label" else "Edit $label",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+        )
+        if (open) {
+            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(statusText(status), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (note != null) {
+                    Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text(if (status == KeyStatus.SAVED) "Replace key" else "API key") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DroidPrimaryButton(onClick = {
+                        onSave(input)
+                        input = ""
+                        open = false
+                    }, enabled = input.isNotBlank()) { Text("Save") }
+                    DroidSecondaryButton(onClick = onClear, enabled = status != KeyStatus.NOT_SET) { Text("Remove") }
+                }
             }
         }
     }

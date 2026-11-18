@@ -1,22 +1,12 @@
 package ai.droidcommand.app.ui.chat
 
 import ai.droidcommand.app.localmodels.OpenGgufDocument
-import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
+import ai.droidcommand.app.ui.components.SectionLabel
 import ai.droidcommand.app.ui.components.rememberDraft
-import ai.droidcommand.app.ui.theme.AccentBlue
-import ai.droidcommand.app.ui.theme.AccentBlueBright
-import ai.droidcommand.app.ui.theme.AccentCyan
-import ai.droidcommand.app.ui.theme.AccentIndigo
-import ai.droidcommand.app.ui.theme.BorderDark
-import ai.droidcommand.app.ui.theme.CardDark
 import ai.droidcommand.app.ui.theme.DroidIconButton
 import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.app.ui.theme.DroidTextButton
-import ai.droidcommand.app.ui.theme.OnAccent
-import ai.droidcommand.app.ui.theme.TextPrimary
-import ai.droidcommand.app.ui.theme.TextSecondary
-import ai.droidcommand.app.ui.theme.UserBubbleDark
 import ai.droidcommand.app.ux.FriendlyErrors
 import ai.droidcommand.app.ux.ScreenHelpCatalog
 import ai.droidcommand.llm.factory.CloudProviderCatalog
@@ -31,39 +21,60 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -78,6 +89,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -160,26 +173,33 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
             onToggleLibrary = { libraryOpen = !libraryOpen },
         )
 
+        // Options and Library open in bottom sheets that scroll on their own. Inline they sat above the message list
+        // with no scrolling, so on a phone the lower half (policy, memory, brain notes) ran under the navigation bar.
         if (optionsOpen) {
-            OptionsPanel(state, viewModel, onImportModel = { modelLauncher.launch(Unit) }, onOpenModels = onOpenModels, onOpenPcHosts = onOpenPcHosts)
+            ChatSheet(title = "Chat options", onDismiss = { optionsOpen = false }) {
+                OptionsPanel(state, viewModel, onImportModel = { modelLauncher.launch(Unit) }, onOpenModels = onOpenModels, onOpenPcHosts = onOpenPcHosts)
+            }
         }
         if (libraryOpen) {
-            ChatLibrary(state, viewModel)
+            ChatSheet(title = "Library", onDismiss = { libraryOpen = false }) {
+                ChatLibrary(state, viewModel)
+            }
         }
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (rows.isEmpty()) {
-                Text(
-                    FriendlyErrors.emptyChat(state.activeLocalModelId != null || state.activePcHost != null || state.cloudKeyReady),
-                    color = TextSecondary,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.align(Alignment.Center).padding(32.dp),
+                EmptyChat(
+                    message = FriendlyErrors.emptyChat(state.activeLocalModelId != null || state.activePcHost != null || state.cloudKeyReady),
+                    onSuggestion = { input = it },
+                    onOpenOptions = { optionsOpen = true },
+                    modifier = Modifier.align(Alignment.Center),
                 )
             }
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(vertical = 8.dp),
             ) {
                 items(rows) { line -> MessageBubble(line) }
             }
@@ -204,38 +224,38 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
         if (state.wakeWord.listeningForWakeWord) {
-            Text("Wake word on: the microphone is listening for the wake phrase.", color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+            Text("Wake word on: the microphone is listening for the wake phrase.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
         if (state.voice.listening && state.voice.partial.isNotEmpty()) {
-            Text(state.voice.partial, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+            Text(state.voice.partial, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
 
         state.activeBotName?.let { botName ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                Text("Helper bot: $botName", color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                Text("Helper bot: $botName", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                 DroidTextButton(onClick = viewModel::stopBot) { Text("Stop bot") }
             }
             state.botToolStatus?.let {
-                Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 4.dp))
+                Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 4.dp))
             }
         }
 
         state.notice?.let {
-            Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+            Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
 
         // Under an inference policy: which device or endpoint and model answered, and why an earlier one did not.
         state.routeSummary?.let {
             Text(
                 it,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(vertical = 4.dp).testTag("chat_route_summary"),
             )
         }
 
         state.documentStatus?.let {
-            Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+            Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
         }
 
         if (state.confirmMeteredDownload) {
@@ -308,30 +328,93 @@ private fun Header(
     libraryOpen: Boolean,
     onToggleLibrary: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top,
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        ScreenTitleWithHelp("AI Chat", ScreenHelpCatalog.CHAT)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            // One tap target for "which model / where do replies come from": the status pill itself opens the options sheet.
+            Surface(
+                onClick = onToggleOptions,
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(1.dp, if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
+                modifier = Modifier.weight(1f).testTag("chat_status_pill"),
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 14.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(Icons.Filled.Tune, contentDescription = if (optionsOpen) "Close chat options" else "Open chat options", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                    Text(
+                        text = subtitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            DroidIconButton(onClick = onToggleLibrary) {
+                Icon(Icons.Filled.Bookmark, contentDescription = if (libraryOpen) "Hide library" else "Library", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            DroidIconButton(onClick = onNewChat, enabled = newChatEnabled) {
+                Icon(Icons.Filled.Add, contentDescription = "New chat", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/** A modal bottom sheet whose body scrolls and clears the keyboard and navigation bar, so no control can end up unreachable. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatSheet(title: String, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            ScreenTitleWithHelp("AI Chat", ScreenHelpCatalog.CHAT)
-            Text(
-                text = subtitle + if (optionsOpen) "  ▴" else "  ▾",
-                color = if (active) AccentBlueBright else AccentCyan,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                modifier = Modifier.clickable(onClick = onToggleOptions).padding(vertical = 4.dp),
-            )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
+                .navigationBarsPadding()
+                .imePadding(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            content()
         }
-        Column(horizontalAlignment = Alignment.End) {
-            DroidTextButton(onClick = onToggleLibrary) {
-                Text(if (libraryOpen) "Hide library" else "Library", color = MaterialTheme.colorScheme.primary)
-            }
-            DroidTextButton(onClick = onNewChat, enabled = newChatEnabled) {
-                Text("New chat", color = TextSecondary)
+    }
+}
+
+private val SUGGESTIONS = listOf(
+    "Explain something simply",
+    "Help me write an email",
+    "Summarise this for me",
+    "Plan my day",
+)
+
+/** The empty conversation: say what to do next (and what is missing), and offer starters that only fill the input. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EmptyChat(message: String, onSuggestion: (String) -> Unit, onOpenOptions: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
+        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SUGGESTIONS.forEach { text ->
+                SuggestionChip(onClick = { onSuggestion(text) }, label = { Text(text) })
             }
         }
+        DroidTextButton(onClick = onOpenOptions) { Text("Choose model or where replies come from") }
     }
 }
 
@@ -341,21 +424,31 @@ private fun Header(
  */
 @Composable
 private fun InferencePolicyPicker(state: ChatUiState, viewModel: ChatViewModel) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.testTag("inference_policy_picker")) {
-        Text("Where replies come from", style = MaterialTheme.typography.titleSmall)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("inference_policy_picker")) {
+        SectionLabel("Where replies come from")
         InferencePolicy.entries.forEach { policy ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            val selected = state.inferencePolicy == policy
+            Surface(
+                onClick = { viewModel.setInferencePolicy(policy) },
+                enabled = !state.sending,
+                shape = RoundedCornerShape(14.dp),
+                color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
                 modifier = Modifier.fillMaxWidth().testTag("inference_policy_${policy.id}"),
             ) {
-                RadioButton(
-                    selected = state.inferencePolicy == policy,
-                    onClick = { viewModel.setInferencePolicy(policy) },
-                    enabled = !state.sending,
-                )
-                Column {
-                    Text(policy.label, style = MaterialTheme.typography.bodyMedium)
-                    Text(policy.description, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(
+                        if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                        contentDescription = if (selected) "Selected" else "Not selected",
+                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(policy.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                        // Only the chosen policy shows its explanation; five paragraphs at once was the wall of text.
+                        if (selected) {
+                            Text(policy.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
             }
         }
@@ -367,7 +460,7 @@ private fun InferencePolicyPicker(state: ChatUiState, viewModel: ChatViewModel) 
                     "; the PC uses the server and model saved in Settings, PC-hosted models. " +
                     "A slash command that names a cloud provider is refused unless cloud fallback is on.",
                 style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -383,17 +476,20 @@ private fun OptionsPanel(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val activeLocal = state.localModels.firstOrNull { it.id == state.activeLocalModelId }
-    DroidCard(modifier = Modifier.padding(bottom = 12.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box {
-                DroidSecondaryButton(onClick = { menuOpen = true }) {
+    Column {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SectionLabel("Model")
+            Box(modifier = Modifier.fillMaxWidth()) {
+                DroidSecondaryButton(onClick = { menuOpen = true }, modifier = Modifier.fillMaxWidth()) {
                     Text(
                         when {
                             state.activePcHost != null -> "On your PC: ${state.activePcHost.label}"
                             state.activeLocalModelId != null -> "On device: ${activeLocal?.label ?: "model"}"
                             else -> state.provider.label
                         },
+                        modifier = Modifier.weight(1f),
                     )
+                    Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     CloudProviderCatalog.all.forEach { spec ->
@@ -403,7 +499,7 @@ private fun OptionsPanel(
                         })
                     }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("On-device models", color = TextSecondary) }, onClick = {}, enabled = false)
+                    DropdownMenuItem(text = { Text("On-device models", color = MaterialTheme.colorScheme.onSurfaceVariant) }, onClick = {}, enabled = false)
                     state.localModels.forEach { model ->
                         DropdownMenuItem(text = { Text("On device: ${model.label}") }, onClick = {
                             viewModel.selectLocalModel(model.id)
@@ -426,7 +522,7 @@ private fun OptionsPanel(
                         },
                     )
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("Models on your PC", color = TextSecondary) }, onClick = {}, enabled = false)
+                    DropdownMenuItem(text = { Text("Models on your PC", color = MaterialTheme.colorScheme.onSurfaceVariant) }, onClick = {}, enabled = false)
                     state.pcHosts.filterValues { it.model.isNotBlank() }.forEach { (kind, saved) ->
                         DropdownMenuItem(text = { Text("On your PC: ${kind.label} · ${saved.model}") }, onClick = {
                             viewModel.selectPcHost(kind)
@@ -451,7 +547,7 @@ private fun OptionsPanel(
                         "This needs the phone to reach the PC (same Wi-Fi or VPN), not internet access. " +
                         "A later cloud turn sends the whole conversation, including these replies, to that provider.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 DroidSecondaryButton(onClick = onOpenPcHosts) { Text("PC-hosted models…") }
             } else if (state.activeLocalModelId == null) {
@@ -466,12 +562,15 @@ private fun OptionsPanel(
                 Text(
                     "Replies run on this device. A later cloud turn sends the whole conversation, including these replies, to that provider.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 DroidSecondaryButton(onClick = viewModel::askDeleteLocalModel, enabled = !state.sending) { Text("Delete this model file") }
             }
             state.localStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            HorizontalDivider()
             InferencePolicyPicker(state, viewModel)
+            HorizontalDivider()
+            SectionLabel("Memory")
             if (state.localImporting) {
                 DroidSecondaryButton(onClick = viewModel::cancelLocalImport) { Text("Cancel import") }
             }
@@ -489,6 +588,8 @@ private fun OptionsPanel(
                     state.memoryStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 }
             }
+            HorizontalDivider()
+            SectionLabel("Brain notes")
             Text(
                 if (state.brainEnabled) {
                     "Brain notes are on. Matching notes are added to the next reply. Saving still asks first."
@@ -496,7 +597,7 @@ private fun OptionsPanel(
                     "Brain notes are off. Turn them on with AI can read and write these notes on the Brain screen."
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (state.brainEnabled) {
                 var factTitle by remember { mutableStateOf("") }
@@ -587,28 +688,31 @@ private fun OptionsPanel(
 
 @Composable
 private fun MessageBubble(line: ChatLine) {
+    val scheme = MaterialTheme.colorScheme
     if (line.fromUser) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             Surface(
-                color = UserBubbleDark,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 6.dp),
-                border = BorderStroke(1.dp, AccentIndigo),
+                color = scheme.primaryContainer,
+                shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = 22.dp, bottomEnd = 6.dp),
                 modifier = Modifier.widthIn(max = 300.dp),
             ) {
-                Text(line.text, color = TextPrimary, modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp))
+                SelectionContainer {
+                    Text(line.text, color = scheme.onPrimaryContainer, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+                }
             }
         }
     } else {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
             Surface(
-                color = CardDark,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 6.dp, bottomEnd = 24.dp),
-                border = BorderStroke(1.dp, BorderDark),
-                modifier = Modifier.widthIn(max = 320.dp),
+                color = scheme.surfaceVariant,
+                shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = 6.dp, bottomEnd = 22.dp),
+                border = BorderStroke(1.dp, scheme.outline),
+                modifier = Modifier.widthIn(max = 330.dp),
             ) {
-                Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("ASSISTANT", color = AccentCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                    Text(line.text, color = TextPrimary)
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("ASSISTANT", color = scheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    // Long-press selects text, so a reply can be copied (there was no way to copy before).
+                    SelectionContainer { Text(line.text, color = scheme.onSurface) }
                 }
             }
         }
@@ -674,7 +778,11 @@ private fun InputBar(
     }
     // Toolbar row above the input: the web-search toggle. When on, each message's text is sent to the
     // configured search provider (Brave/SerpAPI) before the model call — hence the explicit label.
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         if (ToolbarToggle.WEB_SEARCH in visibleToggles) {
             FilterChip(
                 selected = webSearchEnabled,
@@ -704,13 +812,13 @@ private fun InputBar(
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(28.dp),
             maxLines = 4,
-            placeholder = { Text("Ask DroidCommand AI…", color = TextSecondary) },
+            placeholder = { Text("Ask DroidCommand AI…", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = CardDark,
-                unfocusedContainerColor = CardDark,
-                focusedBorderColor = AccentBlue,
-                unfocusedBorderColor = BorderDark,
-                cursorColor = AccentBlueBright,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                cursorColor = MaterialTheme.colorScheme.primary,
             ),
         )
         if (ToolbarToggle.MICROPHONE in visibleToggles) {
@@ -718,7 +826,7 @@ private fun InputBar(
                 Icon(
                     if (listening) Icons.Filled.Stop else Icons.Filled.Mic,
                     contentDescription = if (listening) "Stop dictation" else "Dictate",
-                    tint = if (listening) AccentBlueBright else TextSecondary,
+                    tint = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -736,10 +844,10 @@ private fun InputBar(
                 onClick = onSend,
                 enabled = canSend,
                 colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = AccentBlue,
-                    contentColor = OnAccent,
-                    disabledContainerColor = CardDark,
-                    disabledContentColor = TextSecondary,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
                 modifier = Modifier.padding(start = 2.dp),
             ) {
