@@ -2,6 +2,7 @@ package ai.droidcommand.app.ui.systemsettings
 
 import ai.droidcommand.app.systemsettings.DeviceFacts
 import ai.droidcommand.app.systemsettings.SystemSettingsRuntime
+import ai.droidcommand.systemsettings.AccessAutoSetup
 import ai.droidcommand.systemsettings.AccessKind
 import ai.droidcommand.systemsettings.AccessSetupInstructions
 import ai.droidcommand.systemsettings.ApplyResult
@@ -178,6 +179,37 @@ class SystemSettingsViewModel @Inject constructor(
             dnsLine = snapshot.dns
             config = rt.prefs.config()
             loading = false
+            autoSetupOffer = rt.autoSetup.missing(statuses.firstOrNull { it.kind == AccessKind.STANDARD })
+                .takeIf { it.isNotEmpty() && rt.autoSetup.backendFor(config.allowed) != null }
+            if (autoSetupOffer != null && !autoSetupTried) {
+                autoSetupTried = true
+                autoConfigure(manual = false)
+            }
+        }
+    }
+
+    /** Grants that are still missing and could be granted right now through an allowed Shizuku or root; null when nothing can be done. */
+    var autoSetupOffer by mutableStateOf<Set<AccessAutoSetup.Grant>?>(null)
+        private set
+    private var autoSetupTried = false
+
+    /**
+     * Grants the missing Standard-access permissions through Shizuku, or root when the owner turned root on. Runs by itself once per
+     * screen open and again whenever the owner taps the button. Only WRITE_SECURE_SETTINGS and WRITE_SETTINGS for this app, nothing else.
+     */
+    fun autoConfigure(manual: Boolean) {
+        val wanted = autoSetupOffer ?: return
+        viewModelScope.launch {
+            val report = withContext(Dispatchers.IO) { rt.autoSetup.run(applicationId, wanted, config.allowed) }
+            if (report.granted.isNotEmpty() || report.failed.isNotEmpty() || manual) {
+                banner = when {
+                    report.note != null -> report.note
+                    report.failed.isEmpty() -> "Set up through ${report.via?.label}: " + report.granted.joinToString { it.label } + " granted."
+                    else -> "Set up through ${report.via?.label} was only partly done. " +
+                        report.failed.entries.joinToString(" ") { (g, why) -> "${g.label}: $why" }
+                }
+            }
+            if (report.granted.isNotEmpty()) refresh()
         }
     }
 
