@@ -49,6 +49,7 @@ class BotMakerViewModel @Inject constructor(
     private val registry: ToolRegistry,
     private val capabilities: AssistantCapabilitySettingsStore,
     private val mcpTools: McpToolsRuntime,
+    private val botRuntime: BotRuntime,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("helper_bots", Context.MODE_PRIVATE)
 
@@ -177,6 +178,7 @@ class BotMakerViewModel @Inject constructor(
         // Also drop the deleted bot from every other bot's "talks to" list, so no grant is left pointing at it.
         val bots = mutable.value.bots.filterNot { it.id == bot.id }.map { it.copy(talksTo = it.talksTo - bot.id) }
         prefs.edit { putString(KEY, HelperBots.encode(bots)) }
+        botRuntime.forget(bot.id)
         mutable.update { it.copy(bots = bots, toolState = toolStates(bots), pendingDelete = null, status = "Deleted \"${bot.name}\".") }
     }
 

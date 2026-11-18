@@ -1166,10 +1166,12 @@ class ChatViewModel @Inject constructor(
 
     private fun botPrompt(bot: HelperBot, allowed: Set<String>): String {
         val names = botKit?.names.orEmpty()
+        val canMessage = BotToolNames.MESSAGE_SEND in names
         return HelperBots.systemPrompt(
             bot,
             allowed,
-            peerNames = if (BotToolNames.MESSAGE in names) botRuntime.peerNames(bot) else emptyList(),
+            peers = if (canMessage) botRuntime.peersOf(bot) else emptyList(),
+            unreadMessages = if (canMessage) botRuntime.unreadFor(bot) else 0,
             sandboxOn = BotToolNames.SANDBOX_RUN in names,
         )
     }

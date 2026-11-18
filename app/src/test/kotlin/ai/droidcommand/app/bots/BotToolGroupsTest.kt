@@ -46,4 +46,11 @@ class BotToolGroupsTest {
         assertEquals(listOf("tap"), BotToolGroups.filter(options, "SCREEN").map { it.name })
         assertTrue(BotToolGroups.filter(options, "  ").size == 2)
     }
+
+    @Test
+    fun `VictorSMS tools have their own group, not Fleet or Other`() {
+        val groups = BotToolGroups.group(listOf(opt("victorsms_send"), opt("victorsms_send_status"), opt("fleet_send_command"))).associate { it.title to it.tools.map { t -> t.name } }
+        assertEquals(listOf("victorsms_send", "victorsms_send_status"), groups["Texts (VictorSMS)"])
+        assertEquals(listOf("fleet_send_command"), groups["Fleet & remote"])
+    }
 }

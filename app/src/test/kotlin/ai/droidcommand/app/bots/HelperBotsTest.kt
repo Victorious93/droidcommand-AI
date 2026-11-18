@@ -105,7 +105,14 @@ class HelperBotsTest {
         val bot = HelperBot("1", "Research", "Find things")
         val plain = HelperBots.systemPrompt(bot, emptySet())
         assertTrue(!plain.contains("bot_message") && !plain.contains("sandbox"))
-        val full = HelperBots.systemPrompt(bot, setOf("bot_message"), peerNames = listOf("Writer"), sandboxOn = true)
-        assertTrue(full.contains("Writer") && full.contains("bot_message") && full.contains("sandbox_create"))
+        val full = HelperBots.systemPrompt(
+            bot,
+            setOf("bot_message_send"),
+            peers = listOf(BotPeerRef("22", "Writer")),
+            unreadMessages = 2,
+            sandboxOn = true,
+        )
+        assertTrue(full.contains("Writer (id 22)") && full.contains("bot_message_send") && full.contains("sandbox_create"))
+        assertTrue(full.contains("2 unread messages"))
     }
 }

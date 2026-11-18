@@ -25,6 +25,7 @@ object BotToolGroups {
         "Web & AI" to { n -> n == "web_search" || n == "ask_ai" },
         "Notes & memory" to { n -> n.startsWith("notes_") || n.startsWith("brain_") || n.startsWith("memory_") },
         "Bots" to { n -> n.startsWith("bot_") || n.startsWith("sandbox_") },
+        "Texts (VictorSMS)" to { n -> n.startsWith("victorsms_") },
         "Fleet & remote" to { n ->
             n.startsWith("fleet_") || n.startsWith("remote_") || n.startsWith("rootforge_") || n.startsWith("mesh_") ||
                 n.startsWith("filemanager_") || n.startsWith("victorsuite_") || n.startsWith("n8n_") ||

@@ -1824,27 +1824,27 @@ module.
 
 **Verified B2 session (no Android SDK, no live LLM):** `./gradlew :core-bots:test :core-security:test` and `./gradlew :core-bots:ktlintCheck :core-security:ktlintCheck` — **BUILD SUCCESSFUL**, 6 new `BotLifecycleTest` tests (24 total in `core-bots`), 0 failures. Full `./gradlew test ktlintCheck --continue` (no `-PincludeAndroid`): **BUILD SUCCESSFUL** — 2743 tests, 0 failures/errors, 20 pre-existing device-only skips, zero regressions.
 
-### Bot maker: per-bot peers and sandbox (2026-11-18)
+### Bot maker: per-bot peers and sandbox, wired into the app (2026-11-18)
 
-Owner request: bots that use different MCP servers, may start their own sandbox, and are given permission on which
-bots may talk to which. Status per row; the audit addendum of the same date has the verification record.
+Builds on the bot-to-bot policy/bus that PR #315 added to `core-bots` (`BotPeerPolicy`, `BotMessageBus`,
+`bot_message_send` / `bot_message_read`) — that is the **one** messaging stack; this entry adds what #315 listed as
+not built (app wiring, owner UI, persistence) plus the per-bot sandbox. The audit addenda of the same date have the
+verification records.
 
 | Component | Status | Notes |
 |---|---|---|
-| `core-bots.BotPeer` / `BotDirectory` / `BotBus` / `BotConversation` | IMPLEMENTED — JVM-tested | Directed, default-deny "may message" allow-list per bot. Refuses: unknown/paused bots, not-the-current-speaker, self, not on the sender's list, a bot already in the chain (no A→B→A), chains over 3 bots, over 6 messages per conversation tree, empty or over 2,000-char text. Every decision is audited; a full audit log fails closed. The recipient is run through an injected `BotResponder` and sees the text framed as "from another helper bot, not the owner". |
-| `core-bots.BotMessageTool` / `BotPeersTool` | IMPLEMENTED — JVM-tested | Bound per run to one `BotConversation`, so the sender is always the running bot. A target outside the allow-list gets the same answer whether or not it exists; the attempt is still audited. |
+| `core-bots.AuditedBotMessageSendTool` | IMPLEMENTED — JVM-tested | Wraps `BotMessageSendTool`; writes `BOT_MESSAGE_SENT` / `BOT_MESSAGE_DENIED` (recipient id + length or the bus's reason, never the text). Audited after the bus decides, so a full log does not stop an inert mailbox message. |
 | `core-bots.SandboxExecutor` / `ProotSandboxExecutor` | IMPLEMENTED — JVM-tested against a fake `TermuxExecutor`; **never run against a real proot-distro** | One proot-distro container per bot (`dca-bot-<id>`). Commands use only options in proot-distro's master README (`install IMAGE --name NAME`, `login CONTAINER --isolated -- CMD`, `remove CONTAINER`, `list --quiet`); the command is a single argv element. Needs a proot-distro with OCI-image install; older releases differ. Not a security boundary (proot is not a VM). |
-| `core-bots.SandboxCreateTool` / `SandboxRunTool` / `SandboxDeleteTool` | IMPLEMENTED — JVM-tested | SENSITIVE, confirm-every-time, `PermissionCategory.TERMINAL`. Bound to one bot id, so no input can name another bot's sandbox; the bot's sandbox switch is re-read on every call; audited before running. |
-| `core-bots.BotToolKit` / `RoutingToolRunner` | IMPLEMENTED — JVM-tested | A running bot's own tools run through their own `SecureToolExecutor`; every other name goes to the app's normal runner. |
+| `core-bots.SandboxCreateTool` / `SandboxRunTool` / `SandboxDeleteTool` | IMPLEMENTED — JVM-tested | SENSITIVE, confirm-every-time, `PermissionCategory.TERMINAL`. Bound to one bot id, so no input can name another bot's sandbox; the bot's sandbox switch is re-read on every call; audited before running (a full log refuses to run). |
+| `core-bots.BotToolKit` / `RoutingToolRunner` / `BotToolNames` | IMPLEMENTED — JVM-tested | A running bot's own tools run through their own `SecureToolExecutor`; every other name goes to the app's normal runner. |
 | `core-security.AuditEventType` | EXTENDED | `BOT_MESSAGE_SENT`, `BOT_MESSAGE_DENIED`, `BOT_SANDBOX_CREATED`, `BOT_SANDBOX_COMMAND`, `BOT_SANDBOX_DELETED`. `LogsScreen` shows `BOT_MESSAGE_DENIED` as a problem. Persisted audit files written by this build are not readable by an older build (`valueOf`). |
-| `app.bots.HelperBot` | EXTENDED | `talksTo: Set<String>` and `sandbox: Boolean`; bots saved earlier read as "talks to nobody, no sandbox". |
-| `app.bots.BotRuntime` | IMPLEMENTED — `:app` compiles, no device run | Builds a running bot's kit only when the owner ticked a peer (peers) or the bot's sandbox switch **and** the Linux environment switch are on. Peer replies are **text only** (the recipient runs no tools) and go through `PolicyInference` / the Chat provider like the companion-assist pop-ups. |
-| `app.bots.BotMakerScreen` (redesign) / `BotToolGroups` | IMPLEMENTED — `:app` compiles; unit-tested grouping | Bots first as cards; one editor with Basics, Tools (search, groups, per-MCP-server group with All/None), Talks to, Sandbox. |
+| `app.bots.HelperBot` | EXTENDED | `talksTo: Set<String>` (the per-bot allow-list the owner edits) and `sandbox: Boolean`; bots saved earlier read as "talks to nobody, no sandbox". |
+| `app.bots.BotRuntime` | IMPLEMENTED — `:app` compiles; emulator-checked only for the Bot maker screens | Rebuilds the `BotPeerPolicy` from the saved bots on every send (a link to a deleted bot or to itself grants nothing), owns the in-memory `BotMessageBus` (mailboxes are lost on restart; nothing runs the recipient), and builds a running bot's kit only when the owner ticked a peer or the bot's sandbox switch **and** the Linux environment switch are on. |
+| `app.bots.BotMakerScreen` (redesign) / `BotToolGroups` | IMPLEMENTED — `:app` compiles; emulator-checked; unit-tested grouping | Bots first as cards with chips; one editor (opens at the top) with Basics, Tools (search, purpose groups, one group per MCP server with All/None, a Texts (VictorSMS) group), Talks to other bots, Own sandbox. |
 
-**Not built (by design, this slice):** a bot that is started by anything other than the owner tapping Run (B3/B4);
-peers that run tools while answering; any bot tool for VictorSMS (send/receive SMS, place/answer calls) — VictorSMS's
-bridge today only has `sms.send` (queued, on-device Approve), `sms.send.status`, status and config ops, so reading
-messages and calls need new bridge ops on that side first.
+**Not built:** a bot started by anything other than the owner tapping Run (B3/B4); a bot woken by an incoming message;
+persistence of mailboxes; bots that read texts, receive texts or place/answer calls (VictorSMS exposes no such op — see
+the #315 audit addendum for the texting step and its known reply-validation gap).
 
 ## 20. Launch-crash repair and the release gate (2026-11-13)
 

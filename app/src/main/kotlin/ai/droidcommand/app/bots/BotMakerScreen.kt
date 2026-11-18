@@ -349,8 +349,9 @@ private fun ToolPicker(
 private fun PeerPicker(others: List<HelperBot>, talksTo: List<String>, onChange: (List<String>) -> Unit) {
     Text(
         "A bot can only message the bots you tick here, and only one way: ticking Writer for Research lets Research " +
-            "message Writer, not the other way round. The other bot answers in text only, and nothing it says gives " +
-            "this bot any extra permission. Messages are logged in the Activity log.",
+            "send to Writer, not the other way round. A message waits in the other bot's mailbox until you run that bot; " +
+            "it reads it with its own tool, and nothing in it gives it any extra permission. Mailboxes are kept in memory " +
+            "and are cleared when the app restarts. Every send is logged in the Activity log.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

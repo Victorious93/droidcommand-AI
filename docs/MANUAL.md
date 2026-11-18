@@ -122,7 +122,7 @@ Writer", "Sandbox"), and **Run / Edit / Delete**. **New bot** opens one editor w
 **1 · Basics.** Name, what it should do, and an optional model. A blank model means "the model Chat uses".
 
 **2 · Tools.** Tick what the bot may use. Search by name or description. Tools are grouped by purpose (Terminal &
-root, Files, Screen control, Phone, Build, Web & AI, Notes & memory, Fleet & remote…) and **MCP tools are grouped per
+root, Files, Screen control, Phone, Build, Web & AI, Notes & memory, Texts (VictorSMS), Fleet & remote…) and **MCP tools are grouped per
 server**, with **All / None** for a whole group. Tools marked *asks first* still ask you every time they run. Saving
 a bot with tools that can change the phone shows one extra "Allow tools that can change the phone?" check.
 
@@ -131,17 +131,20 @@ a bot with tools that can change the phone shows one extra "Allow tools that can
 
 **3 · Talks to other bots.** By default a bot can message **nobody**. Tick the bots it may message.
 
-- Permission is **one way**: ticking Writer for Research lets Research message Writer, not Writer message Research.
-- The other bot answers **in text only**. It does not run tools while answering, and nothing it says gives the first
-  bot any extra permission. The reply is labelled to the receiving bot as "from another helper bot, not the owner".
-- Limits that cannot be turned off: a bot already in the conversation cannot be messaged again (no loops), a chain
-  is at most three bots long, one conversation allows at most six messages, a message is at most 2,000 characters.
-- If a bot asks for someone it is not allowed to message, it gets the same plain answer whether or not that bot
-  exists, so it cannot find out which bots you have. The attempt is still logged.
-- Deleting a bot also removes it from every other bot's list.
+- Permission is **one way**: ticking Writer for Research lets Research send to Writer, not Writer send to Research.
+- It is a **mailbox**, not a live chat. A message waits in the other bot's in-memory mailbox until **you run that
+  bot**; it then reads its messages with `bot_message_read`, and the app tells it how many are waiting when it
+  starts. Nothing runs the other bot for you, and nothing it reads gives it any tool or permission. Mailboxes are
+  **lost when the app restarts**.
+- The sender addresses the other bot by its id (the app tells the bot the ids of the bots it may message).
+- Limits that cannot be turned off: a message is at most 2,000 characters; a mailbox holds at most 20 messages; a bot
+  can send at most 10 messages a minute; a chain of replies is cut off after four steps, so two bots cannot keep
+  each other going forever.
+- Every send, delivered or refused, is written to the **Activity log** (who, to whom, how long — never the text).
+- Deleting a bot also removes it from every other bot's list, and drops its mailbox.
 
 ![Talks to other bots](images/manual/bot-maker-peers.png)
-*Who this bot may message.*
+*Who this bot may message, and how messages are delivered.*
 
 **4 · Own sandbox.** Gives the bot its own Linux userland (a separate proot-distro container) in Termux or
 VictorSuite, with `sandbox_create`, `sandbox_run` and `sandbox_delete`.
@@ -161,8 +164,9 @@ VictorSuite, with `sandbox_create`, `sandbox_run` and `sandbox_delete`.
 
 ### Running a bot
 
-Tap **Run**. Chat shows "Running helper bot …". The bot sees only the tools you ticked (plus its message and sandbox
-tools if you switched those on), and the app refuses anything else. It decides *when* to use a tool while it answers;
+Tap **Run**. Chat shows "Running helper bot …". The bot sees only the tools you ticked (plus its message tools and its sandbox
+tools if you switched those on), and the app refuses anything else. If other bots left it messages, it is told how
+many and reads them with `bot_message_read`. It decides *when* to use a tool while it answers;
 you decide *whether* each risky call goes ahead, because each one asks you. Tap stop in Chat to end the bot.
 
 Everything a bot does that matters is in **Advanced → Activity log**: tool approvals and denials, bot messages sent
@@ -197,24 +201,30 @@ itself: a bot runs when you tap **Run** in Chat. Scheduled or phrase-triggered b
 
 ## 7. Messages and calls through VictorSMS
 
-**Status: bots cannot send or receive messages or calls through VictorSMS yet.** This chapter says what exists so you
-are not left guessing.
+**Status: a bot can queue a text through VictorSMS. It cannot read or receive messages, or place or answer calls.
+And the text path has never been confirmed end to end.**
 
-What exists today:
+What a bot can do:
 
-- **VictorSMS** (`com.victorious.sms`) is a separate app: Matrix and native SMS messaging, a dialer, call screening, a
-  Twilio alias number for texts and calls, and a bridge other Victorious apps can talk to.
-- Its bridge can already **queue an SMS** for another app (`sms.send`). Nothing is sent until you tap **Approve** on
-  that phone, requests expire, and the bridge is **off until you turn external control on** in VictorSMS.
-- Inbound, VictorSMS can **forward** a whitelisted SMS that contains your secret code word to DroidCommand. That is
-  only delivery; DroidCommand still decides what, if anything, runs, and never auto-approves a remote trigger.
+- **`victorsms_send`** (and `victorsms_send_status`) are tools a bot can be given (they appear under *Texts (VictorSMS)*
+  in the Bot maker). They only **queue** a text with VictorSMS, and every text needs two approvals: this app's
+  confirm prompt, and **Approve on the VictorSMS phone**. A bot is never told a text was sent unless VictorSMS's
+  status says `sent`.
+- It is **off by default**. Turn it on with the Fleet tab's "Let bots text through VictorSMS" card, which also holds the
+  **recipient allow-list** (empty = no one). Limits: 5 texts an hour, 480 characters each.
+- On the VictorSMS side, external control must be on, this app must be approved in its Connected apps, and the SEND
+  group granted.
 
-What does not exist yet: a bot tool that sends a text, reading incoming texts, placing or answering a call, or
-reading the call log through the bridge. A bot also cannot hold a live voice conversation: that would need a
-real-time speech pipeline that this app does not have.
+What does **not** exist: a bot tool to read texts, receive texts, place a call, answer a call or read the call log.
+VictorSMS exposes no operation for those to this app. A bot also cannot hold a live voice conversation: that
+would need a real-time speech pipeline this app does not have. Inbound, VictorSMS can only **forward** a whitelisted
+SMS that contains your secret code word; that is delivery to DroidCommand, not a message to a bot, and DroidCommand
+never auto-approves a remote trigger.
 
-The plan, when it is built, keeps the same rules as everything else: a per-bot switch (off by default), the VictorSMS
-side switch, and an **on-device Approve for every outgoing text and call**.
+**Known problem, not fixed:** DroidCommand requires the reply from VictorSMS to carry the paired node id, but VictorSMS's
+reply does not, and the two apps disagree on that id. Until both sides are changed, DroidCommand may reject VictorSMS's
+replies even when VictorSMS did queue the text. The tool then says nothing is confirmed sent, which is true. Treat texting
+through a bot as **unverified** until that is fixed.
 
 ## 8. Safety: approvals, switches, and the Activity log
 
@@ -236,8 +246,10 @@ side switch, and an **on-device Approve for every outgoing text and call**.
 |---|---|---|
 | "Bot Maker is off" | The switch is off by default. | Advanced → Kai capabilities → Bot Maker. |
 | The sandbox switch is greyed out | The Linux environment switch is off. | Advanced → Kai capabilities → Linux environment. |
-| Bot says "Message not sent: … not allowed" | Its **Talks to** list does not include that bot. | Edit the bot, tick the other bot. |
-| Bot says "This conversation has used its 6 messages" | The per-conversation limit. | Start a fresh run. |
+| Bot says "This bot is not allowed to message that bot." | Its **Talks to** list does not include that bot. | Edit the bot, tick the other bot. |
+| Bot says "Too many messages sent in the last minute", "That bot's mailbox is full" or "Reply chain is too long" | The fixed message limits. | Wait a minute, run the other bot so it reads its messages, or stop and tell the bot to ask you. |
+| A message a bot sent never seems to arrive | The other bot only reads its mailbox when you run it, and mailboxes are lost when the app restarts. | Run the other bot; it is told how many messages are waiting. |
+| A bot says its text to someone is "queued" or "not confirmed" | The VictorSMS approval is still waiting, or the known reply problem in chapter 7. | Check the VictorSMS phone; see chapter 7. |
 | A bot shows "Pick again" | The MCP server it was tied to was removed or changed. | Edit the bot and tick the tool again. |
 | MCP tools do not appear | MCP is off, the server is down, or an on-device model is selected. | Turn MCP on, press **Check servers and load tools**, pick a cloud or PC model. |
 | Sandbox step fails | Termux or VictorSuite is missing, or its proot-distro is too old. | Install Termux/VictorSuite; update proot-distro. |
@@ -251,6 +263,7 @@ side switch, and an **on-device Approve for every outgoing text and call**.
 - **Fleet / node** — your other Victorious apps; a node is one of them.
 - **Gate / switch** — an off-by-default setting that must be turned on before a feature works.
 - **proot-distro** — a Termux tool that runs a Linux distribution without root.
+- **Mailbox** — where a message from one bot waits until the other bot is run and reads it. Kept in memory only.
 - **Activity log** — the append-only record of security decisions.
 
 ---

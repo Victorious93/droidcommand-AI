@@ -253,3 +253,48 @@ object FleetAppHelp {
         else -> "Another app in your set. Pair it only if you installed it and trust this copy."
     }
 }
+
+/** A short "what is this app" paragraph for each fleet card. Kept to facts this repo's own docs already state. */
+object FleetAppAbout {
+    fun forId(id: String): String = when (id) {
+        "hackerai" ->
+            "HackerAI runs DroidCommand's security helper agents. It splits a job between several AI helpers, keeps a " +
+                "catalog of security skills and checks that a reported finding comes with evidence."
+        "pentestswarm" ->
+            "Pentest-Swarm runs multi-step security tests through its own server on this phone. Each step is something " +
+                "you approve; nothing starts until you confirm."
+        "rootforge" ->
+            "RootForge OS is a rooted-phone toolbox. It reports which adb and fastboot devices are attached and what " +
+                "it can do. DroidCommand only reads that for now; flashing, restores and wipes are not started from here."
+        "termux", "victorsuite" ->
+            "Termux (or VictorSuite, which uses the same package name) gives this phone a Linux command line. " +
+                "DroidCommand runs commands there only after you approve them."
+        "edl-commander" ->
+            "EDL-Commander talks to a phone in EDL (emergency download) mode for repair work. It is never connected " +
+                "automatically."
+        "kyc-auditlab" ->
+            "KYC-AuditLab is a simulator for testing identity-check flows. It stays on this phone, and DroidCommand " +
+                "only reads its status."
+        "file-manager" ->
+            "Victorious File Manager is your file, app and backup manager. Pairing lets DroidCommand ask it for its " +
+                "status and what it can do."
+        "keyboard" ->
+            "Victorious Keyboard is a custom Android keyboard. Pairing never reads or forwards what you type."
+        "mesh" ->
+            "Victorious Mesh is a private network between your devices. Pair it so DroidCommand can see whether the " +
+                "mesh is up. Remote control stays off."
+        "browser" ->
+            "Victorious Browser is a private web browser. Pair it so DroidCommand can see whether it is running. " +
+                "Remote control stays off."
+        "victorsms" ->
+            "VictorSMS is a texting app for SMS and MMS, with chats from WhatsApp, Telegram, Signal and others shown " +
+                "as Matrix rooms. Pairing sends nothing; any text sent for you has to be approved inside VictorSMS."
+        "victorspoof" ->
+            "VictorSpoof is a prank caller-ID app. It is kept separate from anything that can wipe or lock a phone."
+        "victorious-flash" ->
+            "Victorious Flash is a flashing and gadget toolkit. Anything that erases a device asks you twice."
+        "victorlaunch" ->
+            "VictorLaunch is a home-screen launcher that can show this fleet list and shares the fleet theme."
+        else -> "Another app in your set. Pair it only if you installed it and trust this copy."
+    }
+}

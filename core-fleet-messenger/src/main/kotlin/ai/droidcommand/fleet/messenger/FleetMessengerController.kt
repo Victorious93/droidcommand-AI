@@ -213,14 +213,30 @@ class FleetMessengerController(
         return callAllowed(spec, op(spec))
     }
 
+    /**
+     * Runs one of the catalog member's [ExternalNodeSpec.approvalGatedOperations] with [parameters]. Same trust
+     * check as every other live call (paired, package + signing cert still match). The other app, not this one,
+     * holds the real gate: it needs External control ON, this app approved, the right op group granted, and for
+     * `sms.send` an on-device Approve for every message. An operation outside that set is refused here.
+     */
+    fun callApprovalGated(catalogId: String, operation: String, parameters: JsonObject): LiveCallResult {
+        val spec = catalog.find { it.id == catalogId }
+            ?: return LiveCallResult.Gated(operation, "unknown EXTERNAL_NODE $catalogId")
+        if (operation !in spec.approvalGatedOperations) {
+            return LiveCallResult.Gated(operation, "$operation is not an approval-gated operation of ${spec.displayName}")
+        }
+        prepareLive(spec, operation, gated = true)?.let { return it }
+        return mapResult(operation, gateway.call(spec.nodeId, operation, parameters, timeoutMs, ReplyExpectation.RESULT))
+    }
+
     private fun callAllowed(spec: ExternalNodeSpec, operation: String): LiveCallResult {
         prepareLive(spec, operation)?.let { return it }
         return mapResult(operation, gateway.call(spec.nodeId, operation, NodeOperations.EMPTY_PARAMETERS, timeoutMs))
     }
 
     /** Null means go ahead and call the gateway. */
-    private fun prepareLive(spec: ExternalNodeSpec, operation: String): LiveCallResult? {
-        if (!spec.isLiveAllowed(operation)) {
+    private fun prepareLive(spec: ExternalNodeSpec, operation: String, gated: Boolean = false): LiveCallResult? {
+        if (!spec.isLiveAllowed(operation) && !(gated && operation in spec.approvalGatedOperations)) {
             return LiveCallResult.Gated(
                 operation,
                 "write/control op $operation stays behind the normal approval gates",
