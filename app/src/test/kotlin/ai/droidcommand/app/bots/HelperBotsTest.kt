@@ -79,4 +79,33 @@ class HelperBotsTest {
         assertTrue("notes_save" in prompt)
         assertTrue("mcp_notes_search" !in prompt)
     }
+
+    @Test
+    fun `who a bot talks to and its sandbox switch are saved and read back`() {
+        val bot = HelperBot("1", "Research", "Find things", talksTo = setOf("2", "3"), sandbox = true)
+        assertEquals(listOf(bot), HelperBots.decode(HelperBots.encode(listOf(bot))))
+    }
+
+    @Test
+    fun `a bot saved before peers and sandboxes existed talks to nobody and has no sandbox`() {
+        val old = """[{"id":"1","name":"Old","instructions":"x","tools":[],"model":""}]"""
+        val bot = HelperBots.decode(old).single()
+        assertTrue(bot.talksTo.isEmpty())
+        assertEquals(false, bot.sandbox)
+    }
+
+    @Test
+    fun `a bot can never be saved as talking to itself or to a blank id`() {
+        val text = """[{"id":"1","name":"A","instructions":"x","tools":[],"model":"","talksTo":["1","","2"]}]"""
+        assertEquals(setOf("2"), HelperBots.decode(text).single().talksTo)
+    }
+
+    @Test
+    fun `the prompt names peers and the sandbox only when they are on`() {
+        val bot = HelperBot("1", "Research", "Find things")
+        val plain = HelperBots.systemPrompt(bot, emptySet())
+        assertTrue(!plain.contains("bot_message") && !plain.contains("sandbox"))
+        val full = HelperBots.systemPrompt(bot, setOf("bot_message"), peerNames = listOf("Writer"), sandboxOn = true)
+        assertTrue(full.contains("Writer") && full.contains("bot_message") && full.contains("sandbox_create"))
+    }
 }
