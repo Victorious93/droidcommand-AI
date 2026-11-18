@@ -6,6 +6,7 @@ import ai.droidcommand.agent.KnowledgeGraph
 import ai.droidcommand.agent.Role
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolRunner
+import ai.droidcommand.app.bots.BotRuntime
 import ai.droidcommand.app.bots.HelperBot
 import ai.droidcommand.app.bots.HelperBotHandoff
 import ai.droidcommand.app.bots.HelperBotTools
@@ -24,6 +25,8 @@ import ai.droidcommand.app.prompts.PromptLibrary
 import ai.droidcommand.app.skills.SkillFilesPrompt
 import ai.droidcommand.app.ui.pchost.PcHostChoice
 import ai.droidcommand.app.voice.VoiceRuntime
+import ai.droidcommand.bots.BotToolKit
+import ai.droidcommand.bots.BotToolNames
 import ai.droidcommand.config.AssistantCapability
 import ai.droidcommand.config.AssistantCapabilitySettingsStore
 import ai.droidcommand.config.EncryptedSecretsVault
@@ -218,6 +221,7 @@ class ChatViewModel @Inject constructor(
     private val pcHostStore: PcHostSettingsStore,
     private val inferenceSettings: InferenceSettingsStore,
     private val routeResolver: RouteResolver,
+    private val botRuntime: BotRuntime,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
@@ -268,6 +272,10 @@ class ChatViewModel @Inject constructor(
 
     /** The running helper bot, kept so its MCP tools can be loaded once a cloud provider is chosen. */
     private var activeBot: HelperBot? = null
+
+    /** The running bot's own tools (talk to bots, sandbox) and the runner that gates them; null when it has none. */
+    private var botKit: BotToolKit? = null
+    private var botRunner: ToolRunner? = null
 
     @Volatile private var handsFreeRound = false
 
@@ -1097,13 +1105,14 @@ class ChatViewModel @Inject constructor(
         val bot = HelperBotHandoff.consume() ?: return
         if (bot.model.isNotBlank() && mutableState.value.activeLocalModelId == null && mutableState.value.activePcHost == null) setModel(bot.model)
         // Only the tools that are, right now, the ones the owner ticked. MCP tools join after they are loaded below.
-        val allowed = mcpTools.resolve(bot.allowedTools, bot.mcpBindings).allowed
-        session.setToolAccess(
-            HelperBotTools.scopedRunner(toolRunner, allowed),
-            HelperBotTools.offeredTools(toolRegistry, allowed),
-        )
+        val mcpAllowed = mcpTools.resolve(bot.allowedTools, bot.mcpBindings).allowed
+        // Talking to other bots and the bot's own sandbox only exist when the owner switched them on for this bot.
+        botKit = botRuntime.kitFor(bot)
+        botRunner = botKit?.let { botRuntime.runnerFor(it, toolRunner) }
+        val allowed = mcpAllowed + botKit?.names.orEmpty()
+        applyBotToolAccess(allowed)
         mutableState.update {
-            it.copy(activeBotName = bot.name, activeBotPrompt = HelperBots.systemPrompt(bot, allowed), notice = "Running helper bot \"${bot.name}\".")
+            it.copy(activeBotName = bot.name, activeBotPrompt = botPrompt(bot, allowed), notice = "Running helper bot \"${bot.name}\".")
         }
         applyChatSystemPrompt(mutableState.value)
         activeBot = bot
@@ -1128,10 +1137,8 @@ class ChatViewModel @Inject constructor(
                 mcpTools.resolve(bot.allowedTools, bot.mcpBindings)
             }
             if (mutableState.value.activeBotName != bot.name) return@launch
-            session.setToolAccess(
-                HelperBotTools.scopedRunner(toolRunner, now.allowed),
-                HelperBotTools.offeredTools(toolRegistry, now.allowed),
-            )
+            val allowedNow = now.allowed + botKit?.names.orEmpty()
+            applyBotToolAccess(allowedNow)
             val words = when {
                 now.needsReselect.isNotEmpty() -> McpSelections.reselectWords(now.needsReselect)?.replace("Tap Edit", "In Bot maker, tap Edit")
                 now.unavailable.isEmpty() -> null
@@ -1140,7 +1147,7 @@ class ChatViewModel @Inject constructor(
             }
             if (words != null) mutableState.update { it.copy(notice = words) }
             // The prompt names the bot's tools; say only the ones it can really use now.
-            val prompt = HelperBots.systemPrompt(bot, now.allowed)
+            val prompt = botPrompt(bot, allowedNow)
             if (prompt != mutableState.value.activeBotPrompt) {
                 mutableState.update { it.copy(activeBotPrompt = prompt) }
                 applyChatSystemPrompt(mutableState.value)
@@ -1148,8 +1155,31 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** Offers [allowed] (plus the bot's own tools, which run through their own approval-gated runner) to the model. */
+    private fun applyBotToolAccess(allowed: Set<String>) {
+        val kit = botKit
+        session.setToolAccess(
+            HelperBotTools.scopedRunner(botRunner ?: toolRunner, allowed),
+            HelperBotTools.offeredTools(toolRegistry, allowed) + kit?.specs.orEmpty(),
+        )
+    }
+
+    private fun botPrompt(bot: HelperBot, allowed: Set<String>): String {
+        val names = botKit?.names.orEmpty()
+        val canMessage = BotToolNames.MESSAGE_SEND in names
+        return HelperBots.systemPrompt(
+            bot,
+            allowed,
+            peers = if (canMessage) botRuntime.peersOf(bot) else emptyList(),
+            unreadMessages = if (canMessage) botRuntime.unreadFor(bot) else 0,
+            sandboxOn = BotToolNames.SANDBOX_RUN in names,
+        )
+    }
+
     fun stopBot() {
         activeBot = null
+        botKit = null
+        botRunner = null
         session.setToolAccess(null)
         mutableState.update { it.copy(activeBotName = null, activeBotPrompt = null, notice = null, botToolStatus = null) }
         applyChatSystemPrompt(mutableState.value)
