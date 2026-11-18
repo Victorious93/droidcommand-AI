@@ -41,6 +41,7 @@ import ai.droidcommand.config.VaultPasswordPairingStore
 import ai.droidcommand.conversations.RoomConversationStore
 import ai.droidcommand.deviceconnect.DeviceConnectService
 import ai.droidcommand.fleet.messenger.ExternalNodeTransport
+import ai.droidcommand.fleet.messenger.FleetMessengerController
 import ai.droidcommand.fleet.messenger.MessengerBridgeClient
 import ai.droidcommand.fleet.messenger.MessengerChannel
 import ai.droidcommand.fleet.messenger.MutablePairedNodeStore
@@ -48,6 +49,11 @@ import ai.droidcommand.fleet.messenger.NodeTrustVerifier
 import ai.droidcommand.fleet.messenger.PackageIdentityResolver
 import ai.droidcommand.fleet.messenger.PairedNodeGateway
 import ai.droidcommand.fleet.messenger.PairedNodeStore
+import ai.droidcommand.fleet.tools.BotSmsAccess
+import ai.droidcommand.fleet.tools.ControllerSmsBridge
+import ai.droidcommand.fleet.tools.GatedSmsBridge
+import ai.droidcommand.fleet.tools.VictorSmsSendStatusTool
+import ai.droidcommand.fleet.tools.VictorSmsSendTool
 import ai.droidcommand.hackerai.HackerAiTool
 import ai.droidcommand.knowledge.android.RoomKnowledgeGraph
 import ai.droidcommand.llm.ProviderType
@@ -191,6 +197,9 @@ object AppModule {
         toolboxRuntime: ToolboxRuntime,
         approvalPrompt: ApprovalPrompt,
         systemSettings: SystemSettingsRuntime,
+        pairedStore: MutablePairedNodeStore,
+        identityResolver: PackageIdentityResolver,
+        pairedGateway: PairedNodeGateway,
     ): ToolRegistry = ToolRegistry().apply {
         register(AutomationShellTool(AllowlistShellExecutor { advanced.shellAllowlist() }))
         register(
@@ -225,6 +234,12 @@ object AppModule {
         // System Settings for the assistant (Victorious Framework): both tools refuse unless the owner turned assistant access on (default off).
         // Reads share only reviewed settings; changes go through the shared engine, which re-checks everything and asks with the exact old and
         // new values at execution time. Remote initiators are excluded by the tool specs.
+        // Bots texting through VictorSMS: refuses unless the owner switched it on (default off) and only for numbers on
+        // their allow-list. The tools only queue a text; VictorSMS still needs the owner's Approve on the phone for each one.
+        val smsBridge = GatedSmsBridge(advanced::victorSmsBotsEnabled, ControllerSmsBridge(FleetMessengerController(pairedStore, identityResolver, pairedGateway)))
+        val smsAccess = BotSmsAccess(advanced::victorSmsBotRecipients)
+        register(VictorSmsSendTool(smsBridge, smsAccess))
+        register(VictorSmsSendStatusTool(smsBridge, smsAccess))
         val settingsAiEnabled = { systemSettings.prefs.config().assistantEnabled }
         register(SystemSettingsReadTool(systemSettings.engine, systemSettings::profiles, systemSettings.profileService, systemSettings::device, settingsAiEnabled))
         register(SystemSettingsChangeTool(systemSettings.engine, systemSettings::profiles, systemSettings.profileService, systemSettings::device, settingsAiEnabled))

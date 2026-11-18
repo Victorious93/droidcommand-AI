@@ -1,5 +1,6 @@
 package ai.droidcommand.app.ui.fleet
 
+import ai.droidcommand.app.fleet.install.FleetInstallEvents
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.remotepc.RemotePcTile
@@ -11,6 +12,7 @@ import ai.droidcommand.app.ui.theme.DroidPrimaryButton
 import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ui.theme.TextSecondary
+import ai.droidcommand.app.ux.FleetAppAbout
 import ai.droidcommand.app.ux.FleetAppHelp
 import ai.droidcommand.app.ux.FleetCardUi
 import ai.droidcommand.app.ux.FleetUserCopy
@@ -32,8 +34,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,8 +69,24 @@ fun FleetDashboardScreen(
     viewModel: FleetDashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val installModel: FleetInstallViewModel = hiltViewModel()
+    val install by installModel.state.collectAsState()
+    var pairPromptId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        installModel.refresh()
+        FleetInstallEvents.installed.collect { id ->
+            viewModel.refresh()
+            installModel.refresh()
+            pairPromptId = id
+        }
+    }
     FleetDashboardContent(
         state = state,
+        install = install,
+        onInstall = installModel::install,
+        onAutoUpdate = installModel::setAutoUpdate,
+        pairPromptId = pairPromptId,
+        onPairPromptHandled = { pairPromptId = null },
         onRefresh = viewModel::refresh,
         onPair = viewModel::pair,
         onUnpair = viewModel::unpair,
@@ -75,6 +95,7 @@ fun FleetDashboardScreen(
         onOpenOrchestrator = onOpenOrchestrator,
         onOpenConnectDevice = onOpenConnectDevice,
         remotePcTile = { RemotePcTile() },
+        botSmsTile = { VictorSmsBotsCard() },
     )
 }
 
@@ -89,8 +110,23 @@ fun FleetDashboardContent(
     onOpenOrchestrator: () -> Unit,
     onOpenConnectDevice: () -> Unit = {},
     remotePcTile: @Composable () -> Unit = {},
+    botSmsTile: @Composable () -> Unit = {},
+    install: FleetInstallState = FleetInstallState(),
+    onInstall: (String) -> Unit = {},
+    onAutoUpdate: (Boolean) -> Unit = {},
+    pairPromptId: String? = null,
+    onPairPromptHandled: () -> Unit = {},
 ) {
     var dialog by remember { mutableStateOf<FleetDialog?>(null) }
+    // After the owner installs an app from here, open the normal Pair confirmation for it. Pairing itself still
+    // needs their confirm: installing an app never makes it trusted.
+    LaunchedEffect(pairPromptId, state.cards) {
+        val card = state.cards.firstOrNull { it.id == pairPromptId } ?: return@LaunchedEffect
+        if (card.status.kind != FleetUserKind.NOT_INSTALLED) {
+            dialog = FleetDialog.Pair(card)
+            onPairPromptHandled()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -135,6 +171,22 @@ fun FleetDashboardContent(
             modifier = Modifier.fillMaxWidth().testTag("fleet_connect_device"),
         ) { Text("Connect a computer or another phone") }
         remotePcTile()
+        DroidCard(modifier = Modifier.testTag("fleet_auto_update")) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Keep fleet apps up to date", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Checks every few hours for newer published versions of the apps already on this phone and " +
+                            "installs them. Off by default. It never installs a new app and never pairs one.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                }
+                Switch(checked = install.autoUpdate, onCheckedChange = onAutoUpdate)
+            }
+        }
+        install.message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = AccentBlueBright) }
+        botSmsTile()
 
         state.cards.forEach { card ->
             FleetAppCard(
@@ -145,6 +197,8 @@ fun FleetDashboardContent(
                 onTest = { onTest(card.id) },
                 onHelp = { dialog = FleetDialog.Help(card) },
                 onApprovedCommands = onOpenOrchestrator,
+                install = install.byId[card.id],
+                onInstall = { onInstall(card.id) },
             )
         }
     }
@@ -222,6 +276,8 @@ private fun FleetAppCard(
     onTest: () -> Unit,
     onHelp: () -> Unit,
     onApprovedCommands: () -> Unit,
+    install: FleetInstallUi? = null,
+    onInstall: () -> Unit = {},
 ) {
     DroidCard(
         modifier = Modifier.testTag("fleet_dashboard_row_${card.id}"),
@@ -260,7 +316,22 @@ private fun FleetAppCard(
                     modifier = Modifier.testTag("fleet_dashboard_reason_${card.id}"),
                 )
             }
+            Text(
+                FleetAppAbout.forId(card.id),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.testTag("fleet_about_${card.id}"),
+            )
             Text(card.help, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            install?.note?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = TextSecondary, modifier = Modifier.testTag("fleet_install_note_${card.id}"))
+            }
+            install?.actionLabel?.let { label ->
+                DroidPrimaryButton(
+                    onClick = onInstall,
+                    enabled = !busy && install?.busy != true,
+                    modifier = Modifier.fillMaxWidth().testTag("fleet_install_${card.id}"),
+                ) { Text(label) }
+            }
             Text(card.seenLabel, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 if (card.canPair || card.status.kind == FleetUserKind.INSTALLED_TAP_TO_PAIR || card.status.kind == FleetUserKind.NOT_INSTALLED) {

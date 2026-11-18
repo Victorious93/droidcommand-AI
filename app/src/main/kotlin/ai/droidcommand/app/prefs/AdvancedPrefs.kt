@@ -89,6 +89,26 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         prefs.edit { putBoolean(KEY_TOOLBOX_AI, enabled) }
     }
 
+    /**
+     * Off by default. When false the `victorsms_send` tools refuse. When true a bot that has the tool can still only
+     * text numbers in [victorSmsBotRecipients], and VictorSMS itself still needs the owner's Approve for each text.
+     */
+    fun victorSmsBotsEnabled(): Boolean = prefs.getBoolean(KEY_VSMS_BOTS, false)
+
+    fun setVictorSmsBotsEnabled(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_VSMS_BOTS, enabled) }
+    }
+
+    /** Numbers bots may text, one per line. Empty means none. */
+    fun victorSmsBotRecipients(): Set<String> =
+        (prefs.getString(KEY_VSMS_RECIPIENTS, "") ?: "").lines().map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+
+    fun setVictorSmsBotRecipientsText(text: String) {
+        prefs.edit { putString(KEY_VSMS_RECIPIENTS, text) }
+    }
+
+    fun victorSmsBotRecipientsText(): String = prefs.getString(KEY_VSMS_RECIPIENTS, "") ?: ""
+
     /** Off by default. Built-in Shizuku is not started after a reboot until the user turns this on. */
     fun startShizukuOnBoot(): Boolean = prefs.getBoolean(EmbeddedShizukuPrefs.KEY_START_ON_BOOT, EmbeddedShizukuPrefs.DEFAULT_START_ON_BOOT)
 
@@ -118,6 +138,8 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         private const val KEY_N8N_URL = "n8n.server.url"
         private const val KEY_N8N_AI_TOOLS = "n8n.ai.tools"
         private const val KEY_TOOLBOX_AI = "toolbox.ai.enabled"
+        private const val KEY_VSMS_BOTS = "victorsms.bots.enabled"
+        private const val KEY_VSMS_RECIPIENTS = "victorsms.bots.recipients"
 
         private fun labelKey(mode: AgentMode) = "engine.label.${mode.name}"
         val PUBLIC_LIMIT_CHOICES = listOf(10, 25, 50)

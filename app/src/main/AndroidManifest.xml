@@ -16,6 +16,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Fleet apps: the owner taps "Download & install" and Android's own installer confirms. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Lets Android skip the confirm dialog only for an update to an app this app installed, on Android 12+. -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
     <!-- VictorSuite / Termux RUN_COMMAND (dangerous). Required to start
          com.termux.app.RunCommandService. Also requested at runtime from the
@@ -310,6 +314,9 @@
 
         <service
             android:name=".shizuku.embedded.EmbeddedShizukuStartService"
+            android:exported="false" />
+        <receiver
+            android:name=".fleet.install.FleetInstallReceiver"
             android:exported="false" />
     </application>
 </manifest>
