@@ -14,7 +14,7 @@ import javax.inject.Inject
 class VictorSmsBotsViewModel @Inject constructor(
     private val prefs: AdvancedPrefs,
 ) : ViewModel() {
-    var enabled by mutableStateOf(prefs.victorSmsBotsEnabled())
+    var switchedOn by mutableStateOf(prefs.victorSmsBotsEnabled())
         private set
     var recipientsText by mutableStateOf(prefs.victorSmsBotRecipientsText())
         private set
@@ -25,7 +25,7 @@ class VictorSmsBotsViewModel @Inject constructor(
 
     fun setEnabled(on: Boolean) {
         prefs.setVictorSmsBotsEnabled(on)
-        enabled = on
+        switchedOn = on
     }
 
     fun setRecipients(text: String) {

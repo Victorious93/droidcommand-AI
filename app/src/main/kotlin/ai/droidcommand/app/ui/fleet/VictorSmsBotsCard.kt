@@ -34,7 +34,7 @@ fun VictorSmsBotsCard(viewModel: VictorSmsBotsViewModel = hiltViewModel()) {
                         color = TextSecondary,
                     )
                 }
-                Switch(checked = viewModel.enabled, onCheckedChange = viewModel::setEnabled)
+                Switch(checked = viewModel.switchedOn, onCheckedChange = viewModel::setEnabled)
             }
             OutlinedTextField(
                 value = viewModel.recipientsText,
