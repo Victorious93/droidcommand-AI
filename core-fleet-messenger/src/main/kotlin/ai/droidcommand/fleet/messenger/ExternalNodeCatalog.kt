@@ -25,6 +25,12 @@ data class ExternalNodeSpec(
      * Passed through as [PairedNode.customAction] on pair. Null keeps the default.
      */
     val bridgeAction: String? = null,
+    /**
+     * Operations that change something on the other app but that the other app itself holds behind an on-device
+     * owner approval (VictorSMS `sms.send`). Reachable only through [FleetMessengerController.callApprovalGated],
+     * never through the read-only or `*.up` paths. Empty for every member that has no such operation.
+     */
+    val approvalGatedOperations: Set<String> = emptySet(),
     val notes: String = "",
 ) {
     init {
@@ -107,6 +113,7 @@ object ExternalNodeCatalog {
         packages = listOf("com.victorious.sms"),
         capabilitiesOperation = "sms.capabilities.get",
         statusOperation = "sms.status",
+        approvalGatedOperations = setOf("sms.send", "sms.send.status"),
         notes = "EXTERNAL_NODE. Confirmed action com.victorious.sms.action.BRIDGE, protocol_major 1, " +
             "what=1, inbound op sms.remote_command.forward (controller op remote.command). " +
             "debug==release package com.victorious.sms. Node-id prefix ^victorsms-[0-9a-f]{32}$. " +
