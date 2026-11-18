@@ -5,30 +5,50 @@ import ai.droidcommand.app.coding.CodingUiState
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.app.prefs.CodingTunnelChoice
 import ai.droidcommand.app.ui.components.DroidCard
+import ai.droidcommand.app.ui.components.DroidEmptyState
+import ai.droidcommand.app.ui.components.DroidNote
+import ai.droidcommand.app.ui.components.PillTone
+import ai.droidcommand.app.ui.components.ScreenTitle
+import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ui.components.StatusPill
+import ai.droidcommand.app.ui.components.pillColors
 import ai.droidcommand.app.ui.components.rememberDraft
 import ai.droidcommand.app.ui.theme.DroidPrimaryButton
-import ai.droidcommand.app.ui.theme.DroidSecondaryButton
+import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.coding.CodingPhase
 import ai.droidcommand.coding.CodingSession
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -59,8 +79,9 @@ class CodingViewModel @Inject constructor(
 }
 
 /**
- * Plan, then edit, then report, for one session. The running backend is the on-device stand-in.
- * Choosing "Paired" in Settings does not open a socket; that host is not connected.
+ * Plan, then edit, then report, for one session. The running backend is the on-device stand-in: it records canned text
+ * for each step and does nothing else. Choosing "Paired" in Settings does not open a socket; that host is not connected.
+ * The screen therefore says "preview" first and shows the three steps, so what is real and what is not is never in doubt.
  */
 @Composable
 fun CodingScreen(viewModel: CodingViewModel = hiltViewModel()) {
@@ -73,22 +94,20 @@ fun CodingScreen(viewModel: CodingViewModel = hiltViewModel()) {
         contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
     ) {
         item {
-            Text(
-                "Cloud coding",
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ScreenTitle("Coding session", modifier = Modifier.weight(1f))
+                StatusPill("Preview", PillTone.Warning)
+            }
         }
         item {
-            Text(
+            DroidNote(
                 if (paired) {
-                    "Paired tunnel is selected and not connected. No session will start. A live Cursor or Codex backend is not built."
+                    "Paired tunnel is selected and not connected, so no session will start. A live Cursor or Codex backend is not built."
                 } else {
-                    "On-device stand-in. One session goes plan, then edit, then report. No repository is edited and no cloud service is called."
+                    "This is a preview of the flow. It does not write code: it records your goal and walks a fixed plan, edit and report. " +
+                        "No cloud model is called and no repository is touched."
                 },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                tone = PillTone.Warning,
             )
         }
         item {
@@ -98,7 +117,7 @@ fun CodingScreen(viewModel: CodingViewModel = hiltViewModel()) {
                         value = goal,
                         onValueChange = { goal = it },
                         enabled = !paired,
-                        label = { Text("Goal") },
+                        label = { Text("What should the session work on?") },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 2,
                         maxLines = 5,
@@ -117,6 +136,17 @@ fun CodingScreen(viewModel: CodingViewModel = hiltViewModel()) {
                 }
             }
         }
+        if (state.sessions.isEmpty()) {
+            item {
+                DroidEmptyState(
+                    icon = Icons.Filled.Code,
+                    title = "No sessions yet",
+                    body = "Write a goal above and start one to see how plan, edit and report follow each other.",
+                )
+            }
+        } else {
+            item { SectionLabel("Sessions") }
+        }
         items(state.sessions, key = { it.id }) { session ->
             SessionCard(
                 session = session,
@@ -131,18 +161,66 @@ fun CodingScreen(viewModel: CodingViewModel = hiltViewModel()) {
 @Composable
 private fun SessionCard(session: CodingSession, paired: Boolean, onAdvance: () -> Unit, onCancel: () -> Unit) {
     val open = session.phase == CodingPhase.PLAN || session.phase == CodingPhase.EDIT
+    var showEarlier by rememberSaveable(session.id) { mutableStateOf(false) }
+    val (phaseText, phaseTone) = CodingPresentation.phaseLabel(session.phase)
+    val (latestTitle, latestBody) = CodingPresentation.latestTitleAndBody(session)
+    val earlier = CodingPresentation.earlier(session)
     DroidCard {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(session.phase.name, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            Text(session.goal, fontWeight = FontWeight.Bold)
-            PhaseBlock("Plan", session.plan)
-            if (session.edit.isNotEmpty()) PhaseBlock("Edit", session.edit)
-            if (session.report.isNotEmpty()) PhaseBlock("Report", session.report)
-            if (open && !paired) {
-                DroidPrimaryButton(onClick = onAdvance, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (session.phase == CodingPhase.PLAN) "Continue to edit" else "Continue to report")
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(session.goal, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                StatusPill(phaseText, phaseTone)
+            }
+            PhaseStepper(CodingPresentation.steps(session))
+            PhaseBlock(latestTitle, latestBody)
+            if (earlier.isNotEmpty()) {
+                DroidTextButton(onClick = { showEarlier = !showEarlier }) { Text(if (showEarlier) "Hide earlier steps" else "Show earlier steps") }
+                if (showEarlier) earlier.forEach { (title, body) -> PhaseBlock(title, body) }
+            }
+            val continueLabel = CodingPresentation.continueLabel(session.phase)
+            if (open && !paired && continueLabel != null) {
+                DroidPrimaryButton(onClick = onAdvance, modifier = Modifier.fillMaxWidth()) { Text(continueLabel) }
+                DroidTextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel this session") }
+            }
+        }
+    }
+}
+
+/** Plan, Edit, Report as three dots joined by a line: a tick when done, filled when current, an x when stopped. */
+@Composable
+private fun PhaseStepper(steps: List<CodingStep>) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        steps.forEachIndexed { index, step ->
+            val tone = when (step.mark) {
+                StepMark.DONE -> PillTone.Success
+                StepMark.STOPPED -> PillTone.Warning
+                StepMark.CURRENT -> PillTone.Neutral
+                StepMark.TODO -> PillTone.Neutral
+            }
+            val accent = if (step.mark == StepMark.CURRENT) MaterialTheme.colorScheme.primary else pillColors(tone).second
+            val filled = step.mark == StepMark.DONE || step.mark == StepMark.STOPPED || step.mark == StepMark.CURRENT
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(22.dp)
+                        .background(if (filled) accent else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    when (step.mark) {
+                        StepMark.DONE -> Icon(Icons.Filled.Check, contentDescription = "Done", tint = MaterialTheme.colorScheme.surface, modifier = Modifier.size(14.dp))
+                        StepMark.STOPPED -> Icon(Icons.Filled.Close, contentDescription = "Stopped", tint = MaterialTheme.colorScheme.surface, modifier = Modifier.size(14.dp))
+                        StepMark.CURRENT, StepMark.TODO -> Unit
+                    }
                 }
-                DroidSecondaryButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+                Text(
+                    step.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (step.mark == StepMark.CURRENT) FontWeight.Bold else FontWeight.Normal,
+                    color = if (step.mark == StepMark.TODO) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            if (index < steps.lastIndex) {
+                Box(modifier = Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)))
             }
         }
     }
@@ -150,6 +228,8 @@ private fun SessionCard(session: CodingSession, paired: Boolean, onAdvance: () -
 
 @Composable
 private fun PhaseBlock(title: String, body: String) {
-    Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-    Text(body, style = MaterialTheme.typography.bodySmall)
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        SectionLabel(title)
+        Text(body, style = MaterialTheme.typography.bodySmall)
+    }
 }

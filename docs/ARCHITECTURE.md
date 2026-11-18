@@ -1875,3 +1875,18 @@ restoration are identical everywhere. See `docs/SYSTEM_SETTINGS.md` for behaviou
 | `core-system-settings`: `SystemSettingsEngine`, `SettingsBackend` (Standard / Shizuku / Root), `Catalog`, `Journal`, `Profile`, `BootReplay`, `Tools` | IMPLEMENTED — 91 JVM tests | Fake-provider tests inject permission loss, timeouts, dead services, clamped values, crashes and external changes. Shell backends reuse the System Toolbox transports (`ToolboxBackend`); a real `sh` run proves hostile values stay one argument. |
 | `:app` `systemsettings/` (`AndroidPlatformSettings`, `SystemSettingsRuntime`, `PrivateDnsVerifier`, boot receiver) and `ui/systemsettings/` | COMPILES and unit tests pass on CI; emulator result in the audit addendum | `ContentResolver` access, display refresh rates from `DisplayManager`, Private DNS effect check from `LinkProperties`. Never run on a physical phone. |
 | Remote settings command | NOT PRESENT | No remote settings command or `REMOTE_SETTINGS` permission exists, none was invented. Remote-sourced requests are refused; the engine has a `RemoteSettingsAuthorizer` seam for a future command. |
+
+## 21. Phone UI building blocks and the 2026-11-18 screen pass
+
+Shared pieces in `app/.../ui/components/DroidControls.kt` (plus `DroidComponents.kt`): `DroidSwitchRow`, `DroidCheckRow`, `DroidTabs`, `DroidEmptyState`, `DroidNote`, `DroidRowDivider`,
+`StatusPillWithChevron`, `DroidListRow`/`DroidGroup`, `StatusPill`. Rule: a switch or checkbox beside text is a `DroidSwitchRow`/`DroidCheckRow` (the label has its own weighted column), and what a screen
+says or enables is decided in a small pure `*Presentation`/`*Review`/`*Readiness` object that has a JVM test, not inline in the composable.
+
+| Piece | Status |
+|---|---|
+| `ui/models` (`ModelsPresentation`, tabs, search wiring) | IMPLEMENTED, compiled, logic JVM-tested; layout never seen on a device |
+| `ui/fleet` Connect a device (`ConnectDevicePresentation`) | same |
+| `ui/tools/security` hub (`SecurityReadiness`), `metasploit/MetasploitReview`, `setoolkit/SetToolReview` | same; SET Launch is off because `SetExecutor.isAvailable()` is false (Null executor) |
+| `ui/n8n` (`N8nPresentation`), `ui/coding` (`CodingPresentation`), Advanced / Extra tools lists | same; Coding session is a labelled preview of a stand-in |
+
+See the 2026-11-18 "Screen redesigns from the owner's 0.1.8 screenshots" audit entry for what was and was not run.

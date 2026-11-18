@@ -94,12 +94,19 @@ fun BotMakerScreen(viewModel: BotMakerViewModel = hiltViewModel(), onRunInChat: 
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (!ui.enabled) {
-            DroidCard {
-                Text(
-                    ui.error ?: "Bot Maker is off. Turn it on under Advanced → Kai capabilities.",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+            DroidCard(modifier = Modifier.testTag("bot_maker_off")) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Bot maker is off", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Helper bots can be given tools that change this phone, so this ships switched off. " +
+                            "Turning it on lets you make bots here; every risky tool still asks you first.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    DroidPrimaryButton(onClick = viewModel::turnOn, modifier = Modifier.fillMaxWidth().testTag("bot_maker_turn_on")) {
+                        Text("Turn on Bot maker")
+                    }
+                }
             }
         }
         ui.status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -163,7 +170,7 @@ fun BotMakerScreen(viewModel: BotMakerViewModel = hiltViewModel(), onRunInChat: 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             SectionLabel("Your bots")
             if (!editorOpen) {
-                DroidPrimaryButton(onClick = { editorOpen = true }, modifier = Modifier.testTag("bot_new_button")) { Text("New bot") }
+                DroidPrimaryButton(onClick = { editorOpen = true }, enabled = ui.enabled, modifier = Modifier.testTag("bot_new_button")) { Text("New bot") }
             }
         }
         if (ui.bots.isEmpty()) {

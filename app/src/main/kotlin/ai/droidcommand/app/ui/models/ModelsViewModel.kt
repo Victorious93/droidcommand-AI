@@ -74,8 +74,13 @@ data class ModelsUiState(
     val searchQuery: String = "",
     val searchHits: List<HuggingFaceRepoHit> = emptyList(),
     val searchError: String? = null,
+    /** The query the shown results are for; null until a search has finished. Lets the screen tell "no results" from "never searched". */
+    val searchedQuery: String? = null,
     val hubFiles: List<HubFileRow> = emptyList(),
     val hubRepo: String? = null,
+    /** This phone's total and currently free RAM, so a "Tight" label can be read against real numbers. */
+    val ramTotalBytes: Long? = null,
+    val ramFreeBytes: Long? = null,
     val allFilesAccess: Boolean = false,
     val explainAllFiles: Boolean = false,
     val confirmDeleteId: String? = null,
@@ -130,6 +135,8 @@ class ModelsViewModel @Inject constructor(
                     scanMessage = scanStatus(allFiles, scanned.size),
                     nativeProblem = native,
                     allFilesAccess = allFiles,
+                    ramTotalBytes = snap?.totalBytes ?: deviceTotal(),
+                    ramFreeBytes = snap?.availableBytes ?: deviceAvailable(),
                 )
             }
             catalog.forEach { watchDownload(it.entry.metadata.id) }
@@ -138,29 +145,61 @@ class ModelsViewModel @Inject constructor(
 
     fun setSearchQuery(query: String) = mutableState.update { it.copy(searchQuery = query) }
 
+    /** Newest search wins: a slow answer to an older search, or to one the owner cleared, is dropped. */
+    @Volatile private var searchSeq = 0
+
     fun search() {
-        val q = mutableState.value.searchQuery
+        val q = ModelsPresentation.searchable(mutableState.value.searchQuery) ?: return
+        val seq = ++searchSeq
         mutableState.update { it.copy(searching = true, searchError = null, hubFiles = emptyList(), hubRepo = null) }
         viewModelScope.launch(Dispatchers.IO) {
-            when (val result = hub.search(q)) {
-                is HuggingFaceSearchResult.Repos -> mutableState.update {
-                    it.copy(searching = false, searchHits = result.hits, searchError = if (result.hits.isEmpty()) "No free GGUF repos matched." else null)
-                }
-                is HuggingFaceSearchResult.Failed -> mutableState.update {
-                    it.copy(searching = false, searchHits = emptyList(), searchError = result.reason)
+            val result = hub.search(q)
+            mutableState.update { ui ->
+                if (seq != searchSeq) {
+                    ui
+                } else {
+                    when (result) {
+                        // An empty list is a normal answer, not an error: the screen explains it from searchedQuery.
+                        is HuggingFaceSearchResult.Repos -> ui.copy(searching = false, searchHits = result.hits, searchedQuery = q, searchError = null)
+                        is HuggingFaceSearchResult.Failed -> ui.copy(searching = false, searchHits = emptyList(), searchedQuery = null, searchError = result.reason)
+                    }
                 }
             }
         }
     }
+
+    /** Fills the box with a suggested term and searches it. */
+    fun searchFor(term: String) {
+        mutableState.update { it.copy(searchQuery = term) }
+        search()
+    }
+
+    /** Empties the box and the results, and drops any search still in flight. */
+    fun clearSearch() {
+        searchSeq++
+        mutableState.update {
+            it.copy(searchQuery = "", searching = false, searchHits = emptyList(), searchedQuery = null, searchError = null, hubRepo = null, hubFiles = emptyList())
+        }
+    }
+
+    /** Back from one repo's files to the results list. */
+    fun closeRepo() {
+        mutableState.update { it.copy(hubRepo = null, hubFiles = emptyList(), searching = false, searchError = null) }
+    }
+
+    fun dismissStatus() = mutableState.update { it.copy(status = null) }
 
     fun openRepo(repoId: String) {
         mutableState.update { it.copy(searching = true, searchError = null, hubRepo = repoId, hubFiles = emptyList()) }
         viewModelScope.launch(Dispatchers.IO) {
             val snap = runtime.resources.memory?.snapshot()
             val installed = runtime.list()
-            when (val result = hub.listGgufFiles(repoId)) {
-                is HuggingFaceFilesResult.Files -> mutableState.update {
-                    it.copy(
+            val result = hub.listGgufFiles(repoId)
+            mutableState.update { ui ->
+                // The owner went back, or opened another repo, while this was loading: this answer is stale.
+                if (ui.hubRepo != repoId) return@update ui
+                when (result) {
+                    is HuggingFaceFilesResult.Files -> ui.copy(
                         searching = false,
                         hubFiles = result.files.map { file ->
                             val match = installed.firstOrNull { model -> model.metadata.sha256 == file.sha256 }
@@ -172,9 +211,7 @@ class ModelsViewModel @Inject constructor(
                             )
                         },
                     )
-                }
-                is HuggingFaceFilesResult.Failed -> mutableState.update {
-                    it.copy(searching = false, hubFiles = emptyList(), searchError = result.reason)
+                    is HuggingFaceFilesResult.Failed -> ui.copy(searching = false, hubFiles = emptyList(), searchError = result.reason)
                 }
             }
         }

@@ -5,6 +5,7 @@ import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.agent.describe
 import ai.droidcommand.app.ui.tools.ToolRunUiState
 import ai.droidcommand.setoolkit.SetAttackVector
+import ai.droidcommand.setoolkit.SetExecutor
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,7 +33,11 @@ data class SetToolFormState(
 @HiltViewModel
 class SetToolViewModel @Inject constructor(
     private val toolRunner: ToolRunner,
+    setExecutor: SetExecutor,
 ) : ViewModel() {
+    /** Whether anything is connected behind SET. False today (the Null executor), so the screen says so instead of offering a Launch that can only fail. */
+    val backendAvailable: Boolean = setExecutor.isAvailable()
+
     private val _form = MutableStateFlow(SetToolFormState())
     val form: StateFlow<SetToolFormState> = _form
 

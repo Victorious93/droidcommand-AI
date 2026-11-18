@@ -102,6 +102,7 @@ import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
 import ai.droidcommand.setoolkit.NullSetExecutor
+import ai.droidcommand.setoolkit.SetExecutor
 import ai.droidcommand.setoolkit.SetTool
 import ai.droidcommand.shizuku.PrivilegedShell
 import ai.droidcommand.shizuku.ShizukuHost
@@ -168,6 +169,15 @@ object AppModule {
     @Singleton
     fun provideMetasploitExecutor(termux: TermuxExecutor): MetasploitExecutor = TermuxMetasploitExecutor(termux)
 
+    /**
+     * SET has no real backend yet, so this is the fail-closed Null one. It is provided on its own, rather than built inside
+     * the registry, so the Security tools screens can ask the same instance whether it is available instead of keeping a
+     * second, hand-written "SET is not built" flag that could drift from this one.
+     */
+    @Provides
+    @Singleton
+    fun provideSetExecutor(): SetExecutor = NullSetExecutor()
+
     @Provides
     @Singleton
     fun provideKaliPlaybookRunner(
@@ -190,6 +200,7 @@ object AppModule {
         termux: TermuxExecutor,
         metasploit: MetasploitExecutor,
         kaliPlaybookRunner: LocalKaliPlaybookRunner,
+        setExecutor: SetExecutor,
         fleetCommandTool: FleetCommandTool,
         privilegedShell: PrivilegedShell,
         remoteControlStore: RemoteControlStore,
@@ -215,7 +226,7 @@ object AppModule {
         ShizukuTool.all(privilegedShell).forEach { register(it) }
         register(MetasploitTool(metasploit))
         register(KaliAuthorizedScanTool(kaliPlaybookRunner))
-        register(SetTool(NullSetExecutor()))
+        register(SetTool(setExecutor))
         // Always-fail stub: AIDL bind is not started in this module. Registering it keeps the
         // name visible to anything that asks the registry; Pilot as DEVICE_OWNER still hides
         // it because the tool is scoped to Initiator.REMOTE.
