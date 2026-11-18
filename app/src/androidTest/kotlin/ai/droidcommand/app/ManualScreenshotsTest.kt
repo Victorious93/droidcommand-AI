@@ -107,7 +107,8 @@ class ManualScreenshotsTest {
             snap("bot-maker-peers")
         }
         step("bot-maker-sandbox") {
-            compose.onNodeWithText("4 · Own sandbox").performScrollTo()
+            // Scroll to the switch row itself so the whole section is above the bottom bar.
+            compose.onNodeWithText("Own Linux sandbox").performScrollTo()
             snap("bot-maker-sandbox")
         }
         if (failures.isNotEmpty()) throw AssertionError("manual screenshot failures:\n${failures.joinToString("\n")}")
