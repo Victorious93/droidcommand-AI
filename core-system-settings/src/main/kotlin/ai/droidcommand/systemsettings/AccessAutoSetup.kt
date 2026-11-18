@@ -1,5 +1,8 @@
 package ai.droidcommand.systemsettings
 
+import ai.droidcommand.security.AuditEvent
+import ai.droidcommand.security.AuditEventType
+import ai.droidcommand.security.AuditLog
 import ai.droidcommand.shizuku.PrivilegedNames
 import ai.droidcommand.shizuku.PrivilegedResult
 import ai.droidcommand.shizuku.toolbox.ToolboxBackend
@@ -15,10 +18,14 @@ import ai.droidcommand.shizuku.toolbox.ToolboxCommand
  *
  * Which backend may be used is the caller's decision ([allowed] comes from the owner's Access switches); Shizuku is tried before root and
  * root is never used unless the owner turned it on. Nothing here retries or escalates beyond that order.
+ *
+ * Every grant is written to the audit log before it runs (SELF_GRANT_REQUESTED) and again with its result (SELF_GRANT_DONE / SELF_GRANT_FAILED).
+ * If the log refuses the first entry, the grant is not run, so a grant can never happen without a record.
  */
 class AccessAutoSetup(
     private val shizuku: ToolboxBackend,
     private val root: ToolboxBackend,
+    private val audit: AuditLog? = null,
 ) {
     enum class Grant(val label: String) {
         SECURE_SETTINGS("Secure and Global tables (WRITE_SECURE_SETTINGS)"),
@@ -60,6 +67,10 @@ class AccessAutoSetup(
         val granted = mutableListOf<Grant>()
         val failed = linkedMapOf<Grant, String>()
         for (grant in Grant.entries.filter { it in grants }) {
+            if (!record(AuditEventType.SELF_GRANT_REQUESTED, grant, "via ${kind.label}: " + commandFor(grant, applicationId).display)) {
+                failed[grant] = "The audit log could not store the request, so nothing was granted."
+                continue
+            }
             when (val r = backend.run(commandFor(grant, applicationId))) {
                 is PrivilegedResult.Failure -> failed[grant] = r.reason.take(MAX_MESSAGE)
                 is PrivilegedResult.Success -> when {
@@ -69,8 +80,13 @@ class AccessAutoSetup(
                 }
             }
         }
+        granted.forEach { record(AuditEventType.SELF_GRANT_DONE, it, "granted via ${kind.label}") }
+        failed.forEach { (g, why) -> record(AuditEventType.SELF_GRANT_FAILED, g, "via ${kind.label}: $why") }
         return Report(kind, granted, failed, null)
     }
+
+    private fun record(type: AuditEventType, grant: Grant, detail: String): Boolean =
+        audit?.record(AuditEvent(type, "system_settings:self_grant:${grant.name.lowercase()}", detail.take(400))) ?: true
 
     companion object {
         const val SECURE_PERMISSION = "android.permission.WRITE_SECURE_SETTINGS"

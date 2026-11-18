@@ -1,5 +1,9 @@
 package ai.droidcommand.systemsettings
 
+import ai.droidcommand.security.AuditEvent
+import ai.droidcommand.security.AuditEventType
+import ai.droidcommand.security.AuditLog
+import ai.droidcommand.security.InMemoryAuditLog
 import ai.droidcommand.shizuku.PrivilegedResult
 import ai.droidcommand.shizuku.toolbox.ToolboxBackend
 import ai.droidcommand.shizuku.toolbox.ToolboxCommand
@@ -90,5 +94,38 @@ class AccessAutoSetupTest {
         assertEquals(setOf(AccessAutoSetup.Grant.SECURE_SETTINGS), setup.missing(status(setOf(SettingsTable.SYSTEM))))
         assertTrue(setup.missing(status(SettingsTable.entries.toSet())).isEmpty())
         assertTrue(setup.missing(null).isEmpty())
+    }
+
+    @Test
+    fun everyGrantIsAuditedBeforeAndAfterItRuns() {
+        val audit = InMemoryAuditLog()
+        val shizuku = Fake("Shizuku", false, true, exit = { if (it[0] == "pm") 1 else 0 })
+        AccessAutoSetup(shizuku, Fake("Root", true, false), audit).run(app, both, setOf(AccessKind.SHIZUKU))
+        val types = audit.all().map { it.type }
+        assertEquals(
+            listOf(AuditEventType.SELF_GRANT_REQUESTED, AuditEventType.SELF_GRANT_REQUESTED, AuditEventType.SELF_GRANT_DONE, AuditEventType.SELF_GRANT_FAILED),
+            types,
+        )
+        assertTrue(audit.all().first().detail.contains("pm grant $app android.permission.WRITE_SECURE_SETTINGS"))
+        assertTrue(audit.all().none { it.detail.contains("SecurityException") && it.type == AuditEventType.SELF_GRANT_DONE })
+    }
+
+    @Test
+    fun aRefusedAuditEntryStopsTheGrantFromRunning() {
+        val full = object : AuditLog {
+            override fun record(event: AuditEvent) = false
+        }
+        val shizuku = Fake("Shizuku", false, true)
+        val report = AccessAutoSetup(shizuku, Fake("Root", true, false), full).run(app, both, setOf(AccessKind.SHIZUKU))
+        assertTrue(shizuku.ran.isEmpty())
+        assertTrue(report.granted.isEmpty())
+        assertEquals(both, report.failed.keys)
+    }
+
+    @Test
+    fun nothingIsAuditedWhenNoBackendIsAvailable() {
+        val audit = InMemoryAuditLog()
+        AccessAutoSetup(Fake("Shizuku", false, false), Fake("Root", true, true), audit).run(app, both, setOf(AccessKind.SHIZUKU))
+        assertTrue(audit.all().isEmpty())
     }
 }

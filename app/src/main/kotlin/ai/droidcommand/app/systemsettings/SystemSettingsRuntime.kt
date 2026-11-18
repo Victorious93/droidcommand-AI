@@ -40,7 +40,7 @@ class SystemSettingsRuntime @Inject constructor(
     val platform = AndroidPlatformSettings(context)
 
     /** Grants this app WRITE_SECURE_SETTINGS / Modify system settings through Shizuku or (when the owner allowed it) root. */
-    val autoSetup = AccessAutoSetup(toolbox.shizuku, toolbox.root)
+    val autoSetup = AccessAutoSetup(toolbox.shizuku, toolbox.root, auditLog)
     val dnsVerifier = PrivateDnsVerifier(context)
     private val root = context.filesDir.toPath().resolve("system-settings")
 
