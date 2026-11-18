@@ -61,6 +61,7 @@ private val problemTypes = setOf(
     AuditEventType.APPROVAL_TIMED_OUT,
     AuditEventType.APPROVAL_UNAVAILABLE,
     AuditEventType.SETTINGS_REFUSED,
+    AuditEventType.BOT_MESSAGE_DENIED,
 )
 
 private val okTypes = setOf(
