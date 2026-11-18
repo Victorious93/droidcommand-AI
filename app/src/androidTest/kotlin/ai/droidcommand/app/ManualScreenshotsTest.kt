@@ -103,7 +103,8 @@ class ManualScreenshotsTest {
             snap("bot-maker-tools")
         }
         step("bot-maker-peers") {
-            compose.onNodeWithText("3 · Talks to other bots").performScrollTo()
+            // Scrolling to the next section's title leaves the whole "Talks to other bots" section above the bottom bar.
+            compose.onNodeWithText("4 · Own sandbox").performScrollTo()
             snap("bot-maker-peers")
         }
         step("bot-maker-sandbox") {
