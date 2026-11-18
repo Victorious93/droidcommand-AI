@@ -15,6 +15,8 @@ object FleetLiveStatusMapping {
     const val REASON_NOT_INSTALLED = "Not installed (or not visible)"
     const val REASON_INSTALLED_UNPAIRED = "Installed — pair to connect"
     const val REASON_SAME_SIGNING = "Bind refused (same-signing)"
+    const val REASON_COULD_NOT_CONNECT = "Could not connect yet"
+    const val REASON_VERSION_UNEXPECTED = "Connected, but this version answered unexpectedly"
     const val REASON_PEER_CONTROL_OFF = "Peer control off"
     const val REASON_BIND_REFUSED_SIGNATURE = "Bind refused (signature)"
     const val REASON_BIND_REFUSED_CERT = "Bind refused (cert)"
