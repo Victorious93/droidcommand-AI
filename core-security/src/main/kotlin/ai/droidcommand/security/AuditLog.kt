@@ -28,6 +28,9 @@ enum class AuditEventType {
     SETTINGS_CHANGED,
     SETTINGS_RESTORED,
     SETTINGS_REFUSED,
+    SELF_GRANT_REQUESTED,
+    SELF_GRANT_DONE,
+    SELF_GRANT_FAILED,
 }
 
 data class AuditEvent(

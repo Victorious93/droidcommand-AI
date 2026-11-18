@@ -61,6 +61,7 @@ private val problemTypes = setOf(
     AuditEventType.APPROVAL_TIMED_OUT,
     AuditEventType.APPROVAL_UNAVAILABLE,
     AuditEventType.SETTINGS_REFUSED,
+    AuditEventType.SELF_GRANT_FAILED,
     AuditEventType.BOT_MESSAGE_DENIED,
 )
 
@@ -71,6 +72,7 @@ private val okTypes = setOf(
     AuditEventType.GRANT_CONSUMED,
     AuditEventType.SETTINGS_CHANGED,
     AuditEventType.SETTINGS_RESTORED,
+    AuditEventType.SELF_GRANT_DONE,
 )
 
 private fun typeColor(type: AuditEventType): Color = when (type) {
