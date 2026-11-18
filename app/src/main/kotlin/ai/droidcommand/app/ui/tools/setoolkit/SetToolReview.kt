@@ -2,12 +2,14 @@ package ai.droidcommand.app.ui.tools.setoolkit
 
 import ai.droidcommand.setoolkit.SetAttackVector
 import ai.droidcommand.setoolkit.SetCommand
+import ai.droidcommand.setoolkit.SetMenuPath
 
 /**
- * Wording and the launch condition for the Social-Engineer Toolkit screen. Pure, so it is JVM-tested. The tool still
- * refuses an unnamed target and asks for confirmation on its own; this adds one thing the screen did not have:
- * Launch stays off while no backend is connected, instead of inviting a full form and a confirm dialog that can
- * only end in "no backend configured".
+ * Wording, the launch condition and the stdin preview for the Social-Engineer Toolkit screen. Pure, so it is JVM-tested.
+ * The tool still refuses an unnamed target and asks for confirmation on its own; [stdinPreview] is what the review
+ * card shows before that confirmation — the exact, ordered lines [ai.droidcommand.setoolkit.TermuxSetExecutor] would
+ * type into `setoolkit`'s stdin for this form, built from the same [SetMenuPath] it uses, so there is nothing hidden
+ * between what the operator reviews and what actually runs.
  */
 internal object SetToolReview {
     /** SPEAR_PHISHING -> "Spear phishing". */
@@ -25,10 +27,19 @@ internal object SetToolReview {
 
     /** Why Launch is off, most important first, or null when it is on. */
     fun launchHint(form: SetToolFormState, backendAvailable: Boolean): String? = when {
-        !backendAvailable -> "Launch is off: no Social-Engineer Toolkit backend is connected in this version."
+        !backendAvailable -> "Still needed: VictorSuite installed and the RUN_COMMAND permission. See Security tools."
         !hasTarget(form) -> "Still needed: a target host or a target email."
         else -> null
     }
+
+    /**
+     * The exact, ordered lines about to be typed into `setoolkit`'s stdin — [SetMenuPath]'s navigation digits (when
+     * [SetToolFormState.useMenuPath] is on) followed by [SetToolFormState.menuAnswers] verbatim. Computed directly
+     * from the vector and the form's own fields, not by constructing a [SetCommand], so it stays correct even while
+     * the form has no target yet (a [SetCommand] would refuse to build without one).
+     */
+    fun stdinPreview(form: SetToolFormState): List<String> =
+        (if (form.useMenuPath) SetMenuPath.navigationDigits(form.attackVector) else emptyList()) + form.menuAnswers
 
     fun summary(form: SetToolFormState): List<Pair<String, String>> = buildList {
         add("Attack vector" to vectorLabel(form.attackVector))
@@ -38,5 +49,10 @@ internal object SetToolReview {
         if (form.payload.isNotBlank()) add("Payload" to form.payload.trim())
         val options = form.options.filter { it.first.isNotBlank() }
         if (options.isNotEmpty()) add("Options" to options.joinToString(", ") { (key, value) -> "$key=$value" })
+        val stdin = stdinPreview(form)
+        add(
+            "Will type into SET, in order" to
+                if (stdin.isEmpty()) "nothing (setoolkit will read EOF at its first prompt and exit)" else stdin.joinToString(" → "),
+        )
     }
 }

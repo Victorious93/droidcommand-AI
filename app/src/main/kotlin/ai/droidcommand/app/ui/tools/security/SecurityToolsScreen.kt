@@ -126,7 +126,7 @@ fun SecurityToolsScreen(
             val (setText, setTone) = readiness.setPill()
             DroidListRow(
                 title = "Social-Engineer Toolkit",
-                subtitle = "Structured attack-vector forms. Launching needs a backend this version does not have yet.",
+                subtitle = "Structured attack-vector forms. Runs through the same VictorSuite Kali proot as Metasploit.",
                 icon = Icons.Filled.Security,
                 onClick = onOpenSet,
                 modifier = Modifier.testTag("security_open_set"),

@@ -5,6 +5,7 @@ import ai.droidcommand.app.ui.components.DroidGroup
 import ai.droidcommand.app.ui.components.DroidListRow
 import ai.droidcommand.app.ui.components.DroidNote
 import ai.droidcommand.app.ui.components.DroidRowDivider
+import ai.droidcommand.app.ui.components.DroidSwitchRow
 import ai.droidcommand.app.ui.components.PillTone
 import ai.droidcommand.app.ui.components.ScreenTitle
 import ai.droidcommand.app.ui.components.SectionLabel
@@ -32,6 +33,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,13 +43,16 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
 /**
- * Every field here is structured input: a chosen attack vector, a target field, an options row, never a raw command
- * string. Launch only enables once at least one of target host / target email is set (mirroring
- * [ai.droidcommand.setoolkit.SetCommand]'s own "no blank/mass target" rule) **and** a backend is connected; it still
- * has to clear the real confirmation dialog before [ai.droidcommand.setoolkit.SetTool] is invoked.
+ * Every field here is structured input: a chosen attack vector, a target field, an ordered list of menu answers, an
+ * options row — never a raw command string. Launch only enables once at least one of target host / target email is
+ * set (mirroring [ai.droidcommand.setoolkit.SetCommand]'s own "no blank/mass target" rule) **and** a backend is
+ * available; it still has to clear the real confirmation dialog before [ai.droidcommand.setoolkit.SetTool] is
+ * invoked.
  *
- * No backend is connected in this build ([SetToolViewModel.backendAvailable] is false, the Null executor), so the
- * screen says that up front and keeps Launch off. Installing SET on the phone would not change it.
+ * SET runs through [ai.droidcommand.setoolkit.TermuxSetExecutor] — the same VictorSuite Kali proot Metasploit uses,
+ * driven by piping a sequence of lines into `setoolkit`'s stdin (SET has no official scripting flag; this is the
+ * real mechanical fact that a Python CLI reading `input()` lets stdin stand in for a keyboard). The review card
+ * below shows the exact sequence before every run — see [SetToolReview.stdinPreview].
  */
 @Composable
 fun SetToolScreen(viewModel: SetToolViewModel = hiltViewModel()) {
@@ -55,6 +60,8 @@ fun SetToolScreen(viewModel: SetToolViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsState()
     var optionKey by remember { mutableStateOf("") }
     var optionValue by remember { mutableStateOf("") }
+    var answerDraft by remember { mutableStateOf("") }
+    var showHow by rememberSaveable { mutableStateOf(false) }
     val backend = viewModel.backendAvailable
     val running = uiState is ToolRunUiState.Running
     val keyProblem = SetToolReview.optionKeyProblem(optionKey)
@@ -66,13 +73,26 @@ fun SetToolScreen(viewModel: SetToolViewModel = hiltViewModel()) {
         ScreenTitle("Social-Engineer Toolkit")
         if (!backend) {
             DroidNote(
-                "No Social-Engineer Toolkit program is connected on this device. This version has no connection to a SET install, " +
-                    "so Launch is off. Installing SET on this phone would not change that.",
-                tone = PillTone.Error,
+                "No Social-Engineer Toolkit program is connected on this device yet. It runs inside VictorSuite's Kali proot, the " +
+                    "same way Metasploit does — install VictorSuite and grant the RUN_COMMAND permission (see Security tools), " +
+                    "then check again. Launch stays off until then.",
+                tone = PillTone.Warning,
                 modifier = Modifier.testTag("set_no_backend"),
             )
         }
         DroidNote("Every field is structured input. A launch always asks for your confirmation first, and only against a named target.")
+        DroidTextButton(onClick = { showHow = !showHow }) { Text(if (showHow) "Hide how this runs" else "How this runs") }
+        if (showHow) {
+            Text(
+                "SET has no official non-interactive flag, so this types into it the same way a person would: a sequence of lines sent " +
+                    "to its stdin, matching its menu's own numbered prompts. The main-menu digits to reach each attack vector below are " +
+                    "a best-effort default from SET's own long-stable menu layout — not verified against a real install. Turn off " +
+                    "\"Start from the main menu\" and type the whole sequence yourself if your installed version's menu differs. " +
+                    "The exact sequence is always shown in Review before it runs.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         SectionLabel("1 · Attack vector")
         DroidGroup {
@@ -117,7 +137,52 @@ fun SetToolScreen(viewModel: SetToolViewModel = hiltViewModel()) {
             }
         }
 
-        SectionLabel("3 · Options (optional)")
+        SectionLabel("3 · Menu answers")
+        DroidCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                DroidSwitchRow(
+                    title = "Start from the main menu",
+                    subtitle = "Adds SET's own digits for ${SetToolReview.vectorLabel(form.attackVector)} before the answers below. Turn off if your version's menu is different.",
+                    checked = form.useMenuPath,
+                    onCheckedChange = { on -> viewModel.updateForm { it.copy(useMenuPath = on) } },
+                    modifier = Modifier.testTag("set_use_menu_path"),
+                )
+                Text(
+                    "The rest: what SET asks after the vector is picked — target, template, listener, confirmations — in the order " +
+                        "your version asks for it. Re-type the target/payload above here if SET asks for them.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                form.menuAnswers.forEachIndexed { index, answer ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("${index + 1}.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(answer, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        DroidTextButton(
+                            onClick = { viewModel.updateForm { f -> f.copy(menuAnswers = f.menuAnswers.filterIndexed { i, _ -> i != index }) } },
+                        ) { Text("Remove") }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = answerDraft,
+                        onValueChange = { answerDraft = it },
+                        label = { Text("Next answer") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    DroidSecondaryButton(
+                        onClick = {
+                            viewModel.updateForm { f -> f.copy(menuAnswers = f.menuAnswers + answerDraft) }
+                            answerDraft = ""
+                        },
+                        enabled = answerDraft.isNotEmpty(),
+                        modifier = Modifier.testTag("set_add_menu_answer"),
+                    ) { Text("Add") }
+                }
+            }
+        }
+
+        SectionLabel("4 · Options (optional)")
         DroidCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 form.options.forEachIndexed { index, pair ->
@@ -158,7 +223,7 @@ fun SetToolScreen(viewModel: SetToolViewModel = hiltViewModel()) {
             }
         }
 
-        SectionLabel("4 · Review and launch")
+        SectionLabel("5 · Review and launch")
         DroidCard(modifier = Modifier.testTag("set_review"), borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 SetToolReview.summary(form).forEach { (label, value) ->

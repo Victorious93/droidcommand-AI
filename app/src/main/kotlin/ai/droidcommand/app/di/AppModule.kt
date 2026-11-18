@@ -101,9 +101,9 @@ import ai.droidcommand.security.PasswordPairingService
 import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
-import ai.droidcommand.setoolkit.NullSetExecutor
 import ai.droidcommand.setoolkit.SetExecutor
 import ai.droidcommand.setoolkit.SetTool
+import ai.droidcommand.setoolkit.TermuxSetExecutor
 import ai.droidcommand.shizuku.PrivilegedShell
 import ai.droidcommand.shizuku.ShizukuHost
 import ai.droidcommand.shizuku.ShizukuManager
@@ -136,9 +136,10 @@ import javax.inject.Singleton
  * runs `msfconsole` inside VictorSuite Kali through [TermuxExecutor] /
  * `com.termux.RUN_COMMAND` + `RUN_COMMAND_PENDING_INTENT`. That is **not**
  * [ai.droidcommand.metasploit.ShellBackedMetasploitExecutor] (desktop
- * ProcessBuilder) and **not** the Go pentest-swarm companion. SET stays
- * [NullSetExecutor] (TermuxSetExecutor is a later task). A live msfconsole
- * round-trip has not been run in the environment that wired this.
+ * ProcessBuilder) and **not** the Go pentest-swarm companion. SET is bound
+ * to [TermuxSetExecutor] the same way, piping a stdin sequence into
+ * `setoolkit` inside the same Kali proot. Neither a live msfconsole nor a
+ * live setoolkit round-trip has been run in the environment that wired this.
  * The shell allowlist starts empty (no executable is allowed) for the same
  * fail-closed reason `cli`'s own default is empty. The owner allows
  * executables on the Automation keys screen; this module never invents a
@@ -170,13 +171,14 @@ object AppModule {
     fun provideMetasploitExecutor(termux: TermuxExecutor): MetasploitExecutor = TermuxMetasploitExecutor(termux)
 
     /**
-     * SET has no real backend yet, so this is the fail-closed Null one. It is provided on its own, rather than built inside
-     * the registry, so the Security tools screens can ask the same instance whether it is available instead of keeping a
-     * second, hand-written "SET is not built" flag that could drift from this one.
+     * [TermuxSetExecutor] shares the same VictorSuite Kali RUN_COMMAND path [provideMetasploitExecutor] does, so
+     * `isAvailable()` tracks the same two real facts (VictorSuite/Termux installed, RUN_COMMAND granted). Provided on
+     * its own, rather than built inside the registry, so the Security tools screens can ask this exact instance
+     * instead of keeping a second, hand-written readiness flag that could drift from it.
      */
     @Provides
     @Singleton
-    fun provideSetExecutor(): SetExecutor = NullSetExecutor()
+    fun provideSetExecutor(termux: TermuxExecutor): SetExecutor = TermuxSetExecutor(termux)
 
     @Provides
     @Singleton

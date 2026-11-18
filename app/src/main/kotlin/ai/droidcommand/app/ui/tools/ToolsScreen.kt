@@ -88,7 +88,7 @@ fun ToolsScreen(navController: NavHostController) {
             val (setText, setTone) = readiness.setPill()
             DroidListRow(
                 title = "Social-Engineer Toolkit",
-                subtitle = "Structured attack-vector forms. Launching needs a backend this version does not have yet.",
+                subtitle = "Structured attack-vector forms. Runs through the same VictorSuite Kali proot as Metasploit.",
                 icon = Icons.Filled.Security,
                 onClick = { navController.navigate(Routes.SETOOLKIT) },
                 modifier = Modifier.testTag("tools_open_setoolkit"),

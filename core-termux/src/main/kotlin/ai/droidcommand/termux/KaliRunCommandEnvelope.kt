@@ -34,6 +34,15 @@ interface KaliRunCommandEnvelope {
 
     fun msfconsoleResourceScript(scriptLines: List<String>, timeoutMillis: Long): TermuxCommand
 
+    /**
+     * Pipes [stdinLines] into `setoolkit`'s stdin, one per line, exactly as if an operator had typed each line at
+     * its interactive menu. SET has no official non-interactive flag; this is the real mechanical fact that makes
+     * automating it possible at all — it is a plain Python CLI reading `input()`, so stdin substitutes for a
+     * keyboard. What goes on a given version's screen at a given menu depth is not asserted here; see
+     * [ai.droidcommand.setoolkit.SetMenuPath]'s and [ai.droidcommand.setoolkit.TermuxSetExecutor]'s doc comments.
+     */
+    fun setoolkitStdinSequence(stdinLines: List<String>, timeoutMillis: Long): TermuxCommand
+
     fun interpret(bundle: RunCommandResultBundle, durationMillis: Long): TermuxExecutionResult =
         bundle.toExecutionResult(durationMillis)
 }
@@ -78,6 +87,27 @@ class ProotDistroKaliEnvelope(
         }
         val body = scriptLines.joinToString("\n")
         val pipeline = "rc=/tmp/dca-msf.rc\ncat > \"\$rc\" <<'$delimiter'\n$body\n$delimiter\nmsfconsole -q -r \"\$rc\""
+        return toTermuxCommand(
+            KaliCommand(argv = listOf("bash", "-lc", pipeline), timeoutMillis = timeoutMillis),
+        )
+    }
+
+    /**
+     * Same heredoc-into-a-file shape as [msfconsoleResourceScript], but the file becomes `setoolkit`'s stdin rather
+     * than a resource-script argument: `setoolkit < "$in"`. A blank [stdinLines] still runs `setoolkit` with stdin
+     * from `/dev/null`: that reaches its first menu prompt, reads EOF, and exits — it is never skipped silently.
+     */
+    override fun setoolkitStdinSequence(stdinLines: List<String>, timeoutMillis: Long): TermuxCommand {
+        val delimiter = "DCA_SET_EOF"
+        require(stdinLines.none { it.contains(delimiter) }) {
+            "stdin sequence contains the heredoc delimiter"
+        }
+        val pipeline = if (stdinLines.isEmpty()) {
+            "setoolkit < /dev/null"
+        } else {
+            val body = stdinLines.joinToString("\n")
+            "in=/tmp/dca-set.in\ncat > \"\$in\" <<'$delimiter'\n$body\n$delimiter\nsetoolkit < \"\$in\""
+        }
         return toTermuxCommand(
             KaliCommand(argv = listOf("bash", "-lc", pipeline), timeoutMillis = timeoutMillis),
         )
