@@ -73,6 +73,40 @@ class SetToolTest {
     }
 
     @Test
+    fun `menuAnswer keys are read in ascending numeric order regardless of map iteration order`() {
+        val executor = ScriptedSetExecutor(SetExecutionResult.Success(0, "done", "", 10))
+        // LinkedHashMap built in a deliberately scrambled insertion order, so this only passes if SetTool sorts by
+        // the parsed index rather than relying on the map's own iteration order.
+        val input = linkedMapOf(
+            "attackVector" to "WEBSITE_ATTACK",
+            "targetHost" to "10.0.0.5",
+            "menuAnswer.10" to "last",
+            "menuAnswer.2" to "second",
+            "menuAnswer.1" to "first",
+        )
+        val result = SetTool(executor).execute(input)
+        assertIs<ToolResult.Success>(result)
+        assertEquals(listOf("first", "second", "last"), executor.lastCommand!!.menuAnswers)
+    }
+
+    @Test
+    fun `useMenuPath defaults true and can be turned off`() {
+        val executor = ScriptedSetExecutor(SetExecutionResult.Success(0, "", "", 0))
+        SetTool(executor).execute(mapOf("attackVector" to "WEBSITE_ATTACK", "targetHost" to "10.0.0.5"))
+        assertTrue(executor.lastCommand!!.useMenuPath)
+
+        SetTool(executor).execute(mapOf("attackVector" to "WEBSITE_ATTACK", "targetHost" to "10.0.0.5", "useMenuPath" to "false"))
+        assertEquals(false, executor.lastCommand!!.useMenuPath)
+    }
+
+    @Test
+    fun `a key that merely ends in digits without the menuAnswer prefix is not treated as a menu answer`() {
+        val executor = ScriptedSetExecutor(SetExecutionResult.Success(0, "", "", 0))
+        SetTool(executor).execute(mapOf("attackVector" to "WEBSITE_ATTACK", "targetHost" to "10.0.0.5", "option.PORT123" to "x"))
+        assertEquals(emptyList(), executor.lastCommand!!.menuAnswers)
+    }
+
+    @Test
     fun `an invalid target is rejected before the executor is ever invoked`() {
         val executor = ScriptedSetExecutor(SetExecutionResult.Success(0, "", "", 0))
         val result = SetTool(executor).execute(

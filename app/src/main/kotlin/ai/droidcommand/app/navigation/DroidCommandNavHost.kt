@@ -32,6 +32,7 @@ import ai.droidcommand.app.ui.systemsettings.SystemSettingsScreen
 import ai.droidcommand.app.ui.toolbox.SystemToolboxScreen
 import ai.droidcommand.app.ui.tools.ToolsScreen
 import ai.droidcommand.app.ui.tools.metasploit.MetasploitScreen
+import ai.droidcommand.app.ui.tools.security.SecurityToolsScreen
 import ai.droidcommand.app.ui.tools.setoolkit.SetToolScreen
 import ai.droidcommand.app.ui.update.ApkDownloadBar
 import ai.droidcommand.app.ui.update.rememberInstalledVersionLabel
@@ -91,6 +92,7 @@ object Routes {
     const val TOOLS = "tools"
     const val METASPLOIT = "tools/metasploit"
     const val SETOOLKIT = "tools/setoolkit"
+    const val SECURITY = "tools/security"
     const val SETTINGS = "settings"
     const val ADVANCED = "advanced"
     const val MEMORY = "memory"
@@ -195,6 +197,13 @@ fun DroidCommandNavHost(
             composable(Routes.TOOLS) { ToolsScreen(navController) }
             composable(Routes.METASPLOIT) { MetasploitScreen() }
             composable(Routes.SETOOLKIT) { SetToolScreen() }
+            composable(Routes.SECURITY) {
+                SecurityToolsScreen(
+                    onOpenMetasploit = { navController.navigate(Routes.METASPLOIT) },
+                    onOpenSet = { navController.navigate(Routes.SETOOLKIT) },
+                    onOpenLogs = { navController.navigate(Routes.LOGS) },
+                )
+            }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
                     onOpenHelp = { navController.navigate(Routes.HELP) },
@@ -211,6 +220,7 @@ fun DroidCommandNavHost(
                     onOpenMemory = { navController.navigate(Routes.MEMORY) },
                     onOpenBrain = { navController.navigate(Routes.NOTES) },
                     onOpenTools = { navController.navigate(Routes.TOOLS) },
+                    onOpenSecurity = { navController.navigate(Routes.SECURITY) },
                     onOpenLogs = { navController.navigate(Routes.LOGS) },
                     onOpenN8n = { navController.navigate(Routes.N8N) },
                     onOpenToolbox = { navController.navigate(Routes.SYSTEM_TOOLBOX) },
@@ -329,6 +339,7 @@ private val advancedChildRoutes = setOf(
     Routes.TOOLS,
     Routes.METASPLOIT,
     Routes.SETOOLKIT,
+    Routes.SECURITY,
     Routes.CLIPBOARDS,
     Routes.AUTOMATION,
     Routes.CODING,

@@ -3,10 +3,14 @@ package ai.droidcommand.app.ui.settings
 import ai.droidcommand.app.mcp.McpServersSection
 import ai.droidcommand.app.shizuku.ShizukuStatusSection
 import ai.droidcommand.app.ui.components.DroidCard
+import ai.droidcommand.app.ui.components.DroidGroup
+import ai.droidcommand.app.ui.components.DroidListRow
+import ai.droidcommand.app.ui.components.DroidRowDivider
+import ai.droidcommand.app.ui.components.PillTone
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
+import ai.droidcommand.app.ui.components.StatusPillWithChevron
 import ai.droidcommand.app.ui.theme.AccentBlueBright
-import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.app.ui.update.ApkDownloadBar
 import ai.droidcommand.app.update.ApkDownload
 import ai.droidcommand.app.ux.KaiCapabilityCopy
@@ -20,6 +24,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.FormatListNumbered
+import androidx.compose.material.icons.filled.Handyman
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -43,6 +62,7 @@ fun AdvancedScreen(
     onOpenMemory: () -> Unit = {},
     onOpenBrain: () -> Unit = {},
     onOpenTools: () -> Unit = {},
+    onOpenSecurity: () -> Unit = {},
     onOpenLogs: () -> Unit = {},
     onOpenN8n: () -> Unit = {},
     onOpenToolbox: () -> Unit = {},
@@ -60,6 +80,7 @@ fun AdvancedScreen(
         onOpenMemory = onOpenMemory,
         onOpenBrain = onOpenBrain,
         onOpenTools = onOpenTools,
+        onOpenSecurity = onOpenSecurity,
         onOpenLogs = onOpenLogs,
         onOpenN8n = onOpenN8n,
         onOpenToolbox = onOpenToolbox,
@@ -80,6 +101,7 @@ private fun AdvancedContent(
     onOpenMemory: () -> Unit,
     onOpenBrain: () -> Unit,
     onOpenTools: () -> Unit,
+    onOpenSecurity: () -> Unit,
     onOpenLogs: () -> Unit,
     onOpenN8n: () -> Unit,
     onOpenToolbox: () -> Unit,
@@ -114,23 +136,130 @@ private fun AdvancedContent(
                 )
             }
         }
-        SectionLabel("Power-user screens")
-        DroidCard {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DroidSecondaryButton(onClick = onOpenPilot, modifier = Modifier.fillMaxWidth()) { Text("One-step command") }
-                DroidSecondaryButton(onClick = onOpenPlan, modifier = Modifier.fillMaxWidth()) { Text("Multi-step plan") }
-                DroidSecondaryButton(onClick = onOpenMemory, modifier = Modifier.fillMaxWidth()) { Text("Memory") }
-                DroidSecondaryButton(onClick = onOpenBrain, modifier = Modifier.fillMaxWidth().testTag("advanced_open_brain")) { Text("Brain") }
-                DroidSecondaryButton(onClick = onOpenTools, modifier = Modifier.fillMaxWidth()) { Text("Extra tools") }
-                DroidSecondaryButton(onClick = onOpenLogs, modifier = Modifier.fillMaxWidth()) { Text("Activity log") }
-                DroidSecondaryButton(onClick = onOpenN8n, modifier = Modifier.fillMaxWidth().testTag("advanced_n8n")) { Text("n8n (self-hosted)") }
-                DroidSecondaryButton(onClick = onOpenStudio, modifier = Modifier.fillMaxWidth().testTag("advanced_notes_studio")) { Text("Notes Studio") }
-                DroidSecondaryButton(onClick = onOpenToolbox, modifier = Modifier.fillMaxWidth().testTag("advanced_system_toolbox")) { Text("System Toolbox (Shizuku / root)") }
-                DroidSecondaryButton(onClick = onOpenSystemSettings, modifier = Modifier.fillMaxWidth().testTag("advanced_system_settings")) { Text("System Settings (animations, display, Private DNS)") }
-                DroidSecondaryButton(onClick = onOpenBotMaker, modifier = Modifier.fillMaxWidth().testTag("advanced_bot_maker")) { Text("Bot maker") }
-                DroidSecondaryButton(onClick = onOpenSkillFiles, modifier = Modifier.fillMaxWidth().testTag("advanced_skill_files")) { Text("Skill files") }
-                DroidSecondaryButton(onClick = onOpenStatus, modifier = Modifier.fillMaxWidth().testTag("advanced_status_backup")) { Text("Status and backup") }
-            }
+        val capabilities by viewModel.capabilities.collectAsState()
+        val botMakerOn = capabilities.isEnabled(AssistantCapability.BOT_MAKER)
+
+        SectionLabel("Ask and plan")
+        DroidGroup {
+            DroidListRow(
+                title = "One-step command",
+                subtitle = "Ask for one approved action. It shows what it will do and waits.",
+                icon = Icons.Filled.PlayArrow,
+                onClick = onOpenPilot,
+            )
+            DroidRowDivider()
+            DroidListRow(
+                title = "Multi-step plan",
+                subtitle = "Give it a goal and it breaks the work into steps.",
+                icon = Icons.Filled.FormatListNumbered,
+                onClick = onOpenPlan,
+            )
+            DroidRowDivider()
+            DroidListRow(
+                title = "Memory",
+                subtitle = "Facts the app can remember across chats, if you turn that on.",
+                icon = Icons.Filled.Memory,
+                onClick = onOpenMemory,
+            )
+            DroidRowDivider()
+            DroidListRow(
+                title = "Brain",
+                subtitle = "Your markdown notes.",
+                icon = Icons.Filled.Psychology,
+                onClick = onOpenBrain,
+                modifier = Modifier.testTag("advanced_open_brain"),
+            )
+            DroidRowDivider()
+            DroidListRow(
+                title = "Notes Studio",
+                subtitle = "Write and check AI context files in your Brain vault.",
+                icon = Icons.Filled.EditNote,
+                onClick = onOpenStudio,
+                modifier = Modifier.testTag("advanced_notes_studio"),
+            )
+        }
+
+        SectionLabel("Helpers and skills")
+        DroidGroup {
+            DroidListRow(
+                title = "Bot maker",
+                subtitle = "Small helper bots for one job each.",
+                icon = Icons.Filled.SmartToy,
+                onClick = onOpenBotMaker,
+                modifier = Modifier.testTag("advanced_bot_maker"),
+                trailing = { StatusPillWithChevron(if (botMakerOn) "On" else "Off", if (botMakerOn) PillTone.Success else PillTone.Neutral) },
+            )
+            DroidRowDivider()
+            DroidListRow(
+                title = "Skill files",
+                subtitle = "Instruction folders (SKILL.md) the AI can turn on.",
+                icon = Icons.Filled.Extension,
+                onClick = onOpenSkillFiles,
+                modifier = Modifier.testTag("advanced_skill_files"),
+            )
+            DroidRowDivider()
+            DroidListRow(
+                title = "n8n (self-hosted)",
+                subtitle = "Run workflows on your own n8n server. The AI can use it only if you allow it.",
+                icon = Icons.Filled.AccountTree,
+                onClick = onOpenN8n,
+                modifier = Modifier.testTag("advanced_n8n"),
+            )
+        }
+
+        SectionLabel("This phone")
+        DroidGroup {
+            DroidListRow(
+                title = "System Toolbox (Shizuku / root)",
+                subtitle = "A shell, app manager, permissions and logcat through Shizuku or root.",
+                icon = Icons.Filled.Build,
+                onClick = onOpenToolbox,
+                modifier = Modifier.testTag("advanced_system_toolbox"),
+            )
+            DroidRowDivider()
+            DroidListRow(
+                title = "System Settings (animations, display, Private DNS)",
+                subtitle = "A native editor for Android settings, with a way back for every change.",
+                icon = Icons.Filled.Settings,
+                onClick = onOpenSystemSettings,
+                modifier = Modifier.testTag("advanced_system_settings"),
+            )
+            DroidRowDivider()
+            DroidListRow(
+                title = "Extra tools",
+                subtitle = "Clipboards, automation keys, fleet shortcuts.",
+                icon = Icons.Filled.Handyman,
+                onClick = onOpenTools,
+            )
+        }
+
+        SectionLabel("Security")
+        DroidGroup {
+            DroidListRow(
+                title = "Security tools",
+                subtitle = "Metasploit and the Social-Engineer Toolkit, with a readiness check.",
+                icon = Icons.Filled.Security,
+                onClick = onOpenSecurity,
+                modifier = Modifier.testTag("advanced_security_tools"),
+            )
+            DroidRowDivider()
+            DroidListRow(
+                title = "Activity log",
+                subtitle = "What was approved, denied and run.",
+                icon = Icons.Filled.History,
+                onClick = onOpenLogs,
+            )
+        }
+
+        SectionLabel("Backup")
+        DroidGroup {
+            DroidListRow(
+                title = "Status and backup",
+                subtitle = "What this install is doing, and a copy of your data.",
+                icon = Icons.Filled.Backup,
+                onClick = onOpenStatus,
+                modifier = Modifier.testTag("advanced_status_backup"),
+            )
         }
         SectionLabel("Mode names")
         ModeNamesSection(viewModel)
@@ -143,7 +272,7 @@ private fun AdvancedContent(
         SectionLabel("Device tools")
         DroidCard {
             Text(
-                "Root, Termux, Shizuku, Metasploit, and the Social-Engineer Toolkit are under Extra tools. " +
+                "Metasploit and the Social-Engineer Toolkit are under Security tools. " +
                     "Each run still asks before it executes. Shizuku is optional.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

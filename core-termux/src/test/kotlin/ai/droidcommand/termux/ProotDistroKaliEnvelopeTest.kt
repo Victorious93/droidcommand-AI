@@ -43,4 +43,28 @@ class ProotDistroKaliEnvelopeTest {
         assertTrue(pipeline.contains("use auxiliary/scanner/portscan/tcp"))
         assertTrue(pipeline.contains("set RHOSTS 10.0.0.5"))
     }
+
+    @Test
+    fun `setoolkit stdin sequence uses bash -lc pipeline wrap and redirects a heredoc into setoolkit`() {
+        val command = envelope.setoolkitStdinSequence(listOf("1", "2", "10.0.0.5", "y"), 90_000)
+        assertEquals(RunCommandContract.PROOT_DISTRO_PATH, command.executable)
+        assertEquals(listOf("login", "kali", "--", "bash", "-lc"), command.args.dropLast(1))
+        val pipeline = command.args.last()
+        assertTrue(pipeline.contains("setoolkit < "))
+        assertTrue(pipeline.contains("1\n2\n10.0.0.5\ny"))
+    }
+
+    @Test
+    fun `an empty stdin sequence still runs setoolkit, from dev null`() {
+        val command = envelope.setoolkitStdinSequence(emptyList(), 90_000)
+        val pipeline = command.args.last()
+        assertEquals("setoolkit < /dev/null", pipeline)
+    }
+
+    @Test
+    fun `a stdin line containing the heredoc delimiter is refused rather than silently truncating the sequence`() {
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            envelope.setoolkitStdinSequence(listOf("DCA_SET_EOF"), 90_000)
+        }
+    }
 }

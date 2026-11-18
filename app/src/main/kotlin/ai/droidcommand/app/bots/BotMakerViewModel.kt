@@ -124,6 +124,15 @@ class BotMakerViewModel @Inject constructor(
      */
     fun tickedFor(bot: HelperBot): List<String> = mcpTools.resolve(bot.allowedTools, bot.mcpBindings).allowed.sorted()
 
+    /**
+     * The same switch as Advanced → Kai capabilities, flipped from the screen that says it is off, so the owner is not sent
+     * hunting for it. Nothing else changes: tools that can change the phone still ask on every save and every run.
+     */
+    fun turnOn() {
+        capabilities.save(capabilities.load().copy(botMakerEnabled = true))
+        mutable.update { it.copy(enabled = true, error = null) }
+    }
+
     fun save(
         id: String?,
         name: String,

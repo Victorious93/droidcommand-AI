@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.chat
 
 import ai.droidcommand.app.localmodels.OpenGgufDocument
+import ai.droidcommand.app.ui.components.DroidSwitchRow
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
 import ai.droidcommand.app.ui.components.rememberDraft
@@ -72,7 +73,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -574,18 +574,26 @@ private fun OptionsPanel(
             if (state.localImporting) {
                 DroidSecondaryButton(onClick = viewModel::cancelLocalImport) { Text("Cancel import") }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Switch(checked = state.memoryEnabled, onCheckedChange = viewModel::setMemoryEnabled)
-                Text("Memory (applies next time you open Chat)", style = MaterialTheme.typography.bodySmall)
-            }
+            // Each switch has its own label column that takes the width the switch leaves. Before, the label sat beside the
+            // switch with no width of its own, and in a clipped panel the two rows drew on top of each other.
+            DroidSwitchRow(
+                title = "Memory",
+                subtitle = "Chat can recall things from chats you chose to remember. Takes effect the next time you open Chat.",
+                checked = state.memoryEnabled,
+                onCheckedChange = viewModel::setMemoryEnabled,
+                modifier = Modifier.testTag("chat_memory_switch"),
+            )
             if (state.memoryEnabled) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Switch(checked = state.autoRemember, onCheckedChange = viewModel::setAutoRemember)
-                    Text("Auto-remember every 6 replies (one extra request each; applies next time you open Chat)", style = MaterialTheme.typography.bodySmall)
-                }
+                DroidSwitchRow(
+                    title = "Auto-remember",
+                    subtitle = "Every 6 replies, with one extra request each. Takes effect the next time you open Chat.",
+                    checked = state.autoRemember,
+                    onCheckedChange = viewModel::setAutoRemember,
+                    modifier = Modifier.testTag("chat_auto_remember_switch"),
+                )
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     DroidSecondaryButton(onClick = viewModel::rememberChat, enabled = !state.sending) { Text("Remember this chat") }
-                    state.memoryStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    state.memoryStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f)) }
                 }
             }
             HorizontalDivider()

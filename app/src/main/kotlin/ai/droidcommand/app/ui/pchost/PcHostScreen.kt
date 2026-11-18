@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.pchost
 
 import ai.droidcommand.app.ui.components.DroidCard
+import ai.droidcommand.app.ui.components.DroidSwitchRow
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.components.SectionLabel
 import ai.droidcommand.app.ui.settings.KeyStatus
@@ -22,7 +23,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -149,14 +149,12 @@ private fun ServerCard(card: PcHostCard, viewModel: PcHostViewModel) {
                     DroidSecondaryButton(onClick = { viewModel.checkTools(kind) }, enabled = !card.checkingTools) {
                         Text(if (card.checkingTools) "Asking the server…" else "Check tool support")
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Switch(checked = card.toolsForced, onCheckedChange = { viewModel.setToolsForced(kind, it) })
-                        Text(
-                            "Offer tools anyway. For a server that cannot report tool support. If the model cannot use them, the reply says so.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = muted,
-                        )
-                    }
+                    DroidSwitchRow(
+                        title = "Offer tools anyway",
+                        subtitle = "For a server that cannot report tool support. If the model cannot use them, the reply says so.",
+                        checked = card.toolsForced,
+                        onCheckedChange = { viewModel.setToolsForced(kind, it) },
+                    )
                 }
 
                 if (card.usedByChat) {

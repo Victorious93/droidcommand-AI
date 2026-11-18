@@ -23,8 +23,14 @@ import ai.droidcommand.agent.ToolSpec
  * Input keys: `attackVector` (required, one of [SetAttackVector]),
  * `targetHost` or `targetEmail` (at least one required — this tool fails
  * closed rather than accept an unspecified/mass target), `payload`
- * (optional), and any number of `option.<NAME>` keys mapped to SET
- * automation-config entries.
+ * (optional), any number of `option.<NAME>` keys mapped to SET
+ * automation-config entries, `useMenuPath` (optional, default `"true"`),
+ * and any number of `menuAnswer.<N>` keys — the literal, ordered lines fed
+ * to a live SET session's stdin after [SetMenuPath]'s navigation digits
+ * (when `useMenuPath` is on). `<N>` is parsed as an integer and the keys
+ * are read in ascending `<N>` order, not Map iteration order, so a caller
+ * building this input from any `Map` implementation still gets a
+ * deterministic sequence.
  */
 class SetTool(private val executor: SetExecutor) : Tool {
     override val spec = ToolSpec(
@@ -48,6 +54,12 @@ class SetTool(private val executor: SetExecutor) : Tool {
         }
         val payload = input["payload"]
         val options = input.filterKeys { it.startsWith("option.") }.mapKeys { it.key.removePrefix("option.") }
+        val menuAnswers = input.keys
+            .filter { it.startsWith("menuAnswer.") }
+            .mapNotNull { key -> key.removePrefix("menuAnswer.").toIntOrNull()?.let { index -> index to key } }
+            .sortedBy { (index, _) -> index }
+            .map { (_, key) -> input.getValue(key) }
+        val useMenuPath = input["useMenuPath"]?.toBooleanStrictOrNull() ?: true
 
         val command = try {
             SetCommand(
@@ -55,6 +67,8 @@ class SetTool(private val executor: SetExecutor) : Tool {
                 target = SetTarget(targetHost, targetEmail),
                 payload = payload,
                 options = options,
+                menuAnswers = menuAnswers,
+                useMenuPath = useMenuPath,
             )
         } catch (e: IllegalArgumentException) {
             return ToolResult.Failure("Invalid SET command: ${e.message}")

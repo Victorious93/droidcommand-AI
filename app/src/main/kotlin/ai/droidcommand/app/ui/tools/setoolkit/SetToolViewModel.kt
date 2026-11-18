@@ -5,6 +5,7 @@ import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.agent.describe
 import ai.droidcommand.app.ui.tools.ToolRunUiState
 import ai.droidcommand.setoolkit.SetAttackVector
+import ai.droidcommand.setoolkit.SetExecutor
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,6 +21,10 @@ data class SetToolFormState(
     val targetEmail: String = "",
     val payload: String = "",
     val options: List<Pair<String, String>> = emptyList(),
+    /** Prepend [ai.droidcommand.setoolkit.SetMenuPath]'s best-effort main-menu navigation before [menuAnswers]. */
+    val useMenuPath: Boolean = true,
+    /** The literal, ordered lines to type into `setoolkit`'s stdin after the navigation digits. */
+    val menuAnswers: List<String> = emptyList(),
 )
 
 /**
@@ -32,7 +37,15 @@ data class SetToolFormState(
 @HiltViewModel
 class SetToolViewModel @Inject constructor(
     private val toolRunner: ToolRunner,
+    setExecutor: SetExecutor,
 ) : ViewModel() {
+    /**
+     * Whether SET can run at all — the same [ai.droidcommand.setoolkit.TermuxSetExecutor.isAvailable] check Security
+     * tools shows (VictorSuite/Termux installed and the RUN_COMMAND permission granted), asked of the exact instance
+     * `AppModule` wires into the registry so this screen cannot drift from it.
+     */
+    val backendAvailable: Boolean = setExecutor.isAvailable()
+
     private val _form = MutableStateFlow(SetToolFormState())
     val form: StateFlow<SetToolFormState> = _form
 
@@ -53,6 +66,8 @@ class SetToolViewModel @Inject constructor(
                 if (current.targetEmail.isNotBlank()) put("targetEmail", current.targetEmail)
                 if (current.payload.isNotBlank()) put("payload", current.payload)
                 current.options.forEach { (key, value) -> if (key.isNotBlank()) put("option.$key", value) }
+                put("useMenuPath", current.useMenuPath.toString())
+                current.menuAnswers.forEachIndexed { index, answer -> put("menuAnswer.${index + 1}", answer) }
             }
             val result = toolRunner.run("run_setoolkit_attack", input)
             _uiState.value = when (result) {

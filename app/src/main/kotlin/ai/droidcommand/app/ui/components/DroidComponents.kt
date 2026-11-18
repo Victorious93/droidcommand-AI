@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -57,11 +58,15 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 fun DroidCard(
     modifier: Modifier = Modifier,
     borderColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.outline,
+    onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val shape = RoundedCornerShape(16.dp)
     Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .let { if (onClick != null) it.clip(shape).clickable(onClick = onClick) else it },
+        shape = shape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         border = BorderStroke(1.dp, borderColor),
     ) {
@@ -72,16 +77,22 @@ fun DroidCard(
 /** Tone of a [StatusPill]. Success stays green on every theme so "ready" never looks like the brand accent. */
 enum class PillTone { Neutral, Success, Warning, Error }
 
-/** Small rounded status label: "Saved", "Not set", "Needs attention". The text always says it; colour only backs it up. */
+/** Container and content colours for a [PillTone]. Shared by [StatusPill] and the notice banner so they cannot drift apart. */
 @Composable
-fun StatusPill(text: String, tone: PillTone = PillTone.Neutral, modifier: Modifier = Modifier) {
+internal fun pillColors(tone: PillTone): Pair<Color, Color> {
     val scheme = MaterialTheme.colorScheme
-    val (container, content) = when (tone) {
+    return when (tone) {
         PillTone.Neutral -> scheme.surface to scheme.onSurfaceVariant
         PillTone.Success -> Color(0xFF3DDC84).copy(alpha = 0.16f) to Color(0xFF3DDC84)
         PillTone.Warning -> Color(0xFFFFB74D).copy(alpha = 0.16f) to Color(0xFFFFB74D)
         PillTone.Error -> scheme.error.copy(alpha = 0.16f) to scheme.error
     }
+}
+
+/** Small rounded status label: "Saved", "Not set", "Needs attention". The text always says it; colour only backs it up. */
+@Composable
+fun StatusPill(text: String, tone: PillTone = PillTone.Neutral, modifier: Modifier = Modifier) {
+    val (container, content) = pillColors(tone)
     Surface(color = container, shape = RoundedCornerShape(50), modifier = modifier) {
         Text(
             text = text,

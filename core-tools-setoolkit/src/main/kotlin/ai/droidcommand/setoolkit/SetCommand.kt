@@ -6,7 +6,8 @@ package ai.droidcommand.setoolkit
  * [ai.droidcommand.metasploit.MetasploitModuleType], nothing here asserts a
  * specific automation-config shape per vector, since [ProcessBackedSetExecutor]
  * deliberately does not claim to know SET's exact non-interactive syntax
- * (see that class's doc comment).
+ * (see that class's doc comment). [SetMenuPath] maps each entry to the
+ * digits SET's own main menu uses to reach it.
  */
 enum class SetAttackVector {
     SPEAR_PHISHING,
@@ -29,15 +30,36 @@ data class SetTarget(val host: String? = null, val emailAddress: String? = null)
 /**
  * A structured SET attack-vector invocation, built entirely from typed
  * fields — never a raw string a caller types. Every interpolated value
- * (host, email, payload, option values) is checked by [assertSafeValue] so
- * none can inject an extra line into the automation config
- * [ProcessBackedSetExecutor] writes to disk.
+ * (host, email, payload, option values, menu answers) is checked by
+ * [assertSafeValue] so none can inject an extra line into whatever
+ * newline-separated text a real [SetExecutor] writes to disk or pipes to
+ * a process's stdin.
+ *
+ * [target]/[payload]/[options] are this tool's policy surface: what
+ * [SetTool] validates and what `core-security` gates on. They are not
+ * automatically typed into a live SET session — the exact menu SET shows
+ * after a vector is chosen genuinely differs by version and by vector
+ * (spear-phishing's next prompt is not website-attack's), and this
+ * codebase's standing rule is to say so rather than guess. [menuAnswers]
+ * is the explicit, ordered, literal sequence of answers SET would see
+ * after [SetMenuPath]'s best-effort navigation digits — including the
+ * target/payload values again, wherever the operator's own SET session
+ * actually asks for them. [TermuxSetExecutor] shows the exact sequence it
+ * is about to send before it is sent, so a wrong assumption about where a
+ * prompt falls is caught by the operator, not silently mistargeted.
  */
 data class SetCommand(
     val attackVector: SetAttackVector,
     val target: SetTarget,
     val payload: String? = null,
     val options: Map<String, String> = emptyMap(),
+    val menuAnswers: List<String> = emptyList(),
+    /**
+     * Whether [TermuxSetExecutor] should prepend [SetMenuPath]'s best-effort main-menu navigation digits before
+     * [menuAnswers]. Default true. Set false when the operator already knows their installed version's menu and has
+     * put the right digits at the start of [menuAnswers] themselves.
+     */
+    val useMenuPath: Boolean = true,
     val timeoutMillis: Long = 180_000,
 ) {
     init {
@@ -59,6 +81,7 @@ data class SetCommand(
             }
             assertSafeValue("option.$key", value)
         }
+        menuAnswers.forEachIndexed { index, answer -> assertSafeValue("menuAnswers[$index]", answer) }
     }
 
     companion object {
@@ -69,7 +92,8 @@ data class SetCommand(
         /**
          * Rejects a value that could inject an additional line into the
          * newline-separated automation config [ProcessBackedSetExecutor]
-         * writes to disk.
+         * writes to disk, or an extra keystroke into the stdin sequence
+         * [TermuxSetExecutor] pipes into a live `setoolkit` session.
          */
         internal fun assertSafeValue(fieldName: String, value: String) {
             require(value.none { it in UNSAFE_CHARS }) {

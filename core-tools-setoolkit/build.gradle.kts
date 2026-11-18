@@ -10,6 +10,7 @@ dependencies {
     implementation(project(":core-agent"))
     implementation(project(":core-security"))
     implementation(project(":core-shell"))
+    implementation(project(":core-termux"))
     testImplementation(kotlin("test"))
 }
 

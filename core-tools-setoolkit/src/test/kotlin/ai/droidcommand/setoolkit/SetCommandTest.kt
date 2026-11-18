@@ -67,4 +67,34 @@ class SetCommandTest {
             )
         }
     }
+
+    @Test
+    fun `menuAnswers default to empty and useMenuPath defaults to true`() {
+        val command = SetCommand(attackVector = SetAttackVector.WEBSITE_ATTACK, target = SetTarget(host = "10.0.0.5"))
+        kotlin.test.assertEquals(emptyList(), command.menuAnswers)
+        kotlin.test.assertTrue(command.useMenuPath)
+    }
+
+    @Test
+    fun `accepts an ordered menuAnswers list`() {
+        val command = SetCommand(
+            attackVector = SetAttackVector.WEBSITE_ATTACK,
+            target = SetTarget(host = "10.0.0.5"),
+            menuAnswers = listOf("2", "10.0.0.5", "y"),
+            useMenuPath = false,
+        )
+        kotlin.test.assertEquals(listOf("2", "10.0.0.5", "y"), command.menuAnswers)
+        kotlin.test.assertFalse(command.useMenuPath)
+    }
+
+    @Test
+    fun `rejects a menu answer containing a newline that could inject an extra keystroke`() {
+        assertFailsWith<IllegalArgumentException> {
+            SetCommand(
+                attackVector = SetAttackVector.WEBSITE_ATTACK,
+                target = SetTarget(host = "10.0.0.5"),
+                menuAnswers = listOf("y\n99"),
+            )
+        }
+    }
 }
