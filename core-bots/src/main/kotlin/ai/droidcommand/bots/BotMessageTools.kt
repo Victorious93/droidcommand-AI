@@ -17,7 +17,8 @@ object BotToolNames {
 /**
  * Lets the bot that is currently running send one message to a peer the owner allowed it to talk to, and read the
  * reply. Built per run from that run's [BotConversation], so the sender is always the bot actually running and
- * a bot cannot pose as another. It only works when the bot also lists `bot_message` in its allowed tools.
+ * a bot cannot pose as another. A caller must also put `bot_message` on the bot's allow-list (the app does this only
+ * for a bot whose owner ticked at least one peer for it).
  *
  * A target that is not one of the sender's allowed, enabled peers gets the same plain answer whether or not such a
  * bot exists, so a bot cannot probe which other bots the owner has made. The attempt is still audited by the bus.
