@@ -20,6 +20,8 @@ object FleetCompanionLivePublisher {
         val signatureRefusal: String? = null,
         val healthy: Boolean = false,
         val hackerAi: Boolean = false,
+        /** Connected, but a health/interface call threw (e.g. a different AIDL version). Not a refusal. */
+        val callFailed: Boolean = false,
     )
 
     fun reasons(
@@ -55,14 +57,20 @@ object FleetCompanionLivePublisher {
         }
         val connected = link.connect(packageName)
         val refusal = link.lastSignatureRefusalDetail(packageName)
-        val healthy = connected && link.domainHealthy(packageName)
-        val hackerAi = connected && link.exposesHackerAiService(packageName)
+        // Version tolerance: a different build may bind but answer with a different AIDL shape
+        // (RemoteException, SecurityException, ...). That must not crash the probe or read as a signing refusal.
+        var callFailed = false
+        val healthy = connected && runCatching { link.domainHealthy(packageName) }
+            .onFailure { callFailed = true }.getOrDefault(false)
+        val hackerAi = connected && runCatching { link.exposesHackerAiService(packageName) }
+            .onFailure { callFailed = true }.getOrDefault(false)
         return Probe(
             installed = true,
             connected = connected,
             signatureRefusal = refusal,
             healthy = healthy,
             hackerAi = hackerAi,
+            callFailed = callFailed && !healthy && !hackerAi,
         )
     }
 
@@ -77,14 +85,11 @@ object FleetCompanionLivePublisher {
                     FleetLiveStatusMapping.REASON_BIND_REFUSED_SIGNATURE
                 }
         }
-        if (!probe.connected) {
-            return if (sameSigningHint) {
-                FleetLiveStatusMapping.REASON_SAME_SIGNING
-            } else {
-                FleetLiveStatusMapping.REASON_BIND_REFUSED_SIGNATURE
-            }
-        }
+        // No refusal was reported and nothing connected. That could be a signing difference, an app that
+        // has not been opened yet, or a build with no service. We cannot tell which, so do not claim one.
+        if (!probe.connected) return FleetLiveStatusMapping.REASON_COULD_NOT_CONNECT
         if (probe.healthy || probe.hackerAi) return FleetLiveStatusMapping.REASON_LIVE
+        if (probe.callFailed) return FleetLiveStatusMapping.REASON_VERSION_UNEXPECTED
         return FleetLiveStatusMapping.REASON_AWAITING
     }
 }
