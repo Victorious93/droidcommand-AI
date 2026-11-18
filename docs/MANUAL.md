@@ -1,50 +1,259 @@
 # DroidCommand AI — user manual
 
-This is the user-facing copy also shown in-app (Help → Manual). The
-engineering contract for remote control is `docs/specs/REMOTE_CONTROL.md`.
+This is the full manual. **Part 1** is for everyone who uses the app: what each screen does, how to make
+helper bots, and how the safety rules work. **Part 2** is the technical reference for remote control and the
+fleet (the engineering contract is `docs/specs/REMOTE_CONTROL.md`).
 
-DroidCommand AI (DCA) is the **controller / brain** of the room fleet.
-It chats, plans, runs tools, and authorizes remote actions on fleet
-apps. Live wipe, power-off, lock, flash, bootloader, and RustDesk are
-**not implemented** in this skeleton: those seams still prompt, then
-return an honest "not implemented".
+**Honesty rule.** If a screen or this manual says something is planned, stubbed, or not wired, that is the real
+status. The screenshots below were taken on an Android 9 (API 28) emulator with software rendering, not on a
+real phone, and tool backends there are stand-ins: nothing in a screenshot ran real root, Termux, or a live AI
+call. Where a feature has not been run on a real phone, the chapter says so.
 
-Honesty rule: if a screen says something is planned, stubbed, or not
-wired, that is the real status.
+## Contents
 
----
+1. [Getting started](#1-getting-started)
+2. [The five tabs](#2-the-five-tabs)
+3. [AI Chat](#3-ai-chat)
+4. [Models and keys](#4-models-and-keys)
+5. [Bot maker](#5-bot-maker)
+6. [MCP servers (extra AI tools)](#6-mcp-servers-extra-ai-tools)
+7. [Messages and calls through VictorSMS](#7-messages-and-calls-through-victorsms)
+8. [Safety: approvals, switches, and the Activity log](#8-safety-approvals-switches-and-the-activity-log)
+9. [Troubleshooting](#9-troubleshooting)
+10. [Glossary](#10-glossary)
 
-## Chat and providers
-
-Settings holds **BYOK** API keys (Anthropic, OpenAI, Google/Gemini, Groq)
-in the on-device vault. Pick a provider and model on the chat screen.
-Local GGUF models are a separate path (`ProviderType.LOCAL`) and are not
-required for cloud chat.
-
-Chat history, skills, and templates live in Library. A skill injects
-system text; a template fills the input.
-
-Document Q&A (RAG) attaches a text/PDF file to the conversation. The
-embedding model is a separate download. Answers are grounded in attached
-chunks when retrieval is enabled.
-
-Web search is an optional, off-by-default toolbar toggle. It injects
-search snippets as context; it is not a live browse of arbitrary sites
-unless you configured a search key.
+Part 2 (technical reference) starts at [Pilot, Forge, and tools](#pilot-forge-and-tools).
 
 ---
 
-## Voice
+# Part 1 — Using the app
 
-Mic input transcribes into the chat box (on-device STT when available).
-TTS can speak replies (system voices only — no voice cloning). Both
-degrade to silent / no-crash if permission is denied.
+## 1. Getting started
 
-**Local voice remote-control phrases** are configured under Settings →
-Remote Control. Match is exact after normalize. Voice remote control is
-a **local** trigger, not an inbound node command.
+1. Open the app. On a first run you see a short "This app does two things" page. Tap **Skip** to go straight in; you
+   can come back to everything from the tabs.
+2. Give Chat something to answer with. Either **pick or download a model that runs on this phone** (Models tab, no
+   account needed), or **add a cloud key** (Settings tab). See [chapter 4](#4-models-and-keys).
+3. Open **AI Chat** and ask something.
+
+Nothing that can change the phone runs without asking you first, and everything risky is **off until you turn it
+on** (see [chapter 8](#8-safety-approvals-switches-and-the-activity-log)).
+
+## 2. The five tabs
+
+The bar at the bottom has five tabs.
+
+| Tab | What it is for |
+|---|---|
+| **Fleet** | Your other Victorious apps: which are installed, paired, and reachable. |
+| **AI Chat** | Where you ask questions and run helper bots. |
+| **Models** | Pick or download a model that runs on this phone, or point Chat at a model on your PC. |
+| **Settings** | Cloud keys, voice, look, and Remote Control switches. |
+| **Advanced** | One-step commands, multi-step plans, Memory, Brain notes, the Bot maker, the Activity log, extra tools, MCP servers, and the "Kai capabilities" switches. |
+
+> *Screenshot not captured yet: fleet tab.*
+*Fleet: your other apps and whether each can be reached.*
+
+> *Screenshot not captured yet: ai chat tab.*
+*AI Chat.*
+
+> *Screenshot not captured yet: models tab.*
+*Models.*
+
+> *Screenshot not captured yet: settings tab.*
+*Settings.*
+
+> *Screenshot not captured yet: advanced tab.*
+*Advanced: the power-user screens, MCP servers, and the Kai capabilities switches.*
+
+**Fleet** lists HackerAI plus the thirteen known Victorious apps. **Pairing** stores that you trust the install that
+is on this phone *now*; if that app is later replaced, the connection stops until you pair again. Pairing does not
+turn on remote control and does not run a command. Live status from other apps is not wired yet; rows say "no
+snapshot yet" until it is.
+
+## 3. AI Chat
+
+- **Provider and model.** Pick a cloud provider and model on the chat screen, or use a model on this phone or on
+  your PC ([chapter 4](#4-models-and-keys)).
+- **Voice.** The mic button transcribes into the chat box (on-device speech-to-text when available). Replies can be
+  spoken with the system voice. Both stay silent, without crashing, if you deny the permission. Phrases that trigger
+  actions are set under Settings → Remote Control and are a *local* trigger, not an inbound command.
+- **Web search** is an optional toolbar toggle, **off by default**. It adds search snippets to the question; it is
+  not live browsing of arbitrary sites, and needs a search key.
+- **Documents.** Attach a text or PDF file and ask questions about it. The embedding model is a separate download;
+  answers are grounded in the attached text when retrieval is on. PDF text only, no scanned pages.
+- **Memory.** "Remember this chat" saves facts into Advanced → Memory. Brain notes are plain Markdown files you can
+  also open in other apps.
+- **Skills and templates.** A skill adds system text to every message; a template fills the input box.
+- **Running a helper bot.** Tap **Run** on a bot in the Bot maker; Chat switches to that bot until you stop it.
+
+## 4. Models and keys
+
+- **On this phone.** A `.gguf` file lets Chat work without a cloud key. Pick a file you already have or download one
+  from the catalog (checked against a published SHA-256 before it loads). Some models are large; use Wi-Fi.
+- **On your PC.** Chat can talk to Ollama or an OpenAI-compatible server on your PC over your LAN or VPN. This is
+  different from importing a `.gguf` onto the phone. See `docs/PC_HOSTED_MODELS.md`.
+- **Cloud keys.** Settings holds API keys for Anthropic, OpenAI, Google (Gemini) and Groq. Keys are stored encrypted
+  on this phone and never shown again after saving.
+- **Where text may go.** The inference policy (this device only / my PC only / prefer PC then device / confirmed
+  cloud fallback; default "use the model I pick") decides which places may receive your text. See
+  `docs/INFERENCE_POLICY.md`. Bot-to-bot replies follow the same policy.
+
+## 5. Bot maker
+
+A **helper bot** is a saved recipe for one job: a name, instructions, the tools it may use, who it may talk to, and
+whether it gets its own Linux sandbox. Bots live only on this phone and run in AI Chat with your usual provider.
+
+**Turn it on first.** Advanced → Kai capabilities → **Bot Maker**. It is off by default.
+
+### The page
+
+The page shows **Your bots** first, each as a card with chips for what it can do (for example "2 tools", "Talks to
+Writer", "Sandbox"), and **Run / Edit / Delete**. **New bot** opens one editor with four sections.
+
+> *Screenshot not captured yet: bot maker: your bots.*
+*Your bots, at a glance.*
+
+> *Screenshot not captured yet: bot maker editor.*
+*The editor: 1 · Basics.*
+
+**1 · Basics.** Name, what it should do, and an optional model. A blank model means "the model Chat uses".
+
+**2 · Tools.** Tick what the bot may use. Search by name or description. Tools are grouped by purpose (Terminal &
+root, Files, Screen control, Phone, Build, Web & AI, Notes & memory, Fleet & remote…) and **MCP tools are grouped per
+server**, with **All / None** for a whole group. Tools marked *asks first* still ask you every time they run. Saving
+a bot with tools that can change the phone shows one extra "Allow tools that can change the phone?" check.
+
+> *Screenshot not captured yet: tool groups.*
+*Tools, grouped. Tap a group to open it.*
+
+**3 · Talks to other bots.** By default a bot can message **nobody**. Tick the bots it may message.
+
+- Permission is **one way**: ticking Writer for Research lets Research message Writer, not Writer message Research.
+- The other bot answers **in text only**. It does not run tools while answering, and nothing it says gives the first
+  bot any extra permission. The reply is labelled to the receiving bot as "from another helper bot, not the owner".
+- Limits that cannot be turned off: a bot already in the conversation cannot be messaged again (no loops), a chain
+  is at most three bots long, one conversation allows at most six messages, a message is at most 2,000 characters.
+- If a bot asks for someone it is not allowed to message, it gets the same plain answer whether or not that bot
+  exists, so it cannot find out which bots you have. The attempt is still logged.
+- Deleting a bot also removes it from every other bot's list.
+
+> *Screenshot not captured yet: talks to other bots.*
+*Who this bot may message.*
+
+**4 · Own sandbox.** Gives the bot its own Linux userland (a separate proot-distro container) in Termux or
+VictorSuite, with `sandbox_create`, `sandbox_run` and `sandbox_delete`.
+
+- It needs **two** switches: the bot's own switch here, and **Linux environment** under Advanced → Kai capabilities.
+  Both are checked again on every call, so turning either off stops the bot at once, even mid-run.
+- It is **not a locked vault.** It is a separate set of files and processes from your Termux home and from other bots'
+  sandboxes. It is not a virtual machine, runs as the same Android user as Termux, and can still use the network.
+- The first `sandbox_create` downloads a Linux image. **Every** sandbox step asks you first, and every step is
+  written to the Activity log.
+- **Status: not run on a real phone.** The commands are unit-tested and use only options documented by
+  proot-distro, but this has not run against a real proot-distro or a real VictorSuite install. It needs a
+  proot-distro version that can install images (older releases used a different install syntax).
+
+> *Screenshot not captured yet: own sandbox.*
+*The sandbox switch, and why it may be disabled.*
+
+### Running a bot
+
+Tap **Run**. Chat shows "Running helper bot …". The bot sees only the tools you ticked (plus its message and sandbox
+tools if you switched those on), and the app refuses anything else. It decides *when* to use a tool while it answers;
+you decide *whether* each risky call goes ahead, because each one asks you. Tap stop in Chat to end the bot.
+
+Everything a bot does that matters is in **Advanced → Activity log**: tool approvals and denials, bot messages sent
+and refused, and sandbox creates, commands and deletes.
+
+## 6. MCP servers (extra AI tools)
+
+MCP lets a bot use tools from a server you run, for example on your home PC.
+
+1. **Turn it on:** Advanced → *Extra AI tools (MCP)* → **Use MCP servers**. It is **off by default**; nothing is
+   contacted until you turn it on.
+2. **Add a server:** a name, the server address, and an optional token (stored encrypted), then **Add server** and
+   **Check servers and load tools**.
+3. **Give a bot some of its tools:** in the Bot maker, open the bot's **Tools** section. Each server has its own group
+   ("MCP · Home PC"). Tick the tools that bot may use, or tap **All** for that server. Different bots can have
+   different servers, and different tools from the same server.
+
+> *Screenshot not captured yet: mcp servers.*
+*Advanced → Extra AI tools (MCP).*
+
+Rules that keep this safe:
+
+- A bot can use an MCP tool only while it is **exactly the server entry and remote tool you ticked**. If you remove a
+  server, or add a different one with the same name, the tool is not offered and the bot shows "Pick again".
+- A bot only gets the tools you pick for it; this phone asks before each call, and tools that change something ask
+  again.
+- With an on-device model selected, a bot's MCP servers are **not** contacted (an on-device chat makes no network
+  request of its own).
+
+**"Whenever they need to."** A running bot chooses when to call the tools it was given. What it cannot do is start
+itself: a bot runs when you tap **Run** in Chat. Scheduled or phrase-triggered bots are planned, not built.
+
+## 7. Messages and calls through VictorSMS
+
+**Status: bots cannot send or receive messages or calls through VictorSMS yet.** This chapter says what exists so you
+are not left guessing.
+
+What exists today:
+
+- **VictorSMS** (`com.victorious.sms`) is a separate app: Matrix and native SMS messaging, a dialer, call screening, a
+  Twilio alias number for texts and calls, and a bridge other Victorious apps can talk to.
+- Its bridge can already **queue an SMS** for another app (`sms.send`). Nothing is sent until you tap **Approve** on
+  that phone, requests expire, and the bridge is **off until you turn external control on** in VictorSMS.
+- Inbound, VictorSMS can **forward** a whitelisted SMS that contains your secret code word to DroidCommand. That is
+  only delivery; DroidCommand still decides what, if anything, runs, and never auto-approves a remote trigger.
+
+What does not exist yet: a bot tool that sends a text, reading incoming texts, placing or answering a call, or
+reading the call log through the bridge. A bot also cannot hold a live voice conversation: that would need a
+real-time speech pipeline that this app does not have.
+
+The plan, when it is built, keeps the same rules as everything else: a per-bot switch (off by default), the VictorSMS
+side switch, and an **on-device Approve for every outgoing text and call**.
+
+## 8. Safety: approvals, switches, and the Activity log
+
+- **Approvals.** Anything that can change the phone or reach another app shows a **Confirm action** prompt. Wipe,
+  power-off, lock, flashing and security-tool runs always ask. No bot can approve for you.
+- **Switches are off by default.** Under Advanced → *Kai capabilities*: MCP client, Linux environment, background
+  automation, mailbox, SMS access, cloud transfer, generated UI, skill scripts, Kai Build, Brain, and Bot Maker.
+  A bot can never turn one on.
+- **Remote control is off** unless you turn it on in Settings, and each paired app has its own switch.
+- **Activity log.** Advanced → **Activity log** is an append-only record of security decisions. Denials and refusals
+  are shown as problems. If the log is full, the app refuses the action instead of running it unrecorded.
+
+> *Screenshot not captured yet: activity log.*
+*The Activity log.*
+
+## 9. Troubleshooting
+
+| You see | Why | What to do |
+|---|---|---|
+| "Bot Maker is off" | The switch is off by default. | Advanced → Kai capabilities → Bot Maker. |
+| The sandbox switch is greyed out | The Linux environment switch is off. | Advanced → Kai capabilities → Linux environment. |
+| Bot says "Message not sent: … not allowed" | Its **Talks to** list does not include that bot. | Edit the bot, tick the other bot. |
+| Bot says "This conversation has used its 6 messages" | The per-conversation limit. | Start a fresh run. |
+| A bot shows "Pick again" | The MCP server it was tied to was removed or changed. | Edit the bot and tick the tool again. |
+| MCP tools do not appear | MCP is off, the server is down, or an on-device model is selected. | Turn MCP on, press **Check servers and load tools**, pick a cloud or PC model. |
+| Sandbox step fails | Termux or VictorSuite is missing, or its proot-distro is too old. | Install Termux/VictorSuite; update proot-distro. |
+| Chat answers "refused by policy" | The inference policy forbids that place. | Change it under Settings, or pick another model. |
+
+## 10. Glossary
+
+- **BYOK** — bring your own key: you supply the cloud API key.
+- **Helper bot** — a saved recipe (instructions, tools, peers, sandbox) that runs in Chat.
+- **MCP** — Model Context Protocol, a standard for a server to offer tools to an AI.
+- **Fleet / node** — your other Victorious apps; a node is one of them.
+- **Gate / switch** — an off-by-default setting that must be turned on before a feature works.
+- **proot-distro** — a Termux tool that runs a Linux distribution without root.
+- **Activity log** — the append-only record of security decisions.
 
 ---
+
+# Part 2 — Technical reference
 
 ## Pilot, Forge, and tools
 
