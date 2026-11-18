@@ -3,6 +3,7 @@ package ai.droidcommand.app.systemsettings
 import ai.droidcommand.app.shizuku.ToolboxRuntime
 import ai.droidcommand.security.ApprovalPrompt
 import ai.droidcommand.security.JsonFileAuditLog
+import ai.droidcommand.systemsettings.AccessAutoSetup
 import ai.droidcommand.systemsettings.AccessKind
 import ai.droidcommand.systemsettings.BootReplayCoordinator
 import ai.droidcommand.systemsettings.ChangeApprover
@@ -37,6 +38,9 @@ class SystemSettingsRuntime @Inject constructor(
     auditLog: JsonFileAuditLog,
 ) {
     val platform = AndroidPlatformSettings(context)
+
+    /** Grants this app WRITE_SECURE_SETTINGS / Modify system settings through Shizuku or (when the owner allowed it) root. */
+    val autoSetup = AccessAutoSetup(toolbox.shizuku, toolbox.root)
     val dnsVerifier = PrivateDnsVerifier(context)
     private val root = context.filesDir.toPath().resolve("system-settings")
 
