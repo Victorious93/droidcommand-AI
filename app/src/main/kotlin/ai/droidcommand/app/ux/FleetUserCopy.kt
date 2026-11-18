@@ -49,7 +49,8 @@ object FleetUserCopy {
         "Install the other app from its official source.",
         "Open it once.",
         "Come back here and tap Test connection.",
-        "These apps only talk when both were signed the same way. If Test fails, install matching builds.",
+        "Version does not matter, but these apps only talk when both were signed the same way.",
+        "If Test fails, open the other app once and test again. If it still fails, install builds signed the same way.",
     )
 
     val TERMUX_STEPS = listOf(
@@ -87,6 +88,14 @@ object FleetUserCopy {
                 label = "Installed, tap to pair",
                 detail = detail,
                 fix = "Tap Pair and follow the steps. Nothing is sent until you confirm.",
+            )
+        }
+        if (reason == FleetLiveStatusMapping.REASON_VERSION_UNEXPECTED) {
+            return FleetUserStatus(
+                kind = FleetUserKind.CONNECTED,
+                label = "Connected",
+                detail = "Connected, but this version did not answer the health check the usual way.",
+                fix = "Everything still works. If a feature is missing, update the other app.",
             )
         }
         return when (tone) {
@@ -172,6 +181,15 @@ object FleetUserCopy {
     private fun blockFor(reason: String): FleetUserStatus? {
         val lower = reason.lowercase()
         return when {
+            reason == FleetLiveStatusMapping.REASON_COULD_NOT_CONNECT ->
+                FleetUserStatus(
+                    kind = FleetUserKind.BLOCKED,
+                    label = "Blocked: could not connect yet",
+                    detail = "The app is installed, but it did not answer. It may not have been opened yet, " +
+                        "may be signed differently, or may be a build without a connection.",
+                    fix = "Open the other app once, then tap Test connection. If it still fails, " +
+                        "install a build signed the same way, or update it.",
+                )
             reason == FleetLiveStatusMapping.REASON_SAME_SIGNING || looksSameSigning(lower) ->
                 FleetUserStatus(
                     kind = FleetUserKind.BLOCKED,

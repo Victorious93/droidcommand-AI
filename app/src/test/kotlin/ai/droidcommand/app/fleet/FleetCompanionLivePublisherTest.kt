@@ -22,7 +22,7 @@ class FleetCompanionLivePublisherTest {
     }
 
     @Test
-    fun `installed companions that fail to bind report same-signing`() {
+    fun `installed companions that fail to bind report the real cause`() {
         val reasons = FleetCompanionLivePublisher.reasons(
             companionByPackage = mapOf(
                 KnownCompanions.HACKERAI_PACKAGE to FleetCompanionLivePublisher.Probe(installed = true),
@@ -34,7 +34,7 @@ class FleetCompanionLivePublisherTest {
             termuxInstalled = true,
             edlInstalled = true,
         )
-        assertEquals(FleetLiveStatusMapping.REASON_SAME_SIGNING, reasons["hackerai"])
+        assertEquals(FleetLiveStatusMapping.REASON_COULD_NOT_CONNECT, reasons["hackerai"])
         assertEquals(FleetLiveStatusMapping.REASON_BIND_REFUSED_SIGNATURE, reasons["pentestswarm"])
         assertTrue(reasons.getValue("termux").contains("RUN_COMMAND"))
         assertEquals(FleetLiveStatusMapping.REASON_PLANNED_NO_AUTOBIND, reasons["edl-commander"])
@@ -52,6 +52,18 @@ class FleetCompanionLivePublisherTest {
             sameSigningHint = true,
         )
         assertEquals(FleetLiveStatusMapping.REASON_LIVE, live)
+    }
+
+    @Test
+    fun `a bound companion whose calls throw is tolerated not blocked`() {
+        val link = RecordingLink(installed = true, connects = true, throwOnCalls = true)
+        val probe = FleetCompanionLivePublisher.probeLink(link, KnownCompanions.HACKERAI_PACKAGE)
+        assertTrue(probe.connected)
+        assertTrue(probe.callFailed)
+        assertEquals(
+            FleetLiveStatusMapping.REASON_VERSION_UNEXPECTED,
+            FleetCompanionLivePublisher.companionReason(probe, sameSigningHint = true),
+        )
     }
 
     @Test
@@ -80,6 +92,7 @@ class FleetCompanionLivePublisherTest {
         var installed: Boolean,
         var connects: Boolean = false,
         var refusal: String? = null,
+        var throwOnCalls: Boolean = false,
     ) : CompanionLink {
         var connectCalls = 0
 
@@ -90,7 +103,10 @@ class FleetCompanionLivePublisherTest {
             return connects
         }
 
-        override fun domainHealthy(packageName: String) = false
+        override fun domainHealthy(packageName: String): Boolean {
+            if (throwOnCalls) throw IllegalStateException("Binder interface mismatch")
+            return false
+        }
 
         override fun exposesCompanionService(packageName: String) = false
 

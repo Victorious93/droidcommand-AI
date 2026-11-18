@@ -33,6 +33,18 @@ class FleetUserCopyTest {
     }
 
     @Test
+    fun `could not connect is its own message and an unexpected version stays connected`() {
+        val blocked = FleetUserCopy.status(installed = true, paired = true, tone = FleetDashboardTone.UNKNOWN, reason = FleetLiveStatusMapping.REASON_COULD_NOT_CONNECT)
+        assertEquals(FleetUserKind.BLOCKED, blocked.kind)
+        assertTrue(blocked.label.contains("could not connect"))
+        assertFalse(blocked.label.contains("signed"))
+        assertEquals(
+            FleetUserKind.CONNECTED,
+            FleetUserCopy.status(installed = true, paired = true, tone = FleetDashboardTone.UNKNOWN, reason = FleetLiveStatusMapping.REASON_VERSION_UNEXPECTED).kind,
+        )
+    }
+
+    @Test
     fun `blocked rows name a fix and never use internal words`() {
         val blocked = FleetUserCopy.status(
             installed = true,
