@@ -96,9 +96,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 
-package ai.droidcommand.app.ui.chat
-
-
 /**
  * Chat in OpenDroid's layout: blue header with a status line, indigo right-aligned user bubbles,
  * bordered left-aligned reply cards with a cyan role label, and a pill input with a round send

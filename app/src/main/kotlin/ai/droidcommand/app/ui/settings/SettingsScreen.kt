@@ -56,9 +56,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
-package ai.droidcommand.app.ui.settings
-
-
 /**
  * Settings: look, where the AI runs, API keys, voice, pairing and links. Keys go straight to the Keystore-backed
  * vault; this screen never displays a stored key, only its [KeyStatus]. Written without an Android SDK and not yet
