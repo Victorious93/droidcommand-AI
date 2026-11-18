@@ -30,7 +30,7 @@ Part 2 (technical reference) starts at [Pilot, Forge, and tools](#pilot-forge-an
 
 ## 1. Getting started
 
-1. Open the app. On a first run you see a short "This app does two things" page. Tap **Skip** to go straight in; you
+1. Open the app. On a first run you see a short "This app does two things" page. Tap **Skip for now** to go straight in; you
    can come back to everything from the tabs.
 2. Give Chat something to answer with. Either **pick or download a model that runs on this phone** (Models tab, no
    account needed), or **add a cloud key** (Settings tab). See [chapter 4](#4-models-and-keys).
@@ -47,24 +47,24 @@ The bar at the bottom has five tabs.
 |---|---|
 | **Fleet** | Your other Victorious apps: which are installed, paired, and reachable. |
 | **AI Chat** | Where you ask questions and run helper bots. |
-| **Models** | Pick or download a model that runs on this phone, or point Chat at a model on your PC. |
+| **Models** | Pick a `.gguf` from storage or download one from the free catalog, to run on this phone. (A model on your PC is set under Settings → PC-hosted models.) |
 | **Settings** | Cloud keys, voice, look, and Remote Control switches. |
 | **Advanced** | One-step commands, multi-step plans, Memory, Brain notes, the Bot maker, the Activity log, extra tools, MCP servers, and the "Kai capabilities" switches. |
 
-> *Screenshot not captured yet: fleet tab.*
-*Fleet: your other apps and whether each can be reached.*
+![Fleet tab](images/manual/fleet.png)
+*Fleet: status, Refresh, "Connect a computer or another phone", and My PC. Empty until you pair something.*
 
-> *Screenshot not captured yet: ai chat tab.*
-*AI Chat.*
+![AI Chat tab](images/manual/chat.png)
+*AI Chat: provider and model at the top, New chat and Library, Attach document, Web search and Speak toggles, the mic, and Send. Until a model or key is set it says so.*
 
-> *Screenshot not captured yet: models tab.*
-*Models.*
+![Models tab](images/manual/models.png)
+*Models: the current model, "Pick a .gguf from storage", and "Browse catalog".*
 
-> *Screenshot not captured yet: settings tab.*
-*Settings.*
+![Settings tab](images/manual/settings.png)
+*Settings: Look (brightness and accent colour), Setup, then API keys and the rest below.*
 
-> *Screenshot not captured yet: advanced tab.*
-*Advanced: the power-user screens, MCP servers, and the Kai capabilities switches.*
+![Advanced tab](images/manual/advanced.png)
+*Advanced: the "These tools can change this phone" note, then the power-user screens (One-step command, Multi-step plan, Memory, Brain, Extra tools, Activity log, Bot maker and more). The Kai capabilities switches and MCP servers are further down.*
 
 **Fleet** lists HackerAI plus the thirteen known Victorious apps. **Pairing** stores that you trust the install that
 is on this phone *now*; if that app is later replaced, the connection stops until you pair again. Pairing does not
@@ -73,14 +73,16 @@ snapshot yet" until it is.
 
 ## 3. AI Chat
 
-- **Provider and model.** Pick a cloud provider and model on the chat screen, or use a model on this phone or on
-  your PC ([chapter 4](#4-models-and-keys)).
+- **Provider and model.** The line at the top of Chat picks the cloud provider and model. Or use a model on this
+  phone or on your PC ([chapter 4](#4-models-and-keys)). **New chat** starts afresh; **Library** holds your chats,
+  skills and templates.
 - **Voice.** The mic button transcribes into the chat box (on-device speech-to-text when available). Replies can be
-  spoken with the system voice. Both stay silent, without crashing, if you deny the permission. Phrases that trigger
+  spoken with the system voice when **Speak** is on. Both stay silent, without crashing, if you deny the permission. Phrases that trigger
   actions are set under Settings → Remote Control and are a *local* trigger, not an inbound command.
-- **Web search** is an optional toolbar toggle, **off by default**. It adds search snippets to the question; it is
+- **Web search** is a toggle under the message box ("Web search: off"), **off by default**. It adds search snippets to the question; it is
   not live browsing of arbitrary sites, and needs a search key.
-- **Documents.** Attach a text or PDF file and ask questions about it. The embedding model is a separate download;
+- **Documents.** **Attach document** takes a text or PDF file you can then ask about. It needs a separate embedding-model
+  download (the "Download embedding model" button, about 80 MB);
   answers are grounded in the attached text when retrieval is on. PDF text only, no scanned pages.
 - **Memory.** "Remember this chat" saves facts into Advanced → Memory. Brain notes are plain Markdown files you can
   also open in other apps.
@@ -91,7 +93,7 @@ snapshot yet" until it is.
 
 - **On this phone.** A `.gguf` file lets Chat work without a cloud key. Pick a file you already have or download one
   from the catalog (checked against a published SHA-256 before it loads). Some models are large; use Wi-Fi.
-- **On your PC.** Chat can talk to Ollama or an OpenAI-compatible server on your PC over your LAN or VPN. This is
+- **On your PC.** Settings → PC-hosted models lets Chat talk to Ollama or an OpenAI-compatible server on your PC over your LAN or VPN. This is
   different from importing a `.gguf` onto the phone. See `docs/PC_HOSTED_MODELS.md`.
 - **Cloud keys.** Settings holds API keys for Anthropic, OpenAI, Google (Gemini) and Groq. Keys are stored encrypted
   on this phone and never shown again after saving.
@@ -111,10 +113,10 @@ whether it gets its own Linux sandbox. Bots live only on this phone and run in A
 The page shows **Your bots** first, each as a card with chips for what it can do (for example "2 tools", "Talks to
 Writer", "Sandbox"), and **Run / Edit / Delete**. **New bot** opens one editor with four sections.
 
-> *Screenshot not captured yet: bot maker: your bots.*
+![Bot maker: your bots](images/manual/bot-maker.png)
 *Your bots, at a glance.*
 
-> *Screenshot not captured yet: bot maker editor.*
+![Bot maker editor](images/manual/bot-maker-editor.png)
 *The editor: 1 · Basics.*
 
 **1 · Basics.** Name, what it should do, and an optional model. A blank model means "the model Chat uses".
@@ -124,7 +126,7 @@ root, Files, Screen control, Phone, Build, Web & AI, Notes & memory, Fleet & rem
 server**, with **All / None** for a whole group. Tools marked *asks first* still ask you every time they run. Saving
 a bot with tools that can change the phone shows one extra "Allow tools that can change the phone?" check.
 
-> *Screenshot not captured yet: tool groups.*
+![Tool groups](images/manual/bot-maker-tools.png)
 *Tools, grouped. Tap a group to open it.*
 
 **3 · Talks to other bots.** By default a bot can message **nobody**. Tick the bots it may message.
@@ -138,7 +140,7 @@ a bot with tools that can change the phone shows one extra "Allow tools that can
   exists, so it cannot find out which bots you have. The attempt is still logged.
 - Deleting a bot also removes it from every other bot's list.
 
-> *Screenshot not captured yet: talks to other bots.*
+![Talks to other bots](images/manual/bot-maker-peers.png)
 *Who this bot may message.*
 
 **4 · Own sandbox.** Gives the bot its own Linux userland (a separate proot-distro container) in Termux or
@@ -154,7 +156,7 @@ VictorSuite, with `sandbox_create`, `sandbox_run` and `sandbox_delete`.
   proot-distro, but this has not run against a real proot-distro or a real VictorSuite install. It needs a
   proot-distro version that can install images (older releases used a different install syntax).
 
-> *Screenshot not captured yet: own sandbox.*
+![Own sandbox](images/manual/bot-maker-sandbox.png)
 *The sandbox switch, and why it may be disabled.*
 
 ### Running a bot
@@ -178,7 +180,7 @@ MCP lets a bot use tools from a server you run, for example on your home PC.
    ("MCP · Home PC"). Tick the tools that bot may use, or tap **All** for that server. Different bots can have
    different servers, and different tools from the same server.
 
-> *Screenshot not captured yet: mcp servers.*
+![MCP servers](images/manual/advanced-mcp.png)
 *Advanced → Extra AI tools (MCP).*
 
 Rules that keep this safe:
