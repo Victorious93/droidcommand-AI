@@ -71,6 +71,11 @@ is on this phone *now*; if that app is later replaced, the connection stops unti
 turn on remote control and does not run a command. Live status from other apps is not wired yet; rows say "no
 snapshot yet" until it is.
 
+Each fleet card has a short description and a **Download & install** (or **Update**) button that fetches the app's
+latest GitHub release. A first install always needs your tap in Android's installer, and after it succeeds the normal
+Pair confirmation opens; installing never makes an app trusted. **Auto-update** is a switch that is **off by default**.
+(These controls are below the part of the screen shown above, and have not been run on a phone.)
+
 ## 3. AI Chat
 
 - **Provider and model.** The line at the top of Chat picks the cloud provider and model. Or use a model on this
