@@ -81,7 +81,7 @@ class ManualScreenshotsTest {
         step("advanced-mcp") {
             tapNav("nav_advanced")
             waitForText("These tools can change this phone")
-            compose.onNodeWithText("Use MCP servers", substring = true).performScrollTo()
+            compose.onNodeWithText("Check servers and load tools", substring = true).performScrollTo()
             snap("advanced-mcp")
         }
         step("bot-maker") {

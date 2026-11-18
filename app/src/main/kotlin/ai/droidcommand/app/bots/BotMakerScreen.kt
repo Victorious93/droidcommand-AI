@@ -8,6 +8,7 @@ import ai.droidcommand.app.ui.theme.DroidPrimaryButton
 import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.skills.mcp.McpSelections
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +61,10 @@ fun BotMakerScreen(viewModel: BotMakerViewModel = hiltViewModel(), onRunInChat: 
     var sandbox by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var expanded by rememberSaveable { mutableStateOf(listOf<String>()) }
+    val scroll = rememberScrollState()
+    // The editor opens at the top of the page. Without this, tapping Edit on a card further down would open it
+    // out of sight, and it would look as if nothing happened.
+    LaunchedEffect(editorOpen, editingId) { if (editorOpen) scroll.animateScrollTo(0) }
     val close = {
         editorOpen = false
         editingId = null
@@ -75,7 +81,7 @@ fun BotMakerScreen(viewModel: BotMakerViewModel = hiltViewModel(), onRunInChat: 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scroll)
             .padding(16.dp)
             .testTag("bot_maker_screen"),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -98,40 +104,7 @@ fun BotMakerScreen(viewModel: BotMakerViewModel = hiltViewModel(), onRunInChat: 
         }
         ui.status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
 
-        // 1. Your bots, with what each one can do at a glance.
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            SectionLabel("Your bots")
-            if (!editorOpen) {
-                DroidPrimaryButton(onClick = { editorOpen = true }, modifier = Modifier.testTag("bot_new_button")) { Text("New bot") }
-            }
-        }
-        if (ui.bots.isEmpty()) {
-            Text("No bots yet. Tap New bot to make one.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        ui.bots.forEach { bot ->
-            BotCard(
-                bot = bot,
-                ui = ui,
-                onRun = {
-                    viewModel.run(bot)
-                    onRunInChat()
-                },
-                onEdit = {
-                    editorOpen = true
-                    editingId = bot.id
-                    name = bot.name
-                    instructions = bot.instructions
-                    model = bot.model
-                    selected = viewModel.tickedFor(bot)
-                    talksTo = bot.talksTo.toList()
-                    sandbox = bot.sandbox
-                    expanded = ui.groups.filter { g -> g.tools.any { it.name in selected } }.map { it.key }
-                },
-                onDelete = { viewModel.askDelete(bot) },
-            )
-        }
-
-        // 2. The editor, only while making or changing a bot.
+        // 1. The editor, only while making or changing a bot. It sits above the list so it is the first thing seen.
         if (editorOpen) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.testTag("bot_editor")) {
                 SectionLabel(if (editingId == null) "New bot" else "Edit bot")
@@ -185,6 +158,38 @@ fun BotMakerScreen(viewModel: BotMakerViewModel = hiltViewModel(), onRunInChat: 
                     DroidTextButton(onClick = close) { Text("Cancel") }
                 }
             }
+        }
+        // 2. Your bots, with what each one can do at a glance.
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            SectionLabel("Your bots")
+            if (!editorOpen) {
+                DroidPrimaryButton(onClick = { editorOpen = true }, modifier = Modifier.testTag("bot_new_button")) { Text("New bot") }
+            }
+        }
+        if (ui.bots.isEmpty()) {
+            Text("No bots yet. Tap New bot to make one.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        ui.bots.forEach { bot ->
+            BotCard(
+                bot = bot,
+                ui = ui,
+                onRun = {
+                    viewModel.run(bot)
+                    onRunInChat()
+                },
+                onEdit = {
+                    editorOpen = true
+                    editingId = bot.id
+                    name = bot.name
+                    instructions = bot.instructions
+                    model = bot.model
+                    selected = viewModel.tickedFor(bot)
+                    talksTo = bot.talksTo.toList()
+                    sandbox = bot.sandbox
+                    expanded = ui.groups.filter { g -> g.tools.any { it.name in selected } }.map { it.key }
+                },
+                onDelete = { viewModel.askDelete(bot) },
+            )
         }
     }
 
@@ -249,7 +254,11 @@ private fun BotCard(bot: HelperBot, ui: BotMakerUi, onRun: () -> Unit, onEdit: (
 
 @Composable
 private fun InfoChip(text: String) {
-    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceVariant) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
         Text(
             text,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
