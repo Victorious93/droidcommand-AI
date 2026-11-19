@@ -12,10 +12,11 @@ import ai.droidcommand.termux.TermuxExecutor
  *
  * SET has no official scripting flag. What this executor relies on is a plainer, version-independent fact: SET is a
  * Python CLI that reads each menu choice via `input()`, so a sequence of lines piped into its stdin substitutes for
- * an operator typing them. [stdinSequence] builds that sequence: [SetMenuPath]'s best-effort main-menu navigation
- * (skippable with [useMenuPath] = false), then [SetCommand.menuAnswers] verbatim. The navigation digits are a
- * documented-but-unverified guess (see [SetMenuPath]'s own doc comment); everything after them is exactly what the
- * caller supplied, nothing inferred. [execute] never sends anything the caller has not already seen: callers build
+ * an operator typing them. [stdinSequence] builds that sequence: [SetMenuPath]'s now-verified main-menu navigation
+ * (skippable with [useMenuPath] = false), then [SetCommand.menuAnswers] verbatim — see [SetMenuPath]'s own doc
+ * comment for exactly what was verified and the one vector ([SetAttackVector.SMS_SPOOFING]) it refuses to guess a
+ * digit for. Everything after the navigation digits is exactly what the caller supplied, nothing inferred.
+ * [execute] never sends anything the caller has not already seen: callers build
  * the review text shown before every run (this app's confirmation dialog, same as every other tool) from this same
  * [stdinSequence] function, not from a separate rendering of the command.
  *
@@ -35,7 +36,11 @@ class TermuxSetExecutor(
                 "Cannot run SET attack vector '${command.attackVector}': VictorSuite RUN_COMMAND is not available",
             )
         }
-        val lines = stdinSequence(command)
+        val lines = try {
+            stdinSequence(command)
+        } catch (e: UnsupportedSetVectorException) {
+            return SetExecutionResult.Failure(e.message ?: "unsupported SET attack vector '${e.vector}'", e)
+        }
         val termuxCommand = envelope.setoolkitStdinSequence(lines, command.timeoutMillis)
         return when (val result = termux.execute(termuxCommand, isCancelled)) {
             is TermuxExecutionResult.Success ->

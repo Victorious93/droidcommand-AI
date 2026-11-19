@@ -17,13 +17,22 @@ object ToolBackendNotes {
                 "Each run still asks for confirmation. Without Shizuku the rest of the app still works. " +
                 "On-device round-trip is UNVERIFIED."
         "run_metasploit_module" ->
-            "Metasploit runs inside VictorSuite Kali via RUN_COMMAND (TermuxMetasploitExecutor). " +
-                "On-device msfconsole round-trip is UNVERIFIED."
+            "Runs against whichever backend is selected in Security tool settings: VictorSuite Kali via " +
+                "RUN_COMMAND (TermuxMetasploitExecutor, on-device msfconsole round-trip UNVERIFIED), or a " +
+                "configured VictorLinux security backend over its RPC-backed Linux-backend client " +
+                "(LinuxBackendMetasploitExecutor — real end-to-end job lifecycle verified against that " +
+                "backend's own real msfrpcd; this phone-side client itself has not yet been run against a " +
+                "live backend instance). No backend selected falls back to NullMetasploitExecutor."
         "run_kali_authorized_scan" ->
             "Local nmap+msfconsole playbook inside VictorSuite Kali. Safety gates are mandatory. " +
                 "On-device msfconsole round-trip is UNVERIFIED."
         "run_setoolkit_attack" ->
-            "No Social-Engineer Toolkit program is connected (NullSetExecutor). A run is refused."
+            "Runs against whichever backend is selected in Security tool settings: VictorSuite Kali via " +
+                "RUN_COMMAND (TermuxSetExecutor, on-device setoolkit round-trip UNVERIFIED; only vectors " +
+                "SetMenuPath has a real verified menu digit for — not SMS Spoofing, which was removed from " +
+                "SET's current menu entirely), or a configured VictorLinux security backend " +
+                "(LinuxBackendSetExecutor — only QRCODE_GENERATOR actually runs there; every other vector is " +
+                "refused with a specific reason). No backend selected falls back to NullSetExecutor."
         "run_hackerai_agent_task" ->
             "HackerAI companion is not bound. A run is refused."
         "pentest_swarm_scan", "pentest_swarm_run_chain", "pentest_swarm_run_playbook" ->

@@ -77,6 +77,7 @@ include(":core-skills")
 include(":core-device-connect")
 include(":core-system-settings")
 include(":core-remote-pc")
+include(":core-security-backend")
 include(":pc-companion")
 project(":pc-companion").projectDir = file("tools/pc-companion")
 

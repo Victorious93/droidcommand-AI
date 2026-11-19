@@ -21,6 +21,15 @@ data class VictorSuiteCapabilities(
     val kaliInstalled: Boolean,
     val kaliHasNmap: Boolean,
     val kaliHasMsfconsole: Boolean,
+    /**
+     * Whether `setoolkit` resolves on PATH inside the Kali proot — added 2026-11-19 alongside
+     * [kaliHasMsfconsole] so a missing SET install gets the same "actually probed", distinct
+     * readiness fact `TermuxSetExecutor.isAvailable()` cannot provide on its own (that method
+     * only proves VictorSuite is installed and RUN_COMMAND is granted — see its own doc
+     * comment, and master-prompt §6: "VictorSuite installation plus a granted permission does
+     * not establish that Kali, msfconsole or SET exists").
+     */
+    val kaliHasSetoolkit: Boolean,
     val ztCommandPortListening: Boolean,
 ) {
     /** One line per field, for a tool's text output or a log line. */
@@ -31,6 +40,7 @@ data class VictorSuiteCapabilities(
         appendLine("kali_installed: $kaliInstalled")
         appendLine("kali_nmap: $kaliHasNmap")
         appendLine("kali_msfconsole: $kaliHasMsfconsole")
+        appendLine("kali_setoolkit: $kaliHasSetoolkit")
         append("ztcommand_port_listening: $ztCommandPortListening")
     }
 }
@@ -68,6 +78,7 @@ object VictorSuiteCapabilitiesProbe {
             kaliInstalled = bool("kali_installed"),
             kaliHasNmap = bool("kali_nmap"),
             kaliHasMsfconsole = bool("kali_msfconsole"),
+            kaliHasSetoolkit = bool("kali_setoolkit"),
             ztCommandPortListening = bool("ztcommand_port_listening"),
         )
     }
@@ -88,16 +99,20 @@ object VictorSuiteCapabilitiesProbe {
           echo "kali_installed=true"
           NMAP_OK=false
           MSF_OK=false
+          SET_OK=false
           if command -v proot-distro >/dev/null 2>&1; then
             proot-distro login kali -- which nmap >/dev/null 2>&1 && NMAP_OK=true
             proot-distro login kali -- which msfconsole >/dev/null 2>&1 && MSF_OK=true
+            proot-distro login kali -- which setoolkit >/dev/null 2>&1 && SET_OK=true
           fi
           echo "kali_nmap=${'$'}NMAP_OK"
           echo "kali_msfconsole=${'$'}MSF_OK"
+          echo "kali_setoolkit=${'$'}SET_OK"
         else
           echo "kali_installed=false"
           echo "kali_nmap=false"
           echo "kali_msfconsole=false"
+          echo "kali_setoolkit=false"
         fi
         if grep -q ":$ZTCOMMAND_PORT_HEX " /proc/net/tcp 2>/dev/null; then
           echo "ztcommand_port_listening=true"

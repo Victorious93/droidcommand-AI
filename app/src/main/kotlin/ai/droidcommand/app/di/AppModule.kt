@@ -20,6 +20,9 @@ import ai.droidcommand.app.localmodels.LocalModelRuntime
 import ai.droidcommand.app.mode.AdvancedModeStore
 import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.prefs.AdvancedPrefs
+import ai.droidcommand.app.prefs.SECURITY_BACKEND_API_KEY_SECRET_ID
+import ai.droidcommand.app.prefs.SecurityBackend
+import ai.droidcommand.app.prefs.SecurityBackendPrefs
 import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.app.shizuku.AndroidShizukuHost
 import ai.droidcommand.app.shizuku.BoundPrivilegedShell
@@ -69,8 +72,10 @@ import ai.droidcommand.llm.routing.FileInferenceSettingsStore
 import ai.droidcommand.llm.routing.InferenceSettingsStore
 import ai.droidcommand.llm.routing.PolicyInference
 import ai.droidcommand.llm.routing.RouteResolver
+import ai.droidcommand.metasploit.LinuxBackendMetasploitExecutor
 import ai.droidcommand.metasploit.MetasploitExecutor
 import ai.droidcommand.metasploit.MetasploitTool
+import ai.droidcommand.metasploit.NullMetasploitExecutor
 import ai.droidcommand.metasploit.TermuxMetasploitExecutor
 import ai.droidcommand.n8n.N8nClient
 import ai.droidcommand.n8n.N8nListWorkflowsTool
@@ -101,6 +106,10 @@ import ai.droidcommand.security.PasswordPairingService
 import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
 import ai.droidcommand.security.SecurityPolicyEnforcer
+import ai.droidcommand.securitybackend.SecurityBackendClient
+import ai.droidcommand.securitybackend.SecurityBackendConfig
+import ai.droidcommand.setoolkit.LinuxBackendSetExecutor
+import ai.droidcommand.setoolkit.NullSetExecutor
 import ai.droidcommand.setoolkit.SetExecutor
 import ai.droidcommand.setoolkit.SetTool
 import ai.droidcommand.setoolkit.TermuxSetExecutor
@@ -132,14 +141,24 @@ import javax.inject.Singleton
  * so Compose screens can `hiltViewModel()` their way to a shared,
  * singleton [ToolRunner].
  *
- * [MetasploitTool] on Android is bound to [TermuxMetasploitExecutor], which
- * runs `msfconsole` inside VictorSuite Kali through [TermuxExecutor] /
- * `com.termux.RUN_COMMAND` + `RUN_COMMAND_PENDING_INTENT`. That is **not**
- * [ai.droidcommand.metasploit.ShellBackedMetasploitExecutor] (desktop
- * ProcessBuilder) and **not** the Go pentest-swarm companion. SET is bound
- * to [TermuxSetExecutor] the same way, piping a stdin sequence into
- * `setoolkit` inside the same Kali proot. Neither a live msfconsole nor a
- * live setoolkit round-trip has been run in the environment that wired this.
+ * [MetasploitTool]/[SetTool] on Android are bound to whichever backend
+ * [ai.droidcommand.app.prefs.SecurityBackendPrefs.selectedBackend] names (2026-11-19 —
+ * see `provideMetasploitExecutor`/`provideSetExecutor` below): PHONE_LOCAL is
+ * [TermuxMetasploitExecutor]/[TermuxSetExecutor], running `msfconsole`/`setoolkit` inside
+ * VictorSuite Kali through [TermuxExecutor] / `com.termux.RUN_COMMAND` +
+ * `RUN_COMMAND_PENDING_INTENT` — **not**
+ * [ai.droidcommand.metasploit.ShellBackedMetasploitExecutor] (desktop ProcessBuilder) and
+ * **not** the Go pentest-swarm companion; neither a live msfconsole nor a live setoolkit
+ * round-trip through this on-device path has been run. LINUX_BACKEND is
+ * [ai.droidcommand.metasploit.LinuxBackendMetasploitExecutor]/[ai.droidcommand.setoolkit.LinuxBackendSetExecutor],
+ * talking to a configured VictorLinux `secbackend.py` over `core-security-backend`'s
+ * `SecurityBackendClient` — that server-side job lifecycle (submit/poll/cancel against a
+ * real `msfrpcd` and a real installed `setoolkit`) is real and verified
+ * (VictorLinux's `docs/security-backend.md`), but this specific phone-side wiring has not
+ * been built or run against a live backend instance, and this module itself has never been
+ * compiled in a session with an Android SDK — see `cli`'s/this repo's own stated JVM-only
+ * limitation. Unconfigured LINUX_BACKEND falls back to `NullMetasploitExecutor`/
+ * `NullSetExecutor`, never silently to PHONE_LOCAL.
  * The shell allowlist starts empty (no executable is allowed) for the same
  * fail-closed reason `cli`'s own default is empty. The owner allows
  * executables on the Automation keys screen; this module never invents a
@@ -166,19 +185,61 @@ object AppModule {
             },
         )
 
-    @Provides
-    @Singleton
-    fun provideMetasploitExecutor(termux: TermuxExecutor): MetasploitExecutor = TermuxMetasploitExecutor(termux)
-
     /**
-     * [TermuxSetExecutor] shares the same VictorSuite Kali RUN_COMMAND path [provideMetasploitExecutor] does, so
-     * `isAvailable()` tracks the same two real facts (VictorSuite/Termux installed, RUN_COMMAND granted). Provided on
-     * its own, rather than built inside the registry, so the Security tools screens can ask this exact instance
-     * instead of keeping a second, hand-written readiness flag that could drift from it.
+     * Explicit backend selection (master-prompt §7): [SecurityBackendPrefs.selectedBackend] decides
+     * PHONE_LOCAL ([TermuxMetasploitExecutor]/[TermuxSetExecutor], unchanged) vs LINUX_BACKEND (a configured
+     * VictorLinux `secbackend.py` over [LinuxBackendMetasploitExecutor]/[LinuxBackendSetExecutor]). Choosing
+     * LINUX_BACKEND without saving a base URL and API key never falls back to the phone-local path silently —
+     * it falls back to [NullMetasploitExecutor]/[NullSetExecutor], the same fail-closed default every other
+     * unconfigured executor in this module uses, so a misconfigured Linux backend reads as a clear "not
+     * configured" refusal rather than a surprise run against the wrong device.
      */
     @Provides
     @Singleton
-    fun provideSetExecutor(termux: TermuxExecutor): SetExecutor = TermuxSetExecutor(termux)
+    fun provideMetasploitExecutor(
+        termux: TermuxExecutor,
+        prefs: SecurityBackendPrefs,
+        vault: EncryptedSecretsVault,
+        transport: HttpTransport,
+    ): MetasploitExecutor = when (prefs.selectedBackend()) {
+        SecurityBackend.PHONE_LOCAL -> TermuxMetasploitExecutor(termux)
+        SecurityBackend.LINUX_BACKEND -> securityBackendClient(prefs, vault, transport)
+            ?.let { LinuxBackendMetasploitExecutor(it) }
+            ?: NullMetasploitExecutor()
+    }
+
+    /**
+     * [TermuxSetExecutor] shares the same VictorSuite Kali RUN_COMMAND path [provideMetasploitExecutor] does
+     * for PHONE_LOCAL, so `isAvailable()` tracks the same two real facts (VictorSuite/Termux installed,
+     * RUN_COMMAND granted). [LinuxBackendSetExecutor] shares the same [SecurityBackendClient] configuration for
+     * LINUX_BACKEND. Provided on its own, rather than built inside the registry, so the Security tools screens
+     * can ask this exact instance instead of keeping a second, hand-written readiness flag that could drift
+     * from it.
+     */
+    @Provides
+    @Singleton
+    fun provideSetExecutor(
+        termux: TermuxExecutor,
+        prefs: SecurityBackendPrefs,
+        vault: EncryptedSecretsVault,
+        transport: HttpTransport,
+    ): SetExecutor = when (prefs.selectedBackend()) {
+        SecurityBackend.PHONE_LOCAL -> TermuxSetExecutor(termux)
+        SecurityBackend.LINUX_BACKEND -> securityBackendClient(prefs, vault, transport)
+            ?.let { LinuxBackendSetExecutor(it) }
+            ?: NullSetExecutor()
+    }
+
+    /** Null only when the owner selected LINUX_BACKEND but has not yet saved a base URL and API key for it. */
+    private fun securityBackendClient(
+        prefs: SecurityBackendPrefs,
+        vault: EncryptedSecretsVault,
+        transport: HttpTransport,
+    ): SecurityBackendClient? {
+        val baseUrl = prefs.linuxBackendBaseUrl() ?: return null
+        val apiKey = runCatching { vault.getSecret(SECURITY_BACKEND_API_KEY_SECRET_ID) }.getOrNull() ?: return null
+        return SecurityBackendClient(transport, SecurityBackendConfig(baseUrl, apiKey))
+    }
 
     @Provides
     @Singleton
