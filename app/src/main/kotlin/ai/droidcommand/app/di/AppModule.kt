@@ -20,6 +20,9 @@ import ai.droidcommand.app.localmodels.LocalModelRuntime
 import ai.droidcommand.app.mode.AdvancedModeStore
 import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.app.prefs.AdvancedPrefs
+import ai.droidcommand.app.prefs.SECURITY_BACKEND_API_KEY_SECRET_ID
+import ai.droidcommand.app.prefs.SecurityBackend
+import ai.droidcommand.app.prefs.SecurityBackendPrefs
 import ai.droidcommand.app.security.createAndroidSecretsVault
 import ai.droidcommand.app.shizuku.AndroidShizukuHost
 import ai.droidcommand.app.shizuku.BoundPrivilegedShell
@@ -110,9 +113,6 @@ import ai.droidcommand.setoolkit.NullSetExecutor
 import ai.droidcommand.setoolkit.SetExecutor
 import ai.droidcommand.setoolkit.SetTool
 import ai.droidcommand.setoolkit.TermuxSetExecutor
-import ai.droidcommand.app.prefs.SecurityBackend
-import ai.droidcommand.app.prefs.SecurityBackendPrefs
-import ai.droidcommand.app.prefs.SECURITY_BACKEND_API_KEY_SECRET_ID
 import ai.droidcommand.shizuku.PrivilegedShell
 import ai.droidcommand.shizuku.ShizukuHost
 import ai.droidcommand.shizuku.ShizukuManager
