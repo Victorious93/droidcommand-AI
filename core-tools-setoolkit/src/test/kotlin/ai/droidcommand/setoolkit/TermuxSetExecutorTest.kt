@@ -67,6 +67,16 @@ class TermuxSetExecutorTest {
     }
 
     @Test
+    fun `SMS_SPOOFING fails cleanly with a specific reason instead of crashing or sending the wrong digit`() {
+        val termux = RecordingTermuxExecutor(true, TermuxExecutionResult.Success(0, "should not run", "", 0))
+        val smsCommand = SetCommand(attackVector = SetAttackVector.SMS_SPOOFING, target = SetTarget(host = "+15555550123"))
+        val result = TermuxSetExecutor(termux).execute(smsCommand)
+        val failure = assertIs<SetExecutionResult.Failure>(result)
+        assertTrue(failure.reason.contains("removed"))
+        assertEquals(null, termux.lastCommand) // never dispatched - no wrong digit was ever sent
+    }
+
+    @Test
     fun `dispatches setoolkit stdin through proot-distro login kali with the exact previewed sequence`() {
         val termux = RecordingTermuxExecutor(true, TermuxExecutionResult.Success(0, "done", "", 40))
         val result = TermuxSetExecutor(termux, ProotDistroKaliEnvelope()).execute(command)

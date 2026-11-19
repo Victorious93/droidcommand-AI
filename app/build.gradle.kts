@@ -142,6 +142,7 @@ dependencies {
     implementation("org.bouncycastle:bcpkix-jdk15to18:1.78.1")
     implementation(project(":core-tools-metasploit"))
     implementation(project(":core-tools-setoolkit"))
+    implementation(project(":core-security-backend"))
 
     // Phase 3/4 — companion capability modules.
     // core-hackerai and core-pentest-swarm provide the JVM-side Tool stubs and

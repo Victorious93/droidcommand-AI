@@ -38,6 +38,7 @@ class VictorSuiteCapabilitiesProbeTest {
             kali_installed=true
             kali_nmap=true
             kali_msfconsole=false
+            kali_setoolkit=true
             ztcommand_port_listening=true
         """.trimIndent()
         val caps = VictorSuiteCapabilitiesProbe.parse(stdout)
@@ -47,7 +48,18 @@ class VictorSuiteCapabilitiesProbeTest {
         assertTrue(caps.kaliInstalled)
         assertTrue(caps.kaliHasNmap)
         assertFalse(caps.kaliHasMsfconsole)
+        assertTrue(caps.kaliHasSetoolkit)
         assertTrue(caps.ztCommandPortListening)
+    }
+
+    @Test fun `msfconsole and setoolkit are probed and reported independently`() {
+        // A real, common case: Metasploit installed in Kali, SET not (or vice versa) - the two
+        // tools must never be conflated into one "security tools present" flag.
+        val caps = VictorSuiteCapabilitiesProbe.parse(
+            "kali_installed=true\nkali_nmap=true\nkali_msfconsole=true\nkali_setoolkit=false",
+        )
+        assertTrue(caps.kaliHasMsfconsole)
+        assertFalse(caps.kaliHasSetoolkit)
     }
 
     @Test fun `missing or garbled output defaults to false and null rather than throwing`() {

@@ -1890,3 +1890,29 @@ says or enables is decided in a small pure `*Presentation`/`*Review`/`*Readiness
 | `ui/n8n` (`N8nPresentation`), `ui/coding` (`CodingPresentation`), Advanced / Extra tools lists | same; Coding session is a labelled preview of a stand-in |
 
 See the 2026-11-18 "Screen redesigns from the owner's 0.1.8 screenshots" audit entry for what was and was not run.
+
+## 22. Linux-backend security tool execution (added 2026-11-19 — cross-repo)
+
+New `core-security-backend` module: the Kotlin client for a NEW, separate contract whose canonical schema owner is
+VictorLinux's `secprotocol.py` (`airootfs/usr/local/lib/victorlinux/secprotocol.py` in that repo), not anything in
+this one. `SecurityBackendClient` talks to a VictorLinux `secbackend.py` instance over `core-remote`'s
+`HttpTransport`: capability discovery, job submit with idempotency keys, poll-with-cursor, cancel. See VictorLinux's
+`docs/security-backend.md` for the protocol reference and its own, separately real verification against a live
+`msfrpcd` and a live installed `setoolkit`.
+
+| Component | Status | Notes |
+|---|---|---|
+| `core-security-backend`: `SecurityBackendClient`, `SecurityBackendProtocol` data classes | IMPLEMENTED, 15 JVM tests | Tests decode byte-for-byte copies of real `secbackend.py` responses captured 2026-11-19, not invented shapes. |
+| `core-tools-metasploit.LinuxBackendMetasploitExecutor` | IMPLEMENTED, 9 JVM tests — NOT RUN against a live backend from this repo's own code | Second real `MetasploitExecutor`, independent of `TermuxMetasploitExecutor`'s on-device Kali path. Submit-then-poll-to-terminal, cancel-then-reconfirm. |
+| `core-tools-setoolkit.LinuxBackendSetExecutor` | IMPLEMENTED, 4 JVM tests — NOT RUN against a live backend from this repo's own code | Same pattern for SET; only `QRCODE_GENERATOR` actually runs on the VictorLinux side, everything else comes back `capability_missing` with a specific reason. |
+| `core-tools-setoolkit.SetMenuPath` | **Bug fixed**: `SMS_SPOOFING` no longer maps to digit `"10"` | That digit is real (Third Party Modules) in the live-verified install; SMS Spoofing has been removed from SET's menu entirely. `navigationDigits` now throws `UnsupportedSetVectorException` for it instead. |
+| `app.di.AppModule.provideMetasploitExecutor`/`provideSetExecutor` | Edited, **NOT compiled in this session (no Android SDK)** | Reads a new `SecurityBackendPrefs` (PHONE_LOCAL/LINUX_BACKEND, remembered) to choose between the Termux* and LinuxBackend* executors; unconfigured LINUX_BACKEND falls back to `Null*Executor`, never silently to PHONE_LOCAL. |
+| `ToolBackendNotes.forName("run_setoolkit_attack")` | **Stale note fixed** | Previously claimed `NullSetExecutor` while `TermuxSetExecutor` had actually been wired for some time; now describes both real backends. |
+| `core-termux.VictorSuiteCapabilitiesProbe` | Extended: `kaliHasSetoolkit` | Previously probed only `kali_msfconsole`; SET's own presence inside the Kali proot was not distinguished from Metasploit's. |
+
+**Verified this session:** `./gradlew test --continue` (whole repo, 206 tasks) and `./gradlew ktlintCheck` (whole
+repo, 358 tasks) both green, run after every change above. **Not verified:** `:app` itself (no Android SDK in this
+container — same stated limitation as every other `:app` row in this document), and no phone or JVM process in
+this repo has talked to a real running VictorLinux backend yet. See the 2026-11-19 audit addendum for the full
+cross-repo record, including the real `secmsf.py` RPC-error-classification bug found and fixed on the VictorLinux
+side before any of this Kotlin code was written.
