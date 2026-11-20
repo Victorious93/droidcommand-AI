@@ -22,12 +22,16 @@ name: Build APK
 # an APK that dies on launch.
 # workflow_dispatch can pass abi=arm64-v8a for a smaller phone APK
 # (artifact app-arm64-debug-apk) that drops x86 / x86_64 / armeabi-v7a.
+#
+# RELEASES SHIP BOTH (a release_tag run ignores `abi`): the `apk` job is a matrix of `all` and `arm64-v8a`, and the
+# release carries app-debug.apk (all ABIs, unchanged name) plus app-arm64-debug.apk, one merged SHA256SUMS. v0.1.10's
+# single all-ABI asset was ~404 MB and a phone with ~1 GB free refused to install it ("no room on allowed volumes").
 
 on:
   workflow_dispatch:
     inputs:
       abi:
-        description: "ABIs to package. all = current 4-ABI APK; arm64-v8a = phone-sized debug APK."
+        description: "ABIs to package for a plain build (ignored when release_tag is set: releases build both). all = 4-ABI APK; arm64-v8a = phone-sized debug APK."
         type: choice
         options:
           - all
@@ -69,9 +73,14 @@ permissions:
 
 jobs:
   apk:
-    name: Build :app debug APK
+    name: Build :app debug APK (${{ matrix.abi }})
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      matrix:
+        # Release run: both. Manual run: the chosen ABI. Push/PR: all (unchanged).
+        abi: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && '["all","arm64-v8a"]' || format('["{0}"]', inputs.abi || 'all')) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -106,7 +115,7 @@ jobs:
       # landed on the stale feature branch.
       - name: Assemble debug APK (retry transient Maven Central 429s)
         env:
-          ABI_FILTER: ${{ github.event.inputs.abi }}
+          ABI_FILTER: ${{ matrix.abi }}
         run: |
           set -o pipefail
           extra=()
@@ -148,7 +157,7 @@ jobs:
       - name: Select APK artifact name
         if: success()
         env:
-          ABI_FILTER: ${{ github.event.inputs.abi }}
+          ABI_FILTER: ${{ matrix.abi }}
         run: |
           if [ "${ABI_FILTER}" = "arm64-v8a" ]; then
             cp app/build/outputs/apk/debug/app-debug.apk \
@@ -188,7 +197,8 @@ jobs:
         if: success()
         working-directory: app/build/outputs/apk/debug
         run: |
-          sha256sum "$APK_FILE" | tee SHA256SUMS
+          # One file per APK so the two matrix legs do not overwrite each other; publish-release merges them.
+          sha256sum "$APK_FILE" | tee "${APK_FILE}.sha256"
 
       - name: Upload APK artifact
         if: success()
@@ -198,7 +208,7 @@ jobs:
           name: ${{ env.APK_ARTIFACT }}
           path: |
             app/build/outputs/apk/debug/${{ env.APK_FILE }}
-            app/build/outputs/apk/debug/SHA256SUMS
+            app/build/outputs/apk/debug/${{ env.APK_FILE }}.sha256
           if-no-files-found: error
           retention-days: 7
 
@@ -224,11 +234,22 @@ jobs:
       contents: write
       actions: read
     steps:
-      - name: Download APK artifact
+      - name: Download APK artifacts (all-ABI and arm64-v8a)
         uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.abi == 'arm64-v8a' && 'app-arm64-debug-apk' || 'app-debug-apk' }}
+          pattern: app-*debug-apk
+          merge-multiple: true
           path: dist
+
+      # Both APKs must be present, then one SHA256SUMS covers them (checksums were written per APK by the apk job).
+      - name: Merge checksums and require both APKs
+        run: |
+          set -euo pipefail
+          cd dist
+          [ -f app-debug.apk ] && [ -f app-arm64-debug.apk ] || { echo "::error::expected app-debug.apk and app-arm64-debug.apk" >&2; ls -la >&2; exit 1; }
+          cat app-debug.apk.sha256 app-arm64-debug.apk.sha256 > SHA256SUMS
+          rm -f ./*.sha256
+          ls -la
 
       - name: Download emulator validation summary
         uses: actions/download-artifact@v4
@@ -249,7 +270,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.release_tag }}
-          ABI: ${{ inputs.abi }}
         run: |
           set -euo pipefail
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.]+)?$ ]] || { echo "bad tag: $TAG" >&2; exit 1; }
@@ -257,7 +277,7 @@ jobs:
           # The summary is written only by a run that passed every required check, and it names the commit it ran on.
           grep -q "$GITHUB_SHA" validation/validation-summary.md || { echo "::error::validation summary is not for $GITHUB_SHA" >&2; exit 1; }
           {
-            echo "Debug-signed pre-release built by CI from commit ${GITHUB_SHA} (ABIs: ${ABI:-all}). Sideload only,"
+            echo "Debug-signed pre-release built by CI from commit ${GITHUB_SHA} (app-arm64-debug.apk = arm64-v8a only, for phones; app-debug.apk = all ABIs, much larger). Sideload only,"
             echo "not Play Store or production-signed (signer: DroidCommand's own debug identity, docs/SIGNING.md)."
             echo
             echo "**Checks executed for this exact commit before publishing:**"
