@@ -1,5 +1,9 @@
 package ai.droidcommand.app.ui.chat
 
+import ai.droidcommand.activity.ActivityActor
+import ai.droidcommand.activity.ActivityLog
+import ai.droidcommand.activity.ActivityRecordingToolRunner
+import ai.droidcommand.activity.ActivityRun
 import ai.droidcommand.agent.ConversationStore
 import ai.droidcommand.agent.GraphRetriever
 import ai.droidcommand.agent.KnowledgeGraph
@@ -222,6 +226,7 @@ class ChatViewModel @Inject constructor(
     private val inferenceSettings: InferenceSettingsStore,
     private val routeResolver: RouteResolver,
     private val botRuntime: BotRuntime,
+    private val activityLog: ActivityLog,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
@@ -276,6 +281,9 @@ class ChatViewModel @Inject constructor(
     /** The running bot's own tools (talk to bots, sandbox) and the runner that gates them; null when it has none. */
     private var botKit: BotToolKit? = null
     private var botRunner: ToolRunner? = null
+
+    /** The Activity-screen run for the helper bot's message being answered now; null between messages. Read from the model's thread. */
+    @Volatile private var botRun: ActivityRun? = null
 
     @Volatile private var handsFreeRound = false
 
@@ -634,6 +642,12 @@ class ChatViewModel @Inject constructor(
         inFlightText = text
         sendJob = viewModelScope.launch(Dispatchers.IO) {
             applyChatSystemPrompt(current)
+            // A helper bot's answer is one run on the Activity screen. The message text is not recorded, only that one arrived.
+            val turnRun = activeBot?.let { bot ->
+                botRun?.cancel("Replaced by a newer message")
+                ActivityRun.start(ActivityActor("bot:${bot.id}", bot.name), "Working on a message", activityLog)
+            }
+            botRun = turnRun
             // list() also registers the models with the repository before the first on-device turn.
             val route = ChatRoute.decide(
                 selectedLocalId = current.activeLocalModelId,
@@ -692,6 +706,14 @@ class ChatViewModel @Inject constructor(
             // (speaking re-enters this flow through the voice callback, which can force exactly such a retry and a second speak).
             val refreshedChats = if (result is ChatResult.Reply) runCatching { savedChats(store) }.getOrNull() else null
             val cancelled = !isActive || stop.get()
+            turnRun?.let { run ->
+                when {
+                    cancelled -> run.cancel("Stopped")
+                    result is ChatResult.Failure -> run.fail(result.message)
+                    else -> run.finish("Replied")
+                }
+                if (botRun === run) botRun = null
+            }
             if (!cancelled) {
                 val routeSummary = when (result) {
                     is ChatResult.Reply -> result.route?.summary()
@@ -1159,7 +1181,8 @@ class ChatViewModel @Inject constructor(
     private fun applyBotToolAccess(allowed: Set<String>) {
         val kit = botKit
         session.setToolAccess(
-            HelperBotTools.scopedRunner(botRunner ?: toolRunner, allowed),
+            // Records each tool call under the bot's current message on the Activity screen; the call itself is unchanged.
+            ActivityRecordingToolRunner(HelperBotTools.scopedRunner(botRunner ?: toolRunner, allowed), { botRun }, activityLog),
             HelperBotTools.offeredTools(toolRegistry, allowed) + kit?.specs.orEmpty(),
         )
     }
@@ -1177,6 +1200,8 @@ class ChatViewModel @Inject constructor(
     }
 
     fun stopBot() {
+        botRun?.cancel("Bot closed")
+        botRun = null
         activeBot = null
         botKit = null
         botRunner = null

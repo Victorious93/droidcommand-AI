@@ -1824,6 +1824,34 @@ module.
 
 **Verified B2 session (no Android SDK, no live LLM):** `./gradlew :core-bots:test :core-security:test` and `./gradlew :core-bots:ktlintCheck :core-security:ktlintCheck` — **BUILD SUCCESSFUL**, 6 new `BotLifecycleTest` tests (24 total in `core-bots`), 0 failures. Full `./gradlew test ktlintCheck --continue` (no `-PincludeAndroid`): **BUILD SUCCESSFUL** — 2743 tests, 0 failures/errors, 20 pre-existing device-only skips, zero regressions.
 
+### Activity feed — "what is each bot doing" (2026-11-21, `core-activity`)
+
+New JVM-only module. A bounded, in-memory, **oldest-dropped** feed of what bots/Pilot/fleet jobs are doing,
+deliberately **separate from `core-security.AuditLog`** (that log is append-only and fails closed at capacity,
+so routing a high-volume progress feed through it would eventually make sensitive actions get refused).
+Design, the Grok Bot comparison and the open decisions: `docs/ACTIVITY_AND_MISSIONS.md`.
+
+| Component | Status | Notes |
+|---|---|---|
+| `core-activity.ActivityLog` / `InMemoryActivityLog` | IMPLEMENTED — JVM-tested | Ring buffer (default 2,000 events), `seq` assigned on append, listeners isolated from each other. Contents are lost on process restart; nothing persists them yet. |
+| `core-activity.ActivityRun` | IMPLEMENTED — JVM-tested | `start` / `note` / `finish` / `fail` / `cancel`, plus `awaitingOwner` / `ownerDecided` for a request with its own Allow screen and `inScope` to attribute a blocking call; a run ends exactly once. The caller decides what "the end" is — this type never infers it. |
+| `core-activity.ActivityRecordingToolRunner` | IMPLEMENTED — JVM-tested | `ToolRunner` decorator: records started / finished / failed per tool call, returns the delegate's own result object and rethrows its exceptions; a recording failure is swallowed. Sits **outside** `SecureToolExecutor`. |
+| `core-activity.ActivityApprovalPrompt` | IMPLEMENTED — JVM-tested | `ApprovalPrompt` decorator: records "waiting for you" / allowed / declined and returns the delegate's answer unchanged. Attributes the prompt to a bot via a per-thread `ActivityScope`, so parallel bots are not mixed up (tested with two threads). |
+| `core-activity.ActivityRedactor` | IMPLEMENTED — JVM-tested | Masks secret-looking argument keys and well-known token shapes, truncates everything. Best-effort, not a guarantee — see the design doc. |
+| `core-activity.ActivityBoard` | IMPLEMENTED — JVM-tested | Derives per-bot status (waiting for you / working / stalled / failed / done / stopped), the in-flight step and a per-run timeline from events only. |
+| `:app` Activity screen (`fleet/activity`) + tile on the Fleet home screen | IMPLEMENTED — compiled, unit-tested, **never run on a device** | Sections: Needs you / Helper bots / Fleet apps that asked this phone / Commands sent to fleet apps. Read-only: it cannot answer an approval. State building is a pure function (`buildActivityState`), 7 tests. |
+| Recording hooks in `:app` | IMPLEMENTED — compiled, **never run on a device** | `ChatViewModel` (helper-bot turn = one run; tool calls recorded), `CompanionExecActivity` (a paired fleet app's request, e.g. VictorBots, from "asked" to the receipt outcome), `FleetOrchestratorViewModel` (action commands only; status checks are not recorded), `AppModule` (shared `ActivityLog`; the one `ApprovalPrompt` wrapped by `ActivityApprovalPrompt`). |
+| `core-activity.WaitingNotices` | IMPLEMENTED — JVM-tested | Pure "who is waiting for the owner" tracker (one entry per run; an answer or the end of the run removes it). |
+| `:app` `ActivityNotifier` | IMPLEMENTED — compiled, **never run on a device** | Posts "<bot> is waiting for you" when the app is in the background and a run is stuck on an approval (delayed 1.5 s so a rotation does not flash it). Says nothing about what is asked, also on the lock screen. Needs the `POST_NOTIFICATIONS` permission the first-run setup already requests; does nothing without it. Never approves anything. |
+| Pilot and Plan recorded (`PilotController`, `PlanController`) | IMPLEMENTED — compiled, unit-tested for Pilot, **never run on a device** | New top section "DroidCommand (Pilot and Plan)" on the Activity screen. One Pilot instruction / one Plan run = one row; the objective's text is not recorded. Outcome mapping (`ActivityOutcomes`) is unit-tested; `PlanController` itself has no unit test (it needs an Android `Context`), so its wiring is compile-checked only. |
+| Fleet-job events (`core-fleet-worker`) and bot run completion for `BotLifecycle` | NOT STARTED | `BotLifecycle` still records only `BOT_RUN_STARTED` to the audit log. |
+| Persisting the feed, answering an approval from the Activity list, a PC-side log view | NOT STARTED | Persistence is deliberately not built yet: nothing runs while the app is closed, and `ActivityRedactor` is best-effort, so keeping more on disk widens the exposure for little gain. See `docs/ACTIVITY_AND_MISSIONS.md` §3 and §5. |
+
+**Verified (Android SDK installed in the session; no device or emulator):** `:core-activity:test` + `ktlintCheck`
+(33 tests, 0 failures; 37 after the notification and Pilot/Plan follow-up); `:app:compileDebugKotlin`, `:app:hiltJavaCompileDebug` (the Hilt graph resolves the new
+`ActivityLog`), `:app:ktlintCheck`; the whole `:app:testDebugUnitTest` (369 tests, 0 failures) plus `:core-security:test`
+(320, 0 failures). `:app:assembleDebug` was **not** run and nothing was launched.
+
 ### Bot maker: per-bot peers and sandbox, wired into the app (2026-11-18)
 
 Builds on the bot-to-bot policy/bus that PR #315 added to `core-bots` (`BotPeerPolicy`, `BotMessageBus`,
