@@ -1824,6 +1824,27 @@ module.
 
 **Verified B2 session (no Android SDK, no live LLM):** `./gradlew :core-bots:test :core-security:test` and `./gradlew :core-bots:ktlintCheck :core-security:ktlintCheck` — **BUILD SUCCESSFUL**, 6 new `BotLifecycleTest` tests (24 total in `core-bots`), 0 failures. Full `./gradlew test ktlintCheck --continue` (no `-PincludeAndroid`): **BUILD SUCCESSFUL** — 2743 tests, 0 failures/errors, 20 pre-existing device-only skips, zero regressions.
 
+### Activity feed — "what is each bot doing" (2026-11-21, `core-activity`)
+
+New JVM-only module. A bounded, in-memory, **oldest-dropped** feed of what bots/Pilot/fleet jobs are doing,
+deliberately **separate from `core-security.AuditLog`** (that log is append-only and fails closed at capacity,
+so routing a high-volume progress feed through it would eventually make sensitive actions get refused).
+Design, the Grok Bot comparison and the open decisions: `docs/ACTIVITY_AND_MISSIONS.md`.
+
+| Component | Status | Notes |
+|---|---|---|
+| `core-activity.ActivityLog` / `InMemoryActivityLog` | IMPLEMENTED — JVM-tested | Ring buffer (default 2,000 events), `seq` assigned on append, listeners isolated from each other. Contents are lost on process restart; nothing persists them yet. |
+| `core-activity.ActivityRun` | IMPLEMENTED — JVM-tested | `start` / `note` / `finish` / `fail` / `cancel`; a run ends exactly once. The caller decides what "the end" is — this type never infers it. |
+| `core-activity.ActivityRecordingToolRunner` | IMPLEMENTED — JVM-tested | `ToolRunner` decorator: records started / finished / failed per tool call, returns the delegate's own result object and rethrows its exceptions; a recording failure is swallowed. Sits **outside** `SecureToolExecutor`. |
+| `core-activity.ActivityApprovalPrompt` | IMPLEMENTED — JVM-tested | `ApprovalPrompt` decorator: records "waiting for you" / allowed / declined and returns the delegate's answer unchanged. Attributes the prompt to a bot via a per-thread `ActivityScope`, so parallel bots are not mixed up (tested with two threads). |
+| `core-activity.ActivityRedactor` | IMPLEMENTED — JVM-tested | Masks secret-looking argument keys and well-known token shapes, truncates everything. Best-effort, not a guarantee — see the design doc. |
+| `core-activity.ActivityBoard` | IMPLEMENTED — JVM-tested | Derives per-bot status (waiting for you / working / stalled / failed / done / stopped), the in-flight step and a per-run timeline from events only. |
+| `:app` wiring (recorder + prompt decorator in `BotRuntime`/`ChatViewModel`) and the "Activity" screen | NOT STARTED | No Android SDK in the authoring container, and the screen layout is waiting on the owner's Grok Bot reference. Nothing in `:app` calls `core-activity` yet. |
+| Fleet-job events (`core-fleet-worker`) and bot run completion (`core-bots.BotLifecycle`) into the feed | NOT STARTED | `BotLifecycle` still records only `BOT_RUN_STARTED` to the audit log. |
+
+**Verified (no Android SDK, no device):** `./gradlew :core-activity:test :core-activity:ktlintCheck` — BUILD SUCCESSFUL,
+29 tests, 0 failures/errors/skips.
+
 ### Bot maker: per-bot peers and sandbox, wired into the app (2026-11-18)
 
 Builds on the bot-to-bot policy/bus that PR #315 added to `core-bots` (`BotPeerPolicy`, `BotMessageBus`,
