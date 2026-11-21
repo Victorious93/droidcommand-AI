@@ -75,7 +75,12 @@ sealed class InstallResult {
     data class Failed(val reason: String) : InstallResult()
 }
 
-/** Network seam: writes the body of [url] to [dest]. Throws [IOException] on failure or cancellation. */
+/**
+ * Network seam: writes the body of [url] to [dest]. Throws [IOException] on failure or cancellation. If [dest] already
+ * holds bytes from an earlier interrupted or stopped call, an implementation should resume after them and append;
+ * [onBytes] receives only the bytes written by this call. The caller verifies the finished file, so a resumed prefix
+ * is never trusted on its own.
+ */
 fun interface FileDownloader {
     fun download(url: String, dest: File, onBytes: (Long) -> Unit, cancelled: () -> Boolean)
 }
@@ -119,9 +124,13 @@ class VoiceModelRepository(private val root: File, private val downloader: FileD
     }
 
     /**
-     * Downloads whatever is missing or corrupt. [onProgress] gets the bytes downloaded so far in this call
-     * (no total: sizes are not known up front and are not guessed). Never throws; a failure leaves
+     * Downloads whatever is missing or corrupt. [onProgress] gets the bytes on disk so far for this model, including a
+     * resumed prefix (no total: sizes are not known up front and are not guessed). Never throws; a failure leaves
      * previously verified files in place and no partial file under a real name.
+     *
+     * A download that is stopped ([cancelled] turns true) or interrupted keeps its `.part` file, and the next call
+     * resumes it; a finished file with the wrong digest is deleted. [partialBytes] reports what is kept and
+     * [discardPartial] throws it away.
      */
     fun install(id: String, onProgress: (Long) -> Unit = {}, cancelled: () -> Boolean = { false }): InstallResult {
         val model = models[id] ?: return InstallResult.Failed("Unknown voice model '$id'")
@@ -148,16 +157,23 @@ class VoiceModelRepository(private val root: File, private val downloader: FileD
             if (isVerified(target, f)) continue
             if (cancelled()) return "Cancelled"
             val part = File(dir, f.name + ".part")
+            // An interrupted or stopped download keeps its prefix for the next call; a finished one is judged below.
+            var keepPart = true
             try {
+                if (part.isFile) {
+                    done += part.length()
+                    onProgress(done)
+                }
                 downloader.download(f.url, part, { n ->
                     done += n
                     onProgress(done)
                 }, cancelled)
+                keepPart = false
                 val actual = part.inputStream().use(::sha256Hex)
                 if (actual != f.sha256) return "${f.name}: SHA-256 mismatch (got $actual); file discarded"
                 Files.move(part.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
             } finally {
-                part.delete()
+                if (!keepPart) part.delete()
             }
         }
         return null
@@ -174,12 +190,19 @@ class VoiceModelRepository(private val root: File, private val downloader: FileD
         if (cancelled()) return "Cancelled"
         val archive = File(dir, "archive.part")
         val extracted = mutableListOf<File>()
+        // An interrupted or stopped download keeps its prefix for the next call; a finished one is judged and dropped.
+        var keepArchive = true
         try {
             var done = 0L
+            if (archive.isFile) {
+                done += archive.length()
+                onProgress(done)
+            }
             downloader.download(model.files.first().url, archive, { n ->
                 done += n
                 onProgress(done)
             }, cancelled)
+            keepArchive = false
             val actual = archive.inputStream().use(::sha256Hex)
             if (actual != model.archiveSha256) return "archive: SHA-256 mismatch (got $actual); file discarded"
 
@@ -190,7 +213,11 @@ class VoiceModelRepository(private val root: File, private val downloader: FileD
                     val entry = tar.nextEntry ?: break
                     if (!entry.isFile) continue
                     val f = wanted[entry.name.removePrefix("./")] ?: continue
-                    if (cancelled()) return "Cancelled"
+                    if (cancelled()) {
+                        // Stopped while unpacking: the archive is already verified, so keep it and skip the download next time.
+                        keepArchive = true
+                        return "Cancelled"
+                    }
                     val part = File(dir, f.name + ".part").also { extracted += it }
                     copyCapped(tar, part)
                     val got = part.inputStream().use(::sha256Hex)
@@ -202,10 +229,32 @@ class VoiceModelRepository(private val root: File, private val downloader: FileD
             val missing = model.files.map { it.name } - seen
             return if (missing.isEmpty()) null else "archive is missing expected entries: ${missing.joinToString()}"
         } finally {
-            archive.delete()
+            if (!keepArchive) archive.delete()
             extracted.forEach { it.delete() }
         }
     }
+
+    /** Bytes a stopped or interrupted download of [id] left in `.part` files, or 0 when there is none. */
+    fun partialBytes(id: String): Long {
+        val model = models[id] ?: return 0L
+        val dir = File(root, model.id)
+        return partialFiles(model, dir).sumOf { if (it.isFile) it.length() else 0L }
+    }
+
+    /**
+     * Deletes what a stopped or interrupted download of [id] left behind (the "Cancel" that discards, as opposed to a
+     * stop that keeps it). Returns true when something was removed. Verified files are never touched. Stop the
+     * download first and wait for it to end: this does not coordinate with a running [install].
+     */
+    fun discardPartial(id: String): Boolean {
+        val model = models[id] ?: return false
+        var removed = false
+        for (f in partialFiles(model, File(root, model.id))) if (f.isFile && f.delete()) removed = true
+        return removed
+    }
+
+    private fun partialFiles(model: VoiceModel, dir: File): List<File> =
+        model.files.map { File(dir, it.name + ".part") } + File(dir, "archive.part")
 
     private fun copyCapped(input: InputStream, dest: File) {
         dest.outputStream().use { out ->
@@ -246,20 +295,44 @@ class VoiceModelRepository(private val root: File, private val downloader: FileD
 
 /**
  * [FileDownloader] over [HttpURLConnection], https only. Cross-protocol redirects (https→http) are not
- * followed by the JDK; a non-200 status or a body larger than [maxBytes] is a failure. NOT exercised against a
- * real server in tests (the repository logic is tested with a fake); treat as unverified until used.
+ * followed by the JDK; a status other than 200/206 or a body larger than [maxBytes] is a failure. Resume, restart and
+ * rejected-resume are tested against a local HTTP server; never run against the real model hosts or on a device.
  */
-class HttpsFileDownloader(private val maxBytes: Long = 1L shl 30) : FileDownloader {
+class HttpsFileDownloader internal constructor(
+    private val maxBytes: Long,
+    private val httpsOnly: Boolean,
+) : FileDownloader {
+    constructor(maxBytes: Long = 1L shl 30) : this(maxBytes, true)
+
+    /**
+     * If [dest] already holds bytes, asks the server to continue after them (an HTTP Range request) and appends. A
+     * server that ignores the range and answers 200 restarts the file from zero; one that rejects it (416) has the
+     * partial file deleted and the call fails, so the next attempt starts clean.
+     *
+     * Stopping is checked between reads, so it takes effect at once on a flowing connection; a stalled connection can
+     * delay it by up to the 30 s read timeout.
+     */
     override fun download(url: String, dest: File, onBytes: (Long) -> Unit, cancelled: () -> Boolean) {
-        require(url.startsWith("https://")) { "https only" }
+        require(!httpsOnly || url.startsWith("https://")) { "https only" }
+        val existing = if (dest.isFile) dest.length() else 0L
         val conn = URI(url).toURL().openConnection() as HttpURLConnection
         conn.connectTimeout = 15_000
         conn.readTimeout = 30_000
+        if (existing > 0) conn.setRequestProperty("Range", "bytes=$existing-")
         try {
-            if (conn.responseCode != 200) throw IOException("HTTP ${conn.responseCode} for $url")
-            var total = 0L
+            val code = conn.responseCode
+            val resuming = when {
+                code == 206 && existing > 0 && conn.getHeaderField("Content-Range")?.startsWith("bytes $existing-") == true -> true
+                code == 200 -> false
+                code == 416 -> {
+                    dest.delete()
+                    throw IOException("Server rejected the resume; the partial file was discarded, try again")
+                }
+                else -> throw IOException("HTTP $code for $url")
+            }
+            var total = if (resuming) existing else 0L
             conn.inputStream.use { input ->
-                dest.outputStream().use { out ->
+                java.io.FileOutputStream(dest, resuming).use { out ->
                     val buf = ByteArray(64 * 1024)
                     while (true) {
                         if (cancelled()) throw IOException("Cancelled")
