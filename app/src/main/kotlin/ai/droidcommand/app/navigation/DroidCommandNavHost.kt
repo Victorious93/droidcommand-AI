@@ -256,6 +256,7 @@ fun DroidCommandNavHost(
                     onOpenPairing = { navController.navigate(Routes.FLEET_PAIRING) },
                     onOpenOrchestrator = { navController.navigate(Routes.FLEET_ORCHESTRATOR) },
                     onOpenConnectDevice = { navController.navigate(Routes.CONNECT_DEVICE) },
+                    onOpenPasswordPairing = { navController.navigate(Routes.SETTINGS) { launchSingleTop = true } },
                 )
             }
             composable(Routes.FLEET_PAIRING) { FleetScreen() }

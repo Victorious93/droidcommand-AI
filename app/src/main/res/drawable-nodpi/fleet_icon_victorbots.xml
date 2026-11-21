@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- VictorBots launcher artwork (Victorious93/VictorBots app/src/main/res/drawable/ic_launcher.xml), colours inlined from its colors.xml. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#0B0F1A" android:pathData="M0,0h108v108h-108z" />
+    <path android:fillColor="#00E5FF" android:pathData="M22,27h16l16,37 16,-37h16l-25,55h-14z" />
+    <path android:fillColor="#FF2BD6" android:pathData="M76,18h9v9h-9z" />
+</vector>

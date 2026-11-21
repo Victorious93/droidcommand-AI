@@ -66,6 +66,7 @@ fun FleetDashboardScreen(
     onOpenPairing: () -> Unit,
     onOpenOrchestrator: () -> Unit,
     onOpenConnectDevice: () -> Unit = {},
+    onOpenPasswordPairing: () -> Unit = {},
     viewModel: FleetDashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -73,7 +74,7 @@ fun FleetDashboardScreen(
     val install by installModel.state.collectAsState()
     var pairPromptId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
-        installModel.refresh()
+        installModel.refresh(force = false)
         FleetInstallEvents.installed.collect { id ->
             viewModel.refresh()
             installModel.refresh()
@@ -84,6 +85,8 @@ fun FleetDashboardScreen(
         state = state,
         install = install,
         onInstall = installModel::install,
+        onInstallAll = installModel::installAll,
+        onOpenPasswordPairing = onOpenPasswordPairing,
         onAutoUpdate = installModel::setAutoUpdate,
         pairPromptId = pairPromptId,
         onPairPromptHandled = { pairPromptId = null },
@@ -113,6 +116,8 @@ fun FleetDashboardContent(
     botSmsTile: @Composable () -> Unit = {},
     install: FleetInstallState = FleetInstallState(),
     onInstall: (String) -> Unit = {},
+    onInstallAll: () -> Unit = {},
+    onOpenPasswordPairing: () -> Unit = {},
     onAutoUpdate: (Boolean) -> Unit = {},
     pairPromptId: String? = null,
     onPairPromptHandled: () -> Unit = {},
@@ -186,6 +191,7 @@ fun FleetDashboardContent(
             }
         }
         install.message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = AccentBlueBright) }
+        FleetDownloadSection(install = install, onInstall = onInstall, onInstallAll = onInstallAll)
         botSmsTile()
 
         state.cards.forEach { card ->
@@ -201,6 +207,7 @@ fun FleetDashboardContent(
                 onInstall = { onInstall(card.id) },
             )
         }
+        FleetExtraAppsSection(extras = state.extras, onOpenPasswordPairing = onOpenPasswordPairing)
     }
 
     when (val shown = dialog) {
