@@ -18,6 +18,7 @@ import ai.droidcommand.llm.local.HuggingFaceGgufClient
 import ai.droidcommand.llm.local.HuggingFaceGgufFile
 import ai.droidcommand.llm.local.HuggingFaceRepoHit
 import ai.droidcommand.llm.local.HuggingFaceSearchResult
+import ai.droidcommand.llm.local.ModelMetadata
 import ai.droidcommand.llm.local.RamFit
 import ai.droidcommand.llm.local.RamFitAssessment
 import ai.droidcommand.llm.local.RamFitVerdict
@@ -43,6 +44,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
@@ -101,11 +103,14 @@ class ModelsViewModel @Inject constructor(
     val state: StateFlow<ModelsUiState> = mutableState.asStateFlow()
     private val downloadJobs = mutableMapOf<String, Job>()
 
+    /** The Hugging Face files shown so far, by their download id, so Stop and Cancel can find the model they belong to. */
+    private val hubMeta = ConcurrentHashMap<String, ModelMetadata>()
+
     @Volatile private var importCancelled = AtomicBoolean(false)
 
     init {
         refresh(scan = true)
-        ChatModelCatalog.entries.forEach { watchDownload(it.id) }
+        ChatModelCatalog.entries.forEach { watchDownload(it) }
     }
 
     fun refresh(scan: Boolean = false) {
@@ -139,7 +144,7 @@ class ModelsViewModel @Inject constructor(
                     ramFreeBytes = snap?.availableBytes ?: deviceAvailable(),
                 )
             }
-            catalog.forEach { watchDownload(it.entry.metadata.id) }
+            catalog.forEach { watchDownload(it.entry.metadata) }
         }
     }
 
@@ -203,11 +208,14 @@ class ModelsViewModel @Inject constructor(
                         searching = false,
                         hubFiles = result.files.map { file ->
                             val match = installed.firstOrNull { model -> model.metadata.sha256 == file.sha256 }
+                            // A partial file kept by an earlier Stop (or session) shows as Stopped, with Resume and Cancel.
+                            val kept = if (match == null) hubMetadata(file)?.let(runtime::partialBytes) ?: 0L else 0L
                             HubFileRow(
                                 file = file,
                                 fit = ram(file.sizeBytes, DEFAULT_CONTEXT, snap),
                                 installed = match != null,
                                 installedId = match?.id,
+                                download = if (kept > 0L) ModelDownloadState.Stopped(kept) else ModelDownloadState.Idle,
                             )
                         },
                     )
@@ -222,11 +230,7 @@ class ModelsViewModel @Inject constructor(
     }
 
     fun downloadHub(file: HuggingFaceGgufFile) {
-        val meta = file.toMetadata(
-            id = hubId(file),
-            displayName = GgufFileName.displayLabel(file.fileName),
-            contextTokens = DEFAULT_CONTEXT,
-        )
+        val meta = hubMetadata(file)
         if (meta == null) {
             mutableState.update { it.copy(status = "Hugging Face did not publish a SHA-256 for this file, so it cannot be downloaded here. Import it from storage instead.") }
             return
@@ -234,7 +238,21 @@ class ModelsViewModel @Inject constructor(
         enqueue(meta)
     }
 
-    fun cancelDownload(id: String) = downloads.cancel(id)
+    /** Stop: ends the transfer and keeps what is downloaded; Download / Resume continues from it. */
+    fun stopDownload(id: String) = downloads.stop(id)
+
+    /** Cancel: ends the transfer and deletes what was downloaded. */
+    fun cancelDownload(id: String) {
+        val meta = ChatModelCatalog.find(id) ?: hubMeta[id] ?: return
+        downloads.cancel(meta)
+    }
+
+    private fun hubMetadata(file: HuggingFaceGgufFile): ModelMetadata? =
+        file.toMetadata(
+            id = hubId(file),
+            displayName = GgufFileName.displayLabel(file.fileName),
+            contextTokens = DEFAULT_CONTEXT,
+        )?.also { hubMeta[it.id] = it }
 
     fun importUri(uri: Uri) {
         if (mutableState.value.importing) return
@@ -315,16 +333,17 @@ class ModelsViewModel @Inject constructor(
         when (val result = downloads.enqueue(metadata)) {
             EnqueueResult.Enqueued -> {
                 mutableState.update { it.copy(status = "Downloading ${metadata.displayName}…") }
-                watchDownload(metadata.id)
+                watchDownload(metadata)
             }
             is EnqueueResult.Refused -> mutableState.update { it.copy(status = result.reason) }
         }
     }
 
-    private fun watchDownload(id: String) {
+    private fun watchDownload(metadata: ModelMetadata) {
+        val id = metadata.id
         if (downloadJobs.containsKey(id)) return
         downloadJobs[id] = viewModelScope.launch {
-            downloads.observe(id).collect { state ->
+            downloads.observe(metadata).collect { state ->
                 val finished = state is ModelDownloadState.Installed
                 mutableState.update { ui ->
                     ui.copy(

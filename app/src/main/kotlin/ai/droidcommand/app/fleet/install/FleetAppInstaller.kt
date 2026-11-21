@@ -1,7 +1,7 @@
 package ai.droidcommand.app.fleet.install
 
-import ai.droidcommand.fleet.update.ApkVerifier
-import ai.droidcommand.fleet.update.DownloadPolicy
+import ai.droidcommand.fleet.update.ApkDownloadStopped
+import ai.droidcommand.fleet.update.ApkDownloader
 import ai.droidcommand.fleet.update.FleetAppSource
 import ai.droidcommand.fleet.update.GitHubReleases
 import ai.droidcommand.fleet.update.ReleaseAsset
@@ -17,10 +17,9 @@ import android.provider.Settings
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.MessageDigest
 
-/** A downloaded, verified APK on disk. [sha256] is what was actually received. */
-data class DownloadedApk(val file: File, val sha256: String, val digestChecked: Boolean)
+/** A downloaded, verified APK on disk. [ai.droidcommand.fleet.update.DownloadedApk.sha256] is what was actually received. */
+typealias DownloadedApk = ai.droidcommand.fleet.update.DownloadedApk
 
 /**
  * Looks up, downloads and installs fleet app APKs. Blocking: call off the main thread.
@@ -57,65 +56,24 @@ class FleetAppInstaller(private val context: Context) {
         )
     }
 
-    fun download(source: FleetAppSource, asset: ReleaseAsset, onProgress: (Long, Long) -> Unit = { _, _ -> }): DownloadedApk {
-        require(DownloadPolicy.isAllowedAsset(asset.url, source.repo)) { "Download address is not allowed." }
-        val dir = File(context.cacheDir, "fleet-apk").apply { mkdirs() }
-        val target = File(dir, "${source.packageName}.apk")
-        target.delete()
-        var url = asset.url
-        var connection: HttpURLConnection? = null
-        try {
-            for (hop in 0..MAX_REDIRECTS) {
-                connection?.disconnect()
-                connection = open(url).apply { instanceFollowRedirects = false }
-                val code = connection.responseCode
-                if (code in 300..399) {
-                    val next = connection.getHeaderField("Location") ?: error("Redirect without a target.")
-                    val resolved = URL(URL(url), next).toString()
-                    check(DownloadPolicy.isAllowedRedirect(resolved, source.repo)) { "Redirect to a host that is not allowed." }
-                    url = resolved
-                    continue
-                }
-                check(code == 200) { "Download failed (HTTP $code)." }
-                break
-            }
-            val conn = checkNotNull(connection)
-            check(conn.responseCode == 200) { "Too many redirects." }
-            val total = conn.contentLengthLong
-            check(total < 0 || total <= MAX_APK_BYTES) { "File is larger than the ${MAX_APK_BYTES / 1_000_000} MB limit." }
-            val digest = MessageDigest.getInstance("SHA-256")
-            var received = 0L
-            conn.inputStream.use { input ->
-                target.outputStream().use { out ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        val n = input.read(buffer)
-                        if (n < 0) break
-                        received += n
-                        check(received <= MAX_APK_BYTES) { "File is larger than the limit." }
-                        digest.update(buffer, 0, n)
-                        out.write(buffer, 0, n)
-                        onProgress(received, total)
-                    }
-                }
-            }
-            val sha = digest.digest().joinToString("") { "%02x".format(it) }
-            val head = ByteArray(4)
-            val headRead = target.inputStream().use { it.read(head) }
-            if (headRead != 4) head.fill(0)
-            if (!ApkVerifier.looksLikeApk(head)) {
-                target.delete()
-                error("The downloaded file is not an APK.")
-            }
-            if (asset.sha256 != null && !ApkVerifier.matches(asset.sha256, sha)) {
-                target.delete()
-                error("The download does not match the SHA-256 GitHub published. Nothing was installed.")
-            }
-            return DownloadedApk(target, sha, digestChecked = asset.sha256 != null)
-        } finally {
-            connection?.disconnect()
-        }
-    }
+    private val downloader by lazy { ApkDownloader(File(context.cacheDir, "fleet-apk")) }
+
+    /**
+     * Downloads [asset], resumably (see [ApkDownloader]). [cancelled] turning true throws [ApkDownloadStopped] and keeps the
+     * partial file, so calling this again continues after it; [discardPartial] is the Cancel that deletes it.
+     */
+    fun download(
+        source: FleetAppSource,
+        asset: ReleaseAsset,
+        onProgress: (Long, Long) -> Unit = { _, _ -> },
+        cancelled: () -> Boolean = { false },
+    ): DownloadedApk = downloader.download(source.repo, source.packageName, asset, onProgress, cancelled)
+
+    /** Bytes a stopped or interrupted download of [source] left on disk, or 0. */
+    fun partialBytes(source: FleetAppSource): Long = downloader.partialBytes(source.packageName)
+
+    /** Deletes them. True when a file was removed. */
+    fun discardPartial(source: FleetAppSource): Boolean = downloader.discardPartial(source.packageName)
 
     /** False means the owner must first allow this app to install apps (Settings opens from [unknownSourcesIntent]). */
     fun canInstall(): Boolean = context.packageManager.canRequestPackageInstalls()
@@ -180,8 +138,6 @@ class FleetAppInstaller(private val context: Context) {
     }
 
     private companion object {
-        const val MAX_REDIRECTS = 5
-        const val MAX_APK_BYTES = 300L * 1024 * 1024
         const val MAX_JSON_CHARS = 2_000_000
     }
 }

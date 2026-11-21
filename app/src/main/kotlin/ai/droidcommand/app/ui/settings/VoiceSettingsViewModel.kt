@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 data class VoiceModelRow(
@@ -27,6 +29,10 @@ data class VoiceModelRow(
     val license: String,
     val installed: Boolean,
     val busy: Boolean = false,
+    /** Bytes on disk so far while a download runs (including a resumed prefix); the total is not known up front. */
+    val downloadedBytes: Long? = null,
+    /** Bytes a stopped or interrupted download kept on disk. More than 0 means Resume instead of Download. */
+    val partialBytes: Long = 0L,
     val message: String? = null,
 )
 
@@ -51,6 +57,10 @@ class VoiceSettingsViewModel @Inject constructor(
     private val store = SharedPreferencesVoiceSettingsStore(context)
     private val repository = runtime.repository
 
+    /** Per running download: set to true to stop it. Stop keeps what is downloaded; Cancel also deletes it. */
+    private val stopFlags = ConcurrentHashMap<String, AtomicBoolean>()
+    private val discardRequests = ConcurrentHashMap.newKeySet<String>()
+
     private val mutableState = MutableStateFlow(
         VoiceSettingsUi(store.load().normalized(runtime.features()), runtime.features(), rows()),
     )
@@ -70,18 +80,60 @@ class VoiceSettingsViewModel @Inject constructor(
 
     fun setApproveByVoice(enabled: Boolean) = change { it.copy(approval = it.approval.copy(allowApproveByVoice = enabled)) }
 
+    /** Start, or Resume when a stopped download left bytes behind. */
     fun install(id: String) {
-        update(id) { it.copy(busy = true, message = null) }
+        val stop = AtomicBoolean(false)
+        if (stopFlags.putIfAbsent(id, stop) != null) return
+        update(id) { it.copy(busy = true, message = null, downloadedBytes = it.partialBytes) }
         viewModelScope.launch(Dispatchers.IO) {
-            val result = repository.install(id)
+            var lastUpdateNanos = 0L
+            val result = repository.install(
+                id,
+                // Progress arrives on every read; the screen only needs it a few times a second.
+                onProgress = { bytes ->
+                    val now = System.nanoTime()
+                    if (now - lastUpdateNanos >= PROGRESS_INTERVAL_NANOS) {
+                        lastUpdateNanos = now
+                        update(id) { it.copy(downloadedBytes = bytes) }
+                    }
+                },
+                cancelled = stop::get,
+            )
             val features = runtime.refresh()
+            // The transfer has returned, so nothing is writing the partial files: a Cancel can delete them now.
+            val discard = discardRequests.remove(id)
+            if (discard) repository.discardPartial(id)
+            stopFlags.remove(id)
+            val kept = repository.partialBytes(id)
             update(id) {
-                when (result) {
-                    is InstallResult.Installed -> it.copy(busy = false, installed = true)
-                    is InstallResult.Failed -> it.copy(busy = false, message = result.reason)
+                when {
+                    result is InstallResult.Installed -> it.copy(busy = false, installed = true, downloadedBytes = null, partialBytes = 0L)
+                    discard -> it.copy(busy = false, downloadedBytes = null, partialBytes = 0L, message = "Cancelled. What was downloaded was deleted.")
+                    stop.get() -> it.copy(busy = false, downloadedBytes = null, partialBytes = kept, message = "Stopped. Resume continues from where it stopped.")
+                    else -> it.copy(busy = false, downloadedBytes = null, partialBytes = kept, message = (result as? InstallResult.Failed)?.reason)
                 }
             }
             applyFeatures(features)
+        }
+    }
+
+    /** Stop: ends the transfer and keeps what is downloaded, so Resume continues from it. Takes effect within a moment. */
+    fun stop(id: String) {
+        stopFlags[id]?.set(true)
+    }
+
+    /** Cancel: ends the transfer and deletes what was downloaded. */
+    fun cancel(id: String) {
+        val running = stopFlags[id]
+        if (running != null) {
+            // The download deletes its own partial files once it has stopped, so nothing is deleted under a writer.
+            discardRequests += id
+            running.set(true)
+        } else {
+            viewModelScope.launch(Dispatchers.IO) {
+                repository.discardPartial(id)
+                update(id) { it.copy(partialBytes = 0L, message = "Cancelled. What was downloaded was deleted.") }
+            }
         }
     }
 
@@ -97,7 +149,7 @@ class VoiceSettingsViewModel @Inject constructor(
     private fun reverify() {
         viewModelScope.launch(Dispatchers.IO) {
             val features = runtime.refresh()
-            mutableState.update { ui -> ui.copy(models = ui.models.map { it.copy(installed = runtime.isInstalled(it.id)) }) }
+            mutableState.update { ui -> ui.copy(models = ui.models.map { it.copy(installed = runtime.isInstalled(it.id), partialBytes = repository.partialBytes(it.id)) }) }
             applyFeatures(features)
         }
     }
@@ -115,5 +167,10 @@ class VoiceSettingsViewModel @Inject constructor(
     private fun update(id: String, edit: (VoiceModelRow) -> VoiceModelRow) =
         mutableState.update { ui -> ui.copy(models = ui.models.map { if (it.id == id) edit(it) else it }) }
 
-    private fun rows(): List<VoiceModelRow> = repository.list().map { VoiceModelRow(it.id, it.displayName, it.license, installed = runtime.isInstalled(it.id)) }
+    private companion object {
+        const val PROGRESS_INTERVAL_NANOS = 250_000_000L
+    }
+
+    private fun rows(): List<VoiceModelRow> =
+        repository.list().map { VoiceModelRow(it.id, it.displayName, it.license, installed = runtime.isInstalled(it.id), partialBytes = repository.partialBytes(it.id)) }
 }
