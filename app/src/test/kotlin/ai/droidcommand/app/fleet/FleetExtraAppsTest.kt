@@ -1,8 +1,8 @@
 package ai.droidcommand.app.fleet
 
 import ai.droidcommand.app.fleet.install.FleetSources
-import ai.droidcommand.remotepc.RustDeskContract
 import ai.droidcommand.fleet.update.FleetRepoLinks
+import ai.droidcommand.remotepc.RustDeskContract
 import ai.droidcommand.security.InboundEntryPointCatalog
 import kotlin.test.Test
 import kotlin.test.assertEquals
