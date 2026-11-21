@@ -1,0 +1,16 @@
+{
+  "msg_id": "m-dstat-1",
+  "payload": {
+    "content_hash": "6eee8829ff9116804e27a182bf35679b65312e3f3a35f706976c6d53302d2fd2",
+    "draft_id": "draft-0123456789abcdef",
+    "state": "submitted"
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 1
+  },
+  "sender": "dev-0123456789ab",
+  "sent_at": 1790000000000,
+  "target": "coordinator",
+  "type": "draft_status"
+}

@@ -105,6 +105,8 @@ class FleetWorker(
     private val gate: ForegroundGate = SemaphoreForegroundGate(),
     private val onNodeMessage: (fromDevice: String, topic: String, body: JsonObject) -> Unit = { _, _, _ -> },
     private val onRevoked: () -> Unit = {},
+    /** Protocol 1.1 terminal / draft handler. Null = this build does not offer those features (it then reports none of them). */
+    liveFactory: ((sendStatus: (String, JsonObject) -> Unit, relay: TerminalRelay) -> LiveFeatures)? = null,
 ) {
     private val ops = operations.associateBy { it.op }
     private val running = ConcurrentHashMap<String, RunningInfo>()
@@ -112,6 +114,17 @@ class FleetWorker(
     private val currentJob = ThreadLocal<RunningInfo?>()
 
     @Volatile private var helloSent = false
+
+    // Live (non-durable) status messages for terminals/drafts. Held in memory, retried only until acknowledged or 60 s old; never persisted,
+    // so a restart can never revive an approval or a session.
+    private val liveOutbound = java.util.ArrayList<Pair<Long, JsonObject>>()
+    private val live: LiveFeatures? = liveFactory?.invoke(
+        { type, payload ->
+            val dev = store.load().deviceId
+            if (dev != null) synchronized(liveOutbound) { liveOutbound += clock() + 60_000 to env(dev, type, payload) }
+        },
+        TerminalRelay { sid, body -> transport.terminalExchange(store.load().credential ?: throw FleetTransportException(401, "unauthorized", "not paired"), sid, body) },
+    )
 
     @Volatile var enabled = true
         private set
@@ -162,7 +175,7 @@ class FleetWorker(
     /** Owner toggle "allow fleet jobs on this phone". Disabling cancels running jobs and stops accepting work. */
     fun setEnabled(on: Boolean) {
         enabled = on
-        if (!on) cancelAll("worker access disabled by the owner")
+        if (!on) { live?.shutdown("worker access disabled by the owner"); cancelAll("worker access disabled by the owner") }
     }
     fun setPaused(on: Boolean) {
         store.save(store.load().copy(paused = on))
@@ -172,6 +185,7 @@ class FleetWorker(
 
     /** Local, owner-initiated forget (the coordinator copy is revoked from VictorLinux). Credentials are wiped. */
     fun unpair() {
+        live?.shutdown("unpaired by the owner")
         cancelAll("unpaired by the owner")
         store.save(WorkerPersisted(seenInbound = emptyList()))
         helloSent = false
@@ -198,7 +212,8 @@ class FleetWorker(
             out += heartbeat(dev)
         }
         val pending = synchronized(outboundLock) { store.load().pendingOutbound.map { FleetProtocol.json.parseToJsonElement(it) as JsonObject } }
-        val batch = (out + pending).take(FleetProtocol.MAX_BATCH)
+        val liveMsgs = synchronized(liveOutbound) { liveOutbound.removeAll { it.first < now }; liveOutbound.map { it.second } }
+        val batch = (out + pending + liveMsgs).take(FleetProtocol.MAX_BATCH)
         val acks = synchronized(pendingAcks) { pendingAcks.toList() }
         val wait = if (running.isEmpty() && pending.isEmpty()) config.longPollSeconds else config.activePollSeconds
         val resp = try {
@@ -222,6 +237,7 @@ class FleetWorker(
         if (out.isNotEmpty() && out.first()["type"].toString().contains("hello")) helloSent = true
         if (out.isNotEmpty()) lastHeartbeat = now
         reconcileOutbound(batch, resp["results"] as? JsonArray)
+        reconcileLive(liveMsgs, resp["results"] as? JsonArray)
         val inbound = (resp["messages"] as? JsonArray) ?: JsonArray(emptyList())
         for (m in inbound) handleInbound(m as JsonObject)
         return StepResult.Ok(inbound.size)
@@ -248,6 +264,7 @@ class FleetWorker(
     }
 
     private fun handleRevoked() {
+        live?.shutdown("device revoked by the coordinator")      // a revoked phone ends any live shell at once
         cancelAll("device revoked by the coordinator")
         store.save(WorkerPersisted(revoked = true))
         onRevoked()
@@ -313,6 +330,12 @@ class FleetWorker(
         }
     }
 
+    private fun reconcileLive(sent: List<JsonObject>, results: JsonArray?) {
+        val ids = results?.mapNotNull { it as? JsonObject }?.filter { (it["ok"] as? JsonPrimitive)?.contentOrNull == "true" || it["error"] != null }
+            ?.mapNotNull { (it["msg_id"] as? JsonPrimitive)?.contentOrNull }?.toSet() ?: return
+        synchronized(liveOutbound) { liveOutbound.removeAll { (it.second["msg_id"] as JsonPrimitive).content in ids } }
+    }
+
     // -------------------------------------------------------------- inbound
     private fun handleInbound(m: JsonObject) {
         val id = (m["msg_id"] as? JsonPrimitive)?.contentOrNull ?: return
@@ -332,6 +355,7 @@ class FleetWorker(
             "assignment" -> onAssignment(p)
             "cancel" -> onCancel(p)
             "revoke" -> handleRevoked()
+            "terminal_open", "terminal_close", "draft_deliver" -> live?.onInbound((m["type"] as JsonPrimitive).content, p)
             "node_message" -> runCatching { onNodeMessage((p["from_device"] as JsonPrimitive).content, (p["topic"] as JsonPrimitive).content, p["body"] as JsonObject) }
         }
     }

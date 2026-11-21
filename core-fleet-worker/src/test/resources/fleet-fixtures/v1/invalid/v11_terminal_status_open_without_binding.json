@@ -1,0 +1,18 @@
+{
+  "envelope": {
+    "msg_id": "m-bad-14",
+    "payload": {
+      "session_id": "term-0123456789abcdef",
+      "state": "open"
+    },
+    "protocol": {
+      "major": 1,
+      "minor": 1
+    },
+    "sender": "dev-0123456789ab",
+    "sent_at": 1790000000000,
+    "target": "coordinator",
+    "type": "terminal_status"
+  },
+  "expect_error": "bad_request"
+}

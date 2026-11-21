@@ -1,0 +1,18 @@
+{
+  "envelope": {
+    "msg_id": "m-bad-18",
+    "payload": {
+      "draft_id": "draft-1",
+      "state": "sent_twice"
+    },
+    "protocol": {
+      "major": 1,
+      "minor": 1
+    },
+    "sender": "dev-0123456789ab",
+    "sent_at": 1790000000000,
+    "target": "coordinator",
+    "type": "draft_status"
+  },
+  "expect_error": "bad_request"
+}
