@@ -23,7 +23,12 @@ sealed class UpdateDecision {
     data class Unknown(val reason: String) : UpdateDecision()
 }
 
-/** Decides what to do for one app. Pure: give it the installed `versionName`, the parsed releases and the phone's ABIs. */
+/**
+ * Decides what to do for one app. Pure: give it the installed `versionName`, the parsed releases and the phone's ABIs.
+ *
+ * Drafts are never offered. Pre-releases are skipped unless the owner opted in with [plan]'s `includePrereleases`; that
+ * default is `false` on purpose so background auto-update keeps installing stable releases only.
+ */
 object UpdatePlanner {
     fun plan(
         source: FleetAppSource,
@@ -31,8 +36,9 @@ object UpdatePlanner {
         installed: Boolean,
         releases: List<FleetRelease>,
         supportedAbis: List<String>,
+        includePrereleases: Boolean = false,
     ): UpdateDecision {
-        val candidates = releases.filter { !it.draft && !it.prerelease }
+        val candidates = releases.filter { !it.draft && (includePrereleases || !it.prerelease) }
         val usable = candidates.firstNotNullOfOrNull { release ->
             chooseAsset(release.assets.filter { DownloadPolicy.isAllowedAsset(it.url, source.repo) }, supportedAbis)
                 ?.let { release to it }
@@ -50,10 +56,11 @@ object UpdatePlanner {
         }
     }
 
-    private data class Choice(val asset: ReleaseAsset, val debug: Boolean)
+    /** The APK picked from one release for this phone. [debug] is true when only a debug-named APK fit. */
+    data class AssetChoice(val asset: ReleaseAsset, val debug: Boolean)
 
     /** Release builds before debug builds; a matching ABI before a universal APK; never a different ABI. */
-    private fun chooseAsset(assets: List<ReleaseAsset>, abis: List<String>): Choice? {
+    fun chooseAsset(assets: List<ReleaseAsset>, abis: List<String>): AssetChoice? {
         val apks = assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
         val known = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86", "arm64", "armv7")
         fun abiOf(name: String) = known.firstOrNull { name.contains(it, ignoreCase = true) }
@@ -85,7 +92,7 @@ object UpdatePlanner {
             return abiIndex
         }
         val release = fits.filter { !it.name.contains("debug", true) }.minByOrNull(::rank)
-        if (release != null) return Choice(release, false)
-        return fits.minByOrNull(::rank)?.let { Choice(it, true) }
+        if (release != null) return AssetChoice(release, false)
+        return fits.minByOrNull(::rank)?.let { AssetChoice(it, true) }
     }
 }

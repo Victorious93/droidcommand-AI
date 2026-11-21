@@ -20,6 +20,7 @@ import ai.droidcommand.app.ux.FleetUserCopy
 import ai.droidcommand.app.ux.FleetUserKind
 import ai.droidcommand.app.ux.FleetUserStatus
 import ai.droidcommand.app.ux.ScreenHelpCatalog
+import ai.droidcommand.fleet.update.FleetAutoUpdateMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -67,6 +68,7 @@ fun FleetDashboardScreen(
     onOpenPairing: () -> Unit,
     onOpenOrchestrator: () -> Unit,
     onOpenConnectDevice: () -> Unit = {},
+    onOpenPasswordPairing: () -> Unit = {},
     onOpenActivity: () -> Unit = {},
     viewModel: FleetDashboardViewModel = hiltViewModel(),
 ) {
@@ -75,7 +77,7 @@ fun FleetDashboardScreen(
     val install by installModel.state.collectAsState()
     var pairPromptId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
-        installModel.refresh()
+        installModel.refresh(force = false)
         FleetInstallEvents.installed.collect { id ->
             viewModel.refresh()
             installModel.refresh()
@@ -86,6 +88,12 @@ fun FleetDashboardScreen(
         state = state,
         install = install,
         onInstall = installModel::install,
+        onInstallAll = installModel::installAll,
+        onIncludePrereleases = installModel::setIncludePrereleases,
+        onInstallSelected = installModel::installSelected,
+        onSelectVersion = installModel::selectRelease,
+        onAutoMode = installModel::setAutoUpdateMode,
+        onOpenPasswordPairing = onOpenPasswordPairing,
         onAutoUpdate = installModel::setAutoUpdate,
         pairPromptId = pairPromptId,
         onPairPromptHandled = { pairPromptId = null },
@@ -117,6 +125,12 @@ fun FleetDashboardContent(
     botSmsTile: @Composable () -> Unit = {},
     install: FleetInstallState = FleetInstallState(),
     onInstall: (String) -> Unit = {},
+    onInstallAll: () -> Unit = {},
+    onIncludePrereleases: (Boolean) -> Unit = {},
+    onInstallSelected: (String) -> Unit = {},
+    onSelectVersion: (String, String?) -> Unit = { _, _ -> },
+    onAutoMode: (String, FleetAutoUpdateMode) -> Unit = { _, _ -> },
+    onOpenPasswordPairing: () -> Unit = {},
     onAutoUpdate: (Boolean) -> Unit = {},
     pairPromptId: String? = null,
     onPairPromptHandled: () -> Unit = {},
@@ -191,6 +205,14 @@ fun FleetDashboardContent(
             }
         }
         install.message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = AccentBlueBright) }
+        FleetDownloadSection(
+            install = install,
+            onInstall = onInstallSelected,
+            onInstallAll = onInstallAll,
+            onIncludePrereleases = onIncludePrereleases,
+            onSelectVersion = onSelectVersion,
+            onAutoMode = onAutoMode,
+        )
         botSmsTile()
 
         state.cards.forEach { card ->
@@ -206,6 +228,7 @@ fun FleetDashboardContent(
                 onInstall = { onInstall(card.id) },
             )
         }
+        FleetExtraAppsSection(extras = state.extras, onOpenPasswordPairing = onOpenPasswordPairing)
     }
 
     when (val shown = dialog) {

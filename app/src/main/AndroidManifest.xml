@@ -103,6 +103,10 @@
         <package android:name="com.victorious.spoof" />
         <package android:name="com.victorious.flash.android" />
         <package android:name="com.victorious.launch" />
+        <!-- Fleet "Download your apps" list: ShizukuV and rustdeskV are installable apps of the owner's with no hub
+             bridge (FleetExtraApps). Named so the list can show their real launcher icon and install state. -->
+        <package android:name="com.victorious.shizukuv" />
+        <package android:name="com.carriez.flutter_hbb" />
         <!-- FLEET_THEME reader (schemaVersion 1). Package visibility above is enough
              to resolve the writer; the authority is named so a ContentResolver
              query is visible on Android 11+. Reader only — never write. -->
