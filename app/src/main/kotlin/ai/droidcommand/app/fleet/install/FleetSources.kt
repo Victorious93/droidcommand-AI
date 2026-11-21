@@ -6,7 +6,7 @@ import ai.droidcommand.fleet.update.FleetAppSource
 
 /**
  * Which GitHub repo each fleet app's APKs are published from. Only apps with a row here get a
- * "Download & install" button; HackerAI, Termux and VictorTrade have none (no verified public release source), so
+ * "Download & install" button; Termux and VictorTrade have none (no verified public release source), so
  * they keep saying "get it from its official source".
  *
  * The repo names come from the owner's own repository list. Whether a repo actually attaches an `.apk` to a
@@ -16,6 +16,10 @@ object FleetSources {
     private const val OWNER = "Victorious93"
 
     val all: List<FleetAppSource> = listOf(
+        // HackerAI's applicationId (ai.hackerai.companion) was read from its repo's Android build. That repo's release workflow
+        // creates a DRAFT release, which is never offered, so this reads "Not published" until the owner publishes one. HackerAI
+        // is a same-signing bound companion: an APK signed with a different key installs but its bind is refused by Android.
+        FleetAppSource("hackerai", "HackerAI", FleetCatalog.HACKERAI_PACKAGE, "$OWNER/HackerAI-Commander"),
         FleetAppSource("pentestswarm", "Pentest-Swarm", FleetCatalog.PENTESTSWARM_PACKAGE, "$OWNER/Pentest-Swarm-AI"),
         FleetAppSource("rootforge", "RootForge OS", FleetCatalog.ROOTFORGE_PACKAGE, "$OWNER/rootforge-os"),
         FleetAppSource("edl-commander", "EDL-Commander", FleetCatalog.EDLCOMMANDER_PACKAGE, "$OWNER/EDL-Commander"),

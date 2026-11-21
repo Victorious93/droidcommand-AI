@@ -42,8 +42,11 @@ class FleetAppInstaller(private val context: Context) {
 
     fun isInstalled(packageName: String): Boolean = installedVersion(packageName) != null
 
-    /** Looks up the newest published release for [source] and decides what to do. */
-    fun check(source: FleetAppSource): UpdateDecision {
+    /**
+     * Looks up the newest published release for [source] and decides what to do. Pre-releases are skipped unless
+     * [includePrereleases] is true; only the owner's manual download list ever passes true, never auto-update.
+     */
+    fun check(source: FleetAppSource, includePrereleases: Boolean = false): UpdateDecision {
         val body = runCatching { httpGet(GitHubReleases.releasesUrl(source.repo)) }.getOrElse {
             return UpdateDecision.NothingPublished("Could not reach GitHub (${it.javaClass.simpleName}).")
         }
@@ -54,6 +57,7 @@ class FleetAppInstaller(private val context: Context) {
             installed = version != null,
             releases = GitHubReleases.parse(body),
             supportedAbis = Build.SUPPORTED_ABIS.toList(),
+            includePrereleases = includePrereleases,
         )
     }
 

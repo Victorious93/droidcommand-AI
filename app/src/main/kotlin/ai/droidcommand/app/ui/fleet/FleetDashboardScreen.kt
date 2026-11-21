@@ -86,6 +86,7 @@ fun FleetDashboardScreen(
         install = install,
         onInstall = installModel::install,
         onInstallAll = installModel::installAll,
+        onIncludePrereleases = installModel::setIncludePrereleases,
         onOpenPasswordPairing = onOpenPasswordPairing,
         onAutoUpdate = installModel::setAutoUpdate,
         pairPromptId = pairPromptId,
@@ -117,6 +118,7 @@ fun FleetDashboardContent(
     install: FleetInstallState = FleetInstallState(),
     onInstall: (String) -> Unit = {},
     onInstallAll: () -> Unit = {},
+    onIncludePrereleases: (Boolean) -> Unit = {},
     onOpenPasswordPairing: () -> Unit = {},
     onAutoUpdate: (Boolean) -> Unit = {},
     pairPromptId: String? = null,
@@ -191,7 +193,12 @@ fun FleetDashboardContent(
             }
         }
         install.message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = AccentBlueBright) }
-        FleetDownloadSection(install = install, onInstall = onInstall, onInstallAll = onInstallAll)
+        FleetDownloadSection(
+            install = install,
+            onInstall = onInstall,
+            onInstallAll = onInstallAll,
+            onIncludePrereleases = onIncludePrereleases,
+        )
         botSmsTile()
 
         state.cards.forEach { card ->

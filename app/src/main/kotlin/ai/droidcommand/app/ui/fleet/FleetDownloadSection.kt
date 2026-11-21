@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -52,6 +53,7 @@ fun FleetDownloadSection(
     install: FleetInstallState,
     onInstall: (String) -> Unit,
     onInstallAll: () -> Unit,
+    onIncludePrereleases: (Boolean) -> Unit = {},
 ) {
     val rows = install.rows
     val queue = FleetDownloadQueue.queue(rows)
@@ -64,6 +66,18 @@ fun FleetDownloadSection(
                 color = TextSecondary,
                 modifier = Modifier.testTag("fleet_download_summary"),
             )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("fleet_download_prereleases")) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Include pre-releases", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Several of your apps publish only debug-signed pre-releases. Off by default. Android still refuses an " +
+                            "update signed with a different key, and you confirm every install. Auto-update ignores this.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                }
+                Switch(checked = install.includePrereleases, onCheckedChange = onIncludePrereleases)
+            }
             DroidPrimaryButton(
                 onClick = onInstallAll,
                 enabled = queue.isNotEmpty() && !install.bulkBusy,

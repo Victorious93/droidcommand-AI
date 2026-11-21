@@ -4,6 +4,7 @@ import ai.droidcommand.app.fleet.FleetCatalog
 import ai.droidcommand.app.fleet.FleetExtraApps
 import ai.droidcommand.app.fleet.install.FleetAppInstaller
 import ai.droidcommand.app.fleet.install.FleetAutoUpdate
+import ai.droidcommand.app.fleet.install.FleetPrereleasePref
 import ai.droidcommand.app.fleet.install.FleetSources
 import ai.droidcommand.fleet.update.FleetDownloadQueue
 import ai.droidcommand.fleet.update.FleetDownloadRow
@@ -43,6 +44,8 @@ data class FleetInstallState(
     val installedIds: Set<String> = emptySet(),
     /** True while "Download all" is working through its queue. */
     val bulkBusy: Boolean = false,
+    /** Owner's opt-in: offer pre-releases in this list. Off by default. Auto-update never uses it. */
+    val includePrereleases: Boolean = false,
 )
 
 @HiltViewModel
@@ -50,7 +53,12 @@ class FleetInstallViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val installer = FleetAppInstaller(context)
-    private val mutable = MutableStateFlow(FleetInstallState(autoUpdate = FleetAutoUpdate.isEnabled(context)))
+    private val mutable = MutableStateFlow(
+        FleetInstallState(
+            autoUpdate = FleetAutoUpdate.isEnabled(context),
+            includePrereleases = FleetPrereleasePref.isEnabled(context),
+        ),
+    )
     private val decisions = ConcurrentHashMap<String, UpdateDecision>()
 
     @Volatile
@@ -68,7 +76,8 @@ class FleetInstallViewModel @Inject constructor(
             if (!force && decisions.isNotEmpty() && now - lastLookupMs < MIN_LOOKUP_GAP_MS) return@launch
             lastLookupMs = now
             val looked = coroutineScope {
-                FleetSources.all.map { source -> async { source.fleetId to installer.check(source) } }.awaitAll()
+                val pre = mutable.value.includePrereleases
+                FleetSources.all.map { source -> async { source.fleetId to installer.check(source, pre) } }.awaitAll()
             }
             looked.forEach { (id, decision) -> decisions[id] = decision }
             publishDecisions()
@@ -85,7 +94,7 @@ class FleetInstallViewModel @Inject constructor(
         }
         setBusy(fleetId, "Looking up the latest version…")
         viewModelScope.launch(Dispatchers.IO) {
-            val decision = installer.check(source)
+            val decision = installer.check(source, mutable.value.includePrereleases)
             decisions[fleetId] = decision
             val asset = assetOf(decision)
             if (asset == null) {
@@ -148,6 +157,13 @@ class FleetInstallViewModel @Inject constructor(
             }
             mutable.update { it.copy(bulkBusy = false, message = summary) }
         }
+    }
+
+    /** Turns pre-release downloads on or off for this list and looks everything up again under the new rule. */
+    fun setIncludePrereleases(on: Boolean) {
+        FleetPrereleasePref.setEnabled(context, on)
+        mutable.update { it.copy(includePrereleases = on) }
+        refresh(force = true)
     }
 
     fun setAutoUpdate(on: Boolean) {
@@ -224,11 +240,11 @@ class FleetInstallViewModel @Inject constructor(
     private fun describe(decision: UpdateDecision, installed: Boolean): FleetInstallUi = when (decision) {
         is UpdateDecision.Install -> FleetInstallUi(
             actionLabel = "Download & install",
-            note = "Latest: ${decision.release.tag}" + if (decision.isDebugBuild) " (debug build)" else "",
+            note = "Latest: ${decision.release.tag}" + buildLabel(decision.release.prerelease, decision.isDebugBuild),
         )
         is UpdateDecision.Update -> FleetInstallUi(
             actionLabel = "Update to ${decision.release.tag}",
-            note = "Installed ${decision.from}, newer ${decision.release.tag} is published." + if (decision.isDebugBuild) " (debug build)" else "",
+            note = "Installed ${decision.from}, newer ${decision.release.tag} is published." + buildLabel(decision.release.prerelease, decision.isDebugBuild),
         )
         is UpdateDecision.UpToDate -> FleetInstallUi(note = "Up to date (${decision.version}).")
         is UpdateDecision.NothingPublished -> FleetInstallUi(
@@ -237,8 +253,15 @@ class FleetInstallViewModel @Inject constructor(
         is UpdateDecision.Unknown -> FleetInstallUi(note = null)
     }
 
+    private fun buildLabel(prerelease: Boolean, debug: Boolean): String = when {
+        prerelease && debug -> " (pre-release, debug build)"
+        prerelease -> " (pre-release)"
+        debug -> " (debug build)"
+        else -> ""
+    }
+
     private companion object {
-        /** Do not look GitHub up again within this long unless forced. 19 unauthenticated calls per look-up add up fast. */
+        /** Do not look GitHub up again within this long unless forced. about 20 unauthenticated calls per look-up add up fast. */
         const val MIN_LOOKUP_GAP_MS = 10 * 60 * 1000L
     }
 }
