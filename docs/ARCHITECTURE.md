@@ -1852,6 +1852,39 @@ Design, the Grok Bot comparison and the open decisions: `docs/ACTIVITY_AND_MISSI
 `ActivityLog`), `:app:ktlintCheck`; the whole `:app:testDebugUnitTest` (369 tests, 0 failures) plus `:core-security:test`
 (320, 0 failures). `:app:assembleDebug` was **not** run and nothing was launched.
 
+### Download controls: Start / Stop / Cancel on every in-app download (2026-11-21)
+
+Owner request: "there should be a start and stop, cancel on all download options." Meaning used everywhere:
+**Start** begins a download, or **resumes** one whose partial file was kept; **Stop** ends the transfer and **keeps** what
+was downloaded; **Cancel** ends it and **deletes** what was downloaded. Audit of what existed before (read from code):
+chat models had Start and a "Cancel" that really only stopped; the embedding model the same; voice models had no Stop or
+Cancel and could not resume (the partial was deleted in a `finally`); fleet APKs had neither and could not be interrupted;
+the fleet auto-update worker could not interrupt a file mid-download. The "Get latest APK" bar opens a browser page, so it
+has no in-app transfer to control.
+
+| Download | Where | Start | Stop | Cancel | Status |
+|---|---|---|---|---|---|
+| Chat models (catalog + Hugging Face) | Models screen | Download / Resume | Stop | Cancel (`ModelDownloadScheduler.cancel`, discard done by the worker once it has stopped writing) | IMPLEMENTED — compiled, state logic unit-tested, **never run on a device** |
+| Embedding model | chat screen (Document Q&A) | Download / Resume | Stop | Cancel | IMPLEMENTED — compiled, **never run on a device** |
+| Voice models (TTS, wake word) | Settings → Voice | Download / Resume | Stop | Cancel | IMPLEMENTED — repository and downloader JVM-tested against a local server; UI compiled only |
+| Fleet app APKs | Fleet cards | Download / Resume | Stop | Cancel | IMPLEMENTED — `ApkDownloader` JVM-tested against a local server; UI compiled only |
+| Fleet auto-update (background, 6 h) | Fleet settings | on/off switch | stopping the worker now ends the file and keeps the partial (next run resumes) | switch off | IMPLEMENTED — compiled only |
+
+Pieces: `core-llm-local.ModelRepository.partialBytes/discardPartial`; `core-voice.VoiceModelRepository` keeps `.part` files on
+a stop or drop (a finished file with the wrong digest is still deleted), `partialBytes/discardPartial`, and
+`HttpsFileDownloader` now resumes with an HTTP Range request (200 restarts, 416 discards the partial); new pure-JVM
+`core-fleet-update.ApkDownloader` (extracted from `FleetAppInstaller.download`, same safety rules: allowed hosts on every
+redirect hop, 300 MB cap, APK header, published SHA-256; plus a stop hook, Range resume that re-hashes the kept prefix so the
+checksum still covers the whole file, a check that the body is complete, and a partial that the server cannot continue
+(416, or a 206 from the wrong offset) is discarded so a retry cannot fail forever); `:app` `ModelDownloadState.Stopped`,
+`DownloadStopSignals` (the Cancel handshake between scheduler and worker), and the buttons.
+
+Known limits: a stop on the voice and fleet-APK downloaders is checked between reads, so on a *stalled* connection it can
+take up to the 30 s read timeout; a Cancel that races a Start of the same chat model in the same instant can leave a small
+partial that then shows as Stopped and can be cancelled again; an Android cache purge can remove a partial APK (it then
+restarts). Nothing here was run on a device; WorkManager scheduling, the foreground notification and the Cancel handshake
+are compile-checked only.
+
 ### Bot maker: per-bot peers and sandbox, wired into the app (2026-11-18)
 
 Builds on the bot-to-bot policy/bus that PR #315 added to `core-bots` (`BotPeerPolicy`, `BotMessageBus`,

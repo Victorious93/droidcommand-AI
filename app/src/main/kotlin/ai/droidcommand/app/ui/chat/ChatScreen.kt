@@ -275,7 +275,9 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
             attachingDocument = state.attachingDocument,
             embedderDownloadBytes = state.embedderDownloadBytes,
             embedderDownloadMegabytes = state.embedderDownloadMegabytes,
+            embedderPartialBytes = state.embedderPartialBytes,
             onDownloadEmbedder = viewModel::downloadEmbedder,
+            onStopEmbedderDownload = viewModel::stopEmbedderDownload,
             onCancelEmbedderDownload = viewModel::cancelEmbedderDownload,
             onAttachDocument = { documentLauncher.launch(arrayOf("application/pdf", "text/*", "application/octet-stream")) },
             onRemoveDocument = viewModel::removeDocument,
@@ -735,7 +737,9 @@ private fun InputBar(
     attachingDocument: Boolean,
     embedderDownloadBytes: Long?,
     embedderDownloadMegabytes: Long,
+    embedderPartialBytes: Long,
     onDownloadEmbedder: () -> Unit,
+    onStopEmbedderDownload: () -> Unit,
     onCancelEmbedderDownload: () -> Unit,
     onAttachDocument: () -> Unit,
     onRemoveDocument: (String) -> Unit,
@@ -765,9 +769,23 @@ private fun InputBar(
             }
             if (!documentsAvailable) {
                 if (embedderDownloadBytes == null) {
-                    DroidSecondaryButton(onClick = onDownloadEmbedder) { Text("Download embedding model ($embedderDownloadMegabytes MB)") }
+                    // Start, or Resume from what a Stop kept. Cancel (only with something kept) deletes it.
+                    DroidSecondaryButton(onClick = onDownloadEmbedder, modifier = Modifier.testTag("embedder_start")) {
+                        Text(
+                            if (embedderPartialBytes > 0L) {
+                                "Resume (${embedderPartialBytes / BYTES_PER_MEGABYTE} / $embedderDownloadMegabytes MB)"
+                            } else {
+                                "Download embedding model ($embedderDownloadMegabytes MB)"
+                            },
+                        )
+                    }
+                    if (embedderPartialBytes > 0L) {
+                        DroidTextButton(onClick = onCancelEmbedderDownload, modifier = Modifier.testTag("embedder_cancel")) { Text("Cancel") }
+                    }
                 } else {
-                    DroidSecondaryButton(onClick = onCancelEmbedderDownload) { Text("Cancel (${embedderDownloadBytes / BYTES_PER_MEGABYTE} / $embedderDownloadMegabytes MB)") }
+                    Text("${embedderDownloadBytes / BYTES_PER_MEGABYTE} / $embedderDownloadMegabytes MB", style = MaterialTheme.typography.bodySmall)
+                    DroidSecondaryButton(onClick = onStopEmbedderDownload, modifier = Modifier.testTag("embedder_stop")) { Text("Stop") }
+                    DroidTextButton(onClick = onCancelEmbedderDownload, modifier = Modifier.testTag("embedder_cancel")) { Text("Cancel") }
                 }
             }
         }

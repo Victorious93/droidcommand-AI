@@ -137,6 +137,22 @@ class LocalModelRuntime internal constructor(
         return result
     }
 
+    /** Bytes a stopped or interrupted download of [metadata] left in its `.part` file, or 0. Reads the disk only. */
+    fun partialBytes(metadata: ModelMetadata): Long =
+        if (reservedFileName(metadata)) 0L else scratchRepository(metadata).partialBytes(metadata.id)
+
+    /**
+     * Deletes what a stopped download of [metadata] left behind (the Cancel that discards). Call it only when no download
+     * of this model is writing the file: the scheduler and worker coordinate that. Never touches an installed model.
+     */
+    fun discardPartial(metadata: ModelMetadata): Boolean =
+        !reservedFileName(metadata) && scratchRepository(metadata).discardPartial(metadata.id)
+
+    private fun reservedFileName(metadata: ModelMetadata) =
+        metadata.fileName == LocalModelRegistry.FILE_NAME || metadata.fileName.startsWith("import-")
+
+    private fun scratchRepository(metadata: ModelMetadata) = ModelRepository(dir, requireGguf = true).also { it.register(metadata) }
+
     /**
      * Forgets [id] and deletes a copied file. An in-place (scanned) file is left on disk. The model is unloaded first
      * (waiting for a reply that is being generated on it), so its memory is freed and nothing keeps the file open.
