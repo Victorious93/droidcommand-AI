@@ -21,6 +21,12 @@ class FleetProtocolException(val code: String, message: String) : Exception(mess
     }
 }
 
+/** One job in a [PlanManifest]. [args] are exactly what the coordinator will send in that job's own assignment. */
+data class PlanJob(val jobId: String, val op: String, val args: JsonObject, val requiresRoot: Boolean)
+
+/** The jobs of the plan an assignment belongs to, as the coordinator listed them. Information only; never authority. */
+data class PlanManifest(val planId: String, val jobs: List<PlanJob>)
+
 /**
  * The coordinator/worker contract, protocol_major 1. The rules here are the Kotlin twin of VictorLinux
  * `fleet/victorfleet/protocol.py`; both are exercised by the same golden fixtures (`fleet-fixtures/v1`, guarded by
@@ -33,6 +39,8 @@ object FleetProtocol {
     const val MAX_MESSAGE_BYTES = 256 * 1024
     const val MAX_ARGS_BYTES = 64 * 1024
     const val MAX_BATCH = 64
+    const val MAX_PLAN_JOBS = 25
+    const val MAX_PLAN_BYTES = 96 * 1024
     val ID_RE = Regex("^[A-Za-z0-9._:-]{1,96}$")
     val OP_RE = Regex("^[a-z][a-z0-9_.]{0,63}$")
     val SHA256_RE = Regex("^[0-9a-f]{64}$")
@@ -216,5 +224,41 @@ object FleetProtocol {
             validateArtifactRef(io)
         }
         p.int("lease_expires_ms")
+    }
+
+    /**
+     * The optional `plan` object on an assignment (VictorLinux `docs/FLEET.md`, "Plan manifest"), or null when it is absent **or
+     * cannot be accepted for any reason**. A manifest is information only: a phone that cannot use it simply runs the assignment as
+     * it always did, so this never throws. Same rules as the coordinator's `validate_plan_manifest`: 1..[MAX_PLAN_JOBS] jobs, every job
+     * id inside the plan's own id space, no duplicates, a valid op, object args within [MAX_ARGS_BYTES], and the whole thing within
+     * [MAX_PLAN_BYTES].
+     */
+    fun parsePlanManifest(assignment: JsonObject): PlanManifest? = try {
+        val plan = assignment["plan"] as? JsonObject
+        if (plan == null) {
+            null
+        } else {
+            val planId = plan.id("plan_id")!!
+            val raw = plan["jobs"] as? JsonArray ?: bad("plan.jobs missing")
+            if (raw.size !in 1..MAX_PLAN_JOBS) bad("plan must list 1..$MAX_PLAN_JOBS jobs")
+            if (plan.toString().length > MAX_PLAN_BYTES) bad("plan manifest too large", "too_large")
+            val seen = mutableSetOf<String>()
+            val jobs = raw.map { e ->
+                val j = e as? JsonObject ?: bad("plan job must be an object")
+                val jobId = j.id("job_id")!!
+                if (!jobId.startsWith("$planId.")) bad("plan lists a job that is not part of this plan")
+                if (!seen.add(jobId)) bad("plan lists the same job twice")
+                val op = j.str("op", 64)!!
+                if (!OP_RE.matches(op)) bad("plan job op invalid")
+                val args = j.obj("args")
+                if (args.toString().length > MAX_ARGS_BYTES) bad("plan job args too large", "too_large")
+                val root = j["requires_root"]
+                if (root != null && (root as? JsonPrimitive)?.booleanOrNull == null) bad("requires_root must be boolean")
+                PlanJob(jobId, op, args, (root as? JsonPrimitive)?.booleanOrNull ?: false)
+            }
+            PlanManifest(planId, jobs)
+        }
+    } catch (e: FleetProtocolException) {
+        null
     }
 }

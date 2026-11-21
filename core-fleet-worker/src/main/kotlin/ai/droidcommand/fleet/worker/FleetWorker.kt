@@ -4,6 +4,12 @@ import ai.droidcommand.agent.Initiator
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.security.ApprovalPrompt
+import ai.droidcommand.security.ArgsDigest
+import ai.droidcommand.security.BatchApprovals
+import ai.droidcommand.security.BatchJob
+import ai.droidcommand.security.BatchJobContext
+import ai.droidcommand.security.BatchJobScope
+import ai.droidcommand.security.BatchOffer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -90,6 +96,12 @@ private class RunningInfo(val jobId: String, val attempt: Int, val op: String, v
  * The phone side of the fleet protocol. It never schedules anything: it accepts an assignment from the single coordinator,
  * re-checks live permissions, then hands execution to the device's [ToolRunner] (SecureToolExecutor in the app), so the
  * phone's own policy, approvals, grants and audit remain authoritative. Reports are fenced by (job, attempt).
+ *
+ * [batch] is the owner's optional, off-by-default "approve a reviewed batch once" feature. It is never required: with it null, or
+ * with its switch off, every job behaves exactly as it always did. When present the worker only (a) tells it which job is running
+ * and which plan the coordinator says that job belongs to, around the one tool call, and (b) ends every live batch when this phone
+ * is paused, disabled, unpaired or revoked. Whether a tap is replaced is decided by `BatchApprovalPrompt` inside the phone's own
+ * `SecureToolExecutor`, never here.
  */
 class FleetWorker(
     private val identity: WorkerIdentity,
@@ -105,6 +117,7 @@ class FleetWorker(
     private val gate: ForegroundGate = SemaphoreForegroundGate(),
     private val onNodeMessage: (fromDevice: String, topic: String, body: JsonObject) -> Unit = { _, _, _ -> },
     private val onRevoked: () -> Unit = {},
+    private val batch: BatchApprovals? = null,
 ) {
     private val ops = operations.associateBy { it.op }
     private val running = ConcurrentHashMap<String, RunningInfo>()
@@ -162,16 +175,21 @@ class FleetWorker(
     /** Owner toggle "allow fleet jobs on this phone". Disabling cancels running jobs and stops accepting work. */
     fun setEnabled(on: Boolean) {
         enabled = on
-        if (!on) cancelAll("worker access disabled by the owner")
+        if (!on) {
+            batch?.revokeAll("fleet worker switched off by the owner")
+            cancelAll("worker access disabled by the owner")
+        }
     }
     fun setPaused(on: Boolean) {
         store.save(store.load().copy(paused = on))
+        if (on) batch?.revokeAll("fleet worker paused by the owner")
         helloSent = false
     }
     fun runningJobs(): List<String> = running.values.map { "${it.jobId}#${it.attempt}" }
 
     /** Local, owner-initiated forget (the coordinator copy is revoked from VictorLinux). Credentials are wiped. */
     fun unpair() {
+        batch?.revokeAll("unpaired from the coordinator by the owner")
         cancelAll("unpaired by the owner")
         store.save(WorkerPersisted(seenInbound = emptyList()))
         helloSent = false
@@ -248,6 +266,7 @@ class FleetWorker(
     }
 
     private fun handleRevoked() {
+        batch?.revokeAll("this phone was revoked by the coordinator")
         cancelAll("device revoked by the coordinator")
         store.save(WorkerPersisted(revoked = true))
         onRevoked()
@@ -436,7 +455,14 @@ class FleetWorker(
             currentJob.set(info)
             ExecutionMarker.reset()
             val result = try {
-                runner.run(op.toolName, toolInput, isCancelled = { info.cancelled }, initiator = Initiator.REMOTE)
+                val covered = batchContext(op, job, ctx.args, p, wantsRoot)
+                if (covered == null) {
+                    runner.run(op.toolName, toolInput, isCancelled = { info.cancelled }, initiator = Initiator.REMOTE)
+                } else {
+                    BatchJobScope.within(covered) {
+                        runner.run(op.toolName, toolInput, isCancelled = { info.cancelled }, initiator = Initiator.REMOTE)
+                    }
+                }
             } finally {
                 currentJob.remove()
             }
@@ -516,6 +542,44 @@ class FleetWorker(
                 put("side_effects", side)
             },
         )
+
+    /**
+     * What the batch-approval prompt needs to know about the job about to run, or null when no batch may ever apply to it: the feature
+     * is not wired in, the operation did not opt in ([FleetOperation.batchable]), or the job needs root (a root job always asks).
+     * The offer is the plan the coordinator listed, reduced to what this phone could ever cover, and is dropped when the manifest is
+     * unusable or disagrees with this very assignment about the job's arguments. The coordinator's word is only ever a description
+     * shown to the owner: coverage is bound to the digest of the arguments this phone actually received.
+     */
+    private fun batchContext(op: FleetOperation, jobId: String, args: JsonObject, assignment: JsonObject, wantsRoot: Boolean): BatchJobContext? {
+        if (batch == null || wantsRoot || !op.batchable) return null
+        val digest = ArgsDigest.of(args)
+        return BatchJobContext(jobId, op.toolName, digest, offerFor(jobId, digest, assignment))
+    }
+
+    private fun offerFor(jobId: String, digest: String, assignment: JsonObject): BatchOffer? {
+        val plan = FleetProtocol.parsePlanManifest(assignment) ?: return null
+        val mine = plan.jobs.firstOrNull { it.jobId == jobId } ?: return null
+        if (ArgsDigest.of(mine.args) != digest || mine.requiresRoot) return null
+        val jobs = plan.jobs.filter { !it.requiresRoot }.map { j ->
+            val known = ops[j.op]
+            // An operation this phone does not have, or has not opted in, still appears so the owner sees it will ask or not run here.
+            BatchJob(j.jobId, known?.toolName ?: "fleet.${j.op}", ArgsDigest.of(j.args), "${j.op} ${ArgsDigest.canonical(j.args)}")
+        }
+        return BatchOffer(plan.planId, "the fleet coordinator", jobs)
+    }
+
+    /** Called when the owner's one-time batch approval covered this job's confirmation: tell the coordinator, as a note, never as completion. */
+    fun approvalCoveredByBatch() {
+        val j = currentJob.get() ?: return
+        enqueue(
+            "progress",
+            buildJsonObject {
+                put("job_id", j.jobId)
+                put("attempt", j.attempt)
+                put("note", "covered by the owner's batch approval on device")
+            },
+        )
+    }
 
     /** Called by [FleetApprovalPrompt]: the job is waiting for the owner on this device. */
     fun approvalPending(reason: String) {
