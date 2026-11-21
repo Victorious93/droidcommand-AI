@@ -1,0 +1,16 @@
+{
+  "msg_id": "m-draft-2",
+  "payload": {
+    "attempt": 1,
+    "job_id": "plan-m.draft",
+    "note": "draft_received"
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "sender": "dev-0123456789ab",
+  "sent_at": 1790000000000,
+  "target": "coordinator",
+  "type": "progress"
+}
