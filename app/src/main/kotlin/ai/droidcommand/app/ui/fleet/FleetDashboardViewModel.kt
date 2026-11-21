@@ -3,6 +3,8 @@ package ai.droidcommand.app.ui.fleet
 import ai.droidcommand.app.fleet.AndroidCompanionLink
 import ai.droidcommand.app.fleet.FleetCatalog
 import ai.droidcommand.app.fleet.FleetCompanionLivePublisher
+import ai.droidcommand.app.fleet.FleetExtraApps
+import ai.droidcommand.app.fleet.FleetExtraCard
 import ai.droidcommand.app.fleet.FleetMember
 import ai.droidcommand.app.fleet.FleetTrustedLivePublisher
 import ai.droidcommand.app.fleet.PackageFleetProbe
@@ -45,6 +47,8 @@ data class FleetHomeUi(
     val busyIds: Set<String> = emptySet(),
     /** One-line status tray summary for the home strip. */
     val statusSummary: String = "No fleet status yet",
+    /** Display-only apps (VictorBots, ShizukuV, rustdeskV, ...). Not control-plane nodes; see [FleetExtraApps]. */
+    val extras: List<FleetExtraCard> = emptyList(),
 )
 
 /**
@@ -198,6 +202,7 @@ class FleetDashboardViewModel @Inject constructor(
                 notice = notice,
                 busyIds = if (busyRemove == null) it.busyIds else it.busyIds - busyRemove,
                 statusSummary = summary,
+                extras = FleetExtraApps.all.map { app -> FleetExtraCard(app, packageProbe.isInstalled(app.packageName)) },
             )
         }
     }

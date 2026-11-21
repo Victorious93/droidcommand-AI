@@ -30,6 +30,11 @@ class ApkDownloadStopped : IOException("Stopped")
  * and the call fails. [discardPartial] is the Cancel that throws the partial away. A finished file that is oversized,
  * not an APK or does not match its checksum is deleted, never kept for resume.
  *
+ * A kept partial belongs to **one asset**: its address is recorded beside it (`<package>.apk.part.src`). A call for a different asset
+ * (another release picked for the same app) deletes the partial and starts from zero, because appending one release's bytes to
+ * another's would produce a corrupt APK that only a published checksum could catch. A partial with no record (written by an older
+ * build) is treated the same way.
+ *
  * A stop takes effect at once on a flowing connection; a stalled connection can delay it by up to the read timeout.
  */
 class ApkDownloader(
@@ -43,8 +48,15 @@ class ApkDownloader(
     /** Bytes a stopped or interrupted download of [packageName] left behind, or 0. */
     fun partialBytes(packageName: String): Long = partFile(packageName).let { if (it.isFile) it.length() else 0L }
 
+    /** The asset address the kept partial of [packageName] came from, or null when there is no partial or no record of it. */
+    fun partialSource(packageName: String): String? =
+        if (partFile(packageName).isFile) sourceFile(packageName).takeIf { it.isFile }?.readText()?.trim()?.ifEmpty { null } else null
+
     /** Deletes what a stopped or interrupted download of [packageName] left behind. True when a file was removed. */
-    fun discardPartial(packageName: String): Boolean = partFile(packageName).let { it.isFile && it.delete() }
+    fun discardPartial(packageName: String): Boolean {
+        sourceFile(packageName).delete()
+        return partFile(packageName).let { it.isFile && it.delete() }
+    }
 
     /**
      * [onProgress] gets the bytes on disk so far (including a resumed prefix) and the expected total, or -1 when the
@@ -61,7 +73,13 @@ class ApkDownloader(
         dir.mkdirs()
         val finalFile = File(dir, "$packageName.apk")
         val part = partFile(packageName)
+        val source = sourceFile(packageName)
         finalFile.delete()
+        // A kept prefix only continues the asset it came from. Anything else (another release, or no record) cannot be resumed.
+        if (part.isFile && partialSource(packageName) != asset.url) {
+            part.delete()
+            source.delete()
+        }
         // A kept prefix larger than the limit, or larger than the asset it should be part of, cannot belong to it.
         if (part.isFile && (part.length() > maxBytes || (asset.sizeBytes > 0 && part.length() > asset.sizeBytes))) part.delete()
         val existing = if (part.isFile) part.length() else 0L
@@ -124,6 +142,7 @@ class ApkDownloader(
                 onProgress(received, total)
             }
             // From here the partial is kept on a stop or a dropped connection, and judged only once the body is complete.
+            source.writeText(asset.url)
             conn.inputStream.use { input ->
                 FileOutputStream(part, resuming).use { out ->
                     val buffer = ByteArray(BUFFER_BYTES)
@@ -157,6 +176,7 @@ class ApkDownloader(
                 error("The download does not match the SHA-256 GitHub published. Nothing was installed.")
             }
             Files.move(part.toPath(), finalFile.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            source.delete()
             return DownloadedApk(finalFile, sha, digestChecked = asset.sha256 != null)
         } finally {
             connection?.disconnect()
@@ -164,6 +184,8 @@ class ApkDownloader(
     }
 
     private fun partFile(packageName: String) = File(dir, "$packageName.apk.part")
+
+    private fun sourceFile(packageName: String) = File(dir, "$packageName.apk.part.src")
 
     private fun open(url: String): HttpURLConnection {
         require(!httpsOnly || url.startsWith("https://")) { "HTTPS only." }

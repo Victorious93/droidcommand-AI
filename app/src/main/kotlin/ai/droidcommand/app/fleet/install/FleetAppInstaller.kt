@@ -3,6 +3,7 @@ package ai.droidcommand.app.fleet.install
 import ai.droidcommand.fleet.update.ApkDownloadStopped
 import ai.droidcommand.fleet.update.ApkDownloader
 import ai.droidcommand.fleet.update.FleetAppSource
+import ai.droidcommand.fleet.update.FleetRelease
 import ai.droidcommand.fleet.update.GitHubReleases
 import ai.droidcommand.fleet.update.ReleaseAsset
 import ai.droidcommand.fleet.update.UpdateDecision
@@ -41,18 +42,30 @@ class FleetAppInstaller(private val context: Context) {
 
     fun isInstalled(packageName: String): Boolean = installedVersion(packageName) != null
 
-    /** Looks up the newest published release for [source] and decides what to do. */
-    fun check(source: FleetAppSource): UpdateDecision {
-        val body = runCatching { httpGet(GitHubReleases.releasesUrl(source.repo)) }.getOrElse {
-            return UpdateDecision.NothingPublished("Could not reach GitHub (${it.javaClass.simpleName}).")
-        }
+    /**
+     * Looks up the newest published release for [source] and decides what to do. Pre-releases are skipped unless
+     * [includePrereleases] is true; only the owner's manual download list ever passes true, never auto-update.
+     */
+    fun check(source: FleetAppSource, includePrereleases: Boolean = false): UpdateDecision =
+        fetchReleases(source).fold(
+            onSuccess = { decide(source, it, includePrereleases) },
+            onFailure = { UpdateDecision.NothingPublished("Could not reach GitHub (${it.javaClass.simpleName}).") },
+        )
+
+    /** Every release GitHub lists for [source], newest first. A failure is returned, not thrown, so "none" and "unreachable" stay different. */
+    fun fetchReleases(source: FleetAppSource): Result<List<FleetRelease>> =
+        runCatching { GitHubReleases.parse(httpGet(GitHubReleases.releasesUrl(source.repo))) }
+
+    /** What to do for [source] given releases already fetched. No network. */
+    fun decide(source: FleetAppSource, releases: List<FleetRelease>, includePrereleases: Boolean): UpdateDecision {
         val version = installedVersion(source.packageName)
         return UpdatePlanner.plan(
             source = source,
             installedVersionName = version,
             installed = version != null,
-            releases = GitHubReleases.parse(body),
+            releases = releases,
             supportedAbis = Build.SUPPORTED_ABIS.toList(),
+            includePrereleases = includePrereleases,
         )
     }
 
@@ -71,6 +84,9 @@ class FleetAppInstaller(private val context: Context) {
 
     /** Bytes a stopped or interrupted download of [source] left on disk, or 0. */
     fun partialBytes(source: FleetAppSource): Long = downloader.partialBytes(source.packageName)
+
+    /** The asset address the kept partial came from, or null when there is none or it was written by an older build. */
+    fun partialSource(source: FleetAppSource): String? = downloader.partialSource(source.packageName)
 
     /** Deletes them. True when a file was removed. */
     fun discardPartial(source: FleetAppSource): Boolean = downloader.discardPartial(source.packageName)

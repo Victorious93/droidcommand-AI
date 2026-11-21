@@ -63,6 +63,12 @@ class ApkDownloaderTest {
 
     private fun asset(url: String, sha: String? = APK_SHA, size: Long = APK.size.toLong()) = ReleaseAsset("app.apk", url, size, sha)
 
+    /** What an earlier stopped download of [url] leaves behind: the prefix and the record of which asset it came from. */
+    private fun keepPartial(prefix: ByteArray, url: String) {
+        File(dir, "pkg.apk.part").writeBytes(prefix)
+        File(dir, "pkg.apk.part.src").writeText(url)
+    }
+
     @Test
     fun a_full_download_is_verified_moved_into_place_and_reports_progress_to_the_total() {
         val s = serve()
@@ -111,10 +117,57 @@ class ApkDownloaderTest {
     }
 
     @Test
+    fun a_partial_of_one_release_is_never_resumed_into_another_release() {
+        // Two different APKs for the same package, as two releases of one app are.
+        val other = byteArrayOf(0x50, 0x4B, 0x03, 0x04) + ByteArray(180_000) { ((it * 41 + 7) % 251).toByte() }
+        val a = serve(body = APK)
+        val b = serve(body = other)
+        val d = downloader()
+        var received = 0L
+        assertFailsWith<ApkDownloadStopped> {
+            d.download("o/r", "pkg", asset("${a.base}/apk"), { r, _ -> received = r }, cancelled = { received > 0 })
+        }
+        assertTrue(d.partialBytes("pkg") > 0)
+        assertEquals("${a.base}/apk", d.partialSource("pkg"))
+
+        // Picking the other release must start from zero (no Range request), not append its bytes to the first one's prefix.
+        val result = d.download("o/r", "pkg", asset("${b.base}/apk", sha = ApkVerifier.sha256Hex(other), size = other.size.toLong()))
+        assertEquals(listOf<String?>(null), b.ranges, "no range was asked for: the other release's partial was discarded")
+        assertContentEquals(other, result.file.readBytes())
+        assertTrue(result.digestChecked)
+        assertEquals(null, d.partialSource("pkg"))
+    }
+
+    @Test
+    fun a_partial_with_no_record_of_its_asset_is_not_resumed() {
+        val s = serve()
+        val d = downloader()
+        File(dir, "pkg.apk.part").writeBytes(APK.copyOfRange(0, 5_000)) // as an older build left it: no .src record
+        assertEquals(null, d.partialSource("pkg"))
+        val result = d.download("o/r", "pkg", asset("${s.base}/apk"))
+        assertEquals(listOf<String?>(null), s.ranges)
+        assertContentEquals(APK, result.file.readBytes())
+    }
+
+    @Test
+    fun partialSource_names_the_asset_of_a_kept_prefix_and_is_gone_after_a_discard() {
+        val s = serve()
+        val d = downloader()
+        var received = 0L
+        assertFailsWith<ApkDownloadStopped> {
+            d.download("o/r", "pkg", asset("${s.base}/apk"), { r, _ -> received = r }, cancelled = { received > 0 })
+        }
+        assertEquals("${s.base}/apk", d.partialSource("pkg"))
+        d.discardPartial("pkg")
+        assertEquals(null, d.partialSource("pkg"))
+        assertFalse(File(dir, "pkg.apk.part.src").exists())
+    }
+
+    @Test
     fun a_server_that_ignores_the_range_restarts_the_file_and_the_result_is_still_correct() {
         val s = serve(ranges = false)
         val d = downloader()
-        File(dir, "pkg.apk.part").writeBytes(ByteArray(5_000) { 9 })
+        keepPartial(ByteArray(5_000) { 9 }, "${s.base}/apk")
         val result = d.download("o/r", "pkg", asset("${s.base}/apk"))
         assertContentEquals(APK, result.file.readBytes())
     }
@@ -123,7 +176,7 @@ class ApkDownloaderTest {
     fun a_rejected_resume_deletes_the_partial_and_fails() {
         val s = serve(status416 = true)
         val d = downloader()
-        File(dir, "pkg.apk.part").writeBytes(APK.copyOfRange(0, 5_000))
+        keepPartial(APK.copyOfRange(0, 5_000), "${s.base}/apk")
         assertFailsWith<IOException> { d.download("o/r", "pkg", asset("${s.base}/apk")) }
         assertEquals(0L, d.partialBytes("pkg"))
     }
@@ -132,7 +185,7 @@ class ApkDownloaderTest {
     fun a_206_that_does_not_continue_where_we_left_off_discards_the_partial_instead_of_failing_every_retry() {
         val s = serve(wrongRangeStart = true)
         val d = downloader()
-        File(dir, "pkg.apk.part").writeBytes(APK.copyOfRange(0, 5_000))
+        keepPartial(APK.copyOfRange(0, 5_000), "${s.base}/apk")
         assertFailsWith<IOException> { d.download("o/r", "pkg", asset("${s.base}/apk")) }
         assertEquals(0L, d.partialBytes("pkg"))
         // The retry starts clean and succeeds.

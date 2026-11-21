@@ -95,6 +95,30 @@ class FleetUpdateTest {
     }
 
     @Test
+    fun `pre-releases are offered only when the owner opts in and drafts never are`() {
+        val rel = listOf(release("v3", "a.apk", draft = true), release("v2", "a.apk", pre = true), release("v1", "a.apk"))
+        // default: newest stable release wins, the pre-release is skipped
+        assertEquals("v1", assertIs<UpdateDecision.Install>(UpdatePlanner.plan(source, null, false, rel, abis)).release.tag)
+        // opt in: the newest non-draft release wins, even a pre-release
+        val opted = assertIs<UpdateDecision.Install>(UpdatePlanner.plan(source, null, false, rel, abis, includePrereleases = true))
+        assertEquals("v2", opted.release.tag)
+        assertTrue(opted.release.prerelease)
+        // a draft alone is never offered, opted in or not
+        val onlyDraft = listOf(release("v3", "a.apk", draft = true))
+        assertIs<UpdateDecision.NothingPublished>(UpdatePlanner.plan(source, null, false, onlyDraft, abis, includePrereleases = true))
+    }
+
+    @Test
+    fun `an app that publishes only pre-releases is not published by default but updates when opted in`() {
+        val only = listOf(release("v0.2.0", "app-debug.apk", pre = true))
+        assertIs<UpdateDecision.NothingPublished>(UpdatePlanner.plan(source, "0.1.0", true, only, abis))
+        assertIs<UpdateDecision.Update>(UpdatePlanner.plan(source, "0.1.0", true, only, abis, includePrereleases = true))
+        // a rolling tag such as debug-latest cannot be compared with a version name, so no update is claimed
+        val rolling = listOf(release("debug-latest", "app-debug.apk", pre = true))
+        assertIs<UpdateDecision.Unknown>(UpdatePlanner.plan(source, "0.1.0", true, rolling, abis, includePrereleases = true))
+    }
+
+    @Test
     fun `drafts, prereleases and releases without apks are not offered`() {
         val none = UpdatePlanner.plan(source, null, false, listOf(release("v2", "a.apk", pre = true), release("v3", "a.apk", draft = true)), abis)
         assertIs<UpdateDecision.NothingPublished>(none)
