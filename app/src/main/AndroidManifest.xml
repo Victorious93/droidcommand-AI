@@ -15,6 +15,9 @@
          prompt for it yet, so until it is granted the download runs without a visible notification. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- "Use this phone as microphone" (Paired PC): a visible, user-started foreground service of type microphone
+         that streams to ONE PC the owner chose, with Stop in its notification. Not started at boot or by any other app. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Fleet apps: the owner taps "Download & install" and Android's own installer confirms. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -311,6 +314,11 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <service
+            android:name=".phonemic.PhoneMicService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <service
             android:name=".shizuku.embedded.EmbeddedShizukuStartService"
