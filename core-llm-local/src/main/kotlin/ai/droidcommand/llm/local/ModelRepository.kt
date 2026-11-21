@@ -84,6 +84,28 @@ class ModelRepository(private val modelsDir: File, requireGguf: Boolean = false)
         return locations[id] ?: File(modelsDir, meta.fileName)
     }
 
+    /**
+     * Bytes an interrupted or stopped download of [id] left in its `.part` file, or 0 when there is none. This is what
+     * "Resume" continues from: [install] keeps the prefix on a network error or a stop and resumes it next time.
+     */
+    fun partialBytes(id: String): Long {
+        val part = models[id]?.let(::partFile) ?: return 0L
+        return if (part.isFile) part.length() else 0L
+    }
+
+    /**
+     * Deletes what a stopped download of [id] left behind (the "Cancel" that discards, as opposed to a stop that keeps
+     * it). Returns true when a file was removed. It waits for a running [install] of this repository to end, so stop
+     * the download first; it never touches an installed model.
+     */
+    @Synchronized
+    fun discardPartial(id: String): Boolean {
+        val part = models[id]?.let(::partFile) ?: return false
+        return part.isFile && part.delete()
+    }
+
+    private fun partFile(meta: ModelMetadata): File = File(modelsDir, meta.fileName + ".part")
+
     fun verify(id: String): ModelCheck {
         val meta = models[id] ?: throw NoSuchElementException("Unknown model '$id'")
         val file = fileFor(id) ?: return ModelCheck.Missing(File(modelsDir, meta.fileName).path)
@@ -122,7 +144,7 @@ class ModelRepository(private val modelsDir: File, requireGguf: Boolean = false)
             return ModelInstallResult.Failed("Not enough free storage: ${needed / MEGABYTE} MB needed")
         }
         if (cancelled()) return ModelInstallResult.Failed("Cancelled")
-        val part = File(modelsDir, meta.fileName + ".part")
+        val part = partFile(meta)
         // A `.part` file left by an interrupted call is resumed, unless it is already larger than the expected size.
         if (needed != null && part.length() > needed) part.delete()
         var keepPart = false

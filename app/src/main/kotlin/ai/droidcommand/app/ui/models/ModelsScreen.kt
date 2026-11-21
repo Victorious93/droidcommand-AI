@@ -324,6 +324,7 @@ private fun CatalogTab(state: ModelsUiState, viewModel: ModelsViewModel, hideToo
                 totalBytes = size.takeIf { it > 0L },
                 blockedReason = null,
                 onDownload = { viewModel.downloadCatalog(row.entry.metadata.id) },
+                onStop = { viewModel.stopDownload(row.entry.metadata.id) },
                 onCancel = { viewModel.cancelDownload(row.entry.metadata.id) },
                 onUse = { viewModel.select(row.entry.metadata.id) },
             )
@@ -472,6 +473,7 @@ private fun FilesView(state: ModelsUiState, viewModel: ModelsViewModel, repo: St
                         null
                     },
                     onDownload = { viewModel.downloadHub(row.file) },
+                    onStop = { viewModel.stopDownload(hubCancelId(row.file)) },
                     onCancel = { viewModel.cancelDownload(hubCancelId(row.file)) },
                     onUse = { row.installedId?.let(viewModel::select) },
                 )
@@ -499,6 +501,7 @@ private fun ModelCard(
     totalBytes: Long?,
     blockedReason: String?,
     onDownload: () -> Unit,
+    onStop: () -> Unit,
     onCancel: () -> Unit,
     onUse: () -> Unit,
 ) {
@@ -529,6 +532,7 @@ private fun ModelCard(
                 blockedReason = blockedReason,
                 totalBytes = totalBytes,
                 onDownload = onDownload,
+                onStop = onStop,
                 onCancel = onCancel,
                 onUse = onUse,
             )
@@ -545,6 +549,7 @@ private fun DownloadControls(
     blockedReason: String?,
     totalBytes: Long?,
     onDownload: () -> Unit,
+    onStop: () -> Unit,
     onCancel: () -> Unit,
     onUse: () -> Unit,
 ) {
@@ -578,8 +583,26 @@ private fun DownloadControls(
                         ModelsPresentation.sizeLabel(bytes) + (totalBytes?.let { " of ${ModelsPresentation.sizeLabel(it)}" } ?: ""),
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    DroidTextButton(onClick = onCancel) { Text("Cancel") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        DroidTextButton(onClick = onStop, modifier = Modifier.testTag("model_download_stop")) { Text("Stop") }
+                        DroidTextButton(onClick = onCancel, modifier = Modifier.testTag("model_download_cancel")) { Text("Cancel") }
+                    }
                 }
+            }
+        }
+        // Stopped: what was downloaded is still on the phone. Download continues from it; Cancel deletes it.
+        state is ModelDownloadState.Stopped -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (totalBytes != null) {
+                LinearProgressIndicator(progress = { (state.bytesSoFar.toFloat() / totalBytes).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+            }
+            Text(
+                "Stopped at " + ModelsPresentation.sizeLabel(state.bytesSoFar) + (totalBytes?.let { " of ${ModelsPresentation.sizeLabel(it)}" } ?: "") +
+                    ". Resume continues from here; Cancel deletes what was downloaded.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                DroidTextButton(onClick = onCancel, modifier = Modifier.testTag("model_download_cancel")) { Text("Cancel") }
+                DroidPrimaryButton(onClick = onDownload, modifier = Modifier.testTag("model_download_resume")) { Text("Resume") }
             }
         }
         state is ModelDownloadState.Failed -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

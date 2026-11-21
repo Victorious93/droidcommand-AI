@@ -94,6 +94,8 @@ fun FleetDashboardScreen(
         onSelectVersion = installModel::selectRelease,
         onAutoMode = installModel::setAutoUpdateMode,
         onOpenPasswordPairing = onOpenPasswordPairing,
+        onStopInstall = installModel::stop,
+        onCancelInstall = installModel::cancel,
         onAutoUpdate = installModel::setAutoUpdate,
         pairPromptId = pairPromptId,
         onPairPromptHandled = { pairPromptId = null },
@@ -131,6 +133,8 @@ fun FleetDashboardContent(
     onSelectVersion: (String, String?) -> Unit = { _, _ -> },
     onAutoMode: (String, FleetAutoUpdateMode) -> Unit = { _, _ -> },
     onOpenPasswordPairing: () -> Unit = {},
+    onStopInstall: (String) -> Unit = {},
+    onCancelInstall: (String) -> Unit = {},
     onAutoUpdate: (Boolean) -> Unit = {},
     pairPromptId: String? = null,
     onPairPromptHandled: () -> Unit = {},
@@ -212,6 +216,8 @@ fun FleetDashboardContent(
             onIncludePrereleases = onIncludePrereleases,
             onSelectVersion = onSelectVersion,
             onAutoMode = onAutoMode,
+            onStop = onStopInstall,
+            onCancel = onCancelInstall,
         )
         botSmsTile()
 
@@ -226,6 +232,8 @@ fun FleetDashboardContent(
                 onApprovedCommands = onOpenOrchestrator,
                 install = install.byId[card.id],
                 onInstall = { onInstall(card.id) },
+                onStopInstall = { onStopInstall(card.id) },
+                onCancelInstall = { onCancelInstall(card.id) },
             )
         }
         FleetExtraAppsSection(extras = state.extras, onOpenPasswordPairing = onOpenPasswordPairing)
@@ -306,6 +314,8 @@ private fun FleetAppCard(
     onApprovedCommands: () -> Unit,
     install: FleetInstallUi? = null,
     onInstall: () -> Unit = {},
+    onStopInstall: () -> Unit = {},
+    onCancelInstall: () -> Unit = {},
 ) {
     DroidCard(
         modifier = Modifier.testTag("fleet_dashboard_row_${card.id}"),
@@ -353,12 +363,30 @@ private fun FleetAppCard(
             install?.note?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = TextSecondary, modifier = Modifier.testTag("fleet_install_note_${card.id}"))
             }
+            // Downloading: Stop keeps what is downloaded, Cancel deletes it.
+            if (install?.canStop == true) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    DroidSecondaryButton(onClick = onStopInstall, modifier = Modifier.weight(1f).testTag("fleet_install_stop_${card.id}")) { Text("Stop") }
+                    DroidSecondaryButton(onClick = onCancelInstall, modifier = Modifier.weight(1f).testTag("fleet_install_cancel_${card.id}")) { Text("Cancel") }
+                }
+            }
             install?.actionLabel?.let { label ->
-                DroidPrimaryButton(
-                    onClick = onInstall,
-                    enabled = !busy && install?.busy != true,
-                    modifier = Modifier.fillMaxWidth().testTag("fleet_install_${card.id}"),
-                ) { Text(label) }
+                // Stopped earlier: the same button resumes, and Cancel deletes what was kept.
+                val resuming = install.partialBytes > 0L
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    DroidPrimaryButton(
+                        onClick = onInstall,
+                        enabled = !busy && !install.busy,
+                        modifier = Modifier.weight(1f).testTag("fleet_install_${card.id}"),
+                    ) { Text(if (resuming) "Resume" else label) }
+                    if (resuming) {
+                        DroidSecondaryButton(
+                            onClick = onCancelInstall,
+                            enabled = !busy && !install.busy,
+                            modifier = Modifier.weight(1f).testTag("fleet_install_cancel_${card.id}"),
+                        ) { Text("Cancel") }
+                    }
+                }
             }
             Text(card.seenLabel, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {

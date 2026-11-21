@@ -1,5 +1,6 @@
 package ai.droidcommand.app.fleet.install
 
+import ai.droidcommand.fleet.update.ApkDownloadStopped
 import ai.droidcommand.fleet.update.FleetAutoUpdateMode
 import ai.droidcommand.fleet.update.FleetAutoUpdateRules
 import ai.droidcommand.fleet.update.UpdateDecision
@@ -83,10 +84,14 @@ class FleetUpdateWorker(context: Context, params: WorkerParameters) : Worker(con
             if (!installer.isInstalled(source.packageName)) continue
             val decision = installer.check(source, mode.includesPrereleases)
             if (decision !is UpdateDecision.Update) continue
-            runCatching {
-                val apk = installer.download(source, decision.asset)
+            val outcome = runCatching {
+                // A stop (constraints lost, or the owner turning auto-update off) ends the file mid-transfer and keeps the
+                // partial, so the next run continues from it instead of starting over.
+                val apk = installer.download(source, decision.asset, cancelled = { isStopped })
                 installer.install(source, apk, silentIfAllowed = true)
-            }.onFailure { failed = true }
+            }
+            if (outcome.exceptionOrNull() is ApkDownloadStopped) return Result.retry()
+            outcome.onFailure { failed = true }
         }
         return if (failed) Result.retry() else Result.success()
     }

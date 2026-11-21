@@ -145,6 +145,8 @@ data class ChatUiState(
     /** Bytes of the embedding model downloaded so far, or null when no download is running. */
     val embedderDownloadBytes: Long? = null,
     val embedderDownloadMegabytes: Long = 0,
+    /** Bytes a stopped download kept on disk (0 when there are none): the button then says Resume, with a Cancel that deletes them. */
+    val embedderPartialBytes: Long = 0,
     /** True while the user is being asked to confirm downloading the embedding model over a metered (mobile) connection. */
     val confirmMeteredDownload: Boolean = false,
     /** Outcome of the last attach/remove, shown under the toolbar. */
@@ -395,6 +397,7 @@ class ChatViewModel @Inject constructor(
                     documents = docs,
                     documentsAvailable = documentRuntime.embedderAvailable(),
                     embedderDownloadMegabytes = documentRuntime.embedderDownloadMegabytes,
+                    embedderPartialBytes = runCatching { documentRuntime.embedderPartialBytes() }.getOrDefault(0L),
                     documentStatus = documentRuntime.embedderProblem,
                 )
             }
@@ -792,6 +795,9 @@ class ChatViewModel @Inject constructor(
 
     @Volatile private var embedderDownloadCancelled = false
 
+    /** Set by Cancel: once the transfer has ended, what it downloaded is deleted. A Stop leaves it for Resume. */
+    @Volatile private var embedderDiscardRequested = false
+
     private val networkLinks by lazy { NetworkLinkChecker(context) }
 
     /**
@@ -819,7 +825,8 @@ class ChatViewModel @Inject constructor(
     private fun startEmbedderDownload(allowMetered: Boolean = false) {
         if (mutableState.value.embedderDownloadBytes != null) return
         embedderDownloadCancelled = false
-        mutableState.update { it.copy(embedderDownloadBytes = 0, documentStatus = "Downloading the embedding model from huggingface.co…") }
+        embedderDiscardRequested = false
+        mutableState.update { it.copy(embedderDownloadBytes = it.embedderPartialBytes, documentStatus = "Downloading the embedding model from huggingface.co…") }
         viewModelScope.launch(Dispatchers.IO) {
             val supervisor = EmbedderDownloadSupervisor(documentRuntime::installEmbedder, networkLinks::activeLink)
             val outcome = runCatching {
@@ -830,6 +837,11 @@ class ChatViewModel @Inject constructor(
                     onRetrying = { message -> mutableState.update { it.copy(documentStatus = message) } },
                 )
             }
+            // The transfer has ended, so nothing is writing the partial file: a Cancel can delete it now.
+            val discarded = embedderDiscardRequested
+            if (discarded) runCatching { documentRuntime.discardEmbedderPartial() }
+            embedderDiscardRequested = false
+            val kept = runCatching { documentRuntime.embedderPartialBytes() }.getOrDefault(0L)
             val ready = runCatching { documentRuntime.embedderAvailable() }.getOrDefault(false)
             val result = (outcome.getOrNull() as? DownloadOutcome.Finished)?.result
             val paused = outcome.getOrNull() == DownloadOutcome.PausedForMetered && !ready
@@ -838,17 +850,33 @@ class ChatViewModel @Inject constructor(
                 paused -> "Paused: the connection is metered. Confirm to continue from where it stopped."
                 outcome.isFailure -> "Download failed: ${outcome.exceptionOrNull()?.message ?: "unknown error"}"
                 result is ModelInstallResult.Failed -> "Download failed: ${result.reason}. Tap Download again to resume."
-                result == null -> "Download cancelled. Tap Download to resume."
+                discarded -> "Cancelled. What was downloaded was deleted."
+                result == null -> "Stopped. Resume continues from where it stopped."
                 else -> documentRuntime.embedderProblem ?: "The embedding model is installed but could not be loaded."
             }
             mutableState.update {
-                it.copy(embedderDownloadBytes = null, documentsAvailable = ready, documentStatus = status, confirmMeteredDownload = paused)
+                it.copy(embedderDownloadBytes = null, embedderPartialBytes = if (ready) 0L else kept, documentsAvailable = ready, documentStatus = status, confirmMeteredDownload = paused)
             }
         }
     }
 
-    fun cancelEmbedderDownload() {
+    /** Stop: ends the transfer and keeps what is downloaded, so Resume continues from it. */
+    fun stopEmbedderDownload() {
         embedderDownloadCancelled = true
+    }
+
+    /** Cancel: ends the transfer and deletes what was downloaded. */
+    fun cancelEmbedderDownload() {
+        if (mutableState.value.embedderDownloadBytes != null) {
+            // The download deletes its own partial file once it has stopped, so nothing is deleted under a writer.
+            embedderDiscardRequested = true
+            embedderDownloadCancelled = true
+        } else {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { documentRuntime.discardEmbedderPartial() }
+                mutableState.update { it.copy(embedderPartialBytes = 0L, documentStatus = "Cancelled. What was downloaded was deleted.") }
+            }
+        }
     }
 
     fun removeDocument(docId: String) {

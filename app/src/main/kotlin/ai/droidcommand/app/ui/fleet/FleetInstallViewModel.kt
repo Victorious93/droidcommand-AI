@@ -6,6 +6,8 @@ import ai.droidcommand.app.fleet.install.FleetAppInstaller
 import ai.droidcommand.app.fleet.install.FleetAutoUpdate
 import ai.droidcommand.app.fleet.install.FleetPrereleasePref
 import ai.droidcommand.app.fleet.install.FleetSources
+import ai.droidcommand.fleet.update.ApkDownloadStopped
+import ai.droidcommand.fleet.update.FleetAppSource
 import ai.droidcommand.fleet.update.FleetAutoUpdateMode
 import ai.droidcommand.fleet.update.FleetDownloadQueue
 import ai.droidcommand.fleet.update.FleetDownloadRow
@@ -30,6 +32,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 /** What one fleet card shows about installing it. [actionLabel] null means there is nothing to tap. */
@@ -37,7 +40,16 @@ data class FleetInstallUi(
     val actionLabel: String? = null,
     val note: String? = null,
     val busy: Boolean = false,
+    /** True only while the APK is downloading: Stop and Cancel are offered then (not while it is handed to Android). */
+    val canStop: Boolean = false,
+    /** Bytes a stopped or interrupted download kept on disk **for the default action's asset**. More than 0 means Resume. */
+    val partialBytes: Long = 0L,
+    /** Any kept partial of this app, whichever release it belongs to. A picked version resumes only when its asset matches. */
+    val kept: KeptDownload? = null,
 )
+
+/** A stopped or interrupted download left on disk: its size, and the asset address it came from (null when unrecorded). */
+data class KeptDownload(val bytes: Long, val assetUrl: String?)
 
 data class FleetInstallState(
     val byId: Map<String, FleetInstallUi> = emptyMap(),
@@ -75,6 +87,10 @@ class FleetInstallViewModel @Inject constructor(
     private val decisions = ConcurrentHashMap<String, UpdateDecision>()
     private val releases = ConcurrentHashMap<String, List<FleetRelease>>()
     private val failedLookups = ConcurrentHashMap.newKeySet<String>()
+
+    /** Per running download: set to true to stop it. Stop keeps what is downloaded; Cancel also deletes it. */
+    private val stopFlags = ConcurrentHashMap<String, AtomicBoolean>()
+    private val discardRequests = ConcurrentHashMap.newKeySet<String>()
 
     @Volatile
     private var lastLookupMs = 0L
@@ -120,6 +136,7 @@ class FleetInstallViewModel @Inject constructor(
             mutable.update { it.copy(message = "Allow DroidCommand to install apps, then tap the button again.") }
             return
         }
+        if (stopFlags.containsKey(fleetId)) return
         setBusy(fleetId, "Looking up the latest version…")
         viewModelScope.launch(Dispatchers.IO) {
             val decision = installer.check(source, mutable.value.includePrereleases)
@@ -130,10 +147,30 @@ class FleetInstallViewModel @Inject constructor(
                 mutable.update { it.copy(message = "Nothing to install right now.") }
                 return@launch
             }
-            val result = runCatching { downloadAndHandOff(fleetId, source.displayName, asset) }
+            val outcome = downloadWithControls(source, asset)
             restore(fleetId)
-            mutable.update { s ->
-                s.copy(message = result.getOrElse { "${source.displayName}: ${it.message ?: "install failed"}" })
+            mutable.update { it.copy(message = if (outcome.handedOver) outcome.message else "${source.displayName}: ${outcome.message}") }
+        }
+    }
+
+    /** Stop: ends the download and keeps what is downloaded, so Resume continues from it. Takes effect within a moment. */
+    fun stop(fleetId: String) {
+        stopFlags[fleetId]?.set(true)
+    }
+
+    /** Cancel: ends the download and deletes what was downloaded. */
+    fun cancel(fleetId: String) {
+        val source = FleetSources.forId(fleetId) ?: return
+        val running = stopFlags[fleetId]
+        if (running != null) {
+            // The download deletes its own partial file once it has stopped, so nothing is deleted under a writer.
+            discardRequests += fleetId
+            running.set(true)
+        } else {
+            viewModelScope.launch(Dispatchers.IO) {
+                installer.discardPartial(source)
+                restore(fleetId)
+                mutable.update { it.copy(message = "${source.displayName}: cancelled. What was downloaded was deleted.") }
             }
         }
     }
@@ -164,18 +201,17 @@ class FleetInstallViewModel @Inject constructor(
             mutable.update { it.copy(message = "Allow DroidCommand to install apps, then tap Download again.") }
             return
         }
-        setBusy(fleetId, "Downloading ${asset.name}…")
+        if (stopFlags.containsKey(fleetId)) return
+        setBusy(fleetId, "Downloading ${asset.name}…") // Stop is offered once the download itself has registered its stop flag
         viewModelScope.launch(Dispatchers.IO) {
-            val result = runCatching { downloadAndHandOff(fleetId, source.displayName, asset) }
+            val outcome = downloadWithControls(source, asset)
             restore(fleetId)
-            val downgrade = if (option.isDowngrade) {
+            val downgrade = if (option.isDowngrade && outcome.handedOver) {
                 " This is older than the installed version: if Android refuses it, uninstall the newer one first (its data is lost), then tap Download again."
             } else {
                 ""
             }
-            mutable.update { s ->
-                s.copy(message = result.fold({ "${source.displayName} $tag: $it$downgrade" }, { "${source.displayName} $tag: ${it.message ?: "install failed"}$downgrade" }))
-            }
+            mutable.update { it.copy(message = "${source.displayName} $tag: ${outcome.message}$downgrade") }
         }
     }
 
@@ -224,18 +260,17 @@ class FleetInstallViewModel @Inject constructor(
                     failed += "${source.displayName} (nothing to download)"
                     continue
                 }
-                setBusy(source.fleetId, "Downloading ${asset.name}…")
-                runCatching { downloadAndHandOff(source.fleetId, source.displayName, asset) }
-                    .onSuccess {
-                        handedOver++
-                        mutable.update { s ->
-                            s.copy(byId = s.byId + (source.fleetId to FleetInstallUi(note = "Handed to Android. Confirm the install when it asks.")))
-                        }
+                // One app's Stop or Cancel ends only that app; the rest of the queue carries on.
+                val outcome = downloadWithControls(source, asset)
+                if (outcome.handedOver) {
+                    handedOver++
+                    mutable.update { s ->
+                        s.copy(byId = s.byId + (source.fleetId to FleetInstallUi(note = "Handed to Android. Confirm the install when it asks.")))
                     }
-                    .onFailure {
-                        failed += "${source.displayName} (${it.message ?: "failed"})"
-                        restore(source.fleetId)
-                    }
+                } else {
+                    failed += "${source.displayName} (${outcome.message.trimEnd('.')})"
+                    restore(source.fleetId)
+                }
             }
             val summary = buildString {
                 append("Handed $handedOver app${if (handedOver == 1) "" else "s"} to Android's installer. Confirm each one when it asks.")
@@ -270,8 +305,12 @@ class FleetInstallViewModel @Inject constructor(
     /** Back to what the stored look-up says, without another network call. */
     private fun restore(fleetId: String) {
         val source = FleetSources.forId(fleetId) ?: return
-        val decision = decisions[fleetId] ?: return
-        finish(fleetId, describe(decision, installer.isInstalled(source.packageName)), null)
+        val decision = decisions[fleetId]
+        if (decision == null) {
+            publishDecisions()
+            return
+        }
+        finish(fleetId, describe(decision, installer.isInstalled(source.packageName)).withPartial(source, assetOf(decision)), null)
     }
 
     private fun assetOf(decision: UpdateDecision): ReleaseAsset? = when (decision) {
@@ -280,17 +319,55 @@ class FleetInstallViewModel @Inject constructor(
         else -> null
     }
 
-    /** Downloads [asset], checks it and gives it to Android's installer. Returns the owner-facing result line. */
-    private fun downloadAndHandOff(fleetId: String, displayName: String, asset: ReleaseAsset): String {
-        val source = checkNotNull(FleetSources.forId(fleetId)) { "$displayName has no download source." }
-        setBusy(fleetId, "Downloading ${asset.name}…")
-        val apk = installer.download(source, asset)
-        setBusy(fleetId, "Handing it to Android's installer…")
-        installer.install(source, apk, silentIfAllowed = false)
-        return if (apk.digestChecked) {
-            "Downloaded and checked. Confirm in Android's installer."
-        } else {
-            "Downloaded. GitHub gave no checksum, so Android's signature check is the only one. Confirm in Android's installer."
+    /** The result of one controlled download. [message] is the owner-facing line; [handedOver] is true only when Android has the APK. */
+    private data class DownloadOutcome(val handedOver: Boolean, val message: String)
+
+    /**
+     * Downloads [asset] for [source] with Stop, Cancel and Resume, checks it and gives it to Android's installer. Blocking: call
+     * off the main thread. Stop keeps the partial file (the next call for the same asset resumes it); Cancel deletes it. A
+     * partial that belongs to a different release is discarded by the downloader, never appended to. Never throws.
+     */
+    private fun downloadWithControls(source: FleetAppSource, asset: ReleaseAsset): DownloadOutcome {
+        val fleetId = source.fleetId
+        val stop = AtomicBoolean(false)
+        if (stopFlags.putIfAbsent(fleetId, stop) != null) return DownloadOutcome(false, "a download is already running.")
+        try {
+            val result = runCatching {
+                setBusy(fleetId, "Downloading ${asset.name}…", canStop = true)
+                var lastUpdateNanos = 0L
+                val apk = installer.download(
+                    source,
+                    asset,
+                    // Progress arrives on every read; the card only needs it a few times a second.
+                    onProgress = { received, total ->
+                        val now = System.nanoTime()
+                        if (now - lastUpdateNanos >= PROGRESS_INTERVAL_NANOS) {
+                            lastUpdateNanos = now
+                            setBusy(fleetId, "Downloading ${asset.name}… ${megabytes(received)}" + if (total > 0) " of ${megabytes(total)}" else "", canStop = true)
+                        }
+                    },
+                    cancelled = stop::get,
+                )
+                setBusy(fleetId, "Handing it to Android's installer…")
+                installer.install(source, apk, silentIfAllowed = false)
+                apk
+            }
+            // The transfer has returned, so nothing is writing the partial file: a Cancel can delete it now.
+            val discard = discardRequests.remove(fleetId)
+            if (discard) installer.discardPartial(source)
+            val failure = result.exceptionOrNull()
+            return when {
+                discard -> DownloadOutcome(false, "cancelled. What was downloaded was deleted.")
+                failure is ApkDownloadStopped -> DownloadOutcome(false, "stopped. Resume continues from where it stopped.")
+                failure != null -> DownloadOutcome(false, failure.message ?: "install failed")
+                result.getOrThrow().digestChecked -> DownloadOutcome(true, "Downloaded and checked. Confirm in Android's installer.")
+                else -> DownloadOutcome(
+                    true,
+                    "Downloaded. GitHub gave no checksum, so Android's signature check is the only one. Confirm in Android's installer.",
+                )
+            }
+        } finally {
+            stopFlags.remove(fleetId)
         }
     }
 
@@ -312,7 +389,9 @@ class FleetInstallViewModel @Inject constructor(
             }
         }
         val next = FleetSources.all.mapNotNull { source ->
-            decisions[source.fleetId]?.let { source.fleetId to describe(it, source.fleetId in installed) }
+            decisions[source.fleetId]?.let { d ->
+                source.fleetId to describe(d, source.fleetId in installed).withPartial(source, assetOf(d))
+            }
         }.toMap()
         val rows = downloadDirectory().map { (id, name) ->
             val source = FleetSources.forId(id)
@@ -344,8 +423,26 @@ class FleetInstallViewModel @Inject constructor(
         return ordered + FleetSources.all.filter { it.fleetId !in known }.map { it.fleetId to it.displayName }
     }
 
-    private fun setBusy(id: String, note: String) =
-        mutable.update { it.copy(byId = it.byId + (id to FleetInstallUi(note = note, busy = true))) }
+    private fun setBusy(id: String, note: String, canStop: Boolean = false) =
+        mutable.update { it.copy(byId = it.byId + (id to FleetInstallUi(note = note, busy = true, canStop = canStop))) }
+
+    /**
+     * A kept partial file. The card's Resume applies only when the partial belongs to [defaultAsset], the one its button would
+     * download; a partial of another release is still shown through [FleetInstallUi.kept] so a picked version can resume it.
+     */
+    private fun FleetInstallUi.withPartial(source: FleetAppSource, defaultAsset: ReleaseAsset?): FleetInstallUi {
+        val bytes = installer.partialBytes(source)
+        if (bytes <= 0L) return this
+        val url = installer.partialSource(source)
+        val withKept = copy(kept = KeptDownload(bytes, url))
+        return if (url != null && url == defaultAsset?.url && actionLabel != null) {
+            withKept.copy(partialBytes = bytes, note = "Stopped at ${megabytes(bytes)}. " + note.orEmpty())
+        } else {
+            withKept
+        }
+    }
+
+    private fun megabytes(bytes: Long): String = "%.1f MB".format(bytes / (1024.0 * 1024.0))
 
     private fun finish(id: String, ui: FleetInstallUi, message: String?) =
         mutable.update { it.copy(byId = it.byId + (id to ui), message = message ?: it.message) }
@@ -374,6 +471,8 @@ class FleetInstallViewModel @Inject constructor(
     }
 
     private companion object {
+        const val PROGRESS_INTERVAL_NANOS = 250_000_000L
+
         /** Do not look GitHub up again within this long unless forced. about 20 unauthenticated calls per look-up add up fast. */
         const val MIN_LOOKUP_GAP_MS = 10 * 60 * 1000L
     }

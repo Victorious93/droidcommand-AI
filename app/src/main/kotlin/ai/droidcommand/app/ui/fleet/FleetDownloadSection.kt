@@ -21,6 +21,7 @@ import ai.droidcommand.fleet.update.FleetReleaseOption
 import ai.droidcommand.fleet.update.FleetReleaseOptions
 import ai.droidcommand.fleet.update.FleetRepoLinks
 import ai.droidcommand.fleet.update.FleetVersionRelation
+import ai.droidcommand.fleet.update.UpdateDecision
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,6 +73,8 @@ fun FleetDownloadSection(
     onIncludePrereleases: (Boolean) -> Unit = {},
     onSelectVersion: (String, String?) -> Unit = { _, _ -> },
     onAutoMode: (String, FleetAutoUpdateMode) -> Unit = { _, _ -> },
+    onStop: (String) -> Unit = {},
+    onCancel: (String) -> Unit = {},
 ) {
     val rows = install.rows
     val queue = FleetDownloadQueue.queue(rows)
@@ -120,6 +123,8 @@ fun FleetDownloadSection(
                     onInstall = { onInstall(row.fleetId) },
                     onSelectVersion = { onSelectVersion(row.fleetId, it) },
                     onAutoMode = { onAutoMode(row.fleetId, it) },
+                    onStop = { onStop(row.fleetId) },
+                    onCancel = { onCancel(row.fleetId) },
                     bulkBusy = install.bulkBusy,
                 )
             }
@@ -139,6 +144,8 @@ private fun DownloadRow(
     onInstall: () -> Unit,
     onSelectVersion: (String?) -> Unit,
     onAutoMode: (FleetAutoUpdateMode) -> Unit,
+    onStop: () -> Unit,
+    onCancel: () -> Unit,
     bulkBusy: Boolean,
 ) {
     val context = LocalContext.current
@@ -146,10 +153,20 @@ private fun DownloadRow(
     val picked = options.firstOrNull { it.tag == selectedTag }
     // A picked version is downloaded even when the default rule would offer nothing (for example only pre-releases exist).
     val canDownload = if (picked != null) picked.installable else row.canFetch
-    val label = if (picked != null) {
-        if (picked.relation == FleetVersionRelation.SAME) "Reinstall" else "Download"
-    } else {
-        buttonLabel(row)
+    // A kept partial resumes only for the exact asset this row would download now (the picked one, else the default). A partial of
+    // another release is never resumed into it; the downloader discards it and starts clean.
+    val defaultUrl = when (val d = row.decision) {
+        is UpdateDecision.Install -> d.asset.url
+        is UpdateDecision.Update -> d.asset.url
+        else -> null
+    }
+    val targetUrl = picked?.asset?.url ?: defaultUrl
+    val kept = ui?.kept
+    val resumable = kept?.assetUrl != null && kept.assetUrl == targetUrl
+    val label = when {
+        resumable -> "Resume"
+        picked != null -> if (picked.relation == FleetVersionRelation.SAME) "Reinstall" else "Download"
+        else -> buttonLabel(row)
     }
     val repoUrl = FleetRepoLinks.url(FleetSources.repoFor(row.fleetId))
     Column(modifier = Modifier.fillMaxWidth().testTag("fleet_download_row_${row.fleetId}"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -182,6 +199,18 @@ private fun DownloadRow(
                     enabled = false,
                     modifier = Modifier.width(ButtonWidth).testTag("fleet_download_${row.fleetId}"),
                 ) { Text(label) }
+            }
+        }
+        // Downloading: Stop keeps what is downloaded, Cancel deletes it.
+        if (ui?.canStop == true) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                DroidSecondaryButton(onClick = onStop, modifier = Modifier.weight(1f).testTag("fleet_download_stop_${row.fleetId}")) { Text("Stop") }
+                DroidSecondaryButton(onClick = onCancel, modifier = Modifier.weight(1f).testTag("fleet_download_cancel_${row.fleetId}")) { Text("Cancel") }
+            }
+        } else if (kept != null && !busy && !bulkBusy) {
+            // Stopped earlier. Resume is the main button when it is for this version; this deletes what was kept.
+            DroidTextButton(onClick = onCancel, modifier = Modifier.testTag("fleet_download_discard_${row.fleetId}")) {
+                Text("Delete the partial download (${"%.1f".format(kept.bytes / (1024.0 * 1024.0))} MB)")
             }
         }
         if (row.source != null) {
