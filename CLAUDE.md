@@ -910,5 +910,9 @@ compile-time warning. Always update all three locations together. Details in
 ## Don's standing rules (apply to every change)
 - Work on a branch and open a PR. Never push to `main`.
 - Never merge a PR, and never ask to merge one, until every test/check on the PR passes.
+- **Merge when green (Don, 2026-11-21):** once Don has asked for a PR to be opened, merge it yourself as soon as every
+  check on its head commit has passed — don't ask again. If any check is failing, pending, cancelled or missing, don't
+  merge; say which one. This covers merging only: a PR is still opened only when Don asks, and nothing is pushed to
+  `main` directly.
 - Never commit secrets (API keys, tokens, keystore passwords, `.env` files, credentials).
 - Don't claim something works unless it was actually tested; say what was and wasn't run.
