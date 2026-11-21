@@ -33,39 +33,43 @@ Limits, stated plainly: the feed is lost when the process dies; `ActivityRedacto
 and known token shapes but is **not** a guarantee for free text, which is why only short bounded excerpts are stored,
 never full output; it records only what is wrapped, and nothing in `:app` wraps anything yet.
 
-## 3. The screen (not built — waiting for the reference)
+## 3. The screen (`:app`, built and compiled, never run)
 
-Pattern taken from the owner's Grok Bot reference. **[Guessing]** on every detail below: the only description available
-here came from web-search summaries (docs.x.ai and forum.cursor.com were unreachable from this container), not from the
-app. Those summaries describe bots as teammates that work in parallel and "only come back when your approval is
-needed", a per-bot task list, a live view of the machine a bot is working on, and a phone that is the control point
-rather than the place the work runs. Only the *interaction pattern* is reused; no code, text or assets.
+**What Grok Bot's own docs say [Certain: `docs.x.ai/grok-bot/mobile.md` and `/overview.md`, read 2026-11-21].** The
+phone is for starting work, answering questions, approving steps and reviewing results; "work continues in the cloud
+when the app is closed". Home is a list of Bots and group chats. Each Bot has a switch, "Get notified when this Bot
+finishes or is waiting for you". An approval is a card with **Allow once** and **Deny**, answered on the phone the card
+names. "Review the computer" lets you watch the shared cloud computer and take over for a password or CAPTCHA. "Manage
+your devices" lists each device as This device / Online now / last opened, with a per-computer execution setting of
+Ask every time / Always allow / Never allow. A Bot can use the phone's own apps only while Grok Bot is open on it.
+Routines have a schedule and run history, and Bots hand work to each other before bringing the owner in.
 
-**What the owner's APK (Grok Bot v1.18.0, package `ai.x.grok.bot`) adds [Certain, manifest and archive layout only].**
-It is a React Native/Expo app: its screens are in a 21 MB JavaScript bundle (`assets/index.android.bundle`), not in
-Android layout files, so the APK cannot show what the screens look like. It was unzipped and statically inspected only
-(never installed or run), and the bundle was not disassembled. The manifest shows push delivery through Firebase
-Cloud Messaging (Braze, Expo notifications and a `co.anysphere.sandpush` service), a `VoiceCallForegroundService`, a
-location task service and WorkManager's foreground service; it declares **no** foreground service for running bots.
-That matches the "work runs elsewhere, the phone is the control point" description. **[Likely]** it also means Grok Bot's
-"come back when I need approval" reaches the phone as a server push. **A self-hosted DroidCommand has no such server**,
-so the equivalent for fleet work would be the phone's worker long-polling the VictorLinux coordinator from a foreground
-service, or a push relay the owner chooses to run. Neither exists, and picking one is a decision (§5, item 3).
-**Still needed: screenshots or a screen recording of the screens to match** (overview, a bot's detail/tasks, an approval
-request, a group chat with several bots).
+**What the owner's APK (v1.18.0, `ai.x.grok.bot`) adds [Certain, manifest and archive layout only].** It is a React
+Native/Expo app, so its screens live in a 21 MB JavaScript bundle and the APK cannot show what they look like. It was
+unzipped and statically inspected only (never installed or run) and the bundle was not disassembled. The manifest
+shows push through Firebase Cloud Messaging and **no** foreground service for running bots, which fits "work runs
+elsewhere, the phone is the control point".
 
-Planned shape, to be corrected against the owner's screenshots:
+**How that maps onto the fleet, and what was deliberately not copied:**
 
-1. **Overview** — one row per bot from `ActivityBoard.overview`: name, status chip, current step, time since the last
-   update. "Waiting for you" rows first, with the question shown and Allow / Decline reachable without leaving the list.
-2. **Bot detail** — newest-first timeline of one run from `ActivityBoard.timeline` (each tool call with redacted
-   arguments, result excerpt, approvals), plus Stop.
-3. **Entry points** — a Home card ("2 working, 1 needs you") and an ongoing notification only once background execution
-   exists (see §5).
+| Grok Bot | DroidCommand |
+|---|---|
+| Home list of Bots with status | **Activity** (`fleet/activity`, a tile on the Fleet home screen). Sections: *Needs you*, *Helper bots*, *Fleet apps that asked this phone* (VictorBots and the other paired apps, via COMPANION_EXEC), *Commands sent to fleet apps* (the Fleet Orchestrator). |
+| "Waiting for you" | A status pill plus the question being asked. **v1 cannot answer from the list**: the answer is still the existing approval dialog or the fleet app's own Allow screen. |
+| Open a Bot to see its work | Tap a row: its steps, newest first, with redacted arguments and a short result excerpt. |
+| Live "computer" view | **Not built.** A phone bot has no cloud computer; the honest equivalent is the step list. For PC work it would be the VictorLinux runner/coordinator log, which is not wired. |
+| Notify when finished / waiting | **Not built** (see §5, item 3). |
+| Allow once / Deny, Ask every time / Never | Already exist (`ApprovalPrompt`, `FleetControlPolicy`) and are unchanged. |
+| Routines and run history | Not built; VictorBots owns routines. |
 
-The "live computer view" has no phone equivalent: a phone bot's honest live view is its **tool-step timeline**. For work
-run on a VictorLinux PC the equivalent is the runner/coordinator log tail. **[Certain]** VictorLinux's phone mirroring
-goes the other way (PC shows a USB-attached phone) and is unrelated.
+Only the interaction pattern was followed: no code, text or assets were taken from the app.
+
+**Where activity is recorded (all of it goes through the existing approval and audit path unchanged):**
+helper-bot turns and their tool calls (`ChatViewModel`), requests from paired fleet apps (`CompanionExecActivity`:
+"VictorBots asked: device.apps.list", waiting for you, allowed or declined, done), action commands sent to a fleet app
+(`FleetOrchestratorViewModel`; read-only status checks are not recorded, because they run for every node each time the
+screen opens), and every approval raised inside any of those (`ActivityApprovalPrompt`, which wraps the app's one
+approval prompt).
 
 ## 4. Multi-bot deployment: who owns what
 
@@ -104,10 +108,12 @@ simulated workers and the Kotlin `core-fleet-worker`; the worker implements only
 6. **Parallelism limit.** **[Certain]** `ForegroundGate` allows one UI-driving job per phone at a time; real parallelism
    comes from several phones, the PC, or non-UI operations.
 
-## 6. Suggested order
+## 6. Status and what is next
 
-1. (done) `core-activity` foundation.
-2. `:app` wiring — wrap the bot runner and approval prompt, add `BotLifecycle` finish/fail — and the Overview/Detail
-   screens, laid out from the owner's reference. Needs an Android SDK or CI to compile.
-3. Fleet-job events from `core-fleet-worker` into the same feed.
-4. Decisions 1–2, then plan submission from VictorBots to the coordinator.
+1. Done: `core-activity` (33 JVM tests).
+2. Done, compiled and unit-tested, **never run on a device**: the recording hooks and the Activity screen in `:app`
+   (`:app:compileDebugKotlin`, `:app:hiltJavaCompileDebug`, `:app:ktlintCheck`, 7 new app tests, the whole app unit suite).
+3. Next, none started: a device check of the real flow (a bot turn, a VictorBots request, an orchestrator command);
+   `BotLifecycle` finish events and fleet-job events from `core-fleet-worker` into the same feed; persisting the feed;
+   notifications; answering an approval from the list.
+4. Then decisions 1 and 2 in §5, and plan submission from VictorBots to the coordinator.

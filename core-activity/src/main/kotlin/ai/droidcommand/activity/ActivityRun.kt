@@ -23,6 +23,24 @@ class ActivityRun private constructor(
 
     fun note(text: String) = emit(ActivityKind.NOTE, ActivityRedactor.text(text, 200), null)
 
+    /**
+     * For a request that is waiting on the owner outside [ActivityApprovalPrompt], such as a fleet app's
+     * COMPANION_EXEC request that has its own Allow screen. [detail] is what is being asked.
+     */
+    fun awaitingOwner(summary: String, detail: String? = null) =
+        emit(ActivityKind.NEEDS_APPROVAL, ActivityRedactor.text(summary, 200), detail?.let { ActivityRedactor.text(it, 200) })
+
+    /** The owner's answer to an [awaitingOwner] wait. */
+    fun ownerDecided(allowed: Boolean, summary: String = if (allowed) "You allowed it" else "You declined it") =
+        emit(if (allowed) ActivityKind.APPROVAL_GRANTED else ActivityKind.APPROVAL_DENIED, ActivityRedactor.text(summary, 200), null)
+
+    /**
+     * Runs [block] with this run as the current one on the calling thread, so an approval dialog raised
+     * inside it (see [ActivityApprovalPrompt]) is attributed to this run. Use it around a blocking call that
+     * is not already going through an [ActivityRecordingToolRunner].
+     */
+    fun <T> inScope(block: () -> T): T = ActivityScope.within(scope(), block)
+
     fun finish(summary: String = "Finished") = end(ActivityKind.RUN_FINISHED, summary)
 
     fun fail(reason: String) = end(ActivityKind.RUN_FAILED, reason)

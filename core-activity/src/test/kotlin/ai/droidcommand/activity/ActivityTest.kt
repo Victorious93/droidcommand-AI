@@ -386,3 +386,56 @@ class ActivityBoardTest {
         assertNotNull(log.snapshot().last().summary)
     }
 }
+
+class ActivityFleetWiringTest {
+    private val log = InMemoryActivityLog()
+
+    @Test
+    fun `a recorder with no current run passes the call straight through and records nothing`() {
+        val delegate = FakeRunner { ToolResult.Success("hi") }
+        val result = ActivityRecordingToolRunner(delegate, { null }, log).run("t", mapOf("a" to "b"))
+        assertEquals(ToolResult.Success("hi"), result)
+        assertEquals("t", delegate.lastArgs[0])
+        assertTrue(log.snapshot().isEmpty())
+    }
+
+    @Test
+    fun `a recorder follows whichever run is current when the call is made`() {
+        var current: ActivityRun? = null
+        val recorder = ActivityRecordingToolRunner(FakeRunner(), { current }, log)
+        val first = ActivityRun.start(alice, "turn 1", log)
+        current = first
+        recorder.run("one", emptyMap())
+        first.finish()
+        val second = ActivityRun.start(alice, "turn 2", log)
+        current = second
+        recorder.run("two", emptyMap())
+        val toolRuns = log.snapshot().filter { it.kind == ActivityKind.TOOL_STARTED }.associate { it.summary to it.runId }
+        assertEquals(first.runId, toolRuns["one"])
+        assertEquals(second.runId, toolRuns["two"])
+    }
+
+    @Test
+    fun `a request waiting on the owner outside the shared prompt is shown as waiting then answered`() {
+        val run = ActivityRun.start(ActivityActor("app:victorbots", "VictorBots"), "VictorBots asked: device.apps.list", log)
+        run.awaitingOwner("Waiting for you: device.apps.list", "list installed apps")
+        val waiting = ActivityBoard.overview(log.snapshot(), 1_000).single()
+        assertEquals(ActivityStatus.WAITING_FOR_YOU, waiting.status)
+        assertEquals("list installed apps", waiting.pendingApproval)
+
+        run.ownerDecided(allowed = false)
+        run.cancel("You declined it")
+        val after = ActivityBoard.overview(log.snapshot(), 1_000).single()
+        assertEquals(ActivityStatus.STOPPED, after.status)
+        assertNull(after.pendingApproval)
+    }
+
+    @Test
+    fun `inScope attributes an approval raised inside a blocking call to that run`() {
+        val run = ActivityRun.start(bob, "s", log)
+        val prompt = ActivityApprovalPrompt(ApprovalPrompt { true }, log)
+        assertTrue(run.inScope { prompt.requestApproval("send command", emptyMap(), "reason") })
+        assertTrue(log.snapshot().filter { it.kind == ActivityKind.NEEDS_APPROVAL }.all { it.actor == bob })
+        assertNull(ActivityScope.current())
+    }
+}

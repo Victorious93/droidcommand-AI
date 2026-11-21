@@ -1834,16 +1834,20 @@ Design, the Grok Bot comparison and the open decisions: `docs/ACTIVITY_AND_MISSI
 | Component | Status | Notes |
 |---|---|---|
 | `core-activity.ActivityLog` / `InMemoryActivityLog` | IMPLEMENTED — JVM-tested | Ring buffer (default 2,000 events), `seq` assigned on append, listeners isolated from each other. Contents are lost on process restart; nothing persists them yet. |
-| `core-activity.ActivityRun` | IMPLEMENTED — JVM-tested | `start` / `note` / `finish` / `fail` / `cancel`; a run ends exactly once. The caller decides what "the end" is — this type never infers it. |
+| `core-activity.ActivityRun` | IMPLEMENTED — JVM-tested | `start` / `note` / `finish` / `fail` / `cancel`, plus `awaitingOwner` / `ownerDecided` for a request with its own Allow screen and `inScope` to attribute a blocking call; a run ends exactly once. The caller decides what "the end" is — this type never infers it. |
 | `core-activity.ActivityRecordingToolRunner` | IMPLEMENTED — JVM-tested | `ToolRunner` decorator: records started / finished / failed per tool call, returns the delegate's own result object and rethrows its exceptions; a recording failure is swallowed. Sits **outside** `SecureToolExecutor`. |
 | `core-activity.ActivityApprovalPrompt` | IMPLEMENTED — JVM-tested | `ApprovalPrompt` decorator: records "waiting for you" / allowed / declined and returns the delegate's answer unchanged. Attributes the prompt to a bot via a per-thread `ActivityScope`, so parallel bots are not mixed up (tested with two threads). |
 | `core-activity.ActivityRedactor` | IMPLEMENTED — JVM-tested | Masks secret-looking argument keys and well-known token shapes, truncates everything. Best-effort, not a guarantee — see the design doc. |
 | `core-activity.ActivityBoard` | IMPLEMENTED — JVM-tested | Derives per-bot status (waiting for you / working / stalled / failed / done / stopped), the in-flight step and a per-run timeline from events only. |
-| `:app` wiring (recorder + prompt decorator in `BotRuntime`/`ChatViewModel`) and the "Activity" screen | NOT STARTED | No Android SDK in the authoring container, and the screen layout is waiting on the owner's Grok Bot reference. Nothing in `:app` calls `core-activity` yet. |
-| Fleet-job events (`core-fleet-worker`) and bot run completion (`core-bots.BotLifecycle`) into the feed | NOT STARTED | `BotLifecycle` still records only `BOT_RUN_STARTED` to the audit log. |
+| `:app` Activity screen (`fleet/activity`) + tile on the Fleet home screen | IMPLEMENTED — compiled, unit-tested, **never run on a device** | Sections: Needs you / Helper bots / Fleet apps that asked this phone / Commands sent to fleet apps. Read-only: it cannot answer an approval. State building is a pure function (`buildActivityState`), 7 tests. |
+| Recording hooks in `:app` | IMPLEMENTED — compiled, **never run on a device** | `ChatViewModel` (helper-bot turn = one run; tool calls recorded), `CompanionExecActivity` (a paired fleet app's request, e.g. VictorBots, from "asked" to the receipt outcome), `FleetOrchestratorViewModel` (action commands only; status checks are not recorded), `AppModule` (shared `ActivityLog`; the one `ApprovalPrompt` wrapped by `ActivityApprovalPrompt`). |
+| Fleet-job events (`core-fleet-worker`) and bot run completion for `BotLifecycle` | NOT STARTED | `BotLifecycle` still records only `BOT_RUN_STARTED` to the audit log. |
+| Persisting the feed, notifications, answering an approval from the Activity list, a PC-side log view | NOT STARTED | See `docs/ACTIVITY_AND_MISSIONS.md` §3 and §5. |
 
-**Verified (no Android SDK, no device):** `./gradlew :core-activity:test :core-activity:ktlintCheck` — BUILD SUCCESSFUL,
-29 tests, 0 failures/errors/skips.
+**Verified (Android SDK installed in the session; no device or emulator):** `:core-activity:test` + `ktlintCheck`
+(33 tests, 0 failures); `:app:compileDebugKotlin`, `:app:hiltJavaCompileDebug` (the Hilt graph resolves the new
+`ActivityLog`), `:app:ktlintCheck`; the whole `:app:testDebugUnitTest` (369 tests, 0 failures) plus `:core-security:test`
+(320, 0 failures). `:app:assembleDebug` was **not** run and nothing was launched.
 
 ### Bot maker: per-bot peers and sandbox, wired into the app (2026-11-18)
 

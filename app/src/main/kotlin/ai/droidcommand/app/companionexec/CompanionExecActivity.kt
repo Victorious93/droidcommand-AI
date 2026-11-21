@@ -1,5 +1,9 @@
 package ai.droidcommand.app.companionexec
 
+import ai.droidcommand.activity.ActivityActor
+import ai.droidcommand.activity.ActivityLog
+import ai.droidcommand.activity.ActivityRecordingToolRunner
+import ai.droidcommand.activity.ActivityRun
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.app.fleet.AndroidSigningCertObserver
 import ai.droidcommand.app.ui.theme.DroidCommandTheme
@@ -8,8 +12,10 @@ import ai.droidcommand.security.CompanionExec
 import ai.droidcommand.security.ExecBroker
 import ai.droidcommand.security.ExecCatalog
 import ai.droidcommand.security.ExecConsent
+import ai.droidcommand.security.ExecOutcome
 import ai.droidcommand.security.ExecParse
 import ai.droidcommand.security.ExecPrepared
+import ai.droidcommand.security.ExecReceipt
 import ai.droidcommand.security.ExecRequest
 import ai.droidcommand.security.InboundEntryPointCatalog
 import ai.droidcommand.security.JsonFileAuditLog
@@ -57,6 +63,11 @@ class CompanionExecActivity : ComponentActivity() {
 
     @Inject lateinit var pairing: PasswordPairingService
 
+    @Inject lateinit var activityLog: ActivityLog
+
+    /** This request's row on the Activity screen ("VictorBots asked ..."); null for discover and receipt, which run nothing. */
+    @Volatile private var currentRun: ActivityRun? = null
+
     private var finished = false
     private var running by mutableStateOf(false)
     private lateinit var broker: ExecBroker
@@ -80,7 +91,8 @@ class CompanionExecActivity : ComponentActivity() {
         }
         broker = ExecBroker(
             ExecCatalog.DEFAULT,
-            runner,
+            // Records the tool step under this request; the call, its approvals and its audit entries are unchanged.
+            ActivityRecordingToolRunner(runner, { currentRun }, activityLog),
             JsonFileExecReceiptStore(File(filesDir, "exec-receipts.jsonl").toPath()),
             auditLog,
         )
@@ -95,10 +107,24 @@ class CompanionExecActivity : ComponentActivity() {
         when (request) {
             is ExecRequest.Discover -> succeedAndFinish(broker.discover(caller))
             is ExecRequest.Receipt -> succeedAndFinish(broker.receiptJson(caller, request.requestId))
-            is ExecRequest.Execute -> when (val prep = broker.prepare(caller, request)) {
-                is ExecPrepared.Rejected -> succeedAndFinish(CompanionExec.errorJson(prep.reason))
-                is ExecPrepared.Done -> succeedAndFinish(ExecBroker.receiptToJson(prep.receipt))
-                is ExecPrepared.NeedsConsent -> showConsent(prep.consent)
+            is ExecRequest.Execute -> {
+                val callerName = InboundEntryPointCatalog.includedByPackage(caller)?.displayName ?: caller
+                currentRun = ActivityRun.start(ActivityActor("app:$caller", callerName), "$callerName asked: ${request.capability}", activityLog)
+                when (val prep = broker.prepare(caller, request)) {
+                    is ExecPrepared.Rejected -> {
+                        currentRun?.fail(prep.reason)
+                        succeedAndFinish(CompanionExec.errorJson(prep.reason))
+                    }
+                    is ExecPrepared.Done -> {
+                        // Answered from a saved receipt; the tool does not run again.
+                        endRun(prep.receipt)
+                        succeedAndFinish(ExecBroker.receiptToJson(prep.receipt))
+                    }
+                    is ExecPrepared.NeedsConsent -> {
+                        currentRun?.awaitingOwner("Waiting for you: ${request.capability}", request.reason)
+                        showConsent(prep.consent)
+                    }
+                }
             }
         }
     }
@@ -129,9 +155,13 @@ class CompanionExecActivity : ComponentActivity() {
         if (running || finished) return
         running = true
         lifecycleScope.launch(Dispatchers.IO) {
+            currentRun?.ownerDecided(allow)
             val json = try {
-                ExecBroker.receiptToJson(broker.finish(c, allow))
+                val receipt = broker.finish(c, allow)
+                endRun(receipt)
+                ExecBroker.receiptToJson(receipt)
             } catch (e: Exception) {
+                currentRun?.fail("Request failed: ${e.javaClass.simpleName}")
                 CompanionExec.errorJson("Request failed: ${e.javaClass.simpleName}")
             }
             withContext(Dispatchers.Main) { succeedAndFinish(json) }
@@ -143,8 +173,21 @@ class CompanionExecActivity : ComponentActivity() {
         if (running || finished) return
         running = true
         lifecycleScope.launch(Dispatchers.IO) {
-            val json = ExecBroker.receiptToJson(broker.expire(c))
+            val receipt = broker.expire(c)
+            endRun(receipt)
+            val json = ExecBroker.receiptToJson(receipt)
             withContext(Dispatchers.Main) { succeedAndFinish(json) }
+        }
+    }
+
+    /** Ends this request's Activity row from the receipt, which says what really happened. */
+    private fun endRun(receipt: ExecReceipt) {
+        val run = currentRun ?: return
+        when (receipt.outcome) {
+            ExecOutcome.EXECUTED -> run.finish("Done: ${receipt.capability}")
+            ExecOutcome.DENIED -> run.cancel("You declined it")
+            ExecOutcome.EXPIRED -> run.cancel("The request expired")
+            ExecOutcome.FAILED, ExecOutcome.REFUSED -> run.fail(receipt.detail.ifBlank { "Failed" })
         }
     }
 

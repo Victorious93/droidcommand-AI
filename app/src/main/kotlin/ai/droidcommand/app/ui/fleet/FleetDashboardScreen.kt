@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.fleet
 
 import ai.droidcommand.app.fleet.install.FleetInstallEvents
+import ai.droidcommand.app.ui.activity.ActivityTile
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.remotepc.RemotePcTile
@@ -66,6 +67,7 @@ fun FleetDashboardScreen(
     onOpenPairing: () -> Unit,
     onOpenOrchestrator: () -> Unit,
     onOpenConnectDevice: () -> Unit = {},
+    onOpenActivity: () -> Unit = {},
     viewModel: FleetDashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -94,6 +96,7 @@ fun FleetDashboardScreen(
         onOpenPairing = onOpenPairing,
         onOpenOrchestrator = onOpenOrchestrator,
         onOpenConnectDevice = onOpenConnectDevice,
+        activityTile = { ActivityTile(onOpen = onOpenActivity) },
         remotePcTile = { RemotePcTile() },
         botSmsTile = { VictorSmsBotsCard() },
     )
@@ -109,6 +112,7 @@ fun FleetDashboardContent(
     onOpenPairing: () -> Unit,
     onOpenOrchestrator: () -> Unit,
     onOpenConnectDevice: () -> Unit = {},
+    activityTile: @Composable () -> Unit = {},
     remotePcTile: @Composable () -> Unit = {},
     botSmsTile: @Composable () -> Unit = {},
     install: FleetInstallState = FleetInstallState(),
@@ -170,6 +174,7 @@ fun FleetDashboardContent(
             onClick = onOpenConnectDevice,
             modifier = Modifier.fillMaxWidth().testTag("fleet_connect_device"),
         ) { Text("Connect a computer or another phone") }
+        activityTile()
         remotePcTile()
         DroidCard(modifier = Modifier.testTag("fleet_auto_update")) {
             Row(verticalAlignment = Alignment.CenterVertically) {
