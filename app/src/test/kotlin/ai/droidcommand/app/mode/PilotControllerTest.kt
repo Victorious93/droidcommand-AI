@@ -1,5 +1,9 @@
 package ai.droidcommand.app.mode
 
+import ai.droidcommand.activity.ActivityBoard
+import ai.droidcommand.activity.ActivityKind
+import ai.droidcommand.activity.ActivityStatus
+import ai.droidcommand.activity.InMemoryActivityLog
 import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolRegistry
@@ -18,6 +22,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PilotControllerTest {
+    private val activity = InMemoryActivityLog()
+
     private class MemoryStore : ModePreferenceStore {
         private var mode: AgentMode = AgentMode.PILOT
         private val labels = mutableMapOf<AgentMode, String?>()
@@ -64,6 +70,7 @@ class PilotControllerTest {
             RecordingApproval(answer = true),
             JsonFileAuditLog(Files.createTempFile("pilot-audit", ".jsonl")),
             modes,
+            activity,
         )
     }
 
@@ -153,6 +160,68 @@ class PilotControllerTest {
         val state = awaitFinished(controller)
         assertEquals("hi", state.result)
         assertFalse(modes.state.value.busy)
+    }
+
+    @Test
+    fun `a finished instruction is one Pilot row on the Activity screen that ends done`() {
+        val controller = controller()
+        controller.run("echo", "text=hi")
+        awaitFinished(controller)
+
+        assertEquals(
+            listOf(ActivityKind.RUN_STARTED, ActivityKind.TOOL_STARTED, ActivityKind.TOOL_FINISHED, ActivityKind.RUN_FINISHED),
+            activity.snapshot().map { it.kind },
+        )
+        val row = ActivityBoard.overview(activity.snapshot(), System.currentTimeMillis()).single()
+        assertEquals("dc:pilot", row.actor.id)
+        assertEquals(ActivityStatus.DONE, row.status)
+        assertEquals(1, row.steps)
+    }
+
+    @Test
+    fun `an instruction whose tool fails ends as failed`() {
+        val registry = ToolRegistry().apply {
+            register(
+                object : Tool {
+                    override val spec = ToolSpec(name = "broken", description = "Always fails")
+                    override fun execute(input: Map<String, String>): ToolResult = ToolResult.Failure("no backend configured")
+                },
+            )
+        }
+        val controller = PilotController(
+            registry,
+            SecurityPolicy(),
+            RecordingApproval(answer = true),
+            JsonFileAuditLog(Files.createTempFile("pilot-audit", ".jsonl")),
+            EngineModes(MemoryStore()),
+            activity,
+        )
+        controller.run("broken", "x=1")
+        awaitFinished(controller)
+
+        val row = ActivityBoard.overview(activity.snapshot(), System.currentTimeMillis()).single()
+        assertEquals(ActivityStatus.FAILED, row.status)
+        assertEquals(1, row.failedSteps)
+    }
+
+    @Test
+    fun `a stopped instruction ends as stopped even though its tool finishes later`() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val controller = controller(EngineModes(MemoryStore()), HoldTool("hold_a", entered, release))
+        controller.run("hold_a", "x=1")
+        assertTrue(entered.await(2, TimeUnit.SECONDS))
+        controller.stop()
+        release.countDown()
+
+        val deadline = System.nanoTime() + 2_000L * 1_000_000
+        var status: ActivityStatus? = null
+        while (System.nanoTime() < deadline) {
+            status = ActivityBoard.overview(activity.snapshot(), System.currentTimeMillis()).singleOrNull()?.status
+            if (status == ActivityStatus.STOPPED) break
+            Thread.sleep(10)
+        }
+        assertEquals(ActivityStatus.STOPPED, status)
     }
 
     private fun awaitFinished(controller: PilotController, timeoutMs: Long = 2_000): PilotUiState {

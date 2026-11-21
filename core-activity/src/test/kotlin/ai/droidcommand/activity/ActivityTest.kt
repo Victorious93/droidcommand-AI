@@ -439,3 +439,46 @@ class ActivityFleetWiringTest {
         assertNull(ActivityScope.current())
     }
 }
+
+class WaitingNoticesTest {
+    private val notices = WaitingNotices()
+    private var seq = 0L
+
+    private fun event(actor: ActivityActor, run: String, kind: ActivityKind) =
+        ActivityEvent(actor, run, kind, kind.name, null, atMillis = 1_000 + seq, seq = ++seq)
+
+    @Test
+    fun `a run that asks the owner is waiting, once, with the bot's name`() {
+        assertTrue(notices.onEvent(event(alice, "r1", ActivityKind.NEEDS_APPROVAL)))
+        assertFalse(notices.onEvent(event(alice, "r1", ActivityKind.NEEDS_APPROVAL)), "a second ask in the same run changes nothing")
+        assertEquals(listOf("Alice"), notices.current().map { it.actorName })
+    }
+
+    @Test
+    fun `an answer removes it, and a later ask in the same run adds it again`() {
+        notices.onEvent(event(alice, "r1", ActivityKind.NEEDS_APPROVAL))
+        assertTrue(notices.onEvent(event(alice, "r1", ActivityKind.APPROVAL_GRANTED)))
+        assertTrue(notices.current().isEmpty())
+        assertTrue(notices.onEvent(event(alice, "r1", ActivityKind.NEEDS_APPROVAL)))
+        assertTrue(notices.onEvent(event(alice, "r1", ActivityKind.APPROVAL_DENIED)))
+        assertTrue(notices.current().isEmpty())
+    }
+
+    @Test
+    fun `the end of a run removes it even if no answer was recorded`() {
+        notices.onEvent(event(alice, "r1", ActivityKind.NEEDS_APPROVAL))
+        assertTrue(notices.onEvent(event(alice, "r1", ActivityKind.RUN_CANCELLED)))
+        assertTrue(notices.current().isEmpty())
+    }
+
+    @Test
+    fun `ordinary progress events change nothing, and two bots are tracked separately`() {
+        assertFalse(notices.onEvent(event(alice, "r1", ActivityKind.TOOL_STARTED)))
+        assertFalse(notices.onEvent(event(alice, "r1", ActivityKind.APPROVAL_GRANTED)), "nothing to remove")
+        notices.onEvent(event(alice, "r1", ActivityKind.NEEDS_APPROVAL))
+        notices.onEvent(event(bob, "r2", ActivityKind.NEEDS_APPROVAL))
+        assertEquals(listOf("Alice", "Bob"), notices.current().map { it.actorName })
+        notices.onEvent(event(alice, "r1", ActivityKind.RUN_FINISHED))
+        assertEquals(listOf("Bob"), notices.current().map { it.actorName })
+    }
+}

@@ -18,10 +18,12 @@ import javax.inject.Inject
 
 /**
  * Who a row is about. The id prefix is the contract between the places that record activity and this screen:
- * `bot:` helper bots run in this app's chat, `app:` a fleet app (VictorBots, File Manager, ...) that asked this
- * phone to do something through COMPANION_EXEC, `node:` a fleet app this phone sent an approved command to.
+ * `dc:` DroidCommand's own Pilot and Plan runs, `bot:` helper bots run in this app's chat, `app:` a fleet app
+ * (VictorBots, File Manager, ...) that asked this phone to do something through COMPANION_EXEC, `node:` a fleet app
+ * this phone sent an approved command to.
  */
 enum class ActivityGroup(val title: String, val prefix: String) {
+    DROIDCOMMAND("DroidCommand (Pilot and Plan)", "dc:"),
     BOTS("Helper bots", "bot:"),
     ASKED_THIS_PHONE("Fleet apps that asked this phone", "app:"),
     SENT_TO_FLEET("Commands sent to fleet apps", "node:"),
