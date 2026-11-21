@@ -8,7 +8,7 @@ import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.remotecontrol.DevicePairing
 import ai.droidcommand.remotecontrol.Macro
-import ai.droidcommand.remotecontrol.MacroTriggerKind
+import ai.droidcommand.remotecontrol.MacroDraftBuilder
 import ai.droidcommand.remotecontrol.RemoteAction
 import ai.droidcommand.remotecontrol.RemoteCommandMapping
 import ai.droidcommand.remotecontrol.RemoteCommandTargetRegistry
@@ -81,12 +81,13 @@ fun RemoteControlSettingsSection(viewModel: RemoteControlViewModel = hiltViewMod
         }
     }
     SectionLabel("Macros")
-    MacroEditor(viewModel)
-    ui.config.macros.forEach { MacroRow(it, viewModel) }
+    var editingMacro by remember { mutableStateOf<Macro?>(null) }
+    MacroBuilderCard(viewModel, ui.config, editingMacro, onDone = { editingMacro = null })
+    ui.config.macros.forEach { MacroRow(it, viewModel, onEdit = { editingMacro = it }) }
     if (ui.config.macros.isEmpty()) {
         DroidCard {
             Text(
-                "No macros yet. The Macros bot here names an ordered list of fleet steps and binds a trigger. Dry-run validates; Run still asks, then the stub fails.",
+                "No macros yet. Build one above: pick when it starts, then what it does. Test checks it without running anything. Run still asks first.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -358,72 +359,18 @@ private fun MappingRow(mapping: RemoteCommandMapping, viewModel: RemoteControlVi
 }
 
 @Composable
-private fun MacroEditor(viewModel: RemoteControlViewModel) {
-    var id by remember { mutableStateOf("") }
-    var displayName by remember { mutableStateOf("") }
-    var voicePhrase by remember { mutableStateOf("") }
-    var smsCommandId by remember { mutableStateOf("") }
-    var scheduleExpr by remember { mutableStateOf("") }
-    var targetNodeId by remember { mutableStateOf("") }
-    var actionRef by remember { mutableStateOf("") }
-    var triggerKind by remember { mutableStateOf(MacroTriggerKind.MANUAL) }
-    var integrationClass by remember { mutableStateOf(FleetIntegrationClass.EXTERNAL_NODE) }
-    var destructive by remember { mutableStateOf(false) }
-    DroidCard {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Create or replace a macro", style = MaterialTheme.typography.titleMedium)
-            OutlinedTextField(value = id, onValueChange = { id = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Id") })
-            OutlinedTextField(value = displayName, onValueChange = { displayName = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Display name") })
-            Text("Trigger", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            MacroTriggerKind.entries.forEach { candidate ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = triggerKind == candidate, onClick = { triggerKind = candidate })
-                    Text(candidate.name)
-                }
-            }
-            OutlinedTextField(value = voicePhrase, onValueChange = { voicePhrase = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Voice phrase") })
-            OutlinedTextField(value = smsCommandId, onValueChange = { smsCommandId = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("SMS actionRef") })
-            OutlinedTextField(value = scheduleExpr, onValueChange = { scheduleExpr = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Schedule (stored only)") })
-            OutlinedTextField(value = targetNodeId, onValueChange = { targetNodeId = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("First step target") })
-            OutlinedTextField(value = actionRef, onValueChange = { actionRef = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("First step actionRef") })
-            FleetIntegrationClass.entries.filter { it != FleetIntegrationClass.HOST_PROCESS_TOOL }.forEach { candidate ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = integrationClass == candidate, onClick = { integrationClass = candidate })
-                    Text(connectionClassLabel(candidate))
-                }
-            }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("First step destructive")
-                Switch(checked = destructive, onCheckedChange = { destructive = it })
-            }
-            DroidPrimaryButton(
-                onClick = {
-                    viewModel.saveMacro(
-                        id, displayName, triggerKind, voicePhrase, smsCommandId, scheduleExpr,
-                        targetNodeId, integrationClass, actionRef, destructive,
-                    )
-                },
-                enabled = id.isNotBlank() && displayName.isNotBlank() && targetNodeId.isNotBlank() && actionRef.isNotBlank(),
-            ) { Text("Save macro") }
-        }
-    }
-}
-
-@Composable
-private fun MacroRow(macro: Macro, viewModel: RemoteControlViewModel) {
+private fun MacroRow(macro: Macro, viewModel: RemoteControlViewModel, onEdit: () -> Unit) {
     DroidCard {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(macro.displayName, style = MaterialTheme.typography.titleMedium)
-            Text(
-                "${macro.id} · ${macro.trigger.kind} · ${macro.steps.size} steps" +
-                    if (macro.hasDestructiveStep) " · destructive" else "",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            MacroDraftBuilder.describe(macro).forEach {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DroidSecondaryButton(onClick = { viewModel.dryRunMacro(macro.id) }) { Text("Dry-run") }
+                DroidSecondaryButton(onClick = { viewModel.dryRunMacro(macro.id) }) { Text("Test") }
                 DroidPrimaryButton(onClick = { viewModel.requestMacroRun(macro.id) }) { Text("Run (asks first)") }
-                DroidSecondaryButton(onClick = { viewModel.removeMacro(macro.id) }) { Text("Delete") }
+                DroidSecondaryButton(onClick = onEdit) { Text("Edit") }
+                DroidTextButton(onClick = { viewModel.removeMacro(macro.id) }) { Text("Delete") }
             }
         }
     }
