@@ -6,11 +6,16 @@ import ai.droidcommand.app.fleet.install.FleetAppInstaller
 import ai.droidcommand.app.fleet.install.FleetAutoUpdate
 import ai.droidcommand.app.fleet.install.FleetPrereleasePref
 import ai.droidcommand.app.fleet.install.FleetSources
+import ai.droidcommand.fleet.update.FleetAutoUpdateMode
 import ai.droidcommand.fleet.update.FleetDownloadQueue
 import ai.droidcommand.fleet.update.FleetDownloadRow
+import ai.droidcommand.fleet.update.FleetRelease
+import ai.droidcommand.fleet.update.FleetReleaseOption
+import ai.droidcommand.fleet.update.FleetReleaseOptions
 import ai.droidcommand.fleet.update.ReleaseAsset
 import ai.droidcommand.fleet.update.UpdateDecision
 import android.content.Context
+import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -46,6 +51,14 @@ data class FleetInstallState(
     val bulkBusy: Boolean = false,
     /** Owner's opt-in: offer pre-releases in this list. Off by default. Auto-update never uses it. */
     val includePrereleases: Boolean = false,
+    /** Every non-draft release of each app, for its version menu. An app missing here, or mapped to an empty list, has none. */
+    val optionsById: Map<String, List<FleetReleaseOption>> = emptyMap(),
+    /** Apps whose release list could not be fetched, so "none" is not claimed for them. */
+    val lookupFailedIds: Set<String> = emptySet(),
+    /** The version tag the owner picked from an app's menu. Absent means "the latest by the default rule". */
+    val selectedTagById: Map<String, String> = emptyMap(),
+    /** The auto-update mode in force for each app that has a release source. */
+    val autoModeById: Map<String, FleetAutoUpdateMode> = emptyMap(),
 )
 
 @HiltViewModel
@@ -60,10 +73,16 @@ class FleetInstallViewModel @Inject constructor(
         ),
     )
     private val decisions = ConcurrentHashMap<String, UpdateDecision>()
+    private val releases = ConcurrentHashMap<String, List<FleetRelease>>()
+    private val failedLookups = ConcurrentHashMap.newKeySet<String>()
 
     @Volatile
     private var lastLookupMs = 0L
     val state: StateFlow<FleetInstallState> = mutable.asStateFlow()
+
+    init {
+        publishAutoModes()
+    }
 
     /**
      * Asks GitHub what is published for every app that has a release source. Network: runs off the main thread.
@@ -73,13 +92,22 @@ class FleetInstallViewModel @Inject constructor(
     fun refresh(force: Boolean = true) {
         viewModelScope.launch(Dispatchers.IO) {
             val now = System.currentTimeMillis()
-            if (!force && decisions.isNotEmpty() && now - lastLookupMs < MIN_LOOKUP_GAP_MS) return@launch
+            if (!force && decisions.isNotEmpty() && failedLookups.isEmpty() && now - lastLookupMs < MIN_LOOKUP_GAP_MS) return@launch
             lastLookupMs = now
             val looked = coroutineScope {
-                val pre = mutable.value.includePrereleases
-                FleetSources.all.map { source -> async { source.fleetId to installer.check(source, pre) } }.awaitAll()
+                FleetSources.all.map { source -> async { source.fleetId to installer.fetchReleases(source) } }.awaitAll()
             }
-            looked.forEach { (id, decision) -> decisions[id] = decision }
+            looked.forEach { (id, result) ->
+                result
+                    .onSuccess { list ->
+                        releases[id] = list
+                        failedLookups.remove(id)
+                    }
+                    .onFailure {
+                        releases.remove(id)
+                        failedLookups.add(id)
+                    }
+            }
             publishDecisions()
         }
     }
@@ -108,6 +136,64 @@ class FleetInstallViewModel @Inject constructor(
                 s.copy(message = result.getOrElse { "${source.displayName}: ${it.message ?: "install failed"}" })
             }
         }
+    }
+
+    /** Remembers which version the owner picked from an app's menu. Null goes back to "latest by the default rule". */
+    fun selectRelease(fleetId: String, tag: String?) {
+        mutable.update { s ->
+            s.copy(selectedTagById = if (tag == null) s.selectedTagById - fleetId else s.selectedTagById + (fleetId to tag))
+        }
+    }
+
+    /**
+     * Downloads the version the owner picked for [fleetId] (or the default latest when none is picked). The APK still goes
+     * through the same repo-pinned download, checksum when GitHub gives one, and Android's own confirm screen. An older
+     * version than the installed one is allowed to be tried; Android decides, and its refusal is shown.
+     */
+    fun installSelected(fleetId: String) {
+        val tag = mutable.value.selectedTagById[fleetId] ?: return install(fleetId)
+        val source = FleetSources.forId(fleetId) ?: return
+        val option = mutable.value.optionsById[fleetId]?.firstOrNull { it.tag == tag }
+        val asset = option?.asset
+        if (option == null || asset == null) {
+            mutable.update { it.copy(message = "${source.displayName} $tag has no APK for this phone.") }
+            return
+        }
+        if (!installer.canInstall()) {
+            runCatching { context.startActivity(installer.unknownSourcesIntent()) }
+            mutable.update { it.copy(message = "Allow DroidCommand to install apps, then tap Download again.") }
+            return
+        }
+        setBusy(fleetId, "Downloading ${asset.name}…")
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = runCatching { downloadAndHandOff(fleetId, source.displayName, asset) }
+            restore(fleetId)
+            val downgrade = if (option.isDowngrade) {
+                " This is older than the installed version: if Android refuses it, uninstall the newer one first (its data is lost), then tap Download again."
+            } else {
+                ""
+            }
+            mutable.update { s ->
+                s.copy(message = result.fold({ "${source.displayName} $tag: $it$downgrade" }, { "${source.displayName} $tag: ${it.message ?: "install failed"}$downgrade" }))
+            }
+        }
+    }
+
+    /** Sets this app's auto-update mode. It only ever updates an app that is already installed; it never first-installs or pairs. */
+    fun setAutoUpdateMode(fleetId: String, mode: FleetAutoUpdateMode) {
+        FleetAutoUpdate.setMode(context, fleetId, mode)
+        publishAutoModes()
+        val needsInstallRight = mode != FleetAutoUpdateMode.OFF && !installer.canInstall()
+        mutable.update {
+            it.copy(
+                message = if (needsInstallRight) {
+                    "Also allow DroidCommand to install apps in Android settings, or updates will wait."
+                } else {
+                    it.message
+                },
+            )
+        }
+        if (needsInstallRight) runCatching { context.startActivity(installer.unknownSourcesIntent()) }
     }
 
     /**
@@ -159,11 +245,14 @@ class FleetInstallViewModel @Inject constructor(
         }
     }
 
-    /** Turns pre-release downloads on or off for this list and looks everything up again under the new rule. */
+    /** Turns pre-release downloads on or off for the default "latest" choice in this list. The version menus always list everything. */
     fun setIncludePrereleases(on: Boolean) {
         FleetPrereleasePref.setEnabled(context, on)
         mutable.update { it.copy(includePrereleases = on) }
-        refresh(force = true)
+        // The release lists are already here; only the default "latest" choice changes, so no new GitHub calls.
+        viewModelScope.launch(Dispatchers.IO) {
+            if (releases.isEmpty() && failedLookups.isEmpty()) refresh(force = true) else publishDecisions()
+        }
     }
 
     fun setAutoUpdate(on: Boolean) {
@@ -174,6 +263,7 @@ class FleetInstallViewModel @Inject constructor(
                 message = if (on && !installer.canInstall()) "Also allow DroidCommand to install apps in Android settings, or updates will wait." else null,
             )
         }
+        publishAutoModes()
         if (on && !installer.canInstall()) runCatching { context.startActivity(installer.unknownSourcesIntent()) }
     }
 
@@ -204,9 +294,23 @@ class FleetInstallViewModel @Inject constructor(
         }
     }
 
-    /** Rebuilds the per-card notes and the download list from the stored look-ups. Busy cards keep their progress note. */
+    /** Rebuilds decisions, version menus, per-card notes and the download list from the stored release lists. No network. */
     private fun publishDecisions() {
+        val pre = mutable.value.includePrereleases
+        val abis = Build.SUPPORTED_ABIS.toList()
         val installed = FleetSources.all.filter { installer.isInstalled(it.packageName) }.map { it.fleetId }.toSet()
+        val options = HashMap<String, List<FleetReleaseOption>>()
+        FleetSources.all.forEach { source ->
+            val id = source.fleetId
+            if (id in failedLookups) {
+                decisions[id] = UpdateDecision.NothingPublished("Could not reach GitHub.")
+                options[id] = emptyList()
+            } else {
+                val list = releases[id].orEmpty()
+                decisions[id] = installer.decide(source, list, pre)
+                options[id] = FleetReleaseOptions.build(source, installer.installedVersion(source.packageName), id in installed, list, abis)
+            }
+        }
         val next = FleetSources.all.mapNotNull { source ->
             decisions[source.fleetId]?.let { source.fleetId to describe(it, source.fleetId in installed) }
         }.toMap()
@@ -220,8 +324,17 @@ class FleetInstallViewModel @Inject constructor(
                 byId = next.filterKeys { id -> id !in busy } + busy,
                 rows = rows,
                 installedIds = installed,
+                optionsById = options,
+                lookupFailedIds = failedLookups.toSet(),
+                // A picked tag that is no longer in the menu (release deleted) goes back to the default.
+                selectedTagById = state.selectedTagById.filter { (id, tag) -> options[id].orEmpty().any { it.tag == tag } },
             )
         }
+    }
+
+    private fun publishAutoModes() {
+        val modes = FleetSources.all.associate { it.fleetId to FleetAutoUpdate.effectiveMode(context, it.fleetId) }
+        mutable.update { it.copy(autoModeById = modes, autoUpdate = FleetAutoUpdate.isEnabled(context)) }
     }
 
     /** Every app the list shows, in order: the Fleet roster, then the display-only extras, then any source left over. */

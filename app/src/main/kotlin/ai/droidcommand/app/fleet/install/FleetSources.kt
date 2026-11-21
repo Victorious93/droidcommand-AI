@@ -45,4 +45,13 @@ object FleetSources {
     )
 
     fun forId(fleetId: String): FleetAppSource? = all.firstOrNull { it.fleetId == fleetId }
+
+    /** Repos for the "Open repo" button of apps that have no download source. Termux / VictorSuite's source is the owner's VictorSuite repo. */
+    private val repoOnly: Map<String, String> = mapOf(
+        "termux" to "$OWNER/VictorSuite",
+        "victortrade" to "$OWNER/victortrade",
+    )
+
+    /** The `owner/name` repo to open for [fleetId], whether or not it has downloadable releases. Null when none is known. */
+    fun repoFor(fleetId: String): String? = forId(fleetId)?.repo ?: repoOnly[fleetId]
 }

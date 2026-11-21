@@ -3,6 +3,7 @@ package ai.droidcommand.app.fleet.install
 import ai.droidcommand.fleet.update.ApkVerifier
 import ai.droidcommand.fleet.update.DownloadPolicy
 import ai.droidcommand.fleet.update.FleetAppSource
+import ai.droidcommand.fleet.update.FleetRelease
 import ai.droidcommand.fleet.update.GitHubReleases
 import ai.droidcommand.fleet.update.ReleaseAsset
 import ai.droidcommand.fleet.update.UpdateDecision
@@ -46,16 +47,24 @@ class FleetAppInstaller(private val context: Context) {
      * Looks up the newest published release for [source] and decides what to do. Pre-releases are skipped unless
      * [includePrereleases] is true; only the owner's manual download list ever passes true, never auto-update.
      */
-    fun check(source: FleetAppSource, includePrereleases: Boolean = false): UpdateDecision {
-        val body = runCatching { httpGet(GitHubReleases.releasesUrl(source.repo)) }.getOrElse {
-            return UpdateDecision.NothingPublished("Could not reach GitHub (${it.javaClass.simpleName}).")
-        }
+    fun check(source: FleetAppSource, includePrereleases: Boolean = false): UpdateDecision =
+        fetchReleases(source).fold(
+            onSuccess = { decide(source, it, includePrereleases) },
+            onFailure = { UpdateDecision.NothingPublished("Could not reach GitHub (${it.javaClass.simpleName}).") },
+        )
+
+    /** Every release GitHub lists for [source], newest first. A failure is returned, not thrown, so "none" and "unreachable" stay different. */
+    fun fetchReleases(source: FleetAppSource): Result<List<FleetRelease>> =
+        runCatching { GitHubReleases.parse(httpGet(GitHubReleases.releasesUrl(source.repo))) }
+
+    /** What to do for [source] given releases already fetched. No network. */
+    fun decide(source: FleetAppSource, releases: List<FleetRelease>, includePrereleases: Boolean): UpdateDecision {
         val version = installedVersion(source.packageName)
         return UpdatePlanner.plan(
             source = source,
             installedVersionName = version,
             installed = version != null,
-            releases = GitHubReleases.parse(body),
+            releases = releases,
             supportedAbis = Build.SUPPORTED_ABIS.toList(),
             includePrereleases = includePrereleases,
         )

@@ -2,10 +2,13 @@ package ai.droidcommand.app.fleet
 
 import ai.droidcommand.app.fleet.install.FleetSources
 import ai.droidcommand.remotepc.RustDeskContract
+import ai.droidcommand.fleet.update.FleetRepoLinks
 import ai.droidcommand.security.InboundEntryPointCatalog
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FleetExtraAppsTest {
@@ -67,5 +70,16 @@ class FleetExtraAppsTest {
     @Test
     fun `every extra app package is visible through the manifest queries list`() {
         assertTrue(FleetCatalog.queryPackages.containsAll(FleetExtraApps.packages))
+    }
+
+    @Test
+    fun `every app with a download source has an openable GitHub repo link`() {
+        FleetSources.all.forEach { source ->
+            assertNotNull(FleetRepoLinks.url(FleetSources.repoFor(source.fleetId)), source.fleetId)
+        }
+        // apps with no download source still link to their repo where one is known
+        assertEquals("Victorious93/VictorSuite", FleetSources.repoFor("termux"))
+        assertEquals("Victorious93/victortrade", FleetSources.repoFor("victortrade"))
+        assertNull(FleetSources.repoFor("no-such-app"))
     }
 }

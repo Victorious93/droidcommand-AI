@@ -19,6 +19,7 @@ import ai.droidcommand.app.ux.FleetUserCopy
 import ai.droidcommand.app.ux.FleetUserKind
 import ai.droidcommand.app.ux.FleetUserStatus
 import ai.droidcommand.app.ux.ScreenHelpCatalog
+import ai.droidcommand.fleet.update.FleetAutoUpdateMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -87,6 +88,9 @@ fun FleetDashboardScreen(
         onInstall = installModel::install,
         onInstallAll = installModel::installAll,
         onIncludePrereleases = installModel::setIncludePrereleases,
+        onInstallSelected = installModel::installSelected,
+        onSelectVersion = installModel::selectRelease,
+        onAutoMode = installModel::setAutoUpdateMode,
         onOpenPasswordPairing = onOpenPasswordPairing,
         onAutoUpdate = installModel::setAutoUpdate,
         pairPromptId = pairPromptId,
@@ -119,6 +123,9 @@ fun FleetDashboardContent(
     onInstall: (String) -> Unit = {},
     onInstallAll: () -> Unit = {},
     onIncludePrereleases: (Boolean) -> Unit = {},
+    onInstallSelected: (String) -> Unit = {},
+    onSelectVersion: (String, String?) -> Unit = { _, _ -> },
+    onAutoMode: (String, FleetAutoUpdateMode) -> Unit = { _, _ -> },
     onOpenPasswordPairing: () -> Unit = {},
     onAutoUpdate: (Boolean) -> Unit = {},
     pairPromptId: String? = null,
@@ -195,9 +202,11 @@ fun FleetDashboardContent(
         install.message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = AccentBlueBright) }
         FleetDownloadSection(
             install = install,
-            onInstall = onInstall,
+            onInstall = onInstallSelected,
             onInstallAll = onInstallAll,
             onIncludePrereleases = onIncludePrereleases,
+            onSelectVersion = onSelectVersion,
+            onAutoMode = onAutoMode,
         )
         botSmsTile()
 

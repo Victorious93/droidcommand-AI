@@ -56,10 +56,11 @@ object UpdatePlanner {
         }
     }
 
-    private data class Choice(val asset: ReleaseAsset, val debug: Boolean)
+    /** The APK picked from one release for this phone. [debug] is true when only a debug-named APK fit. */
+    data class AssetChoice(val asset: ReleaseAsset, val debug: Boolean)
 
     /** Release builds before debug builds; a matching ABI before a universal APK; never a different ABI. */
-    private fun chooseAsset(assets: List<ReleaseAsset>, abis: List<String>): Choice? {
+    fun chooseAsset(assets: List<ReleaseAsset>, abis: List<String>): AssetChoice? {
         val apks = assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
         val known = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86", "arm64", "armv7")
         fun abiOf(name: String) = known.firstOrNull { name.contains(it, ignoreCase = true) }
@@ -91,7 +92,7 @@ object UpdatePlanner {
             return abiIndex
         }
         val release = fits.filter { !it.name.contains("debug", true) }.minByOrNull(::rank)
-        if (release != null) return Choice(release, false)
-        return fits.minByOrNull(::rank)?.let { Choice(it, true) }
+        if (release != null) return AssetChoice(release, false)
+        return fits.minByOrNull(::rank)?.let { AssetChoice(it, true) }
     }
 }

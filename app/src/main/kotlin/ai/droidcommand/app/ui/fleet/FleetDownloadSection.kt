@@ -12,17 +12,29 @@ import ai.droidcommand.app.ui.theme.DroidPrimaryButton
 import ai.droidcommand.app.ui.theme.DroidSecondaryButton
 import ai.droidcommand.app.ui.theme.DroidTextButton
 import ai.droidcommand.app.ui.theme.TextSecondary
+import ai.droidcommand.app.update.ApkDownload
+import ai.droidcommand.fleet.update.FleetAutoUpdateMode
 import ai.droidcommand.fleet.update.FleetDownloadAction
 import ai.droidcommand.fleet.update.FleetDownloadQueue
 import ai.droidcommand.fleet.update.FleetDownloadRow
+import ai.droidcommand.fleet.update.FleetReleaseOption
+import ai.droidcommand.fleet.update.FleetReleaseOptions
+import ai.droidcommand.fleet.update.FleetRepoLinks
+import ai.droidcommand.fleet.update.FleetVersionRelation
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -33,7 +45,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /** Package names an app is known by, for reading its real icon off the phone. Roster members include debug / bench aliases. */
@@ -44,9 +58,11 @@ private fun packagesFor(id: String): List<String> =
         ?: emptyList()
 
 /**
- * "Download your apps": one row per app of the owner's, each with its icon and a download button, plus a Download all
- * button. A row's button only offers a download when a real release APK was found; otherwise it says why it cannot.
- * Every download is checked and then confirmed by the owner in Android's own installer. Nothing here pairs an app.
+ * "Download your apps": one row per app of the owner's, each with its icon, a download button, a **version menu** (every
+ * published release, whether stable, debug or pre-release), a per-app **auto-update** menu and an **Open repo** button, plus a
+ * Download all button. A row's default button only offers a download when a real release APK was found; picking a version from
+ * the menu downloads exactly that one. Every download is checked and then confirmed by the owner in Android's own installer.
+ * Nothing here pairs an app.
  */
 @Composable
 fun FleetDownloadSection(
@@ -54,6 +70,8 @@ fun FleetDownloadSection(
     onInstall: (String) -> Unit,
     onInstallAll: () -> Unit,
     onIncludePrereleases: (Boolean) -> Unit = {},
+    onSelectVersion: (String, String?) -> Unit = { _, _ -> },
+    onAutoMode: (String, FleetAutoUpdateMode) -> Unit = { _, _ -> },
 ) {
     val rows = install.rows
     val queue = FleetDownloadQueue.queue(rows)
@@ -66,12 +84,18 @@ fun FleetDownloadSection(
                 color = TextSecondary,
                 modifier = Modifier.testTag("fleet_download_summary"),
             )
+            Text(
+                "Pick any published version from an app's Version menu, or set the app to auto-update. Auto-update only updates " +
+                    "an app that is already on this phone; it never installs a new one or pairs anything.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("fleet_download_prereleases")) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Include pre-releases", style = MaterialTheme.typography.titleSmall)
+                    Text("Include pre-releases by default", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "Several of your apps publish only debug-signed pre-releases. Off by default. Android still refuses an " +
-                            "update signed with a different key, and you confirm every install. Auto-update ignores this.",
+                        "Only changes what \"latest\" means and what Download all fetches. Version menus always list everything. " +
+                            "Off by default. Android still refuses an update signed with a different key, and you confirm every install.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                     )
@@ -89,7 +113,13 @@ fun FleetDownloadSection(
                     row = row,
                     installed = row.fleetId in install.installedIds,
                     ui = install.byId[row.fleetId],
+                    options = install.optionsById[row.fleetId].orEmpty(),
+                    lookupFailed = row.fleetId in install.lookupFailedIds,
+                    selectedTag = install.selectedTagById[row.fleetId],
+                    autoMode = install.autoModeById[row.fleetId] ?: FleetAutoUpdateMode.OFF,
                     onInstall = { onInstall(row.fleetId) },
+                    onSelectVersion = { onSelectVersion(row.fleetId, it) },
+                    onAutoMode = { onAutoMode(row.fleetId, it) },
                     bulkBusy = install.bulkBusy,
                 )
             }
@@ -102,43 +132,173 @@ private fun DownloadRow(
     row: FleetDownloadRow,
     installed: Boolean,
     ui: FleetInstallUi?,
+    options: List<FleetReleaseOption>,
+    lookupFailed: Boolean,
+    selectedTag: String?,
+    autoMode: FleetAutoUpdateMode,
     onInstall: () -> Unit,
+    onSelectVersion: (String?) -> Unit,
+    onAutoMode: (FleetAutoUpdateMode) -> Unit,
     bulkBusy: Boolean,
 ) {
+    val context = LocalContext.current
     val busy = ui?.busy == true
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().testTag("fleet_download_row_${row.fleetId}"),
-    ) {
-        FleetAppIcon(
-            fleetId = row.fleetId,
-            name = row.displayName,
-            packageNames = packagesFor(row.fleetId),
-            installed = installed,
-        )
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(row.displayName, style = MaterialTheme.typography.titleSmall)
-            Text(
-                statusLine(row, installed, ui),
-                style = MaterialTheme.typography.bodySmall,
-                color = if (installed) AccentSuccess else TextSecondary,
+    val picked = options.firstOrNull { it.tag == selectedTag }
+    // A picked version is downloaded even when the default rule would offer nothing (for example only pre-releases exist).
+    val canDownload = if (picked != null) picked.installable else row.canFetch
+    val label = if (picked != null) {
+        if (picked.relation == FleetVersionRelation.SAME) "Reinstall" else "Download"
+    } else {
+        buttonLabel(row)
+    }
+    val repoUrl = FleetRepoLinks.url(FleetSources.repoFor(row.fleetId))
+    Column(modifier = Modifier.fillMaxWidth().testTag("fleet_download_row_${row.fleetId}"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            FleetAppIcon(
+                fleetId = row.fleetId,
+                name = row.displayName,
+                packageNames = packagesFor(row.fleetId),
+                installed = installed,
             )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(row.displayName, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    statusLine(row, installed, ui),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (installed) AccentSuccess else TextSecondary,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            if (canDownload) {
+                DroidPrimaryButton(
+                    onClick = onInstall,
+                    enabled = !busy && !bulkBusy,
+                    modifier = Modifier.width(ButtonWidth).testTag("fleet_download_${row.fleetId}"),
+                ) { Text(label) }
+            } else {
+                DroidSecondaryButton(
+                    onClick = {},
+                    enabled = false,
+                    modifier = Modifier.width(ButtonWidth).testTag("fleet_download_${row.fleetId}"),
+                ) { Text(label) }
+            }
         }
-        Spacer(Modifier.width(8.dp))
-        val label = buttonLabel(row)
-        if (row.canFetch) {
-            DroidPrimaryButton(
-                onClick = onInstall,
-                enabled = !busy && !bulkBusy,
-                modifier = Modifier.width(ButtonWidth).testTag("fleet_download_${row.fleetId}"),
-            ) { Text(label) }
-        } else {
-            DroidSecondaryButton(
-                onClick = {},
-                enabled = false,
-                modifier = Modifier.width(ButtonWidth).testTag("fleet_download_${row.fleetId}"),
-            ) { Text(label) }
+        if (row.source != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                VersionMenu(
+                    fleetId = row.fleetId,
+                    options = options,
+                    lookupFailed = lookupFailed,
+                    selectedTag = selectedTag,
+                    onSelect = onSelectVersion,
+                    modifier = Modifier.weight(1f),
+                )
+                AutoUpdateMenu(
+                    fleetId = row.fleetId,
+                    mode = autoMode,
+                    onSelect = onAutoMode,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        picked?.let { option ->
+            if (option.isDowngrade) {
+                Text(
+                    "Older than the installed version. Android usually refuses that; if it does, uninstall the newer one first (its data is lost).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                )
+            }
+        }
+        if (repoUrl != null) {
+            DroidTextButton(
+                onClick = { ApkDownload.openPage(context, repoUrl) },
+                modifier = Modifier.testTag("fleet_repo_${row.fleetId}"),
+            ) { Text("Open ${row.displayName} on GitHub") }
+        }
+    }
+}
+
+/** Dropdown of every published release of one app. An app with no releases says so and the button is disabled. */
+@Composable
+private fun VersionMenu(
+    fleetId: String,
+    options: List<FleetReleaseOption>,
+    lookupFailed: Boolean,
+    selectedTag: String?,
+    onSelect: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var open by remember { mutableStateOf(false) }
+    val title = when {
+        lookupFailed -> "Versions: can't reach GitHub"
+        options.isEmpty() -> "Versions: none"
+        selectedTag != null -> "Version: $selectedTag"
+        else -> "Version: latest"
+    }
+    Box(modifier = modifier) {
+        DroidSecondaryButton(
+            onClick = { open = true },
+            enabled = options.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth().testTag("fleet_version_$fleetId"),
+        ) {
+            Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (options.isEmpty()) {
+                DropdownMenuItem(text = { Text(FleetReleaseOptions.NONE_LABEL) }, enabled = false, onClick = { open = false })
+            } else {
+                DropdownMenuItem(
+                    text = { Text("Latest (default rule)") },
+                    onClick = {
+                        open = false
+                        onSelect(null)
+                    },
+                )
+                options.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option.label) },
+                        enabled = option.installable,
+                        onClick = {
+                            open = false
+                            onSelect(option.tag)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Per-app auto-update: Off, stable releases only, or including pre-releases. Only updates an app already installed. */
+@Composable
+private fun AutoUpdateMenu(
+    fleetId: String,
+    mode: FleetAutoUpdateMode,
+    onSelect: (FleetAutoUpdateMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        DroidSecondaryButton(
+            onClick = { open = true },
+            modifier = Modifier.fillMaxWidth().testTag("fleet_autoupdate_$fleetId"),
+        ) {
+            Text("Auto-update: ${mode.label}", maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            FleetAutoUpdateMode.entries.forEach { choice ->
+                DropdownMenuItem(
+                    text = { Text(if (choice == mode) "${choice.label} (current)" else choice.label) },
+                    onClick = {
+                        open = false
+                        onSelect(choice)
+                    },
+                )
+            }
         }
     }
 }
