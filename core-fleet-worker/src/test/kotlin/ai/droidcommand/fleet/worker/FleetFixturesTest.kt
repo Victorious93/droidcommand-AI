@@ -6,6 +6,8 @@ import java.security.MessageDigest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Runs the SAME golden fixtures as VictorLinux's Python coordinator tests, so contract drift on either side is caught here. */
@@ -16,7 +18,7 @@ class FleetFixturesTest {
 
     @Test fun `copies are byte-identical to the coordinator's fixtures`() {
         val m = manifest()
-        assertTrue(m.size >= 24, "expected the full fixture set, got ${m.size}")
+        assertTrue(m.size >= 33, "expected the full fixture set, got ${m.size}")
         for ((f, h) in m) assertEquals(h, MessageDigest.getInstance("SHA-256").digest(res(f)).joinToString("") { "%02x".format(it) }, f)
     }
 
@@ -43,6 +45,31 @@ class FleetFixturesTest {
                 if (type in FleetProtocol.WORKER_TYPES) FleetProtocol.validateWorkerPayload(type, e["payload"] as JsonObject)
             }
             assertEquals(expected, ex.code, f)
+        }
+    }
+
+    @Test fun `an assignment with a plan manifest parses it, and the assigned job is in it with the same arguments`() {
+        val payload = obj("assignment_with_plan.json")["payload"] as JsonObject
+        FleetProtocol.validateAssignment(payload)
+        val plan = assertNotNull(FleetProtocol.parsePlanManifest(payload))
+        assertEquals("plan-x", plan.planId)
+        assertEquals(3, plan.jobs.size)
+        val mine = plan.jobs.single { it.jobId == (payload["job_id"] as JsonPrimitive).content }
+        assertEquals(payload["args"], mine.args)
+        assertTrue(plan.jobs.none { it.requiresRoot })
+    }
+
+    @Test fun `an assignment with no plan has no manifest`() {
+        assertNull(FleetProtocol.parsePlanManifest(obj("assignment.json")["payload"] as JsonObject))
+    }
+
+    @Test fun `every ignored-plan fixture is still a valid assignment but yields no manifest`() {
+        val cases = manifest().keys.filter { it.startsWith("plan_ignored/") }
+        assertTrue(cases.size >= 8, "expected the full set, got ${cases.size}")
+        for (f in cases) {
+            val payload = FleetProtocol.validateEnvelope(obj(f))["payload"] as JsonObject
+            FleetProtocol.validateAssignment(payload) // the job itself is fine and must still run
+            assertNull(FleetProtocol.parsePlanManifest(payload), f)
         }
     }
 

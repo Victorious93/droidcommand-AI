@@ -1977,3 +1977,19 @@ container — same stated limitation as every other `:app` row in this document)
 this repo has talked to a real running VictorLinux backend yet. See the 2026-11-19 audit addendum for the full
 cross-repo record, including the real `secmsf.py` RPC-error-classification bug found and fixed on the VictorLinux
 side before any of this Kotlin code was written.
+
+### Batch approval for fleet jobs (2026-11-21) — optional, off by default
+
+One owner approval of a *reviewed plan* can cover that plan's confirmation taps. It is an added feature with its own switch (and the
+coordinator has its own, `config --share-plan`), never required, and it replaces only the tap.
+
+| Piece | Where | Status |
+|---|---|---|
+| `ArgsDigest` (SHA-256 of canonical JSON args) | `core-security` | IMPLEMENTED, JVM-tested |
+| `BatchApprovals`, `ToolBatchEligibility`, limits, audit, revoke | `core-security` | IMPLEMENTED, JVM-tested (27 + 11 tests, mutation-checked) |
+| `BatchApprovalPrompt` + `BatchJobScope` + `BatchOfferHandler` (one question per plan) | `core-security` | IMPLEMENTED, JVM-tested |
+| Plan manifest on assignments (`FleetProtocol.parsePlanManifest`, shared golden fixtures `assignment_with_plan`, `plan_ignored/*`) | `core-fleet-worker` + VictorLinux `fleet/` | IMPLEMENTED; real Python coordinator ↔ Kotlin worker over HTTPS tested, manifest on and off |
+| Worker wiring (context around the tool call, `FleetOperation.batchable`, revoke on pause/disable/unpair/revoke) | `core-fleet-worker` | IMPLEMENTED, 11 tests |
+| Android phone service, the two switches, offer card, pairing screen, Keystore identity | `:app` | NOT STARTED |
+
+See `docs/FLEET_WORKER.md`, "Optional: approve a reviewed batch once".
