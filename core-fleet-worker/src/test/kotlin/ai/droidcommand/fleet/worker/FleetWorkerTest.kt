@@ -4,11 +4,13 @@ import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.AgentStateMachine
 import ai.droidcommand.agent.Initiator
 import ai.droidcommand.agent.RetryPolicy
+import ai.droidcommand.agent.SecurityLevel
 import ai.droidcommand.agent.Tool
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolResult
 import ai.droidcommand.agent.ToolRunner
+import ai.droidcommand.agent.ToolSpec
 import ai.droidcommand.security.ApprovalPrompt
 import ai.droidcommand.security.SecureToolExecutor
 import ai.droidcommand.security.SecurityPolicy
@@ -24,6 +26,8 @@ import java.security.MessageDigest
 import java.security.Signature
 import java.security.spec.X509EncodedKeySpec
 import java.util.Base64
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -397,6 +401,115 @@ class FleetWorkerTest {
         assertEquals(listOf("ack", "approval_needed", "progress", "complete"), order)
     }
 
+    @Test fun `concurrent state updates keep every field that was written`() {
+        val initial = WorkerPersisted(deviceId = "d", credential = "CRED", pendingOutbound = listOf("already"))
+        val file = java.io.File(tmp, "worker-state.json")
+        val stores = listOf(
+            InMemoryWorkerStateStore(initial),
+            JsonFileWorkerStateStore(file).also { it.save(initial) },
+        )
+        for (store in stores) {
+            val start = CountDownLatch(1)
+            val done = CountDownLatch(2)
+            val errors = java.util.Collections.synchronizedList(mutableListOf<Throwable>())
+            fun go(block: () -> Unit) {
+                Thread {
+                    try {
+                        start.await()
+                        block()
+                    } catch (t: Throwable) {
+                        errors += t
+                    } finally {
+                        done.countDown()
+                    }
+                }.apply {
+                    isDaemon = true
+                    start()
+                }
+            }
+            go {
+                store.update {
+                    Thread.sleep(40)
+                    it.copy(paused = true)
+                }
+            }
+            go {
+                store.update {
+                    Thread.sleep(40)
+                    it.copy(pendingOutbound = it.pendingOutbound + "result", seenInbound = listOf("m1"))
+                }
+            }
+            start.countDown()
+            assertTrue(done.await(5, TimeUnit.SECONDS), store::class.simpleName)
+            assertTrue(errors.isEmpty(), errors.toString())
+            val s = store.load()
+            assertTrue(s.paused, store::class.simpleName)
+            assertEquals("CRED", s.credential)
+            assertEquals("d", s.deviceId)
+            assertEquals(listOf("already", "result"), s.pendingOutbound)
+            assertEquals(listOf("m1"), s.seenInbound)
+        }
+    }
+
+    @Test fun `two jobs finishing together both report completion and a pause is kept`() {
+        val entered = CountDownLatch(2)
+        val release = CountDownLatch(1)
+        val op = object : FleetOperation {
+            override val op = "wait"
+            override val marksExecution = true
+            override fun prepare(ctx: JobContext) = mapOf("x" to "1")
+            override fun tool(): Tool = object : Tool {
+                override val spec = ToolSpec(
+                    name = toolName,
+                    description = "block until the test releases both jobs",
+                    requiredPermissions = emptySet(),
+                    requiresRoot = false,
+                    securityLevel = SecurityLevel.NORMAL,
+                    requiresConfirmation = false,
+                    requiredInitiator = setOf(Initiator.REMOTE),
+                )
+                override fun execute(input: Map<String, String>): ToolResult {
+                    ExecutionMarker.mark()
+                    entered.countDown()
+                    assertTrue(release.await(5, TimeUnit.SECONDS))
+                    return ToolResult.Success("ok")
+                }
+            }
+        }
+        val counted = CountingStore(WorkerPersisted(deviceId = dev, credential = "CRED"))
+        val localProbe = MutableProbe(
+            CapabilityReport(
+                mapOf("wait" to OperationState(true, true)),
+                RootState(),
+                DeviceState(80, true, "none", 1L shl 33),
+            ),
+        )
+        val w = FleetWorker(
+            SoftwareWorkerIdentity(), t, localProbe, secureRunner(registry(op)), counted, listOf(op), tmp,
+            WorkerConfig("Test phone", "test-1"), clock = { now[0] },
+            executor = { command -> Thread(command, "fleet-job-test").apply { isDaemon = true }.start() },
+        )
+        t.inbound += assignment(job = "job-a", op = "wait", inputs = emptyList())
+        t.inbound += assignment(job = "job-b", op = "wait", inputs = emptyList())
+        w.step()
+        assertTrue(entered.await(5, TimeUnit.SECONDS), "both jobs started")
+        w.setPaused(true)
+        release.countDown()
+        val deadline = System.currentTimeMillis() + 5_000
+        while (w.runningJobs().isNotEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(20)
+        assertTrue(w.runningJobs().isEmpty(), "jobs finished")
+        val state = counted.load()
+        assertTrue(state.paused)
+        assertEquals("CRED", state.credential)
+        assertFalse(state.revoked)
+        val completes = state.pendingOutbound.map { envelope ->
+            val parsed = FleetProtocol.json.parseToJsonElement(envelope) as JsonObject
+            (parsed["type"] as JsonPrimitive).content to ((parsed["payload"] as JsonObject)["job_id"] as JsonPrimitive).content
+        }.filter { it.first == "complete" }.map { it.second }.toSet()
+        assertEquals(setOf("job-a", "job-b"), completes)
+        assertEquals(0, counted.saves, "a load-then-save of the whole record drops the other thread's write")
+    }
+
     @Test fun `backoff is bounded and jittered`() {
         val b = Backoff(1_000, 60_000) { 0.5 }
         val seq = (1..12).map { b.next() }
@@ -405,5 +518,27 @@ class FleetWorkerTest {
         assertTrue(seq[1] >= seq[0])
         b.reset()
         assertTrue(b.next() <= 1_000)
+    }
+}
+
+/** Counts full-record saves. [update] writes through the inner store without counting as a stale save. */
+private class CountingStore(initial: WorkerPersisted) : WorkerStateStore {
+    private val inner = InMemoryWorkerStateStore(initial)
+    var saves = 0
+        private set
+
+    override fun load(): WorkerPersisted = inner.load()
+
+    override fun save(state: WorkerPersisted) {
+        saves++
+        inner.save(state)
+    }
+
+    override fun update(transform: (WorkerPersisted) -> WorkerPersisted): WorkerPersisted {
+        synchronized(inner) {
+            val next = transform(inner.load())
+            inner.save(next)
+            return next
+        }
     }
 }

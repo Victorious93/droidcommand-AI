@@ -164,12 +164,12 @@ class FleetWorker(
         val cred = (p["credential"] as JsonPrimitive).content
         val fpr = (p["coordinator_fingerprint_sha256"] as JsonPrimitive).content
         if (fpr != payload.certFingerprintSha256) return PairingResult.Mismatch("coordinator identity changed during pairing")
-        store.save(
-            store.load().copy(
+        store.update { current ->
+            current.copy(
                 deviceId = id, credential = cred, coordinatorUrl = payload.coordinatorUrl,
                 coordinatorSpkiSha256 = payload.spkiSha256, revoked = false,
-            ),
-        )
+            )
+        }
         helloSent = false
         return PairingResult.Paired(id)
     }
@@ -190,7 +190,7 @@ class FleetWorker(
         }
     }
     fun setPaused(on: Boolean) {
-        store.save(store.load().copy(paused = on))
+        store.update { it.copy(paused = on) }
         if (on) batch?.revokeAll("fleet worker paused by the owner")
         helloSent = false
     }
@@ -333,12 +333,19 @@ class FleetWorker(
     }
 
     private fun enqueue(type: String, payload: JsonObject) {
-        val dev = store.load().deviceId ?: return
+        if (store.load().deviceId == null) return
         reportToOwner(type, payload)
-        val e = env(dev, type, payload)
         synchronized(outboundLock) {
-            val s = store.load()
-            store.save(s.copy(pendingOutbound = s.pendingOutbound + e.toString()))
+            // Append onto the state as it is now. A copy of an earlier snapshot would drop another job's result, or
+            // put the credential back after revocation.
+            store.update { s ->
+                val dev = s.deviceId
+                if (dev == null || s.revoked) {
+                    s
+                } else {
+                    s.copy(pendingOutbound = s.pendingOutbound + env(dev, type, payload).toString())
+                }
+            }
         }
     }
 
@@ -355,8 +362,9 @@ class FleetWorker(
         }
         if (done.isNotEmpty()) {
             synchronized(outboundLock) {
-                val s = store.load()
-                store.save(s.copy(pendingOutbound = s.pendingOutbound.filterNot { p -> (FleetProtocol.json.parseToJsonElement(p) as JsonObject)["msg_id"].let { (it as JsonPrimitive).content } in done }))
+                store.update { s ->
+                    s.copy(pendingOutbound = s.pendingOutbound.filterNot { p -> (FleetProtocol.json.parseToJsonElement(p) as JsonObject)["msg_id"].let { (it as JsonPrimitive).content } in done })
+                }
             }
         }
     }
@@ -365,9 +373,17 @@ class FleetWorker(
     private fun handleInbound(m: JsonObject) {
         val id = (m["msg_id"] as? JsonPrimitive)?.contentOrNull ?: return
         synchronized(pendingAcks) { pendingAcks += id }
-        val st = store.load()
-        if (id in st.seenInbound) return // duplicate delivery
-        store.save(st.copy(seenInbound = (st.seenInbound + id).takeLast(config.maxSeenInbound)))
+        var duplicate = false
+        val st = store.update { current ->
+            if (id in current.seenInbound) {
+                duplicate = true
+                current
+            } else {
+                duplicate = false
+                current.copy(seenInbound = (current.seenInbound + id).takeLast(config.maxSeenInbound))
+            }
+        }
+        if (duplicate) return // duplicate delivery
         val dev = st.deviceId ?: return
         try {
             FleetProtocol.validateEnvelope(m)
@@ -418,7 +434,7 @@ class FleetWorker(
         val info = RunningInfo(job, att, (p["op"] as JsonPrimitive).content, clock())
         running[key] = info
         emit(info, FleetJobEvent.Phase.STARTED)
-        store.save(store.load().let { s -> s.copy(running = s.running + RunningJob(job, att, info.op, info.startedMs)) })
+        store.update { s -> s.copy(running = s.running + RunningJob(job, att, info.op, info.startedMs)) }
         executor.execute {
             try {
                 runJob(info, p)
@@ -430,7 +446,7 @@ class FleetWorker(
 
     private fun finish(info: RunningInfo) {
         running.remove("${info.jobId}#${info.attempt}")
-        store.save(store.load().let { s -> s.copy(running = s.running.filterNot { it.jobId == info.jobId && it.attempt == info.attempt }) })
+        store.update { s -> s.copy(running = s.running.filterNot { it.jobId == info.jobId && it.attempt == info.attempt }) }
     }
 
     // ---------------------------------------------------------------- jobs

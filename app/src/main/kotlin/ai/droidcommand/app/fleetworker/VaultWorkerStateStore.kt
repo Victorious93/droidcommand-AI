@@ -24,6 +24,13 @@ class VaultWorkerStateStore(private val vault: SecretsVault, private val secretI
         cache = state
     }
 
+    @Synchronized
+    override fun update(transform: (WorkerPersisted) -> WorkerPersisted): WorkerPersisted {
+        val next = transform(load())
+        save(next)
+        return next
+    }
+
     private fun read(): WorkerPersisted =
         runCatching { vault.getSecret(secretId)?.let { FleetProtocol.json.decodeFromString(WorkerPersisted.serializer(), it) } }
             .getOrNull() ?: WorkerPersisted()

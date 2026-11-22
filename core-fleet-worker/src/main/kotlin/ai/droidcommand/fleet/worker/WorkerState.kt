@@ -27,6 +27,13 @@ data class WorkerPersisted(
 interface WorkerStateStore {
     fun load(): WorkerPersisted
     fun save(state: WorkerPersisted)
+
+    /**
+     * Store [transform] of the state as it is right now, as one update. Callers must use this instead of load-then-save.
+     * Job results, pause, and revocation are written from different threads; a save of a snapshot taken a moment earlier
+     * drops a result that was queued in between, or writes a credential back after the phone was revoked.
+     */
+    fun update(transform: (WorkerPersisted) -> WorkerPersisted): WorkerPersisted
 }
 
 class InMemoryWorkerStateStore(private var s: WorkerPersisted = WorkerPersisted()) : WorkerStateStore {
@@ -34,6 +41,12 @@ class InMemoryWorkerStateStore(private var s: WorkerPersisted = WorkerPersisted(
 
     @Synchronized override fun save(state: WorkerPersisted) {
         s = state
+    }
+
+    @Synchronized override fun update(transform: (WorkerPersisted) -> WorkerPersisted): WorkerPersisted {
+        val next = transform(s)
+        s = next
+        return next
     }
 }
 
@@ -53,5 +66,11 @@ class JsonFileWorkerStateStore(private val file: File) : WorkerStateStore {
             file.delete()
             check(tmp.renameTo(file)) { "could not replace worker state file" }
         }
+    }
+
+    @Synchronized override fun update(transform: (WorkerPersisted) -> WorkerPersisted): WorkerPersisted {
+        val next = transform(load())
+        save(next)
+        return next
     }
 }
