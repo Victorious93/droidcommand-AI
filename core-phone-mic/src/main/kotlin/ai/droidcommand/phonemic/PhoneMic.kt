@@ -64,6 +64,7 @@ data class MicOffer(
 object Frames {
     const val CHALLENGE = 0; const val HELLO = 1; const val HELLO_OK = 2
     const val AUDIO = 3; const val CTRL = 4; const val BYE = 5
+    const val READ_REQ = 6; const val READ_RESP = 7
 
     fun write(out: DataOutputStream, type: Int, payload: ByteArray) {
         require(payload.size <= MAX_FRAME_PAYLOAD)
@@ -125,9 +126,39 @@ class ShareStateMachine {
 }
 
 /** One connected stream. Not thread-safe except [offer] and [control], which may be called from the capture thread. */
-class MicStream private constructor(private val sock: Socket, private val out: DataOutputStream, val offer: MicOffer) : AutoCloseable {
+data class ReadResult(val ok: Boolean, val text: String, val pc: String, val window: String, val reason: String)
+
+class MicStream private constructor(
+    private val sock: Socket, private val out: DataOutputStream, private val inp: DataInputStream, val offer: MicOffer,
+) : AutoCloseable {
     private var seq = 0
     @Synchronized fun sendPcm(pcm: ByteArray) { Frames.write(out, Frames.AUDIO, Frames.audio(seq++, pcm)) }
+    /** Asks the PC to read its selected text / active window. Needs the PC-side "read" opt-in; independent of mic sharing. */
+    @Synchronized fun requestRead(): ReadResult {
+        Frames.write(out, Frames.READ_REQ, ByteArray(0))
+        val (t, body) = Frames.read(inp)
+        if (t != Frames.READ_RESP) throw java.io.IOException("unexpected frame")
+        val j = String(body, Charsets.UTF_8)
+        fun str(k: String) = Regex("\"$k\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(j)?.groupValues?.get(1)?.let(::unescape) ?: ""
+        return ReadResult(Regex("\"ok\"\\s*:\\s*true").containsMatchIn(j), str("text"), str("pc"), str("window"), str("reason"))
+    }
+
+    private fun unescape(s: String): String {
+        val sb = StringBuilder(); var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (c == '\\' && i + 1 < s.length) {
+                when (val n = s[i + 1]) {
+                    'n' -> sb.append('\n'); 't' -> sb.append('\t'); '"' -> sb.append('"'); '\\' -> sb.append('\\'); '/' -> sb.append('/')
+                    'u' -> if (i + 5 < s.length) { sb.append(s.substring(i + 2, i + 6).toInt(16).toChar()); i += 4 } else sb.append(n)
+                    else -> sb.append(n)
+                }
+                i += 2
+            } else { sb.append(c); i++ }
+        }
+        return sb.toString()
+    }
+
     @Synchronized fun control(state: String) { Frames.write(out, Frames.CTRL, """{"state":"$state"}""".toByteArray()) }
     override fun close() {
         try { synchronized(this) { Frames.write(out, Frames.BYE, ByteArray(0)) } } catch (_: Exception) {}
@@ -151,7 +182,7 @@ class MicStream private constructor(private val sock: Socket, private val out: D
             val (ok, _) = Frames.read(inp)
             if (ok != Frames.HELLO_OK) { s.close(); throw SecurityException("PC rejected the session") }
             s.soTimeout = 0
-            return MicStream(s, out, o)
+            return MicStream(s, out, inp, o)
         }
     }
 }

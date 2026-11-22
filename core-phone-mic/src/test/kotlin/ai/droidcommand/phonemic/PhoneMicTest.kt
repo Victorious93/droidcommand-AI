@@ -58,6 +58,28 @@ class PhoneMicTest {
         assertContentEquals(tone, pcm)
     }
 
+    @Test fun readRequestRoundTripsAndIsGatedByOptIn() {
+        val root = System.getProperty("victorlinux.dir") ?: System.getenv("VICTORLINUX_DIR")
+        assumeTrue(root != null && File(root, "airootfs/usr/local/bin/victor-mic").exists() && python() != null)
+        val dir = kotlin.io.path.createTempDirectory().toFile(); val port = 47200 + (ProcessHandle.current().pid() % 700).toInt()
+        val pb = ProcessBuilder(python()!!, "$root/airootfs/usr/local/bin/victor-mic", "serve", "--port", "$port", "--pc-id", "desk",
+            "--offer", "N:d1:droidcommand:3600:read", "--offer", "M:d2:keyboard", "--read-test-text", "Hello \"world\"\nline two", "--seconds", "10")
+        pb.environment().putAll(mapOf("VICTORFLEET_LIB" to "$root/fleet", "XDG_CONFIG_HOME" to dir.path))
+        val p = pb.start()
+        try {
+            val r = p.inputStream.bufferedReader()
+            val allowed = assertNotNull(MicOffer.parse(r.readLine())); val denied = assertNotNull(MicOffer.parse(r.readLine()))
+            Thread.sleep(800)
+            MicStream.connect(allowed, allowed.expiresAtS - 100).use { s ->
+                val res = s.requestRead()
+                assertTrue(res.ok); assertEquals("Hello \"world\"\nline two", res.text); assertEquals("desk", res.pc); assertEquals("Test window", res.window)
+            }
+            MicStream.connect(denied, denied.expiresAtS - 100).use { s ->
+                val res = s.requestRead(); assertFalse(res.ok); assertEquals("not-enabled", res.reason); assertEquals("", res.text)
+            }
+        } finally { p.destroy() }
+    }
+
     @Test fun wrongPinIsRefused() {
         val root = System.getProperty("victorlinux.dir") ?: System.getenv("VICTORLINUX_DIR")
         assumeTrue(root != null && File(root, "airootfs/usr/local/bin/victor-mic").exists() && python() != null)

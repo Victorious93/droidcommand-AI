@@ -37,6 +37,7 @@ fun PhoneMicSection() {
     val status by PhoneMicBus.status.collectAsState()
     var offerText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var readNote by remember { mutableStateOf<String?>(null) }
 
     fun begin() {
         val o = MicOffer.parse(offerText)
@@ -78,6 +79,10 @@ fun PhoneMicSection() {
             DroidPrimaryButton(onClick = {
                 if (android.os.Build.VERSION.SDK_INT >= 33) notif.launch(Manifest.permission.POST_NOTIFICATIONS) else perm.launch(Manifest.permission.RECORD_AUDIO)
             }, modifier = Modifier.fillMaxWidth().testTag("phone_mic_start")) { Text("Use this phone as microphone") }
+            Text("Separate from the microphone: ask the PC to read its selected text aloud here (offer needs :read).", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            DroidSecondaryButton(onClick = { PhoneRead.read(ctx, offerText) { readNote = it } },
+                modifier = Modifier.fillMaxWidth().testTag("phone_read_pc")) { Text("Read PC screen aloud") }
+            readNote?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
         (error ?: status.note.takeIf { it.isNotBlank() && !sharing })?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
     }
