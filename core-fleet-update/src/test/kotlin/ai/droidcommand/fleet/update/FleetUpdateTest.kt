@@ -95,6 +95,21 @@ class FleetUpdateTest {
     }
 
     @Test
+    fun `an unsigned apk is never chosen, the debug apk beside it is, and an unsigned-only release offers nothing`() {
+        // ShizukuV publishes shizukuv-<v>-release-unsigned.apk next to shizukuv-<v>-debug.apk. Android refuses an unsigned APK, and
+        // release-named builds rank first, so without the filter the unusable file would win.
+        val both = release("v1", "shizukuv-1.0-release-unsigned.apk", "shizukuv-1.0-debug.apk")
+        val choice = assertIs<UpdateDecision.Install>(UpdatePlanner.plan(source, null, false, listOf(both), abis))
+        assertEquals("shizukuv-1.0-debug.apk", choice.asset.name)
+        assertTrue(choice.isDebugBuild)
+        val only = release("v1", "shizukuv-1.0-release-UNSIGNED.apk")
+        assertIs<UpdateDecision.NothingPublished>(UpdatePlanner.plan(source, null, false, listOf(only), abis))
+        // a signed release APK still beats the debug one
+        val signed = release("v2", "app-release.apk", "app-release-unsigned.apk", "app-debug.apk")
+        assertEquals("app-release.apk", assertIs<UpdateDecision.Install>(UpdatePlanner.plan(source, null, false, listOf(signed), abis)).asset.name)
+    }
+
+    @Test
     fun `pre-releases are offered only when the owner opts in and drafts never are`() {
         val rel = listOf(release("v3", "a.apk", draft = true), release("v2", "a.apk", pre = true), release("v1", "a.apk"))
         // default: newest stable release wins, the pre-release is skipped

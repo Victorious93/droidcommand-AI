@@ -34,7 +34,7 @@ enum class FleetVersionRelation(val label: String?) {
 data class FleetReleaseOption(
     val tag: String,
     val channel: FleetReleaseChannel,
-    /** The APK this phone would download for [tag]. Null means the release has no APK that fits this phone. */
+    /** The APK this phone would download for [tag]. Null means the release has no installable APK for this phone (none, wrong ABI, or unsigned only). */
     val asset: ReleaseAsset?,
     val relation: FleetVersionRelation,
 ) {
@@ -48,7 +48,7 @@ data class FleetReleaseOption(
             tag,
             channel.label,
             relation.label,
-            if (asset == null) "no APK for this phone" else null,
+            if (asset == null) "no installable APK for this phone" else null,
         ).joinToString(" · ")
 }
 
