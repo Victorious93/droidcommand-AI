@@ -240,7 +240,10 @@ class FleetWorker(
             out += heartbeat(dev)
         }
         val pending = synchronized(outboundLock) { store.load().pendingOutbound.map { FleetProtocol.json.parseToJsonElement(it) as JsonObject } }
-        val liveMsgs = synchronized(liveOutbound) { liveOutbound.removeAll { it.first < now }; liveOutbound.map { it.second } }
+        val liveMsgs = synchronized(liveOutbound) {
+            liveOutbound.removeAll { it.first < now }
+            liveOutbound.map { it.second }
+        }
         val batch = (out + pending + liveMsgs).take(FleetProtocol.MAX_BATCH)
         val acks = synchronized(pendingAcks) { pendingAcks.toList() }
         val wait = if (running.isEmpty() && pending.isEmpty()) config.longPollSeconds else config.activePollSeconds
@@ -292,7 +295,7 @@ class FleetWorker(
     }
 
     private fun handleRevoked() {
-        live?.shutdown("device revoked by the coordinator")      // a revoked phone ends any live shell at once
+        live?.shutdown("device revoked by the coordinator") // a revoked phone ends any live shell at once
         batch?.revokeAll("this phone was revoked by the coordinator")
         cancelAll("device revoked by the coordinator")
         store.save(WorkerPersisted(revoked = true))

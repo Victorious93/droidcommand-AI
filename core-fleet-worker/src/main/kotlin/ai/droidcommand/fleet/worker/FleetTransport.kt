@@ -24,6 +24,7 @@ interface FleetTransport {
     fun upload(credential: String, jobId: String, attempt: Int, name: String, sha256: String, bytes: ByteArray)
     fun download(credential: String, artifactId: String): ByteArray
     fun rotate(credential: String): String
+
     /** Protocol 1.1 live terminal stream. Default: unsupported (older transports/test fakes). */
     fun terminalExchange(credential: String, sessionId: String, body: JsonObject): JsonObject = throw FleetTransportException(0, null, "terminal stream not supported by this transport")
 }

@@ -59,8 +59,10 @@ class FleetFixturesTest {
             val cmd = (p["command"] as? JsonPrimitive)?.content
             assertEquals(g("binding"), LiveProtocol.terminalBindingHash(g("session_id"), dev, g("desktop"), g("privilege"), g("mode"), cmd, g("nonce")), f)
         }
-        assertEquals("f64d73f27af4640887cfff64a0c1f5db3e3d230631f9fbe3409300c4c24b6c70",
-            LiveProtocol.terminalBindingHash("term-ü-1", "dev-1", "victorlinux:o\"w\\n@host\n\t", "user", "oneshot", "echo 'héllo \uD83D\uDE00' > /tmp/x\u0001\u007f", "n\u2028"))
+        assertEquals(
+            "f64d73f27af4640887cfff64a0c1f5db3e3d230631f9fbe3409300c4c24b6c70",
+            LiveProtocol.terminalBindingHash("term-ü-1", "dev-1", "victorlinux:o\"w\\n@host\n\t", "user", "oneshot", "echo 'héllo \uD83D\uDE00' > /tmp/x\u0001\u007f", "n\u2028"),
+        )
     }
 
     @Test fun `an assignment with a plan manifest parses it, and the assigned job is in it with the same arguments`() {

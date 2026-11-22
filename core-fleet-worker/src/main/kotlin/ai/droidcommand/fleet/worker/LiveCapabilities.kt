@@ -4,9 +4,17 @@ package ai.droidcommand.fleet.worker
 object LiveCapabilities {
     private fun op(s: BrokerStatus, rootNeeded: Boolean = false): OperationState {
         val ready = s.state == "ready" && (!rootNeeded || s.rootAllowed)
-        val state = if (ready) "ready" else if (rootNeeded && s.state == "ready") "permission_needed" else s.state
-        return OperationState(available = ready, granted = ready, ownerInteractionRequired = ready, reason = if (ready) null else (s.detail ?: state.replace('_', ' ')),
-            status = state, detail = if (ready) null else s.detail)
+        val state = if (ready) {
+            "ready"
+        } else if (rootNeeded && s.state == "ready") {
+            "permission_needed"
+        } else {
+            s.state
+        }
+        return OperationState(
+            available = ready, granted = ready, ownerInteractionRequired = ready, reason = if (ready) null else (s.detail ?: state.replace('_', ' ')),
+            status = state, detail = if (ready) null else s.detail,
+        )
     }
 
     fun operations(shell: BrokerStatus?, sms: BrokerStatus?, email: BrokerStatus?): Map<String, OperationState> {
