@@ -58,14 +58,15 @@ elsewhere, the phone is the control point".
 | "Waiting for you" | A status pill plus the question being asked. **v1 cannot answer from the list**: the answer is still the existing approval dialog or the fleet app's own Allow screen. |
 | Open a Bot to see its work | Tap a row: its steps, newest first, with redacted arguments and a short result excerpt. |
 | Live "computer" view | **Not built.** A phone bot has no cloud computer; the honest equivalent is the step list. For PC work it would be the VictorLinux runner/coordinator log, which is not wired. |
-| Notify when finished / waiting | **Not built** (see §5, item 3). |
+| Notify when finished / waiting | **Waiting only**: a notification "<bot> is waiting for you" while the app is in the background (`ActivityNotifier`); nothing on finish; nothing when the app is closed or killed (see §5, item 3). |
 | Allow once / Deny, Ask every time / Never | Already exist (`ApprovalPrompt`, `FleetControlPolicy`) and are unchanged. |
 | Routines and run history | Not built; VictorBots owns routines. |
 
 Only the interaction pattern was followed: no code, text or assets were taken from the app.
 
 **Where activity is recorded (all of it goes through the existing approval and audit path unchanged):**
-helper-bot turns and their tool calls (`ChatViewModel`), requests from paired fleet apps (`CompanionExecActivity`:
+DroidCommand's own Pilot instructions and Plan runs (`PilotController`, `PlanController`; the objective's text is not
+recorded), helper-bot turns and their tool calls (`ChatViewModel`), requests from paired fleet apps (`CompanionExecActivity`:
 "VictorBots asked: device.apps.list", waiting for you, allowed or declined, done), action commands sent to a fleet app
 (`FleetOrchestratorViewModel`; read-only status checks are not recorded, because they run for every node each time the
 screen opens), and every approval raised inside any of those (`ActivityApprovalPrompt`, which wraps the app's one
@@ -113,7 +114,16 @@ simulated workers and the Kotlin `core-fleet-worker`; the worker implements only
 1. Done: `core-activity` (33 JVM tests).
 2. Done, compiled and unit-tested, **never run on a device**: the recording hooks and the Activity screen in `:app`
    (`:app:compileDebugKotlin`, `:app:hiltJavaCompileDebug`, `:app:ktlintCheck`, 7 new app tests, the whole app unit suite).
-3. Next, none started: a device check of the real flow (a bot turn, a VictorBots request, an orchestrator command);
-   `BotLifecycle` finish events and fleet-job events from `core-fleet-worker` into the same feed; persisting the feed;
-   notifications; answering an approval from the list.
-4. Then decisions 1 and 2 in §5, and plan submission from VictorBots to the coordinator.
+3. Done after that, same caveats: Pilot and Plan recorded under "DroidCommand (Pilot and Plan)"; the "waiting for you"
+   notification (`ActivityNotifier`, `WaitingNotices`).
+4. Next, none started: a device check of the real flow (a bot turn, Pilot, a VictorBots request, an orchestrator command,
+   the notification); fleet-job events from `core-fleet-worker` into the same feed; answering an approval from the list.
+   Persisting the feed is deliberately deferred (nothing runs while the app is closed, and the redactor is best-effort).
+5. Then decisions 1 and 2 in §5, and plan submission from VictorBots to the coordinator.
+
+## Fleet jobs from the coordinator (2026-11-22)
+
+When the owner switches on the optional **Fleet worker mode**, each job the VictorLinux coordinator sends to this phone is a run under the actor `fleet:worker` ("Fleet jobs on
+this phone"), shown in a fifth Activity group, "Jobs from your fleet coordinator": started, waiting for you, your answer, covered by your batch approval, done / failed / stopped. Only the
+operation name and a short reason are recorded, never the job's arguments or output. See `docs/FLEET_WORKER.md`, "Android half". Not run on a device.
+

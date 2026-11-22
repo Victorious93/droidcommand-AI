@@ -20,10 +20,23 @@ class ActivityStateTest {
 
     @Test
     fun `an actor id is grouped by its prefix, and an unknown prefix falls back to bots`() {
+        assertEquals(ActivityGroup.DROIDCOMMAND, ActivityGroup.of("dc:pilot"))
+        assertEquals(ActivityGroup.DROIDCOMMAND, ActivityGroup.of("dc:plan"))
         assertEquals(ActivityGroup.BOTS, ActivityGroup.of("bot:x"))
         assertEquals(ActivityGroup.ASKED_THIS_PHONE, ActivityGroup.of("app:com.victorious.bots"))
         assertEquals(ActivityGroup.SENT_TO_FLEET, ActivityGroup.of("node:rootforge"))
+        assertEquals(ActivityGroup.FLEET_JOBS, ActivityGroup.of("fleet:worker"))
         assertEquals(ActivityGroup.BOTS, ActivityGroup.of("something-else"))
+    }
+
+    @Test
+    fun `Pilot and Plan are listed first, under DroidCommand`() {
+        assertEquals(ActivityGroup.DROIDCOMMAND, ActivityGroup.entries.first())
+        add(ActivityActor("dc:pilot", "Pilot"), "r1", ActivityKind.RUN_STARTED, "Pilot: echo")
+        add(bot, "r2", ActivityKind.RUN_STARTED)
+        val state = buildActivityState(log.snapshot(), 2_000, null)
+        assertEquals(listOf("Pilot"), state.inGroup(ActivityGroup.DROIDCOMMAND).map { it.actor.name })
+        assertEquals(listOf("Research bot"), state.inGroup(ActivityGroup.BOTS).map { it.actor.name })
     }
 
     @Test

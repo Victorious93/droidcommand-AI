@@ -54,7 +54,7 @@ fun ActivityScreen(viewModel: ActivityViewModel = hiltViewModel()) {
     ) {
         ScreenTitle("Activity")
         Text(
-            "What your helper bots and fleet apps are doing on this phone. It only shows what ran through this app.",
+            "What DroidCommand, your helper bots and your fleet apps are doing on this phone. It only shows what ran through this app.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -64,7 +64,7 @@ fun ActivityScreen(viewModel: ActivityViewModel = hiltViewModel()) {
             DroidEmptyState(
                 icon = Icons.Filled.Timeline,
                 title = "Nothing has run yet",
-                body = "Run a helper bot from the Bot maker, or ask this phone to do something from a fleet app. It shows up here while it works.",
+                body = "Run a Pilot instruction, a Plan or a helper bot, or ask this phone to do something from a fleet app. It shows up here while it works.",
             )
         }
 

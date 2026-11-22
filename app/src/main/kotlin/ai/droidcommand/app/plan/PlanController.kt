@@ -1,5 +1,9 @@
 package ai.droidcommand.app.plan
 
+import ai.droidcommand.activity.ActivityActor
+import ai.droidcommand.activity.ActivityLog
+import ai.droidcommand.activity.ActivityRecordingToolRunner
+import ai.droidcommand.activity.ActivityRun
 import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.PlanHistoryFile
 import ai.droidcommand.agent.PlanRun
@@ -7,6 +11,7 @@ import ai.droidcommand.agent.PlanRunner
 import ai.droidcommand.agent.PlanStatus
 import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
+import ai.droidcommand.app.activity.endFromPlan
 import ai.droidcommand.app.mode.EngineModes
 import ai.droidcommand.config.EncryptedSecretsVault
 import ai.droidcommand.llm.factory.CloudPlannerFactory
@@ -69,6 +74,7 @@ class PlanController @Inject constructor(
     private val transport: HttpTransport,
     private val modes: EngineModes,
     private val inference: PolicyInference,
+    private val activityLog: ActivityLog,
 ) {
     private val history = PlanHistoryFile(context.filesDir.toPath().resolve("plans").resolve("history.json"))
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -86,6 +92,8 @@ class PlanController @Inject constructor(
         }
         cancelled.set(false)
         mutableState.update { it.copy(running = true, error = null, route = null) }
+        // One Plan run is one row on the Activity screen. The objective's text is not recorded, only that a run is going.
+        val activityRun = ActivityRun.start(ActivityActor("dc:plan", "Plan"), "Plan: working on an objective", activityLog)
 
         scope.launch {
             try {
@@ -94,6 +102,7 @@ class PlanController @Inject constructor(
                 val planner = if (inference.policy().routed) {
                     when (val routed = inference.planner("Plan")) {
                         is RoutedPlanner.Refused -> {
+                            activityRun.fail(routed.message)
                             mutableState.update { it.copy(error = routed.message) }
                             return@launch
                         }
@@ -105,6 +114,7 @@ class PlanController @Inject constructor(
                 } else {
                     when (val result = CloudPlannerFactory.create(vault, spec, model, transport)) {
                         is PlannerResult.MissingKey -> {
+                            activityRun.fail(result.message)
                             mutableState.update { it.copy(error = result.message) }
                             return@launch
                         }
@@ -115,22 +125,29 @@ class PlanController @Inject constructor(
                     registry = registry,
                     planner = planner,
                     newRunner = { machine ->
-                        SecureToolExecutor(
-                            registry,
-                            ToolExecutor(registry, machine),
-                            machine,
-                            SecurityPolicyEnforcer(policy),
-                            approvalPrompt,
-                            auditLog = auditLog,
+                        ActivityRecordingToolRunner(
+                            SecureToolExecutor(
+                                registry,
+                                ToolExecutor(registry, machine),
+                                machine,
+                                SecurityPolicyEnforcer(policy),
+                                approvalPrompt,
+                                auditLog = auditLog,
+                            ),
+                            activityRun,
+                            activityLog,
                         )
                     },
                 )
-                runner.run(text, isCancelled = { cancelled.get() }, onUpdate = ::publish)
+                activityRun.endFromPlan(runner.run(text, isCancelled = { cancelled.get() }, onUpdate = ::publish))
             } catch (e: Exception) {
+                activityRun.fail("Plan run failed: ${e.message ?: e.javaClass.simpleName}")
                 // Exception, not Throwable: an Error (e.g. OutOfMemoryError) should not be swallowed.
                 // The message is the failure's own; the API key is only ever read lazily by the provider.
                 mutableState.update { it.copy(error = "Plan run failed: ${e.message ?: e.javaClass.simpleName}") }
             } finally {
+                // A run that ended some way not handled above must not stay "working" on the Activity screen.
+                if (!activityRun.isEnded) activityRun.fail("Ended without a result")
                 mutableState.update { it.copy(running = false) }
                 modes.endTask()
             }

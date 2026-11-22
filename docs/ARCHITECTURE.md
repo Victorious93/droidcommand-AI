@@ -1841,13 +1841,49 @@ Design, the Grok Bot comparison and the open decisions: `docs/ACTIVITY_AND_MISSI
 | `core-activity.ActivityBoard` | IMPLEMENTED — JVM-tested | Derives per-bot status (waiting for you / working / stalled / failed / done / stopped), the in-flight step and a per-run timeline from events only. |
 | `:app` Activity screen (`fleet/activity`) + tile on the Fleet home screen | IMPLEMENTED — compiled, unit-tested, **never run on a device** | Sections: Needs you / Helper bots / Fleet apps that asked this phone / Commands sent to fleet apps. Read-only: it cannot answer an approval. State building is a pure function (`buildActivityState`), 7 tests. |
 | Recording hooks in `:app` | IMPLEMENTED — compiled, **never run on a device** | `ChatViewModel` (helper-bot turn = one run; tool calls recorded), `CompanionExecActivity` (a paired fleet app's request, e.g. VictorBots, from "asked" to the receipt outcome), `FleetOrchestratorViewModel` (action commands only; status checks are not recorded), `AppModule` (shared `ActivityLog`; the one `ApprovalPrompt` wrapped by `ActivityApprovalPrompt`). |
+| `core-activity.WaitingNotices` | IMPLEMENTED — JVM-tested | Pure "who is waiting for the owner" tracker (one entry per run; an answer or the end of the run removes it). |
+| `:app` `ActivityNotifier` | IMPLEMENTED — compiled, **never run on a device** | Posts "<bot> is waiting for you" when the app is in the background and a run is stuck on an approval (delayed 1.5 s so a rotation does not flash it). Says nothing about what is asked, also on the lock screen. Needs the `POST_NOTIFICATIONS` permission the first-run setup already requests; does nothing without it. Never approves anything. |
+| Pilot and Plan recorded (`PilotController`, `PlanController`) | IMPLEMENTED — compiled, unit-tested for Pilot, **never run on a device** | New top section "DroidCommand (Pilot and Plan)" on the Activity screen. One Pilot instruction / one Plan run = one row; the objective's text is not recorded. Outcome mapping (`ActivityOutcomes`) is unit-tested; `PlanController` itself has no unit test (it needs an Android `Context`), so its wiring is compile-checked only. |
 | Fleet-job events (`core-fleet-worker`) and bot run completion for `BotLifecycle` | NOT STARTED | `BotLifecycle` still records only `BOT_RUN_STARTED` to the audit log. |
-| Persisting the feed, notifications, answering an approval from the Activity list, a PC-side log view | NOT STARTED | See `docs/ACTIVITY_AND_MISSIONS.md` §3 and §5. |
+| Persisting the feed, answering an approval from the Activity list, a PC-side log view | NOT STARTED | Persistence is deliberately not built yet: nothing runs while the app is closed, and `ActivityRedactor` is best-effort, so keeping more on disk widens the exposure for little gain. See `docs/ACTIVITY_AND_MISSIONS.md` §3 and §5. |
 
 **Verified (Android SDK installed in the session; no device or emulator):** `:core-activity:test` + `ktlintCheck`
-(33 tests, 0 failures); `:app:compileDebugKotlin`, `:app:hiltJavaCompileDebug` (the Hilt graph resolves the new
+(33 tests, 0 failures; 37 after the notification and Pilot/Plan follow-up); `:app:compileDebugKotlin`, `:app:hiltJavaCompileDebug` (the Hilt graph resolves the new
 `ActivityLog`), `:app:ktlintCheck`; the whole `:app:testDebugUnitTest` (369 tests, 0 failures) plus `:core-security:test`
 (320, 0 failures). `:app:assembleDebug` was **not** run and nothing was launched.
+
+### Download controls: Start / Stop / Cancel on every in-app download (2026-11-21)
+
+Owner request: "there should be a start and stop, cancel on all download options." Meaning used everywhere:
+**Start** begins a download, or **resumes** one whose partial file was kept; **Stop** ends the transfer and **keeps** what
+was downloaded; **Cancel** ends it and **deletes** what was downloaded. Audit of what existed before (read from code):
+chat models had Start and a "Cancel" that really only stopped; the embedding model the same; voice models had no Stop or
+Cancel and could not resume (the partial was deleted in a `finally`); fleet APKs had neither and could not be interrupted;
+the fleet auto-update worker could not interrupt a file mid-download. The "Get latest APK" bar opens a browser page, so it
+has no in-app transfer to control.
+
+| Download | Where | Start | Stop | Cancel | Status |
+|---|---|---|---|---|---|
+| Chat models (catalog + Hugging Face) | Models screen | Download / Resume | Stop | Cancel (`ModelDownloadScheduler.cancel`, discard done by the worker once it has stopped writing) | IMPLEMENTED — compiled, state logic unit-tested, **never run on a device** |
+| Embedding model | chat screen (Document Q&A) | Download / Resume | Stop | Cancel | IMPLEMENTED — compiled, **never run on a device** |
+| Voice models (TTS, wake word) | Settings → Voice | Download / Resume | Stop | Cancel | IMPLEMENTED — repository and downloader JVM-tested against a local server; UI compiled only |
+| Fleet app APKs | Fleet cards | Download / Resume | Stop | Cancel | IMPLEMENTED — `ApkDownloader` JVM-tested against a local server; UI compiled only |
+| Fleet auto-update (background, 6 h) | Fleet settings | on/off switch | stopping the worker now ends the file and keeps the partial (next run resumes) | switch off | IMPLEMENTED — compiled only |
+
+Pieces: `core-llm-local.ModelRepository.partialBytes/discardPartial`; `core-voice.VoiceModelRepository` keeps `.part` files on
+a stop or drop (a finished file with the wrong digest is still deleted), `partialBytes/discardPartial`, and
+`HttpsFileDownloader` now resumes with an HTTP Range request (200 restarts, 416 discards the partial); new pure-JVM
+`core-fleet-update.ApkDownloader` (extracted from `FleetAppInstaller.download`, same safety rules: allowed hosts on every
+redirect hop, 300 MB cap, APK header, published SHA-256; plus a stop hook, Range resume that re-hashes the kept prefix so the
+checksum still covers the whole file, a check that the body is complete, and a partial that the server cannot continue
+(416, or a 206 from the wrong offset) is discarded so a retry cannot fail forever); `:app` `ModelDownloadState.Stopped`,
+`DownloadStopSignals` (the Cancel handshake between scheduler and worker), and the buttons.
+
+Known limits: a stop on the voice and fleet-APK downloaders is checked between reads, so on a *stalled* connection it can
+take up to the 30 s read timeout; a Cancel that races a Start of the same chat model in the same instant can leave a small
+partial that then shows as Stopped and can be cancelled again; an Android cache purge can remove a partial APK (it then
+restarts). Nothing here was run on a device; WorkManager scheduling, the foreground notification and the Cancel handshake
+are compile-checked only.
 
 ### Bot maker: per-bot peers and sandbox, wired into the app (2026-11-18)
 
@@ -1941,3 +1977,31 @@ container — same stated limitation as every other `:app` row in this document)
 this repo has talked to a real running VictorLinux backend yet. See the 2026-11-19 audit addendum for the full
 cross-repo record, including the real `secmsf.py` RPC-error-classification bug found and fixed on the VictorLinux
 side before any of this Kotlin code was written.
+
+### Batch approval for fleet jobs (2026-11-21) — optional, off by default
+
+One owner approval of a *reviewed plan* can cover that plan's confirmation taps. It is an added feature with its own switch (and the
+coordinator has its own, `config --share-plan`), never required, and it replaces only the tap.
+
+| Piece | Where | Status |
+|---|---|---|
+| `ArgsDigest` (SHA-256 of canonical JSON args) | `core-security` | IMPLEMENTED, JVM-tested |
+| `BatchApprovals`, `ToolBatchEligibility`, limits, audit, revoke | `core-security` | IMPLEMENTED, JVM-tested (27 + 11 tests, mutation-checked) |
+| `BatchApprovalPrompt` + `BatchJobScope` + `BatchOfferHandler` (one question per plan) | `core-security` | IMPLEMENTED, JVM-tested |
+| Plan manifest on assignments (`FleetProtocol.parsePlanManifest`, shared golden fixtures `assignment_with_plan`, `plan_ignored/*`) | `core-fleet-worker` + VictorLinux `fleet/` | IMPLEMENTED; real Python coordinator ↔ Kotlin worker over HTTPS tested, manifest on and off |
+| Worker wiring (context around the tool call, `FleetOperation.batchable`, revoke on pause/disable/unpair/revoke) | `core-fleet-worker` | IMPLEMENTED, 11 tests |
+| Android phone service (`specialUse` foreground service, not started at boot), the two off-by-default switches, offer dialog, pairing screen, Keystore identity, capability probe, job rows in the Activity feed (`fleet:` group) | `:app` | ON DISK (2026-11-22): compiles, Hilt graph valid, engine + pieces JVM-tested (24 tests); never run on a phone or emulator |
+
+See `docs/FLEET_WORKER.md`, "Optional: approve a reviewed batch once".
+
+## Fleet "Download your apps" list (2026-11-22)
+
+Fleet tab → one row per app: icon (installed copy's launcher icon, else bundled artwork for VictorBots/ShizukuV/rustdeskV, else a monogram badge),
+a Download / Update / Resume button, a **Version** menu listing every published release (Stable / Debug / Pre-release, with how it compares to the
+installed version, "Can't compare" when it cannot), a per-app **Auto-update** menu (Off / Stable / Include pre-releases), an **Open repo** button,
+and Stop / Cancel while downloading; plus **Download all** and an *Include pre-releases* default. Pure-JVM parts in `core-fleet-update`
+(`FleetReleaseOptions`, `FleetDownloadQueue`, `FleetAutoUpdateMode`/`FleetAutoUpdateRules`, `FleetRepoLinks`, `FleetAppMonogram`, `ApkDownloader`
+with an asset-bound partial); `:app` glue in `FleetInstallViewModel`, `FleetDownloadSection`, `FleetAppIcon`, `FleetExtraApps` (display-only apps
+that are deliberately **not** `FleetCatalog` members, so they never enter the Fleet Orchestrator control plane), `FleetSources`. IMPLEMENTED —
+JVM-tested; `:app` compiled and launched on the CI emulator, **never run on a phone**. What each repo must publish for a button to work:
+`docs/FLEET_DOWNLOADS.md`.

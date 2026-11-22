@@ -3,6 +3,10 @@ package ai.droidcommand.app
 import ai.droidcommand.app.approval.ApprovalHost
 import ai.droidcommand.app.approval.ComposeApprovalPrompt
 import ai.droidcommand.app.fleet.AndroidFleetThemeClient
+import ai.droidcommand.app.fleetworker.BatchOfferHost
+import ai.droidcommand.app.fleetworker.ComposeBatchOfferPrompt
+import ai.droidcommand.app.fleetworker.FleetWorkerController
+import ai.droidcommand.app.fleetworker.FleetWorkerSettings
 import ai.droidcommand.app.navigation.DroidCommandNavHost
 import ai.droidcommand.app.shortcuts.QuickAction
 import ai.droidcommand.app.shortcuts.QuickActionInbox
@@ -33,6 +37,15 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
     @Inject
     lateinit var approvalPrompt: ComposeApprovalPrompt
+
+    @Inject
+    lateinit var batchOfferPrompt: ComposeBatchOfferPrompt
+
+    @Inject
+    lateinit var fleetWorkerSettings: FleetWorkerSettings
+
+    @Inject
+    lateinit var fleetWorkerController: FleetWorkerController
 
     @Inject
     lateinit var fleetThemeClient: AndroidFleetThemeClient
@@ -88,8 +101,16 @@ class MainActivity : ComponentActivity() {
                 // approval — the same real gate `cli.ConsoleApprovalPrompt`
                 // enforces on the command line, never auto-approved here.
                 ApprovalHost(approvalPrompt)
+                BatchOfferHost(batchOfferPrompt)
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Optional fleet worker: brings its service back only if the owner left the switch on. The first read touches the
+        // Keystore-backed vault, so it runs off the main thread.
+        if (fleetWorkerSettings.workerEnabled.value) Thread { runCatching { fleetWorkerController.resumeIfEnabled() } }.start()
     }
 
     override fun onNewIntent(intent: Intent) {

@@ -1,0 +1,50 @@
+{
+  "msg_id": "m-plan-7",
+  "payload": {
+    "args": {
+      "algorithm": "sha256",
+      "shard": "shard-0.tar"
+    },
+    "attempt": 1,
+    "deadline_ms": null,
+    "fence": 1,
+    "idempotent": true,
+    "inputs": [],
+    "job_id": "plan-x.hash0",
+    "lease_expires_ms": 1790000090000,
+    "op": "hash_files",
+    "plan": {
+      "jobs": [
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-0.tar"
+          },
+          "job_id": "plan-x.hash0",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-1.tar"
+          },
+          "job_id": "../x",
+          "op": "hash_files",
+          "requires_root": false
+        }
+      ],
+      "plan_id": "plan-x"
+    },
+    "requires_root": false,
+    "ui_exclusive": false
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "sender": "coordinator",
+  "sent_at": 1790000000000,
+  "target": "dev-0123456789ab",
+  "type": "assignment"
+}
