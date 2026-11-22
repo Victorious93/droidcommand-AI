@@ -88,6 +88,7 @@ class FleetWorkerBatchTest {
     private val owner = Owner()
     private var offersMade = mutableListOf<BatchReview.Reviewable>()
     private var offerAnswer: Duration? = Duration.ofMinutes(10)
+    private val events = mutableListOf<FleetJobEvent>()
 
     private fun args(title: String) = buildJsonObject { put("title", title) }
 
@@ -144,6 +145,7 @@ class FleetWorkerBatchTest {
         w = FleetWorker(
             SoftwareWorkerIdentity(), t, probe, runner, store, listOf(op), tmp, WorkerConfig("Test phone", "test-1"),
             clock = { now[0] }, executor = { it.run() }, batch = if (withBatchFeature) approvals else null,
+            onJobEvent = { events += it },
         )
         return Rig(w, approvals)
     }
@@ -289,5 +291,54 @@ class FleetWorkerBatchTest {
         assertEquals(1, owner.taps)
         assertEquals(listOf("alpha"), ran, "the declined retry did not run")
         assertEquals("permission_denied", (((t.last("fail")["error"] as JsonObject)["code"]) as JsonPrimitive).content)
+    }
+
+    @Test fun `the owner's activity feed hears about a batch-covered job without any arguments`() {
+        val m = manifest("plan-1", "a" to "alpha")
+        val r = rig()
+        run(r, assignment("plan-1", "a", "alpha", m))
+        assertEquals(
+            listOf(FleetJobEvent.Phase.STARTED, FleetJobEvent.Phase.COVERED_BY_BATCH, FleetJobEvent.Phase.COMPLETED),
+            events.map { it.phase },
+        )
+        assertTrue(events.all { it.jobId == "plan-1.a" && it.op == "note_save" })
+        assertTrue(events.none { "alpha" in (it.detail ?: "") })
+    }
+
+    @Test fun `a job that waits on the owner is reported as waiting, then answered, then completed`() {
+        switchOn = false
+        val r = rig()
+        run(r, assignment("plan-1", "a", "alpha", null))
+        assertEquals(
+            listOf(FleetJobEvent.Phase.STARTED, FleetJobEvent.Phase.WAITING_FOR_OWNER, FleetJobEvent.Phase.OWNER_ANSWERED, FleetJobEvent.Phase.COMPLETED),
+            events.map { it.phase },
+        )
+        assertEquals("approved", events.single { it.phase == FleetJobEvent.Phase.OWNER_ANSWERED }.detail)
+    }
+
+    @Test fun `a job the owner declines ends as failed with the typed reason`() {
+        switchOn = false
+        owner.answer = false
+        val r = rig()
+        run(r, assignment("plan-1", "a", "alpha", null))
+        val last = events.last()
+        assertEquals(FleetJobEvent.Phase.FAILED, last.phase)
+        assertTrue(last.detail!!.startsWith("permission_denied"), last.detail)
+    }
+
+    @Test fun `a listener that throws cannot break the worker`() {
+        val noteOp = NoteOp(true, ran)
+        val reg = ToolRegistry().also { it.register(noteOp.tool()) }
+        val sm = AgentStateMachine()
+        val runner = SecureToolExecutor(reg, ToolExecutor(reg, sm, sleep = { }), sm, SecurityPolicyEnforcer(SecurityPolicy(autoApprove = emptySet())), ApprovalPrompt { true })
+        val w = FleetWorker(
+            SoftwareWorkerIdentity(), t, probe, runner, store, listOf(noteOp), tmp, WorkerConfig("P", "v"),
+            clock = { now[0] }, executor = { it.run() }, onJobEvent = { error("listener bug") },
+        )
+        t.inbound += assignment("plan-1", "a", "alpha", null)
+        w.step()
+        w.step()
+        assertEquals(listOf("alpha"), ran, "the job still ran")
+        assertEquals(1, t.count("complete"), "and still reached its terminal report")
     }
 }

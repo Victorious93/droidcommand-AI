@@ -1990,6 +1990,6 @@ coordinator has its own, `config --share-plan`), never required, and it replaces
 | `BatchApprovalPrompt` + `BatchJobScope` + `BatchOfferHandler` (one question per plan) | `core-security` | IMPLEMENTED, JVM-tested |
 | Plan manifest on assignments (`FleetProtocol.parsePlanManifest`, shared golden fixtures `assignment_with_plan`, `plan_ignored/*`) | `core-fleet-worker` + VictorLinux `fleet/` | IMPLEMENTED; real Python coordinator ↔ Kotlin worker over HTTPS tested, manifest on and off |
 | Worker wiring (context around the tool call, `FleetOperation.batchable`, revoke on pause/disable/unpair/revoke) | `core-fleet-worker` | IMPLEMENTED, 11 tests |
-| Android phone service, the two switches, offer card, pairing screen, Keystore identity | `:app` | NOT STARTED |
+| Android phone service (`specialUse` foreground service, not started at boot), the two off-by-default switches, offer dialog, pairing screen, Keystore identity, capability probe, job rows in the Activity feed (`fleet:` group) | `:app` | ON DISK (2026-11-22): compiles, Hilt graph valid, engine + pieces JVM-tested (24 tests); never run on a phone or emulator |
 
 See `docs/FLEET_WORKER.md`, "Optional: approve a reviewed batch once".

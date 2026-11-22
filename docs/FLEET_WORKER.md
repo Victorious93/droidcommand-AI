@@ -1,7 +1,8 @@
 # DroidCommand phone-worker mode (`core-fleet-worker`)
 
 The phone side of the VictorLinux fleet coordinator (contract: `VictorLinux/fleet/docs/FLEET.md`, protocol_major 1). Pure JVM module; the
-Android pieces (Keystore identity, capability probe, foreground service/WorkManager, pairing UI) are **not written** and are listed at the end.
+Android pieces (Keystore identity, capability probe, foreground service, pairing UI, the two switches) live in `:app` and are described under
+"Android half" below: **they compile and their logic is JVM-tested, but none of it has run on a phone or emulator.**
 
 ## What is implemented and tested
 * `FleetProtocol` — Kotlin twin of the coordinator's validator, run against the **same golden fixtures** (`src/test/resources/fleet-fixtures/v1`,
@@ -44,8 +45,33 @@ Hard limits, all enforced in `core-security` (`BatchApprovals`, `ToolBatchEligib
 Honest status: `hash_files` is the only operation and it is `NORMAL` level, so **nothing can be covered by a batch today**; the engine, the
 manifest and the worker wiring are tested, and the first operation that asks for a tap is what makes the feature observable. Nothing here has run on a phone.
 
+## Android half (2026-11-22) — an optional feature, off by default
+
+Everything below is in `:app` (`ai.droidcommand.app.fleetworker`, Settings → "Fleet worker (optional)"). **Both switches are off until the owner turns them on**, are
+independent, and are re-read at the moment they matter.
+
+| Piece | What it is | Verified |
+|---|---|---|
+| **Fleet worker mode** switch | Whether this phone talks to the coordinator and takes jobs. It cannot be turned on until the phone is paired. Off: the service stops, running jobs are cancelled, every batch approval ends. | engine JVM tests (switch off means nothing runs, no contact with the coordinator) |
+| **Batch approval** switch | See the batch section above. Off: no offer is ever made, nothing is covered, live batches end at once. | engine JVM tests |
+| Pairing | Paste the coordinator's `victor-fleet pair` output, strict parse (https address, two 64-hex fingerprints, secret), the owner compares the fingerprint on screen, then enrollment signs the coordinator identity with the phone key. QR scanning is not built. | parser + engine JVM tests, scripted coordinator |
+| Identity | EC P-256 key in the AndroidKeyStore (`KeystoreWorkerIdentity`, StrongBox first, then the platform default; reports hardware- or software-backed). | compiles only |
+| State | `WorkerPersisted` (credential, pairing, unsent results) in the Keystore-backed secrets vault, never plain storage; an unreadable record means "not paired". | JVM tests with the in-memory vault |
+| Capabilities | Live battery, thermal and free storage; one operation (`hash_files`), "granted" is the owner's switch; no root is ever offered. | mapping JVM-tested; the platform reads compile only |
+| Service | `FleetWorkerService`: a visible foreground service with a **Switch off** notification action. Started only by the owner's switch (or when the app is opened with the switch still on), stops when the switch goes off, the phone is unpaired or revoked, or the coordinator rejects its credential. **Not started at boot.** | manifest policy test; lifecycle not run |
+| Own executor | Fleet jobs run through a dedicated `SecureToolExecutor` holding only the worker's operations, as `Initiator.REMOTE` only, with the app's `SecurityPolicy`, approval prompt and audit log. Local planners and helper bots cannot reach them. | engine JVM tests |
+| Activity feed | Each job is a run under "Jobs from your fleet coordinator": started, waiting for you, your answer, covered by a batch, done / failed / stopped. No arguments are recorded. | engine JVM tests |
+| Offer dialog | `BatchOfferHost`: what one approval covers, what will still ask (with the reason), 5 min / 15 min / 1 hour or "No, ask me each time". Closing it counts as no. | compiles only; the blocking prompt is JVM-tested at the core-security level |
+
+**Why `specialUse`, not `dataSync`.** Android documents that a `dataSync` foreground service may run 6 hours in a 24-hour period once the app targets Android 15 (then
+`Service.onTimeout` is called and a service that does not stop crashes the app), and that such a service cannot be started from a `BOOT_COMPLETED` receiver. A connection that stays up until the
+owner switches it off does not fit that, so the service declares `foregroundServiceType="specialUse"` with the required `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` text. The same page says specialUse
+values are reviewed in Google Play Console if the app is published there; this project has no stated Play distribution. (Source: developer.android.com foreground service types and timeout pages, read 2026-11-22.)
+
+**After a reboot** the worker does not restart itself; the owner's switch stays on and the service comes back the next time the app is opened.
+
 ## Not implemented (do not assume)
-Android Keystore identity; `CapabilityProbe` against real Android state; foreground service / WorkManager and reconnect after process death; pairing screen with fingerprint confirmation;
+Anything that has run on a phone or emulator (none of the Android half has); QR pairing; a restart at boot or after the system kills the app (only an app open brings it back);
 operations other than `hash_files` (`apk.install`, `apk.launch`, `apk.a11y_walkthrough`, `apk.instrumentation`, `apk.diagnostics`, file/private-log reads, Shizuku/ADB/root executors);
-Android storage-permission file access. Unrooted phones can therefore only do `hash_files` on coordinator-supplied inputs today. Installation confirmation must be reported as `approval_needed`.
-Nothing was run on a phone or emulator (no Android SDK in this environment).
+Android storage-permission file access; the Python coordinator's inbound device messages UI. Unrooted phones can therefore only do `hash_files` on coordinator-supplied inputs today, and it
+never asks for a confirmation, so **no batch approval can be observed yet**. Installation confirmation must be reported as `approval_needed`.

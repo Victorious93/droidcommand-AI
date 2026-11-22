@@ -25,6 +25,7 @@ class ActivityStateTest {
         assertEquals(ActivityGroup.BOTS, ActivityGroup.of("bot:x"))
         assertEquals(ActivityGroup.ASKED_THIS_PHONE, ActivityGroup.of("app:com.victorious.bots"))
         assertEquals(ActivityGroup.SENT_TO_FLEET, ActivityGroup.of("node:rootforge"))
+        assertEquals(ActivityGroup.FLEET_JOBS, ActivityGroup.of("fleet:worker"))
         assertEquals(ActivityGroup.BOTS, ActivityGroup.of("something-else"))
     }
 
