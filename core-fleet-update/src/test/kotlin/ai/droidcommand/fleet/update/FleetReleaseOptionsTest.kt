@@ -45,7 +45,7 @@ class FleetReleaseOptionsTest {
         val none = build("0.3.0").single { it.tag == "v0.1.0" }
         assertFalse(none.installable)
         assertNull(none.asset)
-        assertTrue("no APK for this phone" in none.label)
+        assertTrue("no installable APK for this phone" in none.label)
     }
 
     @Test

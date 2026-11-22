@@ -1993,3 +1993,15 @@ coordinator has its own, `config --share-plan`), never required, and it replaces
 | Android phone service (`specialUse` foreground service, not started at boot), the two off-by-default switches, offer dialog, pairing screen, Keystore identity, capability probe, job rows in the Activity feed (`fleet:` group) | `:app` | ON DISK (2026-11-22): compiles, Hilt graph valid, engine + pieces JVM-tested (24 tests); never run on a phone or emulator |
 
 See `docs/FLEET_WORKER.md`, "Optional: approve a reviewed batch once".
+
+## Fleet "Download your apps" list (2026-11-22)
+
+Fleet tab → one row per app: icon (installed copy's launcher icon, else bundled artwork for VictorBots/ShizukuV/rustdeskV, else a monogram badge),
+a Download / Update / Resume button, a **Version** menu listing every published release (Stable / Debug / Pre-release, with how it compares to the
+installed version, "Can't compare" when it cannot), a per-app **Auto-update** menu (Off / Stable / Include pre-releases), an **Open repo** button,
+and Stop / Cancel while downloading; plus **Download all** and an *Include pre-releases* default. Pure-JVM parts in `core-fleet-update`
+(`FleetReleaseOptions`, `FleetDownloadQueue`, `FleetAutoUpdateMode`/`FleetAutoUpdateRules`, `FleetRepoLinks`, `FleetAppMonogram`, `ApkDownloader`
+with an asset-bound partial); `:app` glue in `FleetInstallViewModel`, `FleetDownloadSection`, `FleetAppIcon`, `FleetExtraApps` (display-only apps
+that are deliberately **not** `FleetCatalog` members, so they never enter the Fleet Orchestrator control plane), `FleetSources`. IMPLEMENTED —
+JVM-tested; `:app` compiled and launched on the CI emulator, **never run on a phone**. What each repo must publish for a button to work:
+`docs/FLEET_DOWNLOADS.md`.

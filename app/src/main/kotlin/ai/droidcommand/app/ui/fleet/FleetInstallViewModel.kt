@@ -193,7 +193,7 @@ class FleetInstallViewModel @Inject constructor(
         val option = mutable.value.optionsById[fleetId]?.firstOrNull { it.tag == tag }
         val asset = option?.asset
         if (option == null || asset == null) {
-            mutable.update { it.copy(message = "${source.displayName} $tag has no APK for this phone.") }
+            mutable.update { it.copy(message = "${source.displayName} $tag has no installable APK for this phone.") }
             return
         }
         if (!installer.canInstall()) {
