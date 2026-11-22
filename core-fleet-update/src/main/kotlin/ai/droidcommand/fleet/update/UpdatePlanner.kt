@@ -59,9 +59,11 @@ object UpdatePlanner {
     /** The APK picked from one release for this phone. [debug] is true when only a debug-named APK fit. */
     data class AssetChoice(val asset: ReleaseAsset, val debug: Boolean)
 
-    /** Release builds before debug builds; a matching ABI before a universal APK; never a different ABI. */
+    /** Release builds before debug builds; a matching ABI before a universal APK; never a different ABI; never an unsigned APK. */
     fun chooseAsset(assets: List<ReleaseAsset>, abis: List<String>): AssetChoice? {
-        val apks = assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
+        // An unsigned APK (ShizukuV attaches `...-release-unsigned.apk`) can never be installed: Android refuses it. Without this it would
+        // be preferred over the debug build next to it, because release-named builds rank first.
+        val apks = assets.filter { it.name.endsWith(".apk", ignoreCase = true) && !it.name.contains("unsigned", ignoreCase = true) }
         val known = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86", "arm64", "armv7")
         fun abiOf(name: String) = known.firstOrNull { name.contains(it, ignoreCase = true) }
         fun matchesPhone(name: String): Boolean {
