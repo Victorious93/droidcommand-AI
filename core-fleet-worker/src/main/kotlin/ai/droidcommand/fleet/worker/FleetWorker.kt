@@ -82,6 +82,14 @@ class FleetApprovalPrompt(private val delegate: ApprovalPrompt, private val pend
     }
 }
 
+/**
+ * What happened to one job on this phone, for the owner's Activity feed. Carries no job arguments or output: [detail] is only a short
+ * reason (an error code and message, or the owner's answer).
+ */
+data class FleetJobEvent(val jobId: String, val attempt: Int, val op: String, val phase: Phase, val detail: String? = null) {
+    enum class Phase { STARTED, WAITING_FOR_OWNER, OWNER_ANSWERED, COVERED_BY_BATCH, COMPLETED, FAILED, STOPPED }
+}
+
 sealed class StepResult {
     object NotPaired : StepResult()
     object Revoked : StepResult()
@@ -118,6 +126,7 @@ class FleetWorker(
     private val onNodeMessage: (fromDevice: String, topic: String, body: JsonObject) -> Unit = { _, _, _ -> },
     private val onRevoked: () -> Unit = {},
     private val batch: BatchApprovals? = null,
+    private val onJobEvent: (FleetJobEvent) -> Unit = {},
 ) {
     private val ops = operations.associateBy { it.op }
     private val running = ConcurrentHashMap<String, RunningInfo>()
@@ -304,8 +313,28 @@ class FleetWorker(
     }
 
     /** Reliable results: queued durably, re-sent after any disconnect, coordinator de-duplicates by msg_id. */
+    private fun emit(info: RunningInfo, phase: FleetJobEvent.Phase, detail: String? = null) {
+        runCatching { onJobEvent(FleetJobEvent(info.jobId, info.attempt, info.op, phase, detail)) }
+    }
+
+    /** The terminal reports of a job that is running here are also shown to the owner. */
+    private fun reportToOwner(type: String, payload: JsonObject) {
+        val job = (payload["job_id"] as? JsonPrimitive)?.contentOrNull ?: return
+        val att = (payload["attempt"] as? JsonPrimitive)?.intOrNull ?: return
+        val info = running["$job#$att"] ?: return
+        when (type) {
+            "complete" -> emit(info, FleetJobEvent.Phase.COMPLETED)
+            "fail" -> {
+                val err = payload["error"] as? JsonObject
+                emit(info, FleetJobEvent.Phase.FAILED, "${(err?.get("code") as? JsonPrimitive)?.contentOrNull}: ${(err?.get("message") as? JsonPrimitive)?.contentOrNull}")
+            }
+            "cancel_ack" -> if ((payload["state"] as? JsonPrimitive)?.contentOrNull == "stopped") emit(info, FleetJobEvent.Phase.STOPPED)
+        }
+    }
+
     private fun enqueue(type: String, payload: JsonObject) {
         val dev = store.load().deviceId ?: return
+        reportToOwner(type, payload)
         val e = env(dev, type, payload)
         synchronized(outboundLock) {
             val s = store.load()
@@ -388,6 +417,7 @@ class FleetWorker(
         if (running.containsKey(key)) return
         val info = RunningInfo(job, att, (p["op"] as JsonPrimitive).content, clock())
         running[key] = info
+        emit(info, FleetJobEvent.Phase.STARTED)
         store.save(store.load().let { s -> s.copy(running = s.running + RunningJob(job, att, info.op, info.startedMs)) })
         executor.execute {
             try {
@@ -571,6 +601,7 @@ class FleetWorker(
     /** Called when the owner's one-time batch approval covered this job's confirmation: tell the coordinator, as a note, never as completion. */
     fun approvalCoveredByBatch() {
         val j = currentJob.get() ?: return
+        emit(j, FleetJobEvent.Phase.COVERED_BY_BATCH)
         enqueue(
             "progress",
             buildJsonObject {
@@ -584,6 +615,7 @@ class FleetWorker(
     /** Called by [FleetApprovalPrompt]: the job is waiting for the owner on this device. */
     fun approvalPending(reason: String) {
         val j = currentJob.get() ?: return
+        emit(j, FleetJobEvent.Phase.WAITING_FOR_OWNER)
         enqueue(
             "approval_needed",
             buildJsonObject {
@@ -596,6 +628,7 @@ class FleetWorker(
 
     fun approvalResolved(approved: Boolean) {
         val j = currentJob.get() ?: return
+        emit(j, FleetJobEvent.Phase.OWNER_ANSWERED, if (approved) "approved" else "declined")
         enqueue(
             "progress",
             buildJsonObject {

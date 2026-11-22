@@ -120,3 +120,10 @@ simulated workers and the Kotlin `core-fleet-worker`; the worker implements only
    the notification); fleet-job events from `core-fleet-worker` into the same feed; answering an approval from the list.
    Persisting the feed is deliberately deferred (nothing runs while the app is closed, and the redactor is best-effort).
 5. Then decisions 1 and 2 in §5, and plan submission from VictorBots to the coordinator.
+
+## Fleet jobs from the coordinator (2026-11-22)
+
+When the owner switches on the optional **Fleet worker mode**, each job the VictorLinux coordinator sends to this phone is a run under the actor `fleet:worker` ("Fleet jobs on
+this phone"), shown in a fifth Activity group, "Jobs from your fleet coordinator": started, waiting for you, your answer, covered by your batch approval, done / failed / stopped. Only the
+operation name and a short reason are recorded, never the job's arguments or output. See `docs/FLEET_WORKER.md`, "Android half". Not run on a device.
+

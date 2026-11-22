@@ -15,6 +15,9 @@
          prompt for it yet, so until it is granted the download runs without a visible notification. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Optional fleet worker mode (off by default): a visible service that holds a connection to the owner's own fleet coordinator
+         until the owner switches it off. specialUse, not dataSync: dataSync is capped at 6 hours per 24 on Android 15. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Fleet apps: the owner taps "Download & install" and Android's own installer confirms. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -316,6 +319,15 @@
             </intent-filter>
         </receiver>
 
+        <!-- Fleet worker: only ever started by the owner's own "Fleet worker mode" switch, never exported, never started at boot. -->
+        <service
+            android:name=".fleetworker.FleetWorkerService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps a long-lived HTTPS connection to the owner's own fleet job coordinator on their local network or VPN, only while the owner has switched Fleet worker mode on." />
+        </service>
         <service
             android:name=".shizuku.embedded.EmbeddedShizukuStartService"
             android:exported="false" />
