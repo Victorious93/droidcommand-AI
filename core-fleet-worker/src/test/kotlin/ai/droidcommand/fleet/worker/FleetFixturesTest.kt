@@ -30,12 +30,14 @@ class FleetFixturesTest {
             val payload = e["payload"] as JsonObject
             if (type in FleetProtocol.WORKER_TYPES) FleetProtocol.validateWorkerPayload(type, payload)
             if (type == "assignment") FleetProtocol.validateAssignment(payload)
+            if (type == "terminal_open") LiveProtocol.validateTerminalOpen(payload)
+            if (type == "draft_deliver") LiveProtocol.validateDraftDeliver(payload)
         }
     }
 
     @Test fun `every invalid fixture is rejected with the expected structured code`() {
         val invalid = manifest().keys.filter { it.startsWith("invalid/") }
-        assertTrue(invalid.size >= 9)
+        assertTrue(invalid.size >= 18)
         for (f in invalid) {
             val case = obj(f)
             val expected = (case["expect_error"] as JsonPrimitive).content
@@ -43,9 +45,24 @@ class FleetFixturesTest {
                 val e = FleetProtocol.validateEnvelope(case["envelope"] as JsonObject)
                 val type = (e["type"] as JsonPrimitive).content
                 if (type in FleetProtocol.WORKER_TYPES) FleetProtocol.validateWorkerPayload(type, e["payload"] as JsonObject)
+                if (type == "terminal_open") LiveProtocol.validateTerminalOpen(e["payload"] as JsonObject)
+                if (type == "draft_deliver") LiveProtocol.validateDraftDeliver(e["payload"] as JsonObject)
             }
             assertEquals(expected, ex.code, f)
         }
+    }
+
+    @Test fun `terminal binding computed in Kotlin equals the coordinator's for the shared fixtures`() {
+        for ((f, dev) in listOf("terminal_open_interactive.json" to "dev-0123456789ab", "terminal_open_oneshot.json" to "dev-0123456789ab")) {
+            val p = obj(f)["payload"] as JsonObject
+            fun g(k: String) = (p[k] as JsonPrimitive).content
+            val cmd = (p["command"] as? JsonPrimitive)?.content
+            assertEquals(g("binding"), LiveProtocol.terminalBindingHash(g("session_id"), dev, g("desktop"), g("privilege"), g("mode"), cmd, g("nonce")), f)
+        }
+        assertEquals(
+            "f64d73f27af4640887cfff64a0c1f5db3e3d230631f9fbe3409300c4c24b6c70",
+            LiveProtocol.terminalBindingHash("term-ü-1", "dev-1", "victorlinux:o\"w\\n@host\n\t", "user", "oneshot", "echo 'héllo \uD83D\uDE00' > /tmp/x\u0001\u007f", "n\u2028"),
+        )
     }
 
     @Test fun `an assignment with a plan manifest parses it, and the assigned job is in it with the same arguments`() {

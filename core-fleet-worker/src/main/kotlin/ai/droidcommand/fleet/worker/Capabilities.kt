@@ -14,6 +14,9 @@ data class OperationState(
     val granted: Boolean = true,
     val ownerInteractionRequired: Boolean = false,
     val reason: String? = null,
+    /** Protocol 1.1: why an operation is not usable (permission_needed, version_outdated, not_installed, untrusted, ...). */
+    val status: String? = null,
+    val detail: String? = null,
 )
 
 /** Root is separate from every other capability: grants are per device and may expire. */
@@ -51,7 +54,9 @@ data class CapabilityReport(
                         put("available", o.available)
                         put("granted", o.granted)
                         if (o.ownerInteractionRequired) put("owner_interaction_required", true)
-                        o.reason?.let { put("reason", it) }
+                        o.reason?.let { put("reason", it.take(200)) }
+                        o.status?.let { put("status", it) }
+                        o.detail?.let { put("detail", it.take(200)) }
                     },
                 )
             },

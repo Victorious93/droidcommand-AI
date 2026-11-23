@@ -35,7 +35,7 @@ data class PlanManifest(val planId: String, val jobs: List<PlanJob>)
  */
 object FleetProtocol {
     const val MAJOR = 1
-    const val MINOR = 0
+    const val MINOR = 1
     const val MAX_MESSAGE_BYTES = 256 * 1024
     const val MAX_ARGS_BYTES = 64 * 1024
     const val MAX_BATCH = 64
@@ -47,13 +47,13 @@ object FleetProtocol {
     val ARTIFACT_NAME_RE = Regex("^[A-Za-z0-9._-]{1,128}$")
     val WORKER_TYPES = setOf(
         "enroll_request", "hello", "heartbeat", "ack", "progress", "complete", "fail", "cancel_ack",
-        "approval_needed", "artifact_offer", "node_message",
+        "approval_needed", "artifact_offer", "node_message", "terminal_status", "draft_status",
     )
-    val COORD_TYPES = setOf("enroll_response", "welcome", "assignment", "cancel", "revoke", "artifact_grant", "node_message", "reject")
+    val COORD_TYPES = setOf("enroll_response", "welcome", "assignment", "cancel", "revoke", "artifact_grant", "node_message", "reject", "terminal_open", "terminal_close", "draft_deliver")
     val ERROR_CODES = setOf(
         "bad_request", "unauthorized", "revoked", "unsupported_protocol", "unknown_type", "too_large", "stale_attempt",
         "unknown_job", "quota_exceeded", "capability_missing", "permission_denied", "approval_required", "device_busy", "deadline_exceeded",
-        "cancelled", "executor_unavailable", "internal",
+        "cancelled", "executor_unavailable", "internal", "declined", "revoked_session", "version_outdated", "broker_untrusted",
     )
     val THERMAL = setOf("none", "light", "moderate", "severe", "critical", "emergency", "shutdown", "unknown")
     val json = Json {
@@ -149,6 +149,7 @@ object FleetProtocol {
             val o = v as? JsonObject ?: bad("operation '$name' must be an object")
             if ((o["available"] as? JsonPrimitive)?.booleanOrNull == null) bad("operation '$name' needs boolean 'available'")
             if (o.containsKey("granted") && (o["granted"] as? JsonPrimitive)?.booleanOrNull == null) bad("operation '$name' granted must be boolean")
+            if (o.containsKey("status") && o.str("status") !in LiveProtocol.OP_STATUSES) bad("operation '$name' status invalid")
         }
         (c["root"] as? JsonObject)?.let { r -> if (r.isNotEmpty() && (r["available"] as? JsonPrimitive)?.booleanOrNull == null) bad("root.available must be boolean") }
         validateDeviceState(c.obj("device_state"))
@@ -157,6 +158,8 @@ object FleetProtocol {
     /** Validation of worker->coordinator payloads (what this module produces; also what the coordinator enforces). */
     fun validateWorkerPayload(type: String, p: JsonObject) {
         when (type) {
+            "terminal_status" -> LiveProtocol.validateTerminalStatus(p)
+            "draft_status" -> LiveProtocol.validateDraftStatus(p)
             "enroll_request" -> {
                 p.str("device_name", 80)
                 p.str("public_key_pem", 2048)

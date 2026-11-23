@@ -1,0 +1,24 @@
+{
+  "msg_id": "m-draft-1",
+  "payload": {
+    "channel": "sms",
+    "content_hash": "6eee8829ff9116804e27a182bf35679b65312e3f3a35f706976c6d53302d2fd2",
+    "draft": {
+      "body": "Running late, call you soon.",
+      "to": [
+        "+15550100"
+      ]
+    },
+    "draft_id": "draft-0123456789abcdef",
+    "expires_ms": 1790086400000,
+    "origin": "victorlinux:owner"
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 1
+  },
+  "sender": "coordinator",
+  "sent_at": 1790000000000,
+  "target": "dev-0123456789ab",
+  "type": "draft_deliver"
+}
