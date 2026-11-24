@@ -2,9 +2,13 @@ package ai.droidcommand.app.ui.settings
 
 import ai.droidcommand.agent.ToolRunner
 import ai.droidcommand.agent.describe
+import ai.droidcommand.remotecontrol.ActionOptions
 import ai.droidcommand.remotecontrol.DeliveryMode
 import ai.droidcommand.remotecontrol.DevicePairing
+import ai.droidcommand.remotecontrol.DraftResult
 import ai.droidcommand.remotecontrol.Macro
+import ai.droidcommand.remotecontrol.MacroDraft
+import ai.droidcommand.remotecontrol.MacroDraftBuilder
 import ai.droidcommand.remotecontrol.MacroStep
 import ai.droidcommand.remotecontrol.MacroTrigger
 import ai.droidcommand.remotecontrol.MacroTriggerKind
@@ -152,6 +156,30 @@ class RemoteControlViewModel @Inject constructor(
         } catch (e: IllegalArgumentException) {
             mutable.value = mutable.value.copy(error = e.message)
         }
+    }
+
+    /**
+     * Saves a macro from the plain-language builder. Validation happens in [MacroDraftBuilder], so the owner
+     * sees sentences, not exceptions. Returns the result so the card can show problems or warnings.
+     */
+    fun saveMacroDraft(draft: MacroDraft, replacingId: String?): DraftResult {
+        val config = controller.snapshot()
+        val result = MacroDraftBuilder.build(
+            draft = draft,
+            targets = config.targets,
+            actions = ActionOptions.fromMappings(config.mappings),
+            existingMacroIds = config.macros.map { it.id }.toSet(),
+            replacingId = replacingId,
+        )
+        if (result is DraftResult.Ready) {
+            try {
+                controller.putMacro(result.macro)
+                refresh()
+            } catch (e: IllegalArgumentException) {
+                return DraftResult.Problems(listOf(e.message ?: "This macro is not valid."))
+            }
+        }
+        return result
     }
 
     fun removeMacro(id: String) {

@@ -71,6 +71,7 @@ fun AdvancedScreen(
     onOpenBotMaker: () -> Unit = {},
     onOpenSkillFiles: () -> Unit = {},
     onOpenStatus: () -> Unit = {},
+    onOpenFleet: () -> Unit = {},
     onCopiedLink: () -> Unit = {},
 ) {
     AdvancedContent(
@@ -89,6 +90,7 @@ fun AdvancedScreen(
         onOpenBotMaker = onOpenBotMaker,
         onOpenSkillFiles = onOpenSkillFiles,
         onOpenStatus = onOpenStatus,
+        onOpenFleet = onOpenFleet,
         onCopiedLink = onCopiedLink,
     )
 }
@@ -110,6 +112,7 @@ private fun AdvancedContent(
     onOpenBotMaker: () -> Unit,
     onOpenSkillFiles: () -> Unit,
     onOpenStatus: () -> Unit,
+    onOpenFleet: () -> Unit,
     onCopiedLink: () -> Unit,
 ) {
     Column(
@@ -265,7 +268,8 @@ private fun AdvancedContent(
         ModeNamesSection(viewModel)
         SectionLabel("Model and runtime")
         AdvancedSection(viewModel)
-        KaiCapabilityGatesSection(viewModel)
+        ConnectedAppsSection(onOpenFleet = onOpenFleet)
+        BuiltInFeaturesSection(viewModel)
         McpServersSection()
         RemoteControlSettingsSection()
         ShizukuStatusSection(showEmbeddedControls = true)
@@ -284,34 +288,34 @@ private fun AdvancedContent(
 }
 
 @Composable
-private fun KaiCapabilityGatesSection(viewModel: SettingsViewModel) {
+private fun BuiltInFeaturesSection(viewModel: SettingsViewModel) {
     val settings by viewModel.capabilities.collectAsState()
-    val rows = remember(settings) { KaiCapabilityCopy.rows(settings) }
-    SectionLabel("Kai capabilities")
+    val features = listOf(
+        AssistantCapability.BRAIN to "Brain notes",
+        AssistantCapability.BOT_MAKER to "Helper bots",
+        AssistantCapability.SKILL_SCRIPTS to "Skill files",
+    )
+    SectionLabel("Built-in features")
     DroidCard(modifier = Modifier.testTag("advanced_kai_gates")) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Later assistant features", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Brain notes, Bot Maker, and Skill scripts can be turned on here. " +
-                    "Everything else stays off for now. Nothing here turns on remote control or skips a confirmation.",
+                "These run inside this app and are off until you switch them on. " +
+                    "Nothing here turns on remote control or skips a confirmation. " +
+                    "Extra AI tools (MCP) are set up in their own section below.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            rows.forEach { row ->
-                val toggleable = row.capability in setOf(
-                    AssistantCapability.BRAIN,
-                    AssistantCapability.BOT_MAKER,
-                    AssistantCapability.SKILL_SCRIPTS,
-                )
+            features.forEach { (capability, label) ->
+                val row = KaiCapabilityCopy.rows(settings).first { it.capability == capability }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("advanced_kai_gate_${row.capability.wireName}"),
+                        .testTag("advanced_kai_gate_${capability.wireName}"),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text(row.label, style = MaterialTheme.typography.bodyMedium)
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
                         Text(
                             row.detail,
                             style = MaterialTheme.typography.bodySmall,
@@ -320,19 +324,14 @@ private fun KaiCapabilityGatesSection(viewModel: SettingsViewModel) {
                     }
                     Switch(
                         checked = row.enabled,
-                        onCheckedChange = if (toggleable) {
-                            { on ->
-                                when (row.capability) {
-                                    AssistantCapability.BRAIN -> viewModel.setBrainEnabled(on)
-                                    AssistantCapability.BOT_MAKER -> viewModel.setBotMakerEnabled(on)
-                                    AssistantCapability.SKILL_SCRIPTS -> viewModel.setSkillScriptsEnabled(on)
-                                    else -> Unit
-                                }
+                        onCheckedChange = { on ->
+                            when (capability) {
+                                AssistantCapability.BRAIN -> viewModel.setBrainEnabled(on)
+                                AssistantCapability.BOT_MAKER -> viewModel.setBotMakerEnabled(on)
+                                AssistantCapability.SKILL_SCRIPTS -> viewModel.setSkillScriptsEnabled(on)
+                                else -> Unit
                             }
-                        } else {
-                            null
                         },
-                        enabled = toggleable,
                     )
                 }
             }
