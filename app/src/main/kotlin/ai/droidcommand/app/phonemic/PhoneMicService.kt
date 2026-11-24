@@ -29,12 +29,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /** What the UI shows. The offer's secret is never part of this. */
-data class PhoneMicStatus(val state: ShareState = ShareState.IDLE, val pcName: String = "", val note: String = "")
+data class PhoneMicStatus(
+    val state: ShareState = ShareState.IDLE,
+    val pcName: String = "",
+    val note: String = "",
+)
 
 object PhoneMicBus {
     private val _status = MutableStateFlow(PhoneMicStatus())
     val status = _status.asStateFlow()
-    internal fun set(s: PhoneMicStatus) { _status.value = s }
+    internal fun set(s: PhoneMicStatus) {
+        _status.value = s
+    }
 }
 
 /**
@@ -49,7 +55,9 @@ object PhoneMicBus {
 class PhoneMicService : Service() {
     private val sm = ShareStateMachine()
     private val queue = LiveQueue()
+
     @Volatile private var offer: MicOffer? = null
+
     @Volatile private var record: AudioRecord? = null
     private var worker: Thread? = null
     private var callback: AudioManager.AudioRecordingCallback? = null
@@ -58,23 +66,33 @@ class PhoneMicService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> { stopSharing("Stopped"); return START_NOT_STICKY }
-            ACTION_MUTE -> { toggleMute(); return START_NOT_STICKY }
+            ACTION_STOP -> {
+                stopSharing("Stopped")
+                return START_NOT_STICKY
+            }
+            ACTION_MUTE -> {
+                toggleMute()
+                return START_NOT_STICKY
+            }
             ACTION_START -> {
                 if (worker != null) return START_NOT_STICKY
                 val o = MicOffer.parse(intent.getStringExtra(EXTRA_OFFER).orEmpty())
                 if (o == null || checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                     PhoneMicBus.set(PhoneMicStatus(ShareState.STOPPED, note = if (o == null) "That is not a valid offer." else "Microphone permission is off."))
-                    stopSelf(); return START_NOT_STICKY
+                    stopSelf()
+                    return START_NOT_STICKY
                 }
                 offer = o
                 sm.start()
                 publish("Connecting…")
                 startForegroundCompat()
-                worker = Thread({ run(o) }, "phone-mic").apply { isDaemon = true; start() }
+                worker = Thread({ run(o) }, "phone-mic").apply {
+                    isDaemon = true
+                    start()
+                }
             }
         }
-        return START_NOT_STICKY   // never restarted by the system: consent does not survive a kill
+        return START_NOT_STICKY // never restarted by the system: consent does not survive a kill
     }
 
     private fun run(o: MicOffer) {
@@ -85,20 +103,33 @@ class PhoneMicService : Service() {
             val min = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             check(min > 0) { "This phone cannot record 16 kHz audio" }
             @Suppress("MissingPermission")
-            rec = AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT, maxOf(min, FRAME_BYTES * 8))
+            rec = AudioRecord(
+                MediaRecorder.AudioSource.MIC, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT, maxOf(min, FRAME_BYTES * 8),
+            )
             check(rec.state == AudioRecord.STATE_INITIALIZED) { "The microphone is busy or blocked" }
             record = rec
             watchSilencing(rec, stream)
             rec.startRecording()
-            sm.connected(); publish("Sharing")
+            sm.connected()
+            publish("Sharing")
             val buf = ByteArray(FRAME_BYTES)
             var sent = ShareState.SHARING
             while (sm.state != ShareState.STOPPED) {
                 var n = 0
-                while (n < FRAME_BYTES) { val r = rec.read(buf, n, FRAME_BYTES - n); if (r < 0) throw java.io.IOException("capture error $r"); n += r }
-                if (sm.state != sent) { stream.control(sm.wire); sent = sm.state }
-                if (!sm.capturing) { queue.clear(); continue }   // muted or silenced: nothing leaves the phone
+                while (n < FRAME_BYTES) {
+                    val r = rec.read(buf, n, FRAME_BYTES - n)
+                    if (r < 0) throw java.io.IOException("capture error $r")
+                    n += r
+                }
+                if (sm.state != sent) {
+                    stream.control(sm.wire)
+                    sent = sm.state
+                }
+                if (!sm.capturing) {
+                    queue.clear()
+                    continue
+                } // muted or silenced: nothing leaves the phone
                 queue.push(buf.copyOf())
                 while (true) stream.sendPcm(queue.pop() ?: break)
             }
@@ -113,8 +144,12 @@ class PhoneMicService : Service() {
             }
         } finally {
             queue.clear()
-            try { rec?.stop() } catch (_: IllegalStateException) {}
-            rec?.release(); record = null
+            try {
+                rec?.stop()
+            } catch (_: IllegalStateException) {
+            }
+            rec?.release()
+            record = null
             stream?.close()
         }
     }
@@ -140,13 +175,17 @@ class PhoneMicService : Service() {
 
     private fun stopSharing(note: String) {
         sm.stop()
-        callback?.let { getSystemService(AudioManager::class.java).unregisterAudioRecordingCallback(it) }; callback = null
+        callback?.let { getSystemService(AudioManager::class.java).unregisterAudioRecordingCallback(it) }
+        callback = null
         PhoneMicBus.set(PhoneMicStatus(ShareState.STOPPED, offer?.pcId.orEmpty(), note))
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
-    override fun onDestroy() { if (sm.state != ShareState.STOPPED) sm.stop(); super.onDestroy() }
+    override fun onDestroy() {
+        if (sm.state != ShareState.STOPPED) sm.stop()
+        super.onDestroy()
+    }
 
     private fun publish(note: String) {
         PhoneMicBus.set(PhoneMicStatus(sm.state, offer?.pcId.orEmpty(), note))
@@ -155,15 +194,20 @@ class PhoneMicService : Service() {
 
     private fun startForegroundCompat() {
         val n = notification()
-        if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-        else startForeground(NOTIF_ID, n)
+        if (Build.VERSION.SDK_INT >= 29) {
+            startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        } else {
+            startForeground(NOTIF_ID, n)
+        }
     }
 
     private fun notification(): Notification {
         val nm = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, "Phone microphone", NotificationManager.IMPORTANCE_LOW))
-        fun act(a: String, label: String) = NotificationCompat.Action(0, label,
-            PendingIntent.getService(this, a.hashCode(), Intent(this, PhoneMicService::class.java).setAction(a), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+        fun act(a: String, label: String) = NotificationCompat.Action(
+            0, label,
+            PendingIntent.getService(this, a.hashCode(), Intent(this, PhoneMicService::class.java).setAction(a), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
+        )
         val pc = offer?.pcId ?: "your PC"
         val text = when (sm.state) {
             ShareState.CONNECTING -> "Connecting to $pc…"
@@ -171,10 +215,17 @@ class PhoneMicService : Service() {
             ShareState.SILENCED -> "Android is silencing the microphone. $pc hears nothing."
             else -> "Your microphone is being sent to $pc."
         }
-        return NotificationCompat.Builder(this, CHANNEL).setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("Phone microphone").setContentText(text).setOngoing(true).setOnlyAlertOnce(true)
+        return NotificationCompat
+            .Builder(this, CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setContentTitle("Phone microphone")
+            .setContentText(text)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .addAction(act(ACTION_STOP, "Stop")).addAction(act(ACTION_MUTE, if (sm.state == ShareState.MUTED) "Unmute" else "Mute")).build()
+            .addAction(act(ACTION_STOP, "Stop"))
+            .addAction(act(ACTION_MUTE, if (sm.state == ShareState.MUTED) "Unmute" else "Mute"))
+            .build()
     }
 
     companion object {

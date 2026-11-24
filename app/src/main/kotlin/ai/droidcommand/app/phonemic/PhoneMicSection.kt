@@ -41,11 +41,17 @@ fun PhoneMicSection() {
 
     fun begin() {
         val o = MicOffer.parse(offerText)
-        if (o == null) { error = "That is not a valid offer. Copy the whole line from the PC."; return }
-        if (o.expired(System.currentTimeMillis() / 1000)) { error = "That offer has expired. Create a new one on the PC."; return }
+        if (o == null) {
+            error = "That is not a valid offer. Copy the whole line from the PC."
+            return
+        }
+        if (o.expired(System.currentTimeMillis() / 1000)) {
+            error = "That offer has expired. Create a new one on the PC."
+            return
+        }
         error = null
         PhoneMicService.start(ctx, offerText.trim())
-        offerText = ""   // do not keep the one-time secret on screen
+        offerText = "" // do not keep the one-time secret on screen
     }
     val perm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) begin() else error = "Microphone access is off. Allow it in Android Settings → Apps → DroidCommand AI → Permissions."
@@ -74,14 +80,18 @@ fun PhoneMicSection() {
                 "On the PC run `victor-mic serve --offer NAME:ID:droidcommand` and paste the line it prints. Audio goes only to that PC, only while this notice says sharing.",
                 style = MaterialTheme.typography.bodySmall, color = TextSecondary,
             )
-            OutlinedTextField(offerText, { offerText = it }, label = { Text("Offer from the PC") }, singleLine = true,
-                visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().testTag("phone_mic_offer"))
+            OutlinedTextField(
+                offerText, { offerText = it }, label = { Text("Offer from the PC") }, singleLine = true,
+                visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().testTag("phone_mic_offer"),
+            )
             DroidPrimaryButton(onClick = {
                 if (android.os.Build.VERSION.SDK_INT >= 33) notif.launch(Manifest.permission.POST_NOTIFICATIONS) else perm.launch(Manifest.permission.RECORD_AUDIO)
             }, modifier = Modifier.fillMaxWidth().testTag("phone_mic_start")) { Text("Use this phone as microphone") }
             Text("Separate from the microphone: ask the PC to read its selected text aloud here (offer needs :read).", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-            DroidSecondaryButton(onClick = { PhoneRead.read(ctx, offerText) { readNote = it } },
-                modifier = Modifier.fillMaxWidth().testTag("phone_read_pc")) { Text("Read PC screen aloud") }
+            DroidSecondaryButton(
+                onClick = { PhoneRead.read(ctx, offerText) { readNote = it } },
+                modifier = Modifier.fillMaxWidth().testTag("phone_read_pc"),
+            ) { Text("Read PC screen aloud") }
             readNote?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
         (error ?: status.note.takeIf { it.isNotBlank() && !sharing })?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
