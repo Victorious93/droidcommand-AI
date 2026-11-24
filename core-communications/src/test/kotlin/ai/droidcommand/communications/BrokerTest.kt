@@ -47,6 +47,16 @@ class BrokerTest {
         assertEquals("unavailable", noAi["status"]!!.jsonPrimitive.content)
     }
 
+    @Test fun aCompositeBackendPassesAnAvailableCapabilityThroughAndOnlyReportsAMissingAppAsNotConnected() {
+        val sms = FakeBackend()
+        val composite = CompositeBackend(mapOf(Owner.VICTORSMS to sms))
+        assertEquals(null, composite.availability("communications.list_contacts"), "available means null, not 'not connected'")
+        sms.unavailable["communications.list_contacts"] = "contacts permission missing"
+        assertEquals("contacts permission missing", composite.availability("communications.list_contacts"))
+        assertTrue(composite.availability("communications.get_style_profile")!!.contains("not connected"), "VictorBots is not part of this composite")
+        assertTrue(composite.call("communications.get_style_profile", mapOf("profile_id" to "p"), BackendContext("a", null, "r", "none", null)) is BackendResult.Refused)
+    }
+
     @Test fun incompatibleVersionsAreRefusedGracefullyAndNewerClientsAreNegotiatedDown() {
         val r = Rig()
         val old = r.discover(v = 2, minV = 2)

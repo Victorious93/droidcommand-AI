@@ -31,6 +31,13 @@ data class ExternalNodeSpec(
      * never through the read-only or `*.up` paths. Empty for every member that has no such operation.
      */
     val approvalGatedOperations: Set<String> = emptySet(),
+    /**
+     * Parameterised **reads** the other app holds behind its own owner-granted gate (VictorSMS `comms.*`: an op group the
+     * owner grants this app, plus a per-conversation switch). They carry a request's parameters, so they are reachable
+     * only through [FleetMessengerController.callOwnerGrantedRead], never through the parameterless read-only path or `*.up`.
+     * Empty for every member that has none. Must not overlap any other operation list.
+     */
+    val ownerGrantedReadOperations: Set<String> = emptySet(),
     val notes: String = "",
 ) {
     init {
@@ -39,6 +46,8 @@ data class ExternalNodeSpec(
         require(packages == packages.distinct()) { "duplicate package in $id" }
         require(capabilitiesOperation.isNotBlank() && statusOperation.isNotBlank()) { "read ops must not be blank" }
         upOperation?.let { require(NodeOperations.isFireAndForget(it)) { "upOperation must be a *.up name, not $it" } }
+        val others = readOnlyOperations() + approvalGatedOperations + setOfNotNull(upOperation)
+        require(ownerGrantedReadOperations.none { it in others }) { "ownerGrantedReadOperations of $id overlap another operation list" }
     }
 
     val primaryPackage: String get() = packages.first()
@@ -114,6 +123,9 @@ object ExternalNodeCatalog {
         capabilitiesOperation = "sms.capabilities.get",
         statusOperation = "sms.status",
         approvalGatedOperations = setOf("sms.send", "sms.send.status"),
+        ownerGrantedReadOperations = setOf(
+            "comms.capabilities", "comms.conversations.list", "comms.conversation.read", "comms.messages.search", "comms.context.retrieve",
+        ),
         notes = "EXTERNAL_NODE. Confirmed action com.victorious.sms.action.BRIDGE, protocol_major 1, " +
             "what=1, inbound op sms.remote_command.forward (controller op remote.command). " +
             "debug==release package com.victorious.sms. Node-id prefix ^victorsms-[0-9a-f]{32}$. " +
@@ -123,7 +135,8 @@ object ExternalNodeCatalog {
             "[planned/pending-merge] unenforced — catalogue fail-open/unpinned. Release cert TBD. " +
             "TODO: enforce debug pin after scaffold merge. Fleet-messenger read ops " +
             "sms.capabilities.get / sms.status stay placeholders. The frozen remote-control op for " +
-            "protocol minor 1 is capabilities.get (not a per-class field name).",
+            "protocol minor 1 is capabilities.get (not a per-class field name). " +
+            "comms.* are read-only archive ops behind VictorSMS's own Archive read group and per-conversation switch.",
     )
 
     val VICTOR_SPOOF = ExternalNodeSpec(

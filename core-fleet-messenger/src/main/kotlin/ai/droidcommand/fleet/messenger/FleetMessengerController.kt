@@ -229,14 +229,33 @@ class FleetMessengerController(
         return mapResult(operation, gateway.call(spec.nodeId, operation, parameters, timeoutMs, ReplyExpectation.RESULT))
     }
 
+    /**
+     * Runs one of the catalog member's [ExternalNodeSpec.ownerGrantedReadOperations] with [parameters]. Same trust check as
+     * every other live call. The other app holds the real gates (External control on, this app approved, the archive group
+     * granted, the conversation switched on) and answers `permission_denied` / `not_found` when any is missing. Nothing
+     * here can widen them; an operation outside that set is refused before anything is sent.
+     */
+    fun callOwnerGrantedRead(catalogId: String, operation: String, parameters: JsonObject): LiveCallResult {
+        val spec = catalog.find { it.id == catalogId }
+            ?: return LiveCallResult.Gated(operation, "unknown EXTERNAL_NODE $catalogId")
+        if (operation !in spec.ownerGrantedReadOperations) {
+            return LiveCallResult.Gated(operation, "$operation is not an owner-granted read of ${spec.displayName}")
+        }
+        prepareLive(spec, operation, ownerGrantedRead = true)?.let { return it }
+        return mapResult(operation, gateway.call(spec.nodeId, operation, parameters, timeoutMs, ReplyExpectation.RESULT))
+    }
+
     private fun callAllowed(spec: ExternalNodeSpec, operation: String): LiveCallResult {
         prepareLive(spec, operation)?.let { return it }
         return mapResult(operation, gateway.call(spec.nodeId, operation, NodeOperations.EMPTY_PARAMETERS, timeoutMs))
     }
 
     /** Null means go ahead and call the gateway. */
-    private fun prepareLive(spec: ExternalNodeSpec, operation: String, gated: Boolean = false): LiveCallResult? {
-        if (!spec.isLiveAllowed(operation) && !(gated && operation in spec.approvalGatedOperations)) {
+    private fun prepareLive(spec: ExternalNodeSpec, operation: String, gated: Boolean = false, ownerGrantedRead: Boolean = false): LiveCallResult? {
+        if (!spec.isLiveAllowed(operation) &&
+            !(gated && operation in spec.approvalGatedOperations) &&
+            !(ownerGrantedRead && operation in spec.ownerGrantedReadOperations)
+        ) {
             return LiveCallResult.Gated(
                 operation,
                 "write/control op $operation stays behind the normal approval gates",

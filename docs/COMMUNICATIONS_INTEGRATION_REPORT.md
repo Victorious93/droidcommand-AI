@@ -12,8 +12,8 @@ screen), and the writing-style, profile and agent-configuration engine (VictorBo
 the logic level: import an export, save it permanently, update it repeatedly without duplicates or loss, build a style profile from the owner's own words,
 and draft a reply from budgeted context through a policy-checked model route.
 
-They are **still not connected to each other on a phone.** The VictorSMS-to-DroidCommand connector does not exist (see "Next slice"), live SMS are not
-recorded into the archive, there is no VictorBots screen or service, and no voice-message or interactive-call work. Nothing has run on a device,
+They are **still not connected to each other on a phone.** A read-only VictorSMS-to-DroidCommand connector now exists on both sides (built and tested, never run
+against each other or on a device; see `COMPANION_COMMS.md` → VictorSMS connector), live SMS are not recorded into the archive, there is no VictorBots screen or service, and no voice-message or interactive-call work. Nothing has run on a device,
 emulator, carrier or real model: this environment has no `/dev/kvm`, so verification is JVM tests, Android's SQLite via Robolectric, Compose screens
 rendered on the JVM, local Gradle compiles, and CI. The end-to-end flow in section 26 is therefore **Partially implemented**. Do not read test counts as
 device verification.
@@ -71,7 +71,7 @@ and are listed on each PR). No APK was built in this session; see Deliverables.
 | § | Area | Status |
 |---|---|---|
 | 1,2 | Architecture, inspection | Implemented (ownership documented in `COMPANION_COMMS.md`); baseline recorded above |
-| 3 | Extend companion interface | **Broker and Android bound-service transport: Implemented, Built (compiles; manifest policy test); broker Tested, transport NEVER RUN.** Discovery, versioning, graceful incompatibility: Tested. The VictorSMS/VictorBots connectors: Requested (see below). Integration with Chat/Plan/Pilot/Forge: 27 `communications_*` tools Built+Tested against fakes; not run by a real agent loop. Assist/Remember: Requested |
+| 3 | Extend companion interface | **Broker and Android bound-service transport: Implemented, Built (compiles; manifest policy test); broker Tested, transport NEVER RUN.** Discovery, versioning, graceful incompatibility: Tested. **VictorSMS read-only archive connector (list, read, search, reply/summary context): Implemented, Built, Tested on the JVM and Robolectric, NEVER RUN against a device or the real counterpart app; its reply frames are pinned as literal copies in both repos.** VictorSMS write-side capabilities and the VictorBots connector: Requested (see below). Integration with Chat/Plan/Pilot/Forge: 27 `communications_*` tools Built+Tested against fakes; not run by a real agent loop. Assist/Remember: Requested |
 | 4 | VictorSMS gateway | Pre-existing SMS/MMS/dialer/Twilio/mail code untouched and, per its own docs, never device-tested. New provider-capability architecture, multi-SIM selection, failed-message recovery, drafts, scheduled messages, auto-replies UI: Requested |
 | 5 | Communications tools | 27 capabilities catalogued with permissions/risk/approval; **Tested with a fake backend**. A real VictorSMS/VictorBots backend for them: Requested. Natural-language/voice command mapping depends on a model; not tested |
 | 6 | Import Center | Importers CSV, JSON, SMS-Backup XML (XXE-hardened), WhatsApp-style logs, pasted text, ZIP: **Built, Tested**. **Screens now exist** (VictorSMS Settings → Saved conversations): preview before anything is saved, who-is-me, provider/account, date order, column mapping, manual conversation choice, SAF picker and a share target: **Built, Tested on the JVM (Robolectric + Compose rendered on the JVM), NEVER RUN on a device.** **HTML: Unsupported. TextNow-specific parser: Unsupported (format unknown).** |
@@ -129,9 +129,8 @@ this container's JVM. Memory, battery, on-device SQLite speed and model latency 
 
 ## Next slice (suggested order)
 
-1. **VictorSMS connector (the missing link).** New parameterised read ops in the `victorsms` entry of `core-fleet-messenger`; a new, separately granted
-   `ARCHIVE_READ` op group in VictorSMS's existing `BridgeService`/pairing UI (message contents cross the bridge); handlers over `comms-core`; a
-   `VictorSmsCommsBackend` in DroidCommand replacing `UnconnectedBackend`. Detail in `docs/COMPANION_COMMS.md` → Not built.
+1. **VictorSMS connector: read side DONE (never run on a device).** Remaining: its first device run (pair, grant Archive read, switch one conversation on, call
+   `discover` and `read_conversation`); then the write side (sends, drafts, calls) behind VictorSMS's own gate.
 2. **Record live SMS into the archive** (`SmsDeliverReceiver`), then wire `AutomationGate` and `Outbox` to the real sender. Only after decision 1 below.
 3. **VictorBots:** a screen for profiles/agents and a service that answers `get_style_profile`; add its tables to backup.
 4. **First device run** (needs a phone or a KVM host): bind the service from a paired app and call `discover`; import a real redacted export.

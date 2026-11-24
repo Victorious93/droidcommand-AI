@@ -47,7 +47,7 @@ class FakeModel(var reply: (String) -> ModelResult = { ModelResult.Text("sounds 
     }
 }
 
-class Rig(withModel: Boolean = true) {
+class Rig(withModel: Boolean = true, backendOverride: CommsBackend? = null) {
     var now = 1_800_000_000_000L
     var seq = 0
     val backend = FakeBackend()
@@ -56,7 +56,7 @@ class Rig(withModel: Boolean = true) {
     val audit = InMemoryAuditLog()
     val approvals = ApprovalQueue(clock = { now })
     val kill = KillSwitch()
-    val broker = CommsBroker(backend, if (withModel) ReplyService(model) else null, grants, approvals, InMemoryReceiptStore(), kill, audit, { now })
+    val broker = CommsBroker(backendOverride ?: backend, if (withModel) ReplyService(model) else null, grants, approvals, InMemoryReceiptStore(), kill, audit, { now })
 
     fun nonce() = (++seq).toString(16).padStart(32, '0')
 

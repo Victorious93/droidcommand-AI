@@ -3,7 +3,8 @@
 Added 2026-11-24. **Status: broker IMPLEMENTED, BUILT, TESTED on the JVM (42 tests, 11 security/durability mutations verified caught).
 The Android shell is BUILT but NEVER RUN: a bound Messenger service, Hilt wiring, durable stores and the owner screen compile
 (`:app:compileDebugKotlin`, `ManifestPolicyTest`, ktlint) but nothing has run on a device, an emulator, a carrier or a real model. The VictorSMS and
-VictorBots backend connectors are NOT BUILT, so every capability currently reports "unavailable" in discovery and a call is refused.**
+VictorBots connector is NOT BUILT (its capabilities report "not connected"). The VictorSMS connector is BUILT for three read capabilities plus reply/summary context
+(section "VictorSMS connector"), also never run on a device; every other VictorSMS capability reports "unavailable".**
 Cross-repo status: `docs/COMMUNICATIONS_INTEGRATION_REPORT.md`.
 
 ## Why a third contract
@@ -155,15 +156,71 @@ official public API was found. Community libraries log in with browser cookies a
 This contract therefore treats TextNow as an **import source** (generic CSV/JSON/text with mapping) and a user-directed
 handoff, never as a live provider. Do not add unofficial TextNow access.
 
+## VictorSMS connector (read-only archive)
+
+Added 2026-11-24c. **Status: Implemented, Built, Tested on the JVM and under Robolectric. NEVER RUN against a real phone, a real Messenger bind or an
+installed VictorSMS.** The two sides were built and tested separately; their agreement rests on reply frames pinned as literal copies in both
+repositories (`VictorSmsFramesContractTest` here, `ArchiveBridgeTest`/`DcaFramesTest` in VictorSMS), not on a run of one against the other.
+
+**What it serves:** `list_conversations`, `read_conversation`, `search_messages`, and the context behind `generate_reply` / `summarize_conversation`.
+Everything else VictorSMS owns (contacts, sending, calls, drafts, imports, auto-reply, delivery status, providers) is reported **unavailable** in discovery with
+the reason "VictorSMS does not provide this through the assistant connector." and a call is refused. Nothing is simulated. VictorBots-owned capabilities
+still say "not connected".
+
+**Path:** caller app -> `CommsBroker` -> `CompositeBackend` -> `VictorSmsCommsBackend` -> `ArchiveChannel` (seam in `core-communications`) ->
+`ControllerArchiveChannel` (`:app`) -> `FleetMessengerController.callOwnerGrantedRead` (paired, package and signing certificate re-checked on every call;
+only the five listed operations) -> Messenger -> VictorSMS `BridgeService`.
+
+**Gates, all of which must pass and none of which this app can widen:**
+1. This app's broker: the owner granted the caller `READ_MESSAGES` + `READ_IMPORTED` (plus `ACCESS_MEMORY` + `USE_AI` for reply/summary).
+2. The owner paired VictorSMS here (single signer, certificate pinned).
+3. In VictorSMS: External control is ON, this app is approved under *Connected apps*, and the owner granted it the separate **Archive read** group
+   (it is not part of *Read-only*, because message text crosses the bridge).
+4. In VictorSMS: the owner switched **Let my assistant read this conversation** on for that conversation. Off by default for every existing and new
+   conversation; an upgrade, and a restore of a pre-connector backup, leave everything off. A conversation that is not switched on answers exactly like one that
+   does not exist (`not_found`), so existence cannot be probed.
+
+**Wire (protocol major 1, op group `ARCHIVE_READ`; strict parameters, unknown ones are refused):**
+
+| Operation | Parameters | Answer |
+|---|---|---|
+| `comms.capabilities` | none | `version`, `ops`, `access:"per_conversation"`, `shared_conversations`, `max_limit`, `max_body_chars` |
+| `comms.conversations.list` | `limit`, `provider` | shared conversations: `id` (opaque uid), `title`, `provider`, `is_group`, `message_count`, `last_ts` (no number or account) |
+| `comms.conversation.read` | `conversation`, `limit`, `before_ts`, `direction` | messages oldest first, `has_more`, `next_before_ts`; runs of one timestamp are never split across pages |
+| `comms.messages.search` | `query`, `conversation`, `limit` | hits across shared conversations; every word first, then any word, with `match:"all"|"any"` |
+| `comms.context.retrieve` | `conversation`, `query`, `max_chars` | recent and relevant turns, approved facts, summary, the owner's own earlier messages, `truncated` |
+
+**Limits:** 200 rows, 4,000 characters per body (clipped and flagged `truncated`), 45,000 serialized characters of messages per answer. This broker refuses any
+result over 60,000 characters with `result_too_large` instead of cutting it into broken JSON (the earlier code truncated silently; fixed here).
+
+**Failure mapping:** an unreachable, unpaired or certificate-changed VictorSMS is `backend_unavailable`; VictorSMS saying no keeps its own code
+(`permission_denied`, `not_found`, `external_control_disabled`, ...) with a plain explanation; a reply the validator rejects is a failure. Reads are idempotent,
+so a read is never reported as "outcome unknown", and the broker never retries.
+
+**Transparency in VictorSMS:** every archive request (except `comms.capabilities`) writes one access-log row (app, operation, conversation id, count, outcome, time;
+never message text). The conversation screen shows the latest five; the log keeps 500 rows and is removed with the conversation.
+
+**Two defects found and fixed while building this (both pre-existing):**
+- `CompositeBackend.availability` returned "not connected" for every capability that *was* available (it treated `null`, which means "can be served", as "no backend").
+  It only went unnoticed because the app wired `UnconnectedBackend` and the tests used a fake directly.
+- VictorSMS's replies on the droidcommand-AI wire carried no `node_id` and its errors only a `code`. This app's validator rejects the first as an identity mismatch and
+  cannot decode the second, so **even the existing `sms.send` path could not have validated a VictorSMS reply**. VictorSMS now echoes `target_node_id` as `node_id`
+  and sends `{category, message, code}`; `VictorSmsFramesContractTest` runs the real validator on both the old and the new shapes.
+
+**Known limits, stated plainly:**
+- `node_id` is a *correlation echo*, not an identity proof. VictorSMS's own node id is `victorsms-<hex>`, while this app pairs it as `victorsms`; real node-id
+  binding is not done. Identity on this transport is the OS: `Message.sendingUid` -> package + signing certificate on VictorSMS's side, and a pinned certificate
+  before binding on this side.
+- `discover` probes VictorSMS (`comms.capabilities`, cached 30 s when it works, 5 s when it does not). A paired but unresponsive VictorSMS can make one discovery wait for
+  the bridge timeout (10 s plus grace).
+- Reads only. No sending, drafting, import or auto-reply goes through this connector.
+- Nothing here has bound a service, received a Messenger reply or read a real conversation on a device.
+
 ## Not built
 
-- **The VictorSMS and VictorBots backends** (`CommsBackend`). `UnconnectedBackend` is wired, so discovery truthfully says "unavailable". The
-  VictorSMS connector is a real design slice, not a small addition: DroidCommand's `FleetMessengerController` only calls a fixed per-node operation list
-  (parameterless reads, or approval-gated ops), neither of which fits "read this conversation / retrieve context for this reply". It needs (1) new
-  parameterised read ops in the `victorsms` catalogue entry of `core-fleet-messenger`, (2) a new, separately granted `ARCHIVE_READ` op group in VictorSMS's
-  existing `BridgeService`/pairing UI (message contents cross the bridge, so it must not ride on the existing `READ` group), (3) handlers over `comms-core`
-  (`Archive`, `ContextRetriever`), and (4) a `VictorSmsCommsBackend` here. Sends and calls additionally need VictorSMS's real sender behind its own
-  `AutomationGate`/`Outbox`. VictorBots needs a service to answer `get_style_profile`.
+- **The VictorBots backend.** It needs a service to answer `get_style_profile` / `update_style_profile`; until then its capabilities report "not connected".
+- **VictorSMS write-side capabilities** (contacts, sends, calls, drafts, imports, auto-reply, delivery status, providers). Sends and calls need VictorSMS's real
+  sender behind its own `AutomationGate`/`Outbox`, which has no caller yet.
 - Live SMS are not yet recorded into the VictorSMS archive, so there is nothing for an automatic reply to answer.
 - Voice-message and interactive-call capabilities beyond the catalogue entry; a scheduler for `schedule_message`; semantic (embedding) retrieval.
 - Anything on a device. The first device step is binding the service from a paired app and calling `discover`.
