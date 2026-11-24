@@ -247,6 +247,17 @@
              excluded / pending-refused / mismatch / bad input return
              RESULT_CANCELED. Never auto-approves. CODE_ASSIST for
              Victorious File Manager is a separate activity (CodeAssistActivity). -->
+        <!-- Inbound COMPANION_COMMS v1 (docs/COMPANION_COMMS.md): bound Messenger service. Exported so paired fleet
+             apps can bind; every message is checked in CompanionCommsService (sendingUid -> one catalogued package ->
+             signing cert + owner pairing) before anything runs. Unpaired callers get not_paired. -->
+        <service
+            android:name=".communications.CompanionCommsService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="ai.droidcommand.action.COMPANION_COMMS" />
+            </intent-filter>
+        </service>
+
         <activity
             android:name=".companionassist.CompanionAssistActivity"
             android:excludeFromRecents="true"

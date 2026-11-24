@@ -128,6 +128,7 @@ dependencies {
     implementation(project(":core-n8n"))
     implementation(project(":core-notes"))
     implementation(project(":core-bots"))
+    implementation(project(":core-communications"))
     implementation(project(":core-activity"))
     implementation(project(":core-skills"))
     implementation(project(":core-voice-android"))

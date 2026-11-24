@@ -97,13 +97,26 @@ data class ApprovalItem(
  * The owner's approval queue. [submit] is the only thing a request can do; [decide] is called from the owner's own
  * screen. An approval is bound to the exact caller, request id, capability and arguments (by hash).
  */
-class ApprovalQueue(private val clock: () -> Long) {
-    private val items = LinkedHashMap<String, ApprovalItem>()
+interface ApprovalStore {
+    fun load(): List<ApprovalItem>
+
+    fun save(items: Collection<ApprovalItem>)
+}
+
+class ApprovalQueue(private val clock: () -> Long, private val store: ApprovalStore? = null) {
+    private val items = LinkedHashMap<String, ApprovalItem>().also { m -> store?.load()?.forEach { m[it.id] = it } }
+
+    private fun persist() {
+        store?.save(items.values)
+    }
 
     @Synchronized fun submit(caller: String, requestId: String, payloadHash: String, capability: String, summary: String, botId: String?, expiresAtMs: Long): ApprovalItem {
         forRequest(caller, requestId)?.let { return it }
         val id = ByteArray(8).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
-        return ApprovalItem(id, caller, requestId, payloadHash, capability, summary.take(300), botId, clock(), expiresAtMs, ApprovalState.PENDING).also { items[id] = it }
+        return ApprovalItem(id, caller, requestId, payloadHash, capability, summary.take(300), botId, clock(), expiresAtMs, ApprovalState.PENDING).also {
+            items[id] = it
+            persist()
+        }
     }
 
     @Synchronized fun forRequest(caller: String, requestId: String): ApprovalItem? =
@@ -116,6 +129,7 @@ class ApprovalQueue(private val clock: () -> Long) {
         val cur = items[id]?.let(::expireIfNeeded) ?: return false
         if (cur.state != ApprovalState.PENDING) return false
         items[id] = cur.copy(state = if (approve) ApprovalState.APPROVED else ApprovalState.DENIED)
+        persist()
         return true
     }
 
@@ -124,6 +138,7 @@ class ApprovalQueue(private val clock: () -> Long) {
         val cur = items[id]?.let(::expireIfNeeded) ?: return false
         if (cur.state != ApprovalState.APPROVED) return false
         items[id] = cur.copy(state = ApprovalState.USED)
+        persist()
         return true
     }
 
@@ -131,6 +146,7 @@ class ApprovalQueue(private val clock: () -> Long) {
         if ((i.state == ApprovalState.PENDING || i.state == ApprovalState.APPROVED) && clock() >= i.expiresAtMs) {
             val e = i.copy(state = ApprovalState.EXPIRED)
             items[i.id] = e
+            persist()
             return e
         }
         return i
@@ -140,6 +156,12 @@ class ApprovalQueue(private val clock: () -> Long) {
 /** Remembers recently seen nonces. A nonce can be used once, ever, inside its validity window. */
 class ReplayGuard(private val clock: () -> Long, private val windowMs: Long = 10 * 60_000L, private val capacity: Int = 20_000) {
     private val seen = LinkedHashMap<String, Long>()
+
+    /** Nonces are remembered in memory only. After a restart none are known, so a request stamped before the start is refused. */
+    private val startedAt = clock()
+
+    /** True for a request stamped before this process started: its nonce cannot be checked, so it must be sent again. */
+    fun predatesStart(requestTs: Long) = requestTs < startedAt
 
     @Synchronized fun firstUse(caller: String, nonce: String): Boolean {
         val now = clock()
@@ -175,11 +197,19 @@ class RateLimiter(private val clock: () -> Long, private val perMinute: (CommsRi
 }
 
 /** Emergency stop. While on, nothing that sends, calls or enables automation runs; reading, pausing and cancelling still do. */
-class KillSwitch {
-    private val on = AtomicBoolean(false)
+class KillSwitch(private val persist: ((Boolean) -> Unit)? = null, initial: Boolean = false) {
+    private val on = AtomicBoolean(initial)
     val engaged get() = on.get()
-    fun engage() = on.set(true)
-    fun release() = on.set(false)
+
+    fun engage() {
+        on.set(true)
+        persist?.invoke(true)
+    }
+
+    fun release() {
+        on.set(false)
+        persist?.invoke(false)
+    }
 }
 
 enum class CommsState { COMPLETED, RUNNING, FAILED, REFUSED, UNKNOWN }
@@ -190,6 +220,9 @@ data class Receipt(
 )
 
 interface ReceiptStore {
+    /** False when stored receipts could not be read in full: idempotency can no longer be promised, so sends must stop. */
+    val healthy: Boolean get() = true
+
     fun get(caller: String, requestId: String): Receipt?
     fun putIfAbsent(r: Receipt): Receipt
     fun byJob(caller: String, jobId: String): Receipt?

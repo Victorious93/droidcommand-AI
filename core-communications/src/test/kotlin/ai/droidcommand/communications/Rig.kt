@@ -54,7 +54,7 @@ class Rig(withModel: Boolean = true) {
     val model = FakeModel()
     val grants = InMemoryGrantStore()
     val audit = InMemoryAuditLog()
-    val approvals = ApprovalQueue { now }
+    val approvals = ApprovalQueue(clock = { now })
     val kill = KillSwitch()
     val broker = CommsBroker(backend, if (withModel) ReplyService(model) else null, grants, approvals, InMemoryReceiptStore(), kill, audit, { now })
 

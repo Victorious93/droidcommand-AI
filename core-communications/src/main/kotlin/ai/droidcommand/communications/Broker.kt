@@ -24,6 +24,12 @@ object CommsContract {
     const val MAX_TTL_MS = 5 * 60_000L
     const val MAX_SKEW_MS = 120_000L
     const val MAX_RESULT_CHARS = 60_000
+
+    /** Messenger transport (Android): one request per message, answered on `replyTo`. Identity is `Message.sendingUid`, never the payload. */
+    const val MSG_REQUEST = 1
+    const val MSG_RESULT = 2
+    const val KEY_REQUEST = "request_json"
+    const val KEY_RESULT = "result_json"
     const val TASK_DISCOVER = "discover"
     const val TASK_CALL = "call"
     const val TASK_RECEIPT = "receipt"
@@ -121,6 +127,9 @@ class CommsBroker(
         }
     }
 
+    /** The answer for a transport that could not establish who is calling. Nothing was run. */
+    fun notPaired(detail: String): String = err("not_paired", detail)
+
     /** DroidCommand's own agent (Chat/Plan/Pilot/Forge) calling a capability. The owner's confirmation happened in the tool executor. */
     fun local(capability: String, args: Map<String, String>, botId: String? = null): String {
         val id = "local-" + Hashes.sha256("$capability${clock()}${System.nanoTime()}").take(24)
@@ -204,6 +213,7 @@ class CommsBroker(
             if (p.expiresAt <= now) return err("expired", "The request expired before it was processed.", rid)
             if (p.expiresAt - now > CommsContract.MAX_TTL_MS) return err("invalid_request", "expires_at is more than 5 minutes away.", rid)
             if (kotlin.math.abs(now - p.ts) > CommsContract.MAX_SKEW_MS) return err("stale_timestamp", "The request timestamp is outside the allowed clock skew.", rid)
+            if (replay.predatesStart(p.ts)) return err("stale_timestamp", "droidcommand-AI restarted after this request was stamped, so it cannot be checked against replays. Send it again with a fresh timestamp and nonce.", rid)
             if (!replay.firstUse(caller, p.nonce)) {
                 audit(AuditEventType.ACCESS_DENIED, caller, "replayed nonce for $rid")
                 return err("replayed_nonce", "This nonce was already used; send a fresh one.", rid)
@@ -215,6 +225,9 @@ class CommsBroker(
         if (kill.engaged && cap.risk in setOf(CommsRisk.SEND, CommsRisk.CALL, CommsRisk.ADMIN) && cap.safeWhen?.invoke(p.args) != true) {
             audit(AuditEventType.BOT_MESSAGE_DENIED, caller, "${cap.id} blocked by the emergency stop")
             return refuse(caller, p, cap, "kill_switch", "All automatic communications are stopped by the owner.")
+        }
+        if (!receipts.healthy && cap.risk in setOf(CommsRisk.SEND, CommsRisk.CALL)) {
+            return refuse(caller, p, cap, "receipts_unavailable", "Stored receipts could not be read, so a send could be repeated. Nothing was sent.", record = false)
         }
         if (!rate.allow(caller, cap.risk)) return refuse(caller, p, cap, "rate_limited", "Too many ${cap.risk.name.lowercase()} requests; slow down.", record = false)
         if (cap.id == "communications.cancel_job" && receipts.byJob(caller, p.args.getValue("job_id")) == null) {

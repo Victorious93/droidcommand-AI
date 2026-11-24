@@ -5,16 +5,18 @@ workspace**, so section 22 of the brief is Blocked, not skipped.
 
 ## Honest summary
 
-This session built and tested the **cores** of the system on the JVM: the conversation archive and incremental import engine
-(VictorSMS `comms-core`), the authorised communications contract and broker (DroidCommand `core-communications`), and the
-writing-style, profile and agent-configuration engine (VictorBots). Together they implement the headline requirement of the
-brief at the logic level: import an export, save it permanently, update it repeatedly without duplicates or loss, build a
-style profile from the owner's own words, and draft a reply from budgeted context through a policy-checked model route.
+This work built and tested the **cores** of the system and, in a second pass, the **Android shells around two of them**:
+the conversation archive and incremental import engine (VictorSMS `comms-core`, now with an Android SQLite adapter and an Import Center in the app),
+the authorised communications contract and broker (DroidCommand `core-communications`, now with durable state, a bound-service transport and an owner
+screen), and the writing-style, profile and agent-configuration engine (VictorBots, still core only). Together they implement the headline requirement at
+the logic level: import an export, save it permanently, update it repeatedly without duplicates or loss, build a style profile from the owner's own words,
+and draft a reply from budgeted context through a policy-checked model route.
 
-They are **not yet connected to each other on a phone.** There is no Android transport between the apps, no import screen,
-no grant/approval screen, no voice-message or interactive-call work, and no device, emulator, carrier or live-model run. The
-end-to-end flow in section 26 is therefore **Partially implemented**: every link has a tested core, none is wired through
-Android. Do not read the test counts below as device verification.
+They are **still not connected to each other on a phone.** The VictorSMS-to-DroidCommand connector does not exist (see "Next slice"), live SMS are not
+recorded into the archive, there is no VictorBots screen or service, and no voice-message or interactive-call work. Nothing has run on a device,
+emulator, carrier or real model: this environment has no `/dev/kvm`, so verification is JVM tests, Android's SQLite via Robolectric, Compose screens
+rendered on the JVM, local Gradle compiles, and CI. The end-to-end flow in section 26 is therefore **Partially implemented**. Do not read test counts as
+device verification.
 
 ### Status vocabulary used here
 
@@ -69,11 +71,11 @@ and are listed on each PR). No APK was built in this session; see Deliverables.
 | § | Area | Status |
 |---|---|---|
 | 1,2 | Architecture, inspection | Implemented (ownership documented in `COMPANION_COMMS.md`); baseline recorded above |
-| 3 | Extend companion interface | **Broker: Implemented, Built, Tested.** Discovery, versioning, graceful incompatibility: Tested. **Android bound-service transport, cert verification wiring: Requested.** Integration with Chat/Plan/Pilot/Forge: 27 `communications_*` tools Built+Tested against fakes; not run by a real agent loop. Assist/Remember: Requested |
+| 3 | Extend companion interface | **Broker and Android bound-service transport: Implemented, Built (compiles; manifest policy test); broker Tested, transport NEVER RUN.** Discovery, versioning, graceful incompatibility: Tested. The VictorSMS/VictorBots connectors: Requested (see below). Integration with Chat/Plan/Pilot/Forge: 27 `communications_*` tools Built+Tested against fakes; not run by a real agent loop. Assist/Remember: Requested |
 | 4 | VictorSMS gateway | Pre-existing SMS/MMS/dialer/Twilio/mail code untouched and, per its own docs, never device-tested. New provider-capability architecture, multi-SIM selection, failed-message recovery, drafts, scheduled messages, auto-replies UI: Requested |
 | 5 | Communications tools | 27 capabilities catalogued with permissions/risk/approval; **Tested with a fake backend**. A real VictorSMS/VictorBots backend for them: Requested. Natural-language/voice command mapping depends on a model; not tested |
-| 6 | Import Center | Importers CSV, JSON, SMS-Backup XML (XXE-hardened), WhatsApp-style logs, pasted text, ZIP: **Built, Tested**. Preview, participants, date range, duplicates, errors, unresolved senders, column mapping API, self-identification, original file preserved: **Tested**. **HTML: Unsupported. TextNow-specific parser: Unsupported (format unknown). SAF/share-target/UI/manual-mapping screen: Requested** |
-| 7 | Updating imported conversations | **Built, Tested** (the headline requirement): auto and manual matching, file hashing, stable ids, content+time fingerprinting, legitimate repeated texts, precision tolerance, time-zone shift *suggestion*, conflicts with resolution, import history, rollback, nothing deleted when missing from a newer export, historical never live. "Update Conversation" button: Requested. Incremental search index: Tested (FTS4) |
+| 6 | Import Center | Importers CSV, JSON, SMS-Backup XML (XXE-hardened), WhatsApp-style logs, pasted text, ZIP: **Built, Tested**. **Screens now exist** (VictorSMS Settings → Saved conversations): preview before anything is saved, who-is-me, provider/account, date order, column mapping, manual conversation choice, SAF picker and a share target: **Built, Tested on the JVM (Robolectric + Compose rendered on the JVM), NEVER RUN on a device.** **HTML: Unsupported. TextNow-specific parser: Unsupported (format unknown).** |
+| 7 | Updating imported conversations | **Built, Tested** (the headline requirement): auto and manual matching, file hashing, stable ids, content+time fingerprinting, legitimate repeated texts, precision tolerance, time-zone shift *suggestion* (owner opt-in), conflicts with resolution, import history, **Undo**, nothing deleted when missing from a newer export, historical never live. **"Update conversation" button now exists** on each saved conversation (Built, UI tested on the JVM, never run on a device). Incremental search index: Tested (FTS4, also on Android's SQLite) |
 | 8 | Conversation intelligence | Archive, FTS search, budgeted retrieval, approved facts, summaries store, encrypted backup/restore, selective deletion incl. index: **Built, Tested**. Semantic/embedding retrieval, follow-up reminders, important-message flags: Requested. At-rest database encryption: Unsupported in this slice (app-private storage only, same limit as VictorBots) |
 | 9–11 | Style engine, profiles, corrections | **Built, Tested** (Java): outgoing-only analysis, versions/rollback/compare/duplicate/reset/export/import, learned preferences reversible, no self-reinforcement. Quality against real conversations: **not measured**. Preview-generation and comparison screens: Requested |
 | 12 | Communication agents | Config, default Approval mode, one bot per conversation, pause one/all: **Tested**. Avatar/personality use the existing VictorBots bot. Voice configuration, per-bot model choice, activity monitoring UI: Requested |
@@ -82,29 +84,31 @@ and are listed on each PR). No APK was built in this session; see Deliverables.
 | 15 | Calls | Catalogue entry `place_call` Tested against a fake. Native placing already exists in VictorSMS (not device-tested). **Interactive AI calling: Requested; not claimed** — ordinary cellular calls give apps no two-way audio access |
 | 16 | TextNow | Import: Built (generic formats). Live TextNow: **Unsupported** (no official API). Handoff workflow: Requested |
 | 17,18 | Unified use, shared AI | Ownership enforced in design; `ReplyModel` seam Tested. `PolicyInference` wiring and per-purpose model selection: Requested |
-| 19 | Secure IPC | Broker authorisation model **Tested** (grants, per-call approval, replay, rate limit, idempotency, audit, kill switch). Android IPC, pairing, UIs: Requested |
+| 19 | Secure IPC | Broker authorisation model **Tested**. **Android transport Built, never run:** bound Messenger service, identity from `sendingUid` through the existing catalogue + owner pairing (never starts pairing, refuses shared uids), manifest allowlist test. VictorSMS/VictorBots are `pending-refused` until the owner pairs them. No client exists yet to call it |
 | 20 | Automation/scheduling | Persistent outbox state machine Tested. Scheduler, retries engine, translation: Requested |
-| 21 | User interface | **Requested; no screens were built** |
+| 21 | User interface | **VictorSMS: saved conversations, import wizard, conversation view with Update/Search/Undo/conflicts/Delete (Built, JVM-tested).** **DroidCommand: Advanced → Communications (emergency stop, approvals, per-app grants) Built, not run.** VictorBots, Unified Inbox integration, Calls, Voice, Providers, Backup/Restore screens: Requested |
 | 22 | VictorLinux | **Blocked: not in the workspace** |
-| 23 | Testing | JVM unit/integration tests: **Tested** (below). Android instrumentation, emulator, device, carrier, multi-SIM, battery, memory: **Blocked (none available); not run** |
+| 23 | Testing | JVM unit/integration tests and Android-SQLite/Compose-on-JVM tests: **Tested** (below). Emulator, device, carrier, multi-SIM, battery, memory: **Blocked: this environment has no `/dev/kvm`; not run.** CI emulator launch exists for DroidCommand only and exercises the existing app |
 | 24 | Documentation | Protocol, report, per-repo architecture/manual/verification updates: Implemented. **Screenshots: Blocked (no UI, no emulator).** Guide-app export: Requested |
-| 25 | Deliverables | Source, schemas/migrations, importers, tests, reports: yes. **Debug APKs: not produced in this session** (the PR CI jobs build them; see each PR). Release APKs: Blocked (no signing keys) |
+| 25 | Deliverables | Source, schemas/migrations, importers, tests, reports: yes. **Debug APKs are built by each PR's CI**; I did not download or checksum them. Release APKs: Blocked (no signing keys) |
 | 26 | End-to-end | **Partially implemented**: every link has a tested core; none is wired through Android |
 
-## Test evidence (this environment, JVM + real SQLite)
+## Test evidence (this environment; JVM, real SQLite, Android SQLite via Robolectric)
 
 | Module | Tests | Notes |
 |---|---|---|
-| VictorSMS `comms-core` | 58, 0 failing | `ImportEngineTest` (22 incl. a 20,000→20,500-message re-import) ran in 2.9 s total |
-| DroidCommand `core-communications` | 34, 0 failing | ktlint passes; baseline modules unchanged |
+| VictorSMS `comms-core` | 59, 0 failing | JDBC SQLite. Includes a 20,000→20,500-message re-import |
+| VictorSMS `:app` | 108, 0 failing (17 new) | `AndroidArchiveTest` 9 (Android SQLite code, Robolectric native, API 34), `ImportSessionTest` 5, `ImportScreensTest` 3 (Compose rendered on the JVM). **Not an emulator** |
+| DroidCommand `core-communications` | 42, 0 failing | ktlint clean; `ManifestPolicyTest` 20 (updated deliberately); `:app:compileDebugKotlin` with `-PincludeAndroid=true` passes |
 | VictorBots | `StyleTest` 81 · `CommsTest` 68 · `MigrationTest` 25; **full JVM suite green** | includes `GatewayTest`: no second model path |
 
 **Mutation checks** (a deliberate break, run, restored byte-for-byte): comms-core 5 of 5 caught after strengthening one test that
-initially missed "one saved message absorbs several incoming ones"; core-communications 7 of 7 (approval bypass, auto-claim
-without grant, replay, kill switch, bot scope, double execution, unknown links); VictorBots 6 of 6.
+initially missed "one saved message absorbs several incoming ones"; core-communications 11 of 11 (approval bypass, auto-claim
+without grant, replay, kill switch, bot scope, double execution, unknown links, and four durability breaks); VictorBots 6 of 6.
 
 Bugs found by tests during this work, all fixed: day-first dates in chat logs rejected every line; outbox states compared
-in the wrong case; `FEWER_EMOJIS` preference kind mismatch; a ktlint failure that would have failed CI.
+in the wrong case; `FEWER_EMOJIS` preference kind mismatch; a ktlint failure that would have failed CI; only the checkbox, not its label, was
+tappable in the import wizard (found by the Compose test); a search box needed every-word matching, not any-word.
 
 ## Security review (design level; no external audit, no device)
 
@@ -125,8 +129,10 @@ this container's JVM. Memory, battery, on-device SQLite speed and model latency 
 
 ## Next slice (suggested order)
 
-1. VictorSMS: `SqlDb` adapter over `SQLiteDatabase`, import screen (SAF + share target + preview + self-identification + mapping),
-   "Update Conversation" button, saved-conversations list. Needs an emulator run.
-2. DroidCommand: bound-service transport + grant/approval screens + `PolicyInference` `ReplyModel` + persistent stores.
-3. VictorSMS backend connector implementing `CommsBackend`; VictorBots connector for profiles.
-4. Only then: auto-send wiring (decision 1), voice messages, scheduling.
+1. **VictorSMS connector (the missing link).** New parameterised read ops in the `victorsms` entry of `core-fleet-messenger`; a new, separately granted
+   `ARCHIVE_READ` op group in VictorSMS's existing `BridgeService`/pairing UI (message contents cross the bridge); handlers over `comms-core`; a
+   `VictorSmsCommsBackend` in DroidCommand replacing `UnconnectedBackend`. Detail in `docs/COMPANION_COMMS.md` → Not built.
+2. **Record live SMS into the archive** (`SmsDeliverReceiver`), then wire `AutomationGate` and `Outbox` to the real sender. Only after decision 1 below.
+3. **VictorBots:** a screen for profiles/agents and a service that answers `get_style_profile`; add its tables to backup.
+4. **First device run** (needs a phone or a KVM host): bind the service from a paired app and call `discover`; import a real redacted export.
+5. Then voice messages, scheduling, interactive calls.
