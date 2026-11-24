@@ -1,7 +1,12 @@
 package ai.droidcommand.app
 
 import android.graphics.Bitmap
+import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodes
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -61,6 +66,9 @@ class PrimaryScreensScreenshotTest {
                 block()
             } catch (t: Throwable) {
                 failures.add("$name: ${t.javaClass.simpleName}: ${t.message}")
+                recordFailure(name)
+                // A confirmation dialog left open is modal: every later step would time out behind it.
+                closeOpenDialogs()
                 try {
                     skipSetupIfShown()
                     tapNav("nav_chat")
@@ -224,6 +232,8 @@ class PrimaryScreensScreenshotTest {
                 block()
             } catch (t: Throwable) {
                 failures.add("$name: ${t.javaClass.simpleName}: ${t.message}")
+                recordFailure(name)
+                closeOpenDialogs()
             }
         }
         skipSetupIfShown()
@@ -253,6 +263,49 @@ class PrimaryScreensScreenshotTest {
         }
         if (failures.isNotEmpty()) {
             throw AssertionError("approval/SET walk failures:\n${failures.joinToString("\n")}")
+        }
+    }
+
+    /**
+     * Saves what was on screen when a step timed out: `FAILED-<name>.png` and `FAILED-<name>.txt` (every text, test tag
+     * and disabled flag in the semantics tree, dialogs included). Without these a timeout only says that some text never
+     * appeared, which cannot tell a changed label from a screen that never opened. Best effort; never throws.
+     */
+    private fun recordFailure(name: String) {
+        try {
+            snap("FAILED-$name")
+        } catch (_: Throwable) {
+        }
+        try {
+            val out = StringBuilder()
+            compose.onAllNodes(isRoot()).fetchSemanticsNodes().forEachIndexed { i, root ->
+                out.appendLine("root $i")
+                dumpSemantics(root, 1, out)
+            }
+            File(outDir, "FAILED-$name.txt").writeText(out.toString())
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun dumpSemantics(node: SemanticsNode, depth: Int, out: StringBuilder) {
+        val text = node.config.getOrNull(SemanticsProperties.Text)?.joinToString(" | ") { it.text }
+        val tag = node.config.getOrNull(SemanticsProperties.TestTag)
+        if (text != null || tag != null) {
+            val disabled = node.config.contains(SemanticsProperties.Disabled)
+            out.appendLine("${"  ".repeat(depth)}text=$text tag=$tag${if (disabled) " DISABLED" else ""}")
+        }
+        node.children.forEach { dumpSemantics(it, depth + 1, out) }
+    }
+
+    /** Taps Deny on a leftover in-app confirmation dialog so the next step starts on a usable screen. */
+    private fun closeOpenDialogs() {
+        try {
+            val deny = compose.onAllNodesWithText("Deny")
+            if (deny.fetchSemanticsNodes().isNotEmpty()) {
+                deny[0].performClick()
+                compose.waitForIdle()
+            }
+        } catch (_: Throwable) {
         }
     }
 
