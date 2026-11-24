@@ -1,5 +1,6 @@
 package ai.droidcommand.app.ui.communications
 
+import ai.droidcommand.communications.AccessRecord
 import ai.droidcommand.communications.ApprovalItem
 import ai.droidcommand.communications.CommsAdmin
 import ai.droidcommand.communications.CommsBroker
@@ -7,6 +8,8 @@ import ai.droidcommand.communications.CommsGrant
 import ai.droidcommand.communications.CommsPermission
 import ai.droidcommand.communications.ExpansionRequest
 import ai.droidcommand.communications.FileShareEngine
+import ai.droidcommand.communications.ShareForm
+import ai.droidcommand.communications.ShareForms
 import ai.droidcommand.communications.ShareGrant
 import ai.droidcommand.communications.ShareScope
 import androidx.lifecycle.ViewModel
@@ -26,6 +29,7 @@ data class CommunicationsUi(
     val pending: List<ApprovalItem> = emptyList(),
     val shares: List<ShareGrant> = emptyList(),
     val fileRequests: List<ExpansionRequest> = emptyList(),
+    val fileHistory: List<AccessRecord> = emptyList(),
     val stopped: Boolean = false,
     val available: Int = 0,
     val total: Int = 0,
@@ -63,6 +67,15 @@ class CommunicationsViewModel @Inject constructor(
     fun revokeShare(id: String) {
         shares.revoke(id)
         mutable.value = read("File sharing removed.")
+    }
+
+    /** Owner action from the form. The grant is built and validated by [ShareForms]; a refusal is shown as-is. */
+    fun createShare(form: ShareForm) {
+        val now = System.currentTimeMillis()
+        val msg = ShareForms.build(form, now) { "s" + now + "-" + java.util.UUID.randomUUID().toString().take(6) }
+            .mapCatching { shares.grant(it).getOrThrow() }
+            .fold({ "Sharing set up. Everything else stays denied." }, { it.message ?: "Could not share." })
+        mutable.value = read(msg)
     }
 
     fun denyFileRequest(id: String) {
@@ -107,6 +120,7 @@ class CommunicationsViewModel @Inject constructor(
             pending = admin.pending(),
             shares = shares.grants().filter { !it.revoked },
             fileRequests = shares.pendingRequests(),
+            fileHistory = shares.history().takeLast(30).reversed(),
             stopped = admin.killEngaged,
             available = caps.size - unavailable.size,
             total = caps.size,
