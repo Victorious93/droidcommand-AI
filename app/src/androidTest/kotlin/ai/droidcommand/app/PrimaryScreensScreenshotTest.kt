@@ -145,7 +145,7 @@ class PrimaryScreensScreenshotTest {
             snap("tools-metasploit")
         }
         step("tool-approval") {
-            compose.onNodeWithText("auxiliary/scanner/portscan/tcp").performClick()
+            compose.onNodeWithText("auxiliary/scanner/portscan/tcp").performScrollTo().performClick()
             compose.onNodeWithText("Target host (required, authorized target only)").performTextInput("127.0.0.1")
             device.pressBack()
             compose.waitForIdle()
@@ -244,7 +244,7 @@ class PrimaryScreensScreenshotTest {
             snap("tools-metasploit")
         }
         step("tool-approval") {
-            compose.onNodeWithText("auxiliary/scanner/portscan/tcp").performClick()
+            compose.onNodeWithText("auxiliary/scanner/portscan/tcp").performScrollTo().performClick()
             compose.onNodeWithText("Target host (required, authorized target only)").performTextInput("127.0.0.1")
             compose.waitForIdle()
             compose.onNodeWithText("Run Module").performScrollTo().performClick()
@@ -324,9 +324,28 @@ class PrimaryScreensScreenshotTest {
         }
     }
 
-    private fun openFromAdvanced(label: String) {
-        tapNav("nav_advanced")
+    /**
+     * Gets to the Advanced tab's root screen from anywhere. Switching tabs saves and restores each tab's child screen,
+     * and only re-tapping the already-selected tab pops to its root (see DroidCommandNavHost). So after a failed step
+     * left Advanced > Extra tools > Metasploit open and the recovery moved to Chat, one tap on Advanced restored
+     * Metasploit and every later step timed out behind it. Tap again (up to three times) until the root shows.
+     */
+    private fun returnToAdvancedRoot() {
+        repeat(3) {
+            tapNav("nav_advanced")
+            val atRoot = try {
+                waitForText("These tools can change this phone", timeoutMs = 3_000)
+                true
+            } catch (_: Throwable) {
+                false
+            }
+            if (atRoot) return
+        }
         waitForText("These tools can change this phone")
+    }
+
+    private fun openFromAdvanced(label: String) {
+        returnToAdvancedRoot()
         compose.onNodeWithText(label).performScrollTo().performClick()
         compose.waitForIdle()
     }
