@@ -127,6 +127,7 @@ dependencies {
     implementation(project(":core-n8n"))
     implementation(project(":core-notes"))
     implementation(project(":core-bots"))
+    implementation(project(":core-activity"))
     implementation(project(":core-skills"))
     implementation(project(":core-voice-android"))
     implementation(project(":core-voice-neural-android"))
@@ -159,6 +160,7 @@ dependencies {
     // EXTERNAL_NODE Messenger transport: pure envelope/validation/trust logic (api-exposes core-rootforge's
     // BridgeRequest/FailureKind). The Android Messenger plumbing is app/.../fleet/AndroidMessengerChannel.kt.
     implementation(project(":core-fleet-messenger"))
+    implementation(project(":core-fleet-worker")) // protocol 1.1 live features (terminal/draft) adapters: fleet/LiveBridges.kt
     implementation(project(":core-fleet-tools"))
     implementation(project(":core-fleet-update"))
 

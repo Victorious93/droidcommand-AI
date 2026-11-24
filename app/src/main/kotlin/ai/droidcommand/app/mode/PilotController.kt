@@ -1,5 +1,9 @@
 package ai.droidcommand.app.mode
 
+import ai.droidcommand.activity.ActivityActor
+import ai.droidcommand.activity.ActivityLog
+import ai.droidcommand.activity.ActivityRecordingToolRunner
+import ai.droidcommand.activity.ActivityRun
 import ai.droidcommand.agent.AgentMode
 import ai.droidcommand.agent.AgentStateMachine
 import ai.droidcommand.agent.Initiator
@@ -7,6 +11,7 @@ import ai.droidcommand.agent.ToolExecutor
 import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.agent.ToolSpec
 import ai.droidcommand.agent.describe
+import ai.droidcommand.app.activity.endFromResult
 import ai.droidcommand.security.ApprovalPrompt
 import ai.droidcommand.security.JsonFileAuditLog
 import ai.droidcommand.security.SecureToolExecutor
@@ -45,6 +50,7 @@ class PilotController @Inject constructor(
     private val approvalPrompt: ApprovalPrompt,
     private val auditLog: JsonFileAuditLog,
     private val modes: EngineModes,
+    private val activityLog: ActivityLog,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val cancelFlag = AtomicBoolean(false)
@@ -84,10 +90,15 @@ class PilotController @Inject constructor(
             nextRunId
         }
         mutableState.update { it.copy(running = true, error = null, result = null) }
+        // One Pilot instruction is one row on the Activity screen; the arguments are recorded redacted, never the typed text.
+        val activityRun = ActivityRun.start(ActivityActor("dc:pilot", "Pilot"), "Pilot: ${tool.name}", activityLog)
         runJob = scope.launch {
             try {
-                val instruction = PilotInstruction(registry) { machine -> secureRunner(machine) }
+                val instruction = PilotInstruction(registry) { machine ->
+                    ActivityRecordingToolRunner(secureRunner(machine), activityRun, activityLog)
+                }
                 val result = instruction.run(tool.name, input, isCancelled = { cancelFlag.get() || activeRunId != runId })
+                activityRun.endFromResult(tool.name, result, stopped = cancelFlag.get() || activeRunId != runId)
                 synchronized(lock) {
                     if (activeRunId != runId) return@launch
                     if (cancelFlag.get()) {
@@ -97,6 +108,11 @@ class PilotController @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
+                if (cancelFlag.get() || activeRunId != runId) {
+                    activityRun.cancel("Stopped")
+                } else {
+                    activityRun.fail(e.message ?: e.javaClass.simpleName)
+                }
                 if (activeRunId == runId && !cancelFlag.get()) {
                     mutableState.update { it.copy(error = e.message ?: e.javaClass.simpleName) }
                 }

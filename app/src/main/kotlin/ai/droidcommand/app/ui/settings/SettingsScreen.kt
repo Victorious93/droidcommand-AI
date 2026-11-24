@@ -147,6 +147,7 @@ fun SettingsScreen(
         }
 
         VoiceSettingsSection()
+        FleetWorkerSection()
         PasswordPairingSection()
 
         SectionLabel("More")

@@ -1,7 +1,11 @@
 package ai.droidcommand.app.ui.fleet
 
+import ai.droidcommand.activity.ActivityActor
+import ai.droidcommand.activity.ActivityLog
+import ai.droidcommand.activity.ActivityRun
 import ai.droidcommand.app.fleet.FleetRowUi
 import ai.droidcommand.app.fleet.FleetRows
+import ai.droidcommand.security.FleetCommandStatus
 import ai.droidcommand.security.FleetControlPolicy
 import ai.droidcommand.security.FleetNodeBoard
 import ai.droidcommand.security.FleetOrchestrator
@@ -25,6 +29,7 @@ class FleetOrchestratorViewModel @Inject constructor(
     private val orchestrator: FleetOrchestrator,
     private val board: FleetNodeBoard,
     private val control: FleetControlPolicy,
+    private val activityLog: ActivityLog,
 ) : ViewModel() {
     private val busy = MutableStateFlow<Set<String>>(emptySet())
     private val _rows = MutableStateFlow(rows())
@@ -47,7 +52,33 @@ class FleetOrchestratorViewModel @Inject constructor(
 
     /** Always goes through the approval dialog: [FleetOrchestrator.sendCommand] has no other path. */
     fun sendCommand(nodeId: String, capabilityId: String, inputJson: String) {
-        viewModelScope.launch(Dispatchers.IO) { withBusy(nodeId) { orchestrator.sendCommand(nodeId, capabilityId, inputJson) } }
+        viewModelScope.launch(Dispatchers.IO) { withBusy(nodeId) { recordedSend(nodeId, capabilityId, inputJson) } }
+    }
+
+    /**
+     * Shows the command on the Activity screen under the fleet app it goes to. Only action commands are recorded:
+     * the read-only status checks run for every node each time this screen opens, and would bury everything else.
+     * The capability id is recorded, not the input, which can hold anything the owner typed.
+     */
+    private fun recordedSend(nodeId: String, capabilityId: String, inputJson: String) {
+        val name = board.node(nodeId)?.displayName ?: nodeId
+        val run = ActivityRun.start(ActivityActor("node:$nodeId", name), "Sending to $name: $capabilityId", activityLog)
+        val state = try {
+            run.inScope { orchestrator.sendCommand(nodeId, capabilityId, inputJson) }
+        } catch (t: Throwable) {
+            run.fail("${t.javaClass.simpleName}: ${t.message.orEmpty()}")
+            throw t
+        }
+        val last = state.lastCommand
+        if (last == null) {
+            run.fail("No result was recorded")
+        } else {
+            when (last.status) {
+                FleetCommandStatus.SUCCEEDED -> run.finish("Sent to $name")
+                FleetCommandStatus.DENIED -> run.cancel("You declined it")
+                else -> run.fail(last.result.ifBlank { "The command did not go through" })
+            }
+        }
     }
 
     private inline fun withBusy(nodeId: String, block: () -> Unit) {

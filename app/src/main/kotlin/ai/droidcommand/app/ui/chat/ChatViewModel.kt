@@ -1,5 +1,9 @@
 package ai.droidcommand.app.ui.chat
 
+import ai.droidcommand.activity.ActivityActor
+import ai.droidcommand.activity.ActivityLog
+import ai.droidcommand.activity.ActivityRecordingToolRunner
+import ai.droidcommand.activity.ActivityRun
 import ai.droidcommand.agent.ConversationStore
 import ai.droidcommand.agent.GraphRetriever
 import ai.droidcommand.agent.KnowledgeGraph
@@ -141,6 +145,8 @@ data class ChatUiState(
     /** Bytes of the embedding model downloaded so far, or null when no download is running. */
     val embedderDownloadBytes: Long? = null,
     val embedderDownloadMegabytes: Long = 0,
+    /** Bytes a stopped download kept on disk (0 when there are none): the button then says Resume, with a Cancel that deletes them. */
+    val embedderPartialBytes: Long = 0,
     /** True while the user is being asked to confirm downloading the embedding model over a metered (mobile) connection. */
     val confirmMeteredDownload: Boolean = false,
     /** Outcome of the last attach/remove, shown under the toolbar. */
@@ -222,6 +228,7 @@ class ChatViewModel @Inject constructor(
     private val inferenceSettings: InferenceSettingsStore,
     private val routeResolver: RouteResolver,
     private val botRuntime: BotRuntime,
+    private val activityLog: ActivityLog,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val prefs = context.getSharedPreferences("chat_prefs", Context.MODE_PRIVATE)
@@ -276,6 +283,9 @@ class ChatViewModel @Inject constructor(
     /** The running bot's own tools (talk to bots, sandbox) and the runner that gates them; null when it has none. */
     private var botKit: BotToolKit? = null
     private var botRunner: ToolRunner? = null
+
+    /** The Activity-screen run for the helper bot's message being answered now; null between messages. Read from the model's thread. */
+    @Volatile private var botRun: ActivityRun? = null
 
     @Volatile private var handsFreeRound = false
 
@@ -387,6 +397,7 @@ class ChatViewModel @Inject constructor(
                     documents = docs,
                     documentsAvailable = documentRuntime.embedderAvailable(),
                     embedderDownloadMegabytes = documentRuntime.embedderDownloadMegabytes,
+                    embedderPartialBytes = runCatching { documentRuntime.embedderPartialBytes() }.getOrDefault(0L),
                     documentStatus = documentRuntime.embedderProblem,
                 )
             }
@@ -634,6 +645,12 @@ class ChatViewModel @Inject constructor(
         inFlightText = text
         sendJob = viewModelScope.launch(Dispatchers.IO) {
             applyChatSystemPrompt(current)
+            // A helper bot's answer is one run on the Activity screen. The message text is not recorded, only that one arrived.
+            val turnRun = activeBot?.let { bot ->
+                botRun?.cancel("Replaced by a newer message")
+                ActivityRun.start(ActivityActor("bot:${bot.id}", bot.name), "Working on a message", activityLog)
+            }
+            botRun = turnRun
             // list() also registers the models with the repository before the first on-device turn.
             val route = ChatRoute.decide(
                 selectedLocalId = current.activeLocalModelId,
@@ -692,6 +709,14 @@ class ChatViewModel @Inject constructor(
             // (speaking re-enters this flow through the voice callback, which can force exactly such a retry and a second speak).
             val refreshedChats = if (result is ChatResult.Reply) runCatching { savedChats(store) }.getOrNull() else null
             val cancelled = !isActive || stop.get()
+            turnRun?.let { run ->
+                when {
+                    cancelled -> run.cancel("Stopped")
+                    result is ChatResult.Failure -> run.fail(result.message)
+                    else -> run.finish("Replied")
+                }
+                if (botRun === run) botRun = null
+            }
             if (!cancelled) {
                 val routeSummary = when (result) {
                     is ChatResult.Reply -> result.route?.summary()
@@ -770,6 +795,9 @@ class ChatViewModel @Inject constructor(
 
     @Volatile private var embedderDownloadCancelled = false
 
+    /** Set by Cancel: once the transfer has ended, what it downloaded is deleted. A Stop leaves it for Resume. */
+    @Volatile private var embedderDiscardRequested = false
+
     private val networkLinks by lazy { NetworkLinkChecker(context) }
 
     /**
@@ -797,7 +825,8 @@ class ChatViewModel @Inject constructor(
     private fun startEmbedderDownload(allowMetered: Boolean = false) {
         if (mutableState.value.embedderDownloadBytes != null) return
         embedderDownloadCancelled = false
-        mutableState.update { it.copy(embedderDownloadBytes = 0, documentStatus = "Downloading the embedding model from huggingface.co…") }
+        embedderDiscardRequested = false
+        mutableState.update { it.copy(embedderDownloadBytes = it.embedderPartialBytes, documentStatus = "Downloading the embedding model from huggingface.co…") }
         viewModelScope.launch(Dispatchers.IO) {
             val supervisor = EmbedderDownloadSupervisor(documentRuntime::installEmbedder, networkLinks::activeLink)
             val outcome = runCatching {
@@ -808,6 +837,11 @@ class ChatViewModel @Inject constructor(
                     onRetrying = { message -> mutableState.update { it.copy(documentStatus = message) } },
                 )
             }
+            // The transfer has ended, so nothing is writing the partial file: a Cancel can delete it now.
+            val discarded = embedderDiscardRequested
+            if (discarded) runCatching { documentRuntime.discardEmbedderPartial() }
+            embedderDiscardRequested = false
+            val kept = runCatching { documentRuntime.embedderPartialBytes() }.getOrDefault(0L)
             val ready = runCatching { documentRuntime.embedderAvailable() }.getOrDefault(false)
             val result = (outcome.getOrNull() as? DownloadOutcome.Finished)?.result
             val paused = outcome.getOrNull() == DownloadOutcome.PausedForMetered && !ready
@@ -816,17 +850,33 @@ class ChatViewModel @Inject constructor(
                 paused -> "Paused: the connection is metered. Confirm to continue from where it stopped."
                 outcome.isFailure -> "Download failed: ${outcome.exceptionOrNull()?.message ?: "unknown error"}"
                 result is ModelInstallResult.Failed -> "Download failed: ${result.reason}. Tap Download again to resume."
-                result == null -> "Download cancelled. Tap Download to resume."
+                discarded -> "Cancelled. What was downloaded was deleted."
+                result == null -> "Stopped. Resume continues from where it stopped."
                 else -> documentRuntime.embedderProblem ?: "The embedding model is installed but could not be loaded."
             }
             mutableState.update {
-                it.copy(embedderDownloadBytes = null, documentsAvailable = ready, documentStatus = status, confirmMeteredDownload = paused)
+                it.copy(embedderDownloadBytes = null, embedderPartialBytes = if (ready) 0L else kept, documentsAvailable = ready, documentStatus = status, confirmMeteredDownload = paused)
             }
         }
     }
 
-    fun cancelEmbedderDownload() {
+    /** Stop: ends the transfer and keeps what is downloaded, so Resume continues from it. */
+    fun stopEmbedderDownload() {
         embedderDownloadCancelled = true
+    }
+
+    /** Cancel: ends the transfer and deletes what was downloaded. */
+    fun cancelEmbedderDownload() {
+        if (mutableState.value.embedderDownloadBytes != null) {
+            // The download deletes its own partial file once it has stopped, so nothing is deleted under a writer.
+            embedderDiscardRequested = true
+            embedderDownloadCancelled = true
+        } else {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { documentRuntime.discardEmbedderPartial() }
+                mutableState.update { it.copy(embedderPartialBytes = 0L, documentStatus = "Cancelled. What was downloaded was deleted.") }
+            }
+        }
     }
 
     fun removeDocument(docId: String) {
@@ -1159,7 +1209,8 @@ class ChatViewModel @Inject constructor(
     private fun applyBotToolAccess(allowed: Set<String>) {
         val kit = botKit
         session.setToolAccess(
-            HelperBotTools.scopedRunner(botRunner ?: toolRunner, allowed),
+            // Records each tool call under the bot's current message on the Activity screen; the call itself is unchanged.
+            ActivityRecordingToolRunner(HelperBotTools.scopedRunner(botRunner ?: toolRunner, allowed), { botRun }, activityLog),
             HelperBotTools.offeredTools(toolRegistry, allowed) + kit?.specs.orEmpty(),
         )
     }
@@ -1177,6 +1228,8 @@ class ChatViewModel @Inject constructor(
     }
 
     fun stopBot() {
+        botRun?.cancel("Bot closed")
+        botRun = null
         activeBot = null
         botKit = null
         botRunner = null

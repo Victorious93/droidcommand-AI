@@ -1,5 +1,8 @@
 package ai.droidcommand.app.di
 
+import ai.droidcommand.activity.ActivityApprovalPrompt
+import ai.droidcommand.activity.ActivityLog
+import ai.droidcommand.activity.InMemoryActivityLog
 import ai.droidcommand.agent.AgentStateMachine
 import ai.droidcommand.agent.ConversationStore
 import ai.droidcommand.agent.KnowledgeGraph
@@ -511,18 +514,31 @@ object AppModule {
     fun provideApprovalPrompt(
         composePrompt: ComposeApprovalPrompt,
         auditLog: JsonFileAuditLog,
+        activityLog: ActivityLog,
         @ApplicationContext context: Context,
     ): ApprovalPrompt {
         val store = SharedPreferencesVoiceSettingsStore(context)
         // Created on the first approval that actually uses voice, then reused (a TextToSpeech binding per approval would leak).
         val io by lazy { VoiceApprovalPrompt.engineIo(AndroidSpeechToText(context), AndroidTextToSpeech(context)) }
-        return VoiceApprovalPrompt(
-            screen = composePrompt,
-            io = { io },
-            auditLog = auditLog,
-            settings = { store.load().approval },
+        // The activity decorator only records "this bot is waiting for you"; the answer is still the dialog's.
+        return ActivityApprovalPrompt(
+            VoiceApprovalPrompt(
+                screen = composePrompt,
+                io = { io },
+                auditLog = auditLog,
+                settings = { store.load().approval },
+            ),
+            activityLog,
         )
     }
+
+    /**
+     * The live "what is each bot / fleet app doing" feed the Activity screen reads. In memory, bounded, drops its
+     * oldest entries; deliberately not the audit log, which fails closed when full.
+     */
+    @Provides
+    @Singleton
+    fun provideActivityLog(): ActivityLog = InMemoryActivityLog()
 
     /**
      * The on-device audit trail the Logs screen reads. Append-only JSON Lines under app-private storage;

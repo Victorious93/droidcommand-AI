@@ -291,11 +291,11 @@ object FleetCatalog {
     /**
      * Every Android package the catalog names: Fleet-screen probes plus
      * Messenger EXTERNAL_NODE debug/bench aliases plus inbound-only
-     * included packages. Must match the `<queries>` package list exactly
+     * included packages plus the display-only [FleetExtraApps]. Must match the `<queries>` package list exactly
      * (`ManifestPolicyTest`).
      */
     val queryPackages: Set<String>
-        get() = all.flatMap { it.androidPackages }.toSet() + INBOUND_VISIBILITY_PACKAGES
+        get() = all.flatMap { it.androidPackages }.toSet() + INBOUND_VISIBILITY_PACKAGES + FleetExtraApps.packages
 }
 
 enum class FleetInstallState {

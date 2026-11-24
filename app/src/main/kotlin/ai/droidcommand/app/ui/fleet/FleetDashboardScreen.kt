@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.fleet
 
 import ai.droidcommand.app.fleet.install.FleetInstallEvents
+import ai.droidcommand.app.ui.activity.ActivityTile
 import ai.droidcommand.app.ui.components.DroidCard
 import ai.droidcommand.app.ui.components.ScreenTitleWithHelp
 import ai.droidcommand.app.ui.remotepc.RemotePcTile
@@ -19,6 +20,7 @@ import ai.droidcommand.app.ux.FleetUserCopy
 import ai.droidcommand.app.ux.FleetUserKind
 import ai.droidcommand.app.ux.FleetUserStatus
 import ai.droidcommand.app.ux.ScreenHelpCatalog
+import ai.droidcommand.fleet.update.FleetAutoUpdateMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -66,6 +68,8 @@ fun FleetDashboardScreen(
     onOpenPairing: () -> Unit,
     onOpenOrchestrator: () -> Unit,
     onOpenConnectDevice: () -> Unit = {},
+    onOpenPasswordPairing: () -> Unit = {},
+    onOpenActivity: () -> Unit = {},
     viewModel: FleetDashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -73,7 +77,7 @@ fun FleetDashboardScreen(
     val install by installModel.state.collectAsState()
     var pairPromptId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
-        installModel.refresh()
+        installModel.refresh(force = false)
         FleetInstallEvents.installed.collect { id ->
             viewModel.refresh()
             installModel.refresh()
@@ -84,6 +88,14 @@ fun FleetDashboardScreen(
         state = state,
         install = install,
         onInstall = installModel::install,
+        onInstallAll = installModel::installAll,
+        onIncludePrereleases = installModel::setIncludePrereleases,
+        onInstallSelected = installModel::installSelected,
+        onSelectVersion = installModel::selectRelease,
+        onAutoMode = installModel::setAutoUpdateMode,
+        onOpenPasswordPairing = onOpenPasswordPairing,
+        onStopInstall = installModel::stop,
+        onCancelInstall = installModel::cancel,
         onAutoUpdate = installModel::setAutoUpdate,
         pairPromptId = pairPromptId,
         onPairPromptHandled = { pairPromptId = null },
@@ -94,6 +106,7 @@ fun FleetDashboardScreen(
         onOpenPairing = onOpenPairing,
         onOpenOrchestrator = onOpenOrchestrator,
         onOpenConnectDevice = onOpenConnectDevice,
+        activityTile = { ActivityTile(onOpen = onOpenActivity) },
         remotePcTile = { RemotePcTile() },
         botSmsTile = { VictorSmsBotsCard() },
     )
@@ -109,10 +122,19 @@ fun FleetDashboardContent(
     onOpenPairing: () -> Unit,
     onOpenOrchestrator: () -> Unit,
     onOpenConnectDevice: () -> Unit = {},
+    activityTile: @Composable () -> Unit = {},
     remotePcTile: @Composable () -> Unit = {},
     botSmsTile: @Composable () -> Unit = {},
     install: FleetInstallState = FleetInstallState(),
     onInstall: (String) -> Unit = {},
+    onInstallAll: () -> Unit = {},
+    onIncludePrereleases: (Boolean) -> Unit = {},
+    onInstallSelected: (String) -> Unit = {},
+    onSelectVersion: (String, String?) -> Unit = { _, _ -> },
+    onAutoMode: (String, FleetAutoUpdateMode) -> Unit = { _, _ -> },
+    onOpenPasswordPairing: () -> Unit = {},
+    onStopInstall: (String) -> Unit = {},
+    onCancelInstall: (String) -> Unit = {},
     onAutoUpdate: (Boolean) -> Unit = {},
     pairPromptId: String? = null,
     onPairPromptHandled: () -> Unit = {},
@@ -170,6 +192,7 @@ fun FleetDashboardContent(
             onClick = onOpenConnectDevice,
             modifier = Modifier.fillMaxWidth().testTag("fleet_connect_device"),
         ) { Text("Connect a computer or another phone") }
+        activityTile()
         remotePcTile()
         DroidCard(modifier = Modifier.testTag("fleet_auto_update")) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -186,6 +209,16 @@ fun FleetDashboardContent(
             }
         }
         install.message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = AccentBlueBright) }
+        FleetDownloadSection(
+            install = install,
+            onInstall = onInstallSelected,
+            onInstallAll = onInstallAll,
+            onIncludePrereleases = onIncludePrereleases,
+            onSelectVersion = onSelectVersion,
+            onAutoMode = onAutoMode,
+            onStop = onStopInstall,
+            onCancel = onCancelInstall,
+        )
         botSmsTile()
 
         state.cards.forEach { card ->
@@ -199,8 +232,11 @@ fun FleetDashboardContent(
                 onApprovedCommands = onOpenOrchestrator,
                 install = install.byId[card.id],
                 onInstall = { onInstall(card.id) },
+                onStopInstall = { onStopInstall(card.id) },
+                onCancelInstall = { onCancelInstall(card.id) },
             )
         }
+        FleetExtraAppsSection(extras = state.extras, onOpenPasswordPairing = onOpenPasswordPairing)
     }
 
     when (val shown = dialog) {
@@ -278,6 +314,8 @@ private fun FleetAppCard(
     onApprovedCommands: () -> Unit,
     install: FleetInstallUi? = null,
     onInstall: () -> Unit = {},
+    onStopInstall: () -> Unit = {},
+    onCancelInstall: () -> Unit = {},
 ) {
     DroidCard(
         modifier = Modifier.testTag("fleet_dashboard_row_${card.id}"),
@@ -325,12 +363,30 @@ private fun FleetAppCard(
             install?.note?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = TextSecondary, modifier = Modifier.testTag("fleet_install_note_${card.id}"))
             }
+            // Downloading: Stop keeps what is downloaded, Cancel deletes it.
+            if (install?.canStop == true) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    DroidSecondaryButton(onClick = onStopInstall, modifier = Modifier.weight(1f).testTag("fleet_install_stop_${card.id}")) { Text("Stop") }
+                    DroidSecondaryButton(onClick = onCancelInstall, modifier = Modifier.weight(1f).testTag("fleet_install_cancel_${card.id}")) { Text("Cancel") }
+                }
+            }
             install?.actionLabel?.let { label ->
-                DroidPrimaryButton(
-                    onClick = onInstall,
-                    enabled = !busy && install?.busy != true,
-                    modifier = Modifier.fillMaxWidth().testTag("fleet_install_${card.id}"),
-                ) { Text(label) }
+                // Stopped earlier: the same button resumes, and Cancel deletes what was kept.
+                val resuming = install.partialBytes > 0L
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    DroidPrimaryButton(
+                        onClick = onInstall,
+                        enabled = !busy && !install.busy,
+                        modifier = Modifier.weight(1f).testTag("fleet_install_${card.id}"),
+                    ) { Text(if (resuming) "Resume" else label) }
+                    if (resuming) {
+                        DroidSecondaryButton(
+                            onClick = onCancelInstall,
+                            enabled = !busy && !install.busy,
+                            modifier = Modifier.weight(1f).testTag("fleet_install_cancel_${card.id}"),
+                        ) { Text("Cancel") }
+                    }
+                }
             }
             Text(card.seenLabel, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {

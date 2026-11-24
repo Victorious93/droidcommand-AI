@@ -1,0 +1,24 @@
+{
+  "envelope": {
+    "msg_id": "m-bad-11",
+    "payload": {
+      "cols": 100,
+      "desktop": "victorlinux:owner@host",
+      "expires_ms": 1790000120000,
+      "mode": "interactive",
+      "nonce": "00112233445566778899aabbccddeeff",
+      "privilege": "user",
+      "rows": 30,
+      "session_id": "term-0123456789abcdef"
+    },
+    "protocol": {
+      "major": 1,
+      "minor": 1
+    },
+    "sender": "coordinator",
+    "sent_at": 1790000000000,
+    "target": "dev-0123456789ab",
+    "type": "terminal_open"
+  },
+  "expect_error": "bad_request"
+}

@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
@@ -76,9 +77,27 @@ fun VoiceSettingsSection(viewModel: VoiceSettingsViewModel = hiltViewModel()) {
                 Text(m.name, style = MaterialTheme.typography.titleMedium)
                 Note("License: ${m.license}")
                 m.message?.let { Note(it) }
+                if (m.busy) Note("Downloading… " + megabytes(m.downloadedBytes ?: 0L))
+                if (!m.busy && m.partialBytes > 0L && !m.installed) {
+                    Note("Stopped at " + megabytes(m.partialBytes) + ". Resume continues from here; Cancel deletes what was downloaded.")
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DroidPrimaryButton(onClick = { viewModel.install(m.id) }, enabled = !m.busy && !m.installed) { Text(if (m.busy) "Downloading…" else "Download") }
-                    DroidSecondaryButton(onClick = { viewModel.delete(m.id) }, enabled = !m.busy && m.installed) { Text("Delete") }
+                    when {
+                        // Start was pressed: Stop keeps what is downloaded, Cancel deletes it.
+                        m.busy -> {
+                            DroidSecondaryButton(onClick = { viewModel.stop(m.id) }, modifier = Modifier.testTag("voice_stop_${m.id}")) { Text("Stop") }
+                            DroidSecondaryButton(onClick = { viewModel.cancel(m.id) }, modifier = Modifier.testTag("voice_cancel_${m.id}")) { Text("Cancel") }
+                        }
+                        m.installed -> DroidSecondaryButton(onClick = { viewModel.delete(m.id) }) { Text("Delete") }
+                        else -> {
+                            DroidPrimaryButton(onClick = { viewModel.install(m.id) }, modifier = Modifier.testTag("voice_start_${m.id}")) {
+                                Text(if (m.partialBytes > 0L) "Resume" else "Download")
+                            }
+                            if (m.partialBytes > 0L) {
+                                DroidSecondaryButton(onClick = { viewModel.cancel(m.id) }, modifier = Modifier.testTag("voice_cancel_${m.id}")) { Text("Cancel") }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -101,3 +120,5 @@ private fun ToggleCard(title: String, checked: Boolean, enabled: Boolean, note: 
 @Composable
 private fun Note(text: String) =
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+private fun megabytes(bytes: Long): String = "%.1f MB".format(bytes / (1024.0 * 1024.0))

@@ -7,6 +7,7 @@ import ai.droidcommand.app.clipboard.ClipboardScreen
 import ai.droidcommand.app.shortcuts.QuickAction
 import ai.droidcommand.app.shortcuts.QuickActionInbox
 import ai.droidcommand.app.skills.SkillFilesScreen
+import ai.droidcommand.app.ui.activity.ActivityScreen
 import ai.droidcommand.app.ui.automation.AutomationScreen
 import ai.droidcommand.app.ui.chat.ChatScreen
 import ai.droidcommand.app.ui.coding.CodingScreen
@@ -103,6 +104,7 @@ object Routes {
     const val FLEET = "fleet"
     const val FLEET_PAIRING = "fleet/pairing"
     const val FLEET_ORCHESTRATOR = "fleet/orchestrator"
+    const val ACTIVITY = "fleet/activity"
     const val CONNECT_DEVICE = "fleet/connect"
     const val HELP = "help"
     const val MODELS = "models"
@@ -257,8 +259,11 @@ fun DroidCommandNavHost(
                     onOpenPairing = { navController.navigate(Routes.FLEET_PAIRING) },
                     onOpenOrchestrator = { navController.navigate(Routes.FLEET_ORCHESTRATOR) },
                     onOpenConnectDevice = { navController.navigate(Routes.CONNECT_DEVICE) },
+                    onOpenPasswordPairing = { navController.navigate(Routes.SETTINGS) { launchSingleTop = true } },
+                    onOpenActivity = { navController.navigate(Routes.ACTIVITY) },
                 )
             }
+            composable(Routes.ACTIVITY) { ActivityScreen() }
             composable(Routes.FLEET_PAIRING) { FleetScreen() }
             composable(Routes.FLEET_ORCHESTRATOR) { FleetOrchestratorScreen() }
             composable(Routes.CONNECT_DEVICE) { ConnectDeviceScreen() }

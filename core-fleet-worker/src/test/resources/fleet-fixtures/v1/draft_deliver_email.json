@@ -1,0 +1,35 @@
+{
+  "msg_id": "m-draft-2",
+  "payload": {
+    "channel": "email",
+    "content_hash": "02365f887570a5eeffa0eb2f1af949105d986fd892039938d3be15f668207802",
+    "draft": {
+      "account_hint": "work@example.test",
+      "attachments": [
+        {
+          "data_b64": "bm90ZXM=",
+          "mime": "text/plain",
+          "name": "notes.txt"
+        }
+      ],
+      "bcc": [],
+      "body": "Notes attached.",
+      "cc": [],
+      "subject": "Notes",
+      "to": [
+        "alex@example.test"
+      ]
+    },
+    "draft_id": "draft-fedcba9876543210",
+    "expires_ms": 1790086400000,
+    "origin": "victorlinux:owner"
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 1
+  },
+  "sender": "coordinator",
+  "sent_at": 1790000000000,
+  "target": "dev-0123456789ab",
+  "type": "draft_deliver"
+}

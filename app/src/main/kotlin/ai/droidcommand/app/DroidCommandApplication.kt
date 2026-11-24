@@ -1,5 +1,6 @@
 package ai.droidcommand.app
 
+import ai.droidcommand.app.activity.ActivityNotifier
 import ai.droidcommand.app.deviceconnect.DeviceConnectRuntime
 import ai.droidcommand.app.fleet.AndroidFleetThemeClient
 import ai.droidcommand.shizuku.ShizukuManager
@@ -19,6 +20,9 @@ class DroidCommandApplication : Application() {
     @Inject
     lateinit var deviceConnectRuntime: DeviceConnectRuntime
 
+    @Inject
+    lateinit var activityNotifier: ActivityNotifier
+
     override fun onCreate() {
         super.onCreate()
         // Listeners only — never request permission or run a privileged command at start.
@@ -27,5 +31,7 @@ class DroidCommandApplication : Application() {
         fleetThemeClient.start()
         // Listener stays down unless the owner left "keep waiting" on.
         deviceConnectRuntime.startIfKeptOn()
+        // Listener only: tells the owner when a run is waiting on them while the app is in the background.
+        activityNotifier.start()
     }
 }

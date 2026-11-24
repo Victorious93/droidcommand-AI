@@ -1,0 +1,266 @@
+{
+  "msg_id": "m-plan-3",
+  "payload": {
+    "args": {
+      "algorithm": "sha256",
+      "shard": "shard-0.tar"
+    },
+    "attempt": 1,
+    "deadline_ms": null,
+    "fence": 1,
+    "idempotent": true,
+    "inputs": [],
+    "job_id": "plan-x.hash0",
+    "lease_expires_ms": 1790000090000,
+    "op": "hash_files",
+    "plan": {
+      "jobs": [
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-0.tar"
+          },
+          "job_id": "plan-x.hash0",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-1.tar"
+          },
+          "job_id": "plan-x.hash1",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-2.tar"
+          },
+          "job_id": "plan-x.hash2",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-3.tar"
+          },
+          "job_id": "plan-x.hash3",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-4.tar"
+          },
+          "job_id": "plan-x.hash4",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-5.tar"
+          },
+          "job_id": "plan-x.hash5",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-6.tar"
+          },
+          "job_id": "plan-x.hash6",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-7.tar"
+          },
+          "job_id": "plan-x.hash7",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-8.tar"
+          },
+          "job_id": "plan-x.hash8",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-9.tar"
+          },
+          "job_id": "plan-x.hash9",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-10.tar"
+          },
+          "job_id": "plan-x.hash10",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-11.tar"
+          },
+          "job_id": "plan-x.hash11",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-12.tar"
+          },
+          "job_id": "plan-x.hash12",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-13.tar"
+          },
+          "job_id": "plan-x.hash13",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-14.tar"
+          },
+          "job_id": "plan-x.hash14",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-15.tar"
+          },
+          "job_id": "plan-x.hash15",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-16.tar"
+          },
+          "job_id": "plan-x.hash16",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-17.tar"
+          },
+          "job_id": "plan-x.hash17",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-18.tar"
+          },
+          "job_id": "plan-x.hash18",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-19.tar"
+          },
+          "job_id": "plan-x.hash19",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-20.tar"
+          },
+          "job_id": "plan-x.hash20",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-21.tar"
+          },
+          "job_id": "plan-x.hash21",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-22.tar"
+          },
+          "job_id": "plan-x.hash22",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-23.tar"
+          },
+          "job_id": "plan-x.hash23",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-24.tar"
+          },
+          "job_id": "plan-x.hash24",
+          "op": "hash_files",
+          "requires_root": false
+        },
+        {
+          "args": {
+            "algorithm": "sha256",
+            "shard": "shard-25.tar"
+          },
+          "job_id": "plan-x.hash25",
+          "op": "hash_files",
+          "requires_root": false
+        }
+      ],
+      "plan_id": "plan-x"
+    },
+    "requires_root": false,
+    "ui_exclusive": false
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "sender": "coordinator",
+  "sent_at": 1790000000000,
+  "target": "dev-0123456789ab",
+  "type": "assignment"
+}

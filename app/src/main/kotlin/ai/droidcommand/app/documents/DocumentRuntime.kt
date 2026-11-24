@@ -63,6 +63,12 @@ class DocumentRuntime @Inject constructor(@ApplicationContext private val contex
     /** Download size for the Download button's label, from the pinned catalog entry. */
     val embedderDownloadMegabytes: Long = (spec.metadata.sizeBytes ?: 0L) / BYTES_PER_MEGABYTE
 
+    /** Bytes a stopped or interrupted embedding-model download left on disk, or 0. "Resume" continues from them. */
+    fun embedderPartialBytes(): Long = models.partialBytes(spec.metadata.id)
+
+    /** Deletes them (the Cancel that discards). Waits for a running install to end, so stop the download first. */
+    fun discardEmbedderPartial(): Boolean = models.discardPartial(spec.metadata.id)
+
     /**
      * Downloads and verifies the embedding model. Blocking: run on Dispatchers.IO. [onProgress] receives bytes so
      * far (the total is [embedderDownloadMegabytes]). The only network request is to the model host; no user data is sent.
