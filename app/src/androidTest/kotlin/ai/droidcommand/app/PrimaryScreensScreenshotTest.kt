@@ -202,7 +202,10 @@ class PrimaryScreensScreenshotTest {
         step("system-toolbox-confirm") {
             openFromAdvanced("System Toolbox (Shizuku / root)")
             waitForText("Let the assistant use the toolbox")
-            compose.onNodeWithText("Reboot").performClick()
+            // "Reboot" is the last tab of a horizontally scrolling row: off screen on a narrow emulator, where a bare click hits nothing.
+            compose.onNodeWithText("Reboot").performScrollTo().performClick()
+            compose.waitForIdle()
+            waitForText("Restart")
             compose.onNodeWithText("Restart").performScrollTo().performClick()
             waitForText("This exact command will run")
             snap("system-toolbox-confirm")
