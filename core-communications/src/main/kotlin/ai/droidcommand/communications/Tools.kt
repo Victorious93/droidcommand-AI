@@ -32,7 +32,9 @@ class CommunicationsTool(private val cap: CommsCapability, private val broker: C
     )
 
     override fun execute(input: Map<String, String>): ToolResult {
-        val reply = try { CommsContract.JSON.parseToJsonElement(broker.local(cap.id, input)) as JsonObject } catch (_: Exception) {
+        val reply = try {
+            CommsContract.JSON.parseToJsonElement(broker.local(cap.id, input)) as JsonObject
+        } catch (_: Exception) {
             return ToolResult.Failure("The communications gateway gave an unreadable answer. Do not assume anything was done.")
         }
         val state = (reply["state"] as? JsonPrimitive)?.contentOrNull

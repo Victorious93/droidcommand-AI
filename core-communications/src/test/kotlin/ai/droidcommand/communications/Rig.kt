@@ -1,7 +1,6 @@
 package ai.droidcommand.communications
 
 import ai.droidcommand.security.InMemoryAuditLog
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
@@ -42,7 +41,10 @@ class FakeBackend : CommsBackend {
 class FakeModel(var reply: (String) -> ModelResult = { ModelResult.Text("sounds good, see u there") }) : ReplyModel {
     val prompts = mutableListOf<Pair<String, String>>()
 
-    override fun generate(feature: String, prompt: String): ModelResult { prompts.add(feature to prompt); return reply(prompt) }
+    override fun generate(feature: String, prompt: String): ModelResult {
+        prompts.add(feature to prompt)
+        return reply(prompt)
+    }
 }
 
 class Rig(withModel: Boolean = true) {
@@ -70,14 +72,36 @@ class Rig(withModel: Boolean = true) {
 
     fun request(capability: String, args: Map<String, String>, rid: String, bot: String? = null, mode: String? = null, nonce: String = nonce(), ts: Long = now, expires: Long = now + 60_000, v: Int = 1, minV: Int? = null): String =
         buildJsonObject {
-            put("v", v); minV?.let { put("min_v", it) }
-            put("task", "call"); put("request_id", rid); put("nonce", nonce); put("ts", ts); put("expires_at", expires); put("capability", capability)
+            put("v", v)
+            minV?.let { put("min_v", it) }
+            put("task", "call")
+            put("request_id", rid)
+            put("nonce", nonce)
+            put("ts", ts)
+            put("expires_at", expires)
+            put("capability", capability)
             put("args", JsonObject(args.mapValues { JsonPrimitive(it.value) }))
-            if (bot != null || mode != null) put("actor", buildJsonObject { bot?.let { put("bot_id", it) }; mode?.let { put("mode", it) } })
+            if (bot != null || mode != null) {
+                put(
+                    "actor",
+                    buildJsonObject {
+                        bot?.let { put("bot_id", it) }
+                        mode?.let { put("mode", it) }
+                    },
+                )
+            }
         }.toString()
 
     fun discover(caller: String = APP, v: Int = 1, minV: Int? = null): JsonObject = parse(
-        broker.handle(caller, buildJsonObject { put("v", v); minV?.let { put("min_v", it) }; put("task", "discover"); put("request_id", "disc-" + (++seq).toString().padStart(6, '0')) }.toString()),
+        broker.handle(
+            caller,
+            buildJsonObject {
+                put("v", v)
+                minV?.let { put("min_v", it) }
+                put("task", "discover")
+                put("request_id", "disc-" + (++seq).toString().padStart(6, '0'))
+            }.toString(),
+        ),
     )
 
     fun receipt(rid: String, caller: String = APP): JsonObject = parse(broker.handle(caller, """{"v":1,"task":"receipt","request_id":"$rid"}"""))

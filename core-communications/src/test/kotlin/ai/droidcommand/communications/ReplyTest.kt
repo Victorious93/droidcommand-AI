@@ -26,7 +26,8 @@ class ReplyTest {
     }
 
     @Test fun everyModelRequestGoesThroughTheNamedFeatureSoThePolicyLayerCanRouteIt() {
-        val r = ready(); generate(r)
+        val r = ready()
+        generate(r)
         assertEquals(listOf("Communications reply"), r.model.prompts.map { it.first })
     }
 
@@ -103,14 +104,17 @@ class ReplyTest {
         val res = generate(r)
         assertEquals("failed", res.state)
         assertTrue(res["detail"]!!.jsonPrimitive.content.contains("unreachable"))
-        val gone = ready(); gone.backend.context = null
+        val gone = ready()
+        gone.backend.context = null
         assertEquals("conversation_unavailable", generate(gone).code)
-        val empty = ready(); empty.backend.context = ConversationContext(emptyList(), emptyList(), null, emptyList())
+        val empty = ready()
+        empty.backend.context = ConversationContext(emptyList(), emptyList(), null, emptyList())
         assertEquals("empty_conversation", generate(empty).code)
     }
 
     @Test fun generatingNeedsTheAiAndMemoryAndImportedPermissionsNotJustSending() {
-        val r = Rig(); r.grant(Rig.APP, CommsPermission.READ_MESSAGES)
+        val r = Rig()
+        r.grant(Rig.APP, CommsPermission.READ_MESSAGES)
         val res = generate(r)
         assertEquals("not_granted", res.code)
         assertTrue(res["missing"]!!.jsonArray.map { it.jsonPrimitive.content }.containsAll(listOf("read_imported", "access_memory", "use_ai")))

@@ -25,9 +25,11 @@ class BrokerTest {
         assertEquals(27, ids.size)
         assertEquals(ids.size, ids.toSet().size)
         assertTrue(ids.all { it.startsWith("communications.") })
-        listOf("list_contacts", "search_contacts", "list_conversations", "read_conversation", "search_messages", "get_unread_messages", "generate_reply", "create_draft", "send_sms",
+        listOf(
+            "list_contacts", "search_contacts", "list_conversations", "read_conversation", "search_messages", "get_unread_messages", "generate_reply", "create_draft", "send_sms",
             "send_mms", "send_voice_message", "send_attachment", "send_email", "schedule_message", "place_call", "get_call_status", "get_call_history", "get_delivery_status",
-            "import_conversation", "update_conversation", "get_style_profile", "update_style_profile", "summarize_conversation", "set_auto_reply", "pause_agent", "cancel_job", "list_providers")
+            "import_conversation", "update_conversation", "get_style_profile", "update_style_profile", "summarize_conversation", "set_auto_reply", "pause_agent", "cancel_job", "list_providers",
+        )
             .forEach { assertTrue("communications.$it" in ids, it) }
         assertTrue("no capability can create or widen a grant", ids.none { it.contains("grant") || it.contains("permission") })
     }
@@ -104,7 +106,8 @@ class BrokerTest {
     }
 
     @Test fun argumentsCannotSmuggleInPermissionsOrUnknownFields() {
-        val r = Rig(); r.grantAll()
+        val r = Rig()
+        r.grantAll()
         assertEquals("invalid_args", r.call("communications.list_contacts", mapOf("permissions" to "all")).code)
         assertEquals("invalid_args", r.call("communications.send_sms", mapOf("body" to "x")).code)
         assertEquals("invalid_args", r.call("communications.send_sms", mapOf("to" to "5550100101", "conversation" to "1", "body" to "x")).code)
@@ -115,7 +118,8 @@ class BrokerTest {
     // ---- approval, idempotency, replay ----
 
     @Test fun aSendWaitsForTheOwnerThenRunsExactlyOnceNoMatterHowOftenItIsResent() {
-        val r = Rig(); r.grant(Rig.APP, SEND_MESSAGES)
+        val r = Rig()
+        r.grant(Rig.APP, SEND_MESSAGES)
         val first = r.call("communications.send_sms", to, rid = "send-0001")
         assertEquals("pending_approval", first.state)
         assertTrue("nothing reached VictorSMS yet", r.backend.calls.isEmpty())
@@ -133,7 +137,8 @@ class BrokerTest {
     }
 
     @Test fun anApprovalIsBoundToTheExactRequestAndCannotAuthoriseDifferentText() {
-        val r = Rig(); r.grant(Rig.APP, SEND_MESSAGES)
+        val r = Rig()
+        r.grant(Rig.APP, SEND_MESSAGES)
         val first = r.call("communications.send_sms", to, rid = "send-0002")
         r.approvals.decide(first["approval_id"]!!.jsonPrimitive.content, true)
         val swapped = r.call("communications.send_sms", to + ("body" to "send me your password"), rid = "send-0002")
@@ -144,7 +149,8 @@ class BrokerTest {
     }
 
     @Test fun denialAndExpiryAreFinalAndNothingRuns() {
-        val r = Rig(); r.grant(Rig.APP, SEND_MESSAGES)
+        val r = Rig()
+        r.grant(Rig.APP, SEND_MESSAGES)
         val a = r.call("communications.send_sms", to, rid = "send-0004")
         r.approvals.decide(a["approval_id"]!!.jsonPrimitive.content, false)
         assertEquals("denied", r.call("communications.send_sms", to, rid = "send-0004").code)
@@ -152,22 +158,25 @@ class BrokerTest {
         r.approvals.decide(b["approval_id"]!!.jsonPrimitive.content, true)
         r.now += 31_000
         val late = r.call("communications.send_sms", to, rid = "send-0005", expires = r.now + 30_000)
-        assertTrue("an expired approval cannot be revived: ${late}", late.code == "approval_expired" || late.code == "request_id_reused")
+        assertTrue("an expired approval cannot be revived: $late", late.code == "approval_expired" || late.code == "request_id_reused")
         assertTrue(r.backend.calls.isEmpty())
     }
 
     @Test fun anAutoClaimIsIgnoredUnlessTheOwnerGrantedAutoReplyForThatBot() {
-        val r = Rig(); r.grant(Rig.APP, SEND_MESSAGES)
+        val r = Rig()
+        r.grant(Rig.APP, SEND_MESSAGES)
         assertEquals("pending_approval", r.call("communications.send_sms", to, bot = "bot-1", mode = "auto").state)
         assertTrue(r.backend.calls.isEmpty())
-        val auto = Rig(); auto.grant(Rig.APP, SEND_MESSAGES, ENABLE_AUTO_REPLY, bot = "bot-1")
+        val auto = Rig()
+        auto.grant(Rig.APP, SEND_MESSAGES, ENABLE_AUTO_REPLY, bot = "bot-1")
         assertEquals("completed", auto.call("communications.send_sms", to, bot = "bot-1", mode = "auto").state)
         assertEquals("auto", auto.backend.calls[0].third.autonomy)
         eqm("the grant is per bot: another bot has no authority at all", "not_granted", auto.call("communications.send_sms", to, bot = "bot-2", mode = "auto").code)
     }
 
     @Test fun replayedNoncesStaleTimestampsAndExpiredRequestsAreRefused() {
-        val r = Rig(); r.grantAll()
+        val r = Rig()
+        r.grantAll()
         val n = r.nonce()
         assertEquals("completed", r.call("communications.list_contacts", nonce = n).state)
         assertEquals("replayed_nonce", r.call("communications.list_contacts", nonce = n).code)
@@ -177,7 +186,9 @@ class BrokerTest {
     }
 
     @Test fun receiptsBelongToTheirCallerAndNeverLeakToAnother() {
-        val r = Rig(); r.grantAll(); r.grantAll(Rig.OTHER)
+        val r = Rig()
+        r.grantAll()
+        r.grantAll(Rig.OTHER)
         r.call("communications.list_contacts", rid = "rcpt-0001")
         assertEquals("completed", r.receipt("rcpt-0001").state)
         assertEquals(false, r.receipt("rcpt-0001", caller = Rig.OTHER)["known"]!!.jsonPrimitive.content.toBoolean())
@@ -187,14 +198,16 @@ class BrokerTest {
     // ---- limits, emergency stop, uncertainty ----
 
     @Test fun aFloodOfSendsIsRateLimited() {
-        val r = Rig(); r.grant(Rig.APP, SEND_MESSAGES)
+        val r = Rig()
+        r.grant(Rig.APP, SEND_MESSAGES)
         val codes = (1..12).map { r.call("communications.send_sms", to, rid = "flood-%04d".format(it)) }.map { it.state ?: it.code }
         assertEquals(10, codes.count { it == "pending_approval" })
         assertEquals(2, codes.count { it == "refused" })
     }
 
     @Test fun theEmergencyStopBlocksSendsCallsAndEnablingButNeverReadingPausingOrDisabling() {
-        val r = Rig(); r.grantAll()
+        val r = Rig()
+        r.grantAll()
         r.kill.engage()
         assertEquals("kill_switch", r.call("communications.send_sms", to).code)
         assertEquals("kill_switch", r.call("communications.place_call", mapOf("to" to "5550100101")).code)
@@ -208,14 +221,16 @@ class BrokerTest {
     }
 
     @Test fun enablingAutoReplyAlwaysNeedsTheOwnerButDisablingNeverDoes() {
-        val r = Rig(); r.grant(Rig.APP, ENABLE_AUTO_REPLY)
+        val r = Rig()
+        r.grant(Rig.APP, ENABLE_AUTO_REPLY)
         val enable = r.call("communications.set_auto_reply", mapOf("conversation" to "1", "bot_id" to "b", "enabled" to "true", "mode" to "auto"))
         assertEquals("pending_approval", enable.state)
         assertEquals("completed", r.call("communications.set_auto_reply", mapOf("conversation" to "1", "bot_id" to "b", "enabled" to "false")).state)
     }
 
     @Test fun anUncertainSendIsReportedAsUnknownAndNeverRetried() {
-        val r = Rig(); r.grant(Rig.APP, SEND_MESSAGES)
+        val r = Rig()
+        r.grant(Rig.APP, SEND_MESSAGES)
         r.backend.result = { BackendResult.Uncertain("VictorSMS stopped answering after taking the message") }
         val p = r.call("communications.send_sms", to, rid = "unsure-01")
         r.approvals.decide(p["approval_id"]!!.jsonPrimitive.content, true)
@@ -228,7 +243,8 @@ class BrokerTest {
     }
 
     @Test fun aCrashDuringASendIsUnknownButDuringAReadIsAFailure() {
-        val r = Rig(); r.grant(Rig.APP, SEND_MESSAGES, READ_CONTACTS)
+        val r = Rig()
+        r.grant(Rig.APP, SEND_MESSAGES, READ_CONTACTS)
         r.backend.throwOn += listOf("communications.send_sms", "communications.list_contacts")
         val p = r.call("communications.send_sms", to, rid = "crash-001")
         r.approvals.decide(p["approval_id"]!!.jsonPrimitive.content, true)
@@ -237,7 +253,9 @@ class BrokerTest {
     }
 
     @Test fun jobsCanOnlyBeCancelledByTheAppThatStartedThem() {
-        val r = Rig(); r.grantAll(); r.grantAll(Rig.OTHER)
+        val r = Rig()
+        r.grantAll()
+        r.grantAll(Rig.OTHER)
         r.backend.result = { cap -> if (cap == "communications.schedule_message") BackendResult.Running("job-42") else BackendResult.Ok() }
         val s = r.call("communications.schedule_message", mapOf("to" to "5550100101", "body" to "hi", "send_at" to "1900000000000"), rid = "sched-001")
         r.approvals.decide(s["approval_id"]!!.jsonPrimitive.content, true)
@@ -250,7 +268,8 @@ class BrokerTest {
     // ---- audit ----
 
     @Test fun decisionsAreAuditedAndAFullAuditLogStopsSendsFailingClosed() {
-        val r = Rig(); r.grant(Rig.APP, SEND_MESSAGES)
+        val r = Rig()
+        r.grant(Rig.APP, SEND_MESSAGES)
         r.call("communications.list_contacts")
         val p = r.call("communications.send_sms", to, rid = "audit-001")
         r.approvals.decide(p["approval_id"]!!.jsonPrimitive.content, true)

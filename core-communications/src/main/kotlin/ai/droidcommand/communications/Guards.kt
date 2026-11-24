@@ -36,15 +36,22 @@ interface GrantStore {
 class InMemoryGrantStore : GrantStore {
     private val map = LinkedHashMap<String, CommsGrant>()
 
-    @Synchronized override fun add(grant: CommsGrant) { map[grant.id] = grant }
+    @Synchronized override fun add(grant: CommsGrant) {
+        map[grant.id] = grant
+    }
 
     @Synchronized override fun list() = map.values.toList()
 
-    @Synchronized override fun revoke(id: String): Boolean = map[id]?.let { map[id] = it.copy(revoked = true); true } ?: false
+    @Synchronized override fun revoke(id: String): Boolean = map[id]?.let {
+        map[id] = it.copy(revoked = true)
+        true
+    } ?: false
 
     @Synchronized override fun revokeAll(caller: String): Int = map.values.filter { it.caller == caller && !it.revoked }.onEach { map[it.id] = it.copy(revoked = true) }.size
 
-    @Synchronized override fun markUsed(id: String) { map[id]?.let { map[id] = it.copy(uses = it.uses + 1) } }
+    @Synchronized override fun markUsed(id: String) {
+        map[id]?.let { map[id] = it.copy(uses = it.uses + 1) }
+    }
 }
 
 sealed class AuthDecision {
@@ -61,7 +68,11 @@ class Authorizer(private val grants: GrantStore, private val clock: () -> Long) 
     fun check(caller: String, botId: String?, targets: Set<String>, needed: Set<CommsPermission>): AuthDecision {
         val live = grants.list().filter { usable(it, caller, botId, targets) }
         val used = LinkedHashSet<String>()
-        val missing = needed.filter { p -> val g = live.firstOrNull { p in it.permissions }; if (g != null) used.add(g.id); g == null }
+        val missing = needed.filter { p ->
+            val g = live.firstOrNull { p in it.permissions }
+            if (g != null) used.add(g.id)
+            g == null
+        }
         if (missing.isNotEmpty()) return AuthDecision.Denied(missing.toSet())
         return AuthDecision.Allowed(used.toList(), autoReply = hasAutoReply(caller, botId, targets))
     }

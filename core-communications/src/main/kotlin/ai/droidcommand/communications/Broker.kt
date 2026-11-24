@@ -5,7 +5,6 @@ import ai.droidcommand.security.AuditEventType
 import ai.droidcommand.security.AuditLog
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -107,7 +106,10 @@ class CommsBroker(
      */
     fun handle(caller: String, raw: String?): String {
         if (caller.isBlank()) return err("not_paired", "Caller identity is required.")
-        val p = when (val r = parse(raw)) { is Either.Bad -> return r.json; is Either.Good -> r.value }
+        val p = when (val r = parse(raw)) {
+            is Either.Bad -> return r.json
+            is Either.Good -> r.value
+        }
         val negotiated = minOf(p.v, CommsContract.MAX_VERSION)
         if (negotiated < maxOf(p.minV, CommsContract.MIN_VERSION)) {
             return err("incompatible_version", "This droidcommand-AI speaks COMPANION_COMMS v${CommsContract.MIN_VERSION}-${CommsContract.MAX_VERSION}; you require v${p.minV}+.", requestId = p.requestId)
@@ -129,25 +131,57 @@ class CommsBroker(
     fun discover(version: Int = CommsContract.MAX_VERSION): String = CommsContract.JSON.encodeToString(JsonObject.serializer(), discoverObject(version))
 
     private fun discoverObject(version: Int): JsonObject = obj {
-        put("v", version); put("ok", true); put("contract", CommsContract.NAME)
-        put("versions", obj { put("min", CommsContract.MIN_VERSION); put("max", CommsContract.MAX_VERSION) })
+        put("v", version)
+        put("ok", true)
+        put("contract", CommsContract.NAME)
+        put(
+            "versions",
+            obj {
+                put("min", CommsContract.MIN_VERSION)
+                put("max", CommsContract.MAX_VERSION)
+            },
+        )
         put("build", build)
         put("kill_switch", kill.engaged)
         put("approval", "Sends and calls need the owner's approval for every call unless an auto-reply grant exists for that bot and contact. Grants are created only by the owner in droidcommand-AI.")
-        put("limits", obj { put("max_request_chars", CommsContract.MAX_REQUEST_CHARS); put("max_ttl_ms", CommsContract.MAX_TTL_MS); put("max_result_chars", CommsContract.MAX_RESULT_CHARS) })
+        put(
+            "limits",
+            obj {
+                put("max_request_chars", CommsContract.MAX_REQUEST_CHARS)
+                put("max_ttl_ms", CommsContract.MAX_TTL_MS)
+                put("max_result_chars", CommsContract.MAX_RESULT_CHARS)
+            },
+        )
         put(
             "capabilities",
             JsonArray(
                 CommsCatalog.ALL.map { c ->
                     val reason = availabilityOf(c)
                     obj {
-                        put("id", c.id); put("since", c.since); put("description", c.description); put("risk", c.risk.name.lowercase())
+                        put("id", c.id)
+                        put("since", c.since)
+                        put("description", c.description)
+                        put("risk", c.risk.name.lowercase())
                         put("owner", c.owner.name.lowercase())
                         put("status", if (reason == null) "available" else "unavailable")
                         reason?.let { put("reason", it) }
                         put("needs", JsonArray(c.permissions.map { JsonPrimitive(it.name.lowercase()) }))
                         put("approval", c.approval.name.lowercase())
-                        put("args", obj { c.args.forEach { (k, a) -> put(k, obj { put("type", a.type); put("required", a.required); put("max", a.max) }) } })
+                        put(
+                            "args",
+                            obj {
+                                c.args.forEach { (k, a) ->
+                                    put(
+                                        k,
+                                        obj {
+                                            put("type", a.type)
+                                            put("required", a.required)
+                                            put("max", a.max)
+                                        },
+                                    )
+                                }
+                            },
+                        )
                     }
                 },
             ),
@@ -170,7 +204,10 @@ class CommsBroker(
             if (p.expiresAt <= now) return err("expired", "The request expired before it was processed.", rid)
             if (p.expiresAt - now > CommsContract.MAX_TTL_MS) return err("invalid_request", "expires_at is more than 5 minutes away.", rid)
             if (kotlin.math.abs(now - p.ts) > CommsContract.MAX_SKEW_MS) return err("stale_timestamp", "The request timestamp is outside the allowed clock skew.", rid)
-            if (!replay.firstUse(caller, p.nonce)) { audit(AuditEventType.ACCESS_DENIED, caller, "replayed nonce for $rid"); return err("replayed_nonce", "This nonce was already used; send a fresh one.", rid) }
+            if (!replay.firstUse(caller, p.nonce)) {
+                audit(AuditEventType.ACCESS_DENIED, caller, "replayed nonce for $rid")
+                return err("replayed_nonce", "This nonce was already used; send a fresh one.", rid)
+            }
         }
         val cap = p.capability?.let { CommsCatalog.get(it) } ?: return err("unknown_capability", "Unknown capability. Call discover.", rid)
         availabilityOf(cap)?.let { reason -> return refuse(caller, p, cap, "unavailable", reason, record = false) }
@@ -194,7 +231,10 @@ class CommsBroker(
                     audit(AuditEventType.ACCESS_DENIED, caller, "${cap.id} lacks ${d.missing.joinToString { it.name }}")
                     return refuse(caller, p, cap, "not_granted", "Not granted: ${d.missing.joinToString { it.name.lowercase() }}.", record = false, extra = { put("missing", JsonArray(d.missing.map { JsonPrimitive(it.name.lowercase()) })) })
                 }
-                is AuthDecision.Allowed -> { grantIds = d.grantIds; if (d.autoReply && p.mode == "auto") autonomy = "auto" }
+                is AuthDecision.Allowed -> {
+                    grantIds = d.grantIds
+                    if (d.autoReply && p.mode == "auto") autonomy = "auto"
+                }
             }
         }
 
@@ -209,11 +249,25 @@ class CommsBroker(
             val item = approvals.submit(caller, rid, p.hash, cap.id, summarize(cap, p.args), p.botId, p.expiresAt)
             if (item.payloadHash != p.hash) return err("request_id_reused", "This request id has a pending approval for a different request.", rid)
             when (item.state) {
-                ApprovalState.PENDING -> { audit(AuditEventType.APPROVAL_UNAVAILABLE, caller, "${cap.id} waiting for the owner (${item.id})"); return pending(rid, item.id) }
-                ApprovalState.DENIED -> { audit(AuditEventType.APPROVAL_DENIED, caller, "${cap.id} denied by the owner"); return refuse(caller, p, cap, "denied", "The owner denied this request. Nothing was done.") }
-                ApprovalState.EXPIRED -> { audit(AuditEventType.APPROVAL_TIMED_OUT, caller, "${cap.id} approval expired"); return refuse(caller, p, cap, "approval_expired", "The approval expired before the request ran. Nothing was done.") }
+                ApprovalState.PENDING -> {
+                    audit(AuditEventType.APPROVAL_UNAVAILABLE, caller, "${cap.id} waiting for the owner (${item.id})")
+                    return pending(rid, item.id)
+                }
+                ApprovalState.DENIED -> {
+                    audit(AuditEventType.APPROVAL_DENIED, caller, "${cap.id} denied by the owner")
+                    return refuse(caller, p, cap, "denied", "The owner denied this request. Nothing was done.")
+                }
+                ApprovalState.EXPIRED -> {
+                    audit(AuditEventType.APPROVAL_TIMED_OUT, caller, "${cap.id} approval expired")
+                    return refuse(caller, p, cap, "approval_expired", "The approval expired before the request ran. Nothing was done.")
+                }
                 ApprovalState.USED -> return err("approval_used", "That approval was already used.", rid)
-                ApprovalState.APPROVED -> { if (!approvals.consume(item.id)) return err("approval_used", "That approval was already used.", rid); approvalId = item.id; autonomy = "approved"; audit(AuditEventType.APPROVAL_APPROVED, caller, "${cap.id} approved by the owner (${item.id})") }
+                ApprovalState.APPROVED -> {
+                    if (!approvals.consume(item.id)) return err("approval_used", "That approval was already used.", rid)
+                    approvalId = item.id
+                    autonomy = "approved"
+                    audit(AuditEventType.APPROVAL_APPROVED, caller, "${cap.id} approved by the owner (${item.id})")
+                }
             }
         }
 
@@ -231,8 +285,11 @@ class CommsBroker(
             }
         } catch (e: Exception) {
             // After hand-off we cannot know. For anything that sends or calls, uncertainty is the honest answer.
-            if (cap.risk == CommsRisk.SEND || cap.risk == CommsRisk.CALL) BackendResult.Uncertain("Lost contact while sending (${e.javaClass.simpleName}); it may or may not have gone out.")
-            else BackendResult.Failed("The operation failed (${e.javaClass.simpleName}).")
+            if (cap.risk == CommsRisk.SEND || cap.risk == CommsRisk.CALL) {
+                BackendResult.Uncertain("Lost contact while sending (${e.javaClass.simpleName}); it may or may not have gone out.")
+            } else {
+                BackendResult.Failed("The operation failed (${e.javaClass.simpleName}).")
+            }
         }
         if (result !is BackendResult.Refused) authorizer.consume(grantIds)
         val receipt = when (result) {
@@ -257,7 +314,11 @@ class CommsBroker(
     private fun parse(raw: String?): Either<Parsed> {
         if (raw.isNullOrBlank()) return Either.Bad(err("invalid_request", "Empty request."))
         if (raw.length > CommsContract.MAX_REQUEST_CHARS) return Either.Bad(err("invalid_request", "Request is too large."))
-        val o = try { CommsContract.JSON.parseToJsonElement(raw) as? JsonObject } catch (_: Exception) { null } ?: return Either.Bad(err("invalid_request", "Request must be a JSON object."))
+        val o = try {
+            CommsContract.JSON.parseToJsonElement(raw) as? JsonObject
+        } catch (_: Exception) {
+            null
+        } ?: return Either.Bad(err("invalid_request", "Request must be a JSON object."))
         fun str(k: String) = (o[k] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull
         val v = (o["v"] as? JsonPrimitive)?.intOrNull ?: return Either.Bad(err("invalid_request", "Missing protocol version 'v'."))
         val minV = (o["min_v"] as? JsonPrimitive)?.intOrNull ?: v
@@ -291,21 +352,51 @@ class CommsBroker(
 
     private fun err(code: String, message: String, requestId: String? = null): String = CommsContract.JSON.encodeToString(
         JsonObject.serializer(),
-        obj { put("v", CommsContract.MAX_VERSION); put("ok", false); put("state", "error"); put("code", code); put("detail", message); requestId?.let { put("request_id", it) }
-            put("versions", obj { put("min", CommsContract.MIN_VERSION); put("max", CommsContract.MAX_VERSION) }) },
+        obj {
+            put("v", CommsContract.MAX_VERSION)
+            put("ok", false)
+            put("state", "error")
+            put("code", code)
+            put("detail", message)
+            requestId?.let { put("request_id", it) }
+            put(
+                "versions",
+                obj {
+                    put("min", CommsContract.MIN_VERSION)
+                    put("max", CommsContract.MAX_VERSION)
+                },
+            )
+        },
     )
 
     private fun pending(rid: String, approvalId: String): String = CommsContract.JSON.encodeToString(
         JsonObject.serializer(),
-        obj { put("v", CommsContract.MAX_VERSION); put("ok", true); put("state", "pending_approval"); put("request_id", rid); put("approval_id", approvalId)
-            put("detail", "Waiting for the owner to approve in droidcommand-AI. Nothing has been done. Send the same request again (same request_id and arguments, fresh nonce) to collect the outcome.") },
+        obj {
+            put("v", CommsContract.MAX_VERSION)
+            put("ok", true)
+            put("state", "pending_approval")
+            put("request_id", rid)
+            put("approval_id", approvalId)
+            put("detail", "Waiting for the owner to approve in droidcommand-AI. Nothing has been done. Send the same request again (same request_id and arguments, fresh nonce) to collect the outcome.")
+        },
     )
 
     private fun refuse(caller: String, p: Parsed, cap: CommsCapability, code: String, message: String, record: Boolean = true, extra: (kotlinx.serialization.json.JsonObjectBuilder.() -> Unit)? = null): String {
-        if (record) { val r = receipts.putIfAbsent(mk(caller, p, cap, CommsState.REFUSED, code, message, "{}")); return receiptJson(r) }
+        if (record) {
+            val r = receipts.putIfAbsent(mk(caller, p, cap, CommsState.REFUSED, code, message, "{}"))
+            return receiptJson(r)
+        }
         return CommsContract.JSON.encodeToString(
             JsonObject.serializer(),
-            obj { put("v", CommsContract.MAX_VERSION); put("ok", false); put("state", "refused"); put("request_id", p.requestId); put("code", code); put("detail", message); extra?.invoke(this) },
+            obj {
+                put("v", CommsContract.MAX_VERSION)
+                put("ok", false)
+                put("state", "refused")
+                put("request_id", p.requestId)
+                put("code", code)
+                put("detail", message)
+                extra?.invoke(this)
+            },
         )
     }
 
@@ -317,8 +408,12 @@ class CommsBroker(
         obj {
             put("v", CommsContract.MAX_VERSION)
             put("ok", r.state == CommsState.COMPLETED || r.state == CommsState.RUNNING)
-            put("state", r.state.name.lowercase()); put("request_id", r.requestId); put("capability", r.capability)
-            put("code", r.code); put("detail", r.detail); put("finished_at", r.finishedAtMs)
+            put("state", r.state.name.lowercase())
+            put("request_id", r.requestId)
+            put("capability", r.capability)
+            put("code", r.code)
+            put("detail", r.detail)
+            put("finished_at", r.finishedAtMs)
             r.jobId?.let { put("job_id", it) }
             put("result", runCatching { CommsContract.JSON.parseToJsonElement(r.resultJson) }.getOrDefault(JsonObject(emptyMap())))
             put("audit_ref", "audit:${r.requestId}")
@@ -327,13 +422,21 @@ class CommsBroker(
 
     private fun unknownReceipt(rid: String) = CommsContract.JSON.encodeToString(
         JsonObject.serializer(),
-        obj { put("v", CommsContract.MAX_VERSION); put("ok", true); put("known", false); put("request_id", rid); put("detail", "No request with this id was recorded for this caller. Nothing ran for it.") },
+        obj {
+            put("v", CommsContract.MAX_VERSION)
+            put("ok", true)
+            put("known", false)
+            put("request_id", rid)
+            put("detail", "No request with this id was recorded for this caller. Nothing ran for it.")
+        },
     )
 
     private fun summarize(cap: CommsCapability, args: Map<String, String>): String =
         cap.id.removePrefix("communications.") + ": " + args.filterKeys { it != "attachment_ref" }.entries.joinToString(", ") { "${it.key}=${it.value.take(80)}" }
 
-    private fun audit(type: AuditEventType, caller: String, detail: String) { audit?.record(AuditEvent(type, "companion_comms:$caller", detail)) }
+    private fun audit(type: AuditEventType, caller: String, detail: String) {
+        audit?.record(AuditEvent(type, "companion_comms:$caller", detail))
+    }
 
     companion object {
         const val LOCAL_CALLER = "droidcommand-ai:local"

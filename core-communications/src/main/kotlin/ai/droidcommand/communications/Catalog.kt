@@ -105,7 +105,10 @@ object CommsCatalog {
         (args.keys - cap.args.keys).forEach { errors.add("Unknown argument '$it'.") }
         cap.args.forEach { (name, spec) ->
             val v = args[name]
-            if (v == null) { if (spec.required) errors.add("Missing required argument '$name'."); return@forEach }
+            if (v == null) {
+                if (spec.required) errors.add("Missing required argument '$name'.")
+                return@forEach
+            }
             if (v.length > spec.max) errors.add("Argument '$name' is too long.")
             when (spec.type) {
                 "int" -> if (v.toLongOrNull()?.let { it >= 0 } != true) errors.add("Argument '$name' must be a non-negative integer.")
