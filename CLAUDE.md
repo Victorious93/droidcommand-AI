@@ -145,6 +145,11 @@ re-verifying something.
   a new inference entry point must go through `RouteResolver` or call `refusalFor` first. Run against real Ollama and
   llama.cpp on a host; never on a device or emulator.
 
+- **`docs/COMPANION_COMMS.md`** / **`docs/COMMUNICATIONS_INTEGRATION_REPORT.md`** (2026-11-24, Victorious Framework) — the third companion contract
+  (`core-communications`): unattended-capable, owner-grant based, 27 `communications.*` capabilities for VictorBots/VictorSMS. JVM-tested only;
+  the Android transport, connectors and screens are NOT built, nothing has run on a device. A real `ReplyModel` must be `PolicyInference.ask`.
+  Read the report's status table and "decisions needed" before extending it. VictorSMS has no live TextNow provider by design (no official API).
+
 - **`docs/SYSTEM_SETTINGS.md`** (2026-11-15) — the native System Settings editor ("Victorious Framework"): `core-system-settings` engine
   (typed System/Secure/Global access, write-ahead journal, readback, compensating rollback, baselines, conflict-aware restore, profiles, boot
   reapply, assistant tools) and the Advanced → System Settings screen. Independent implementation inspired by `kerneldroid/SetEditPlus` (MIT);
