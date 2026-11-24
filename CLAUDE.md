@@ -147,7 +147,7 @@ re-verifying something.
 
 - **`docs/COMPANION_COMMS.md`** / **`docs/COMMUNICATIONS_INTEGRATION_REPORT.md`** (2026-11-24, Victorious Framework) — the third companion contract
   (`core-communications`): unattended-capable, owner-grant based, 27 `communications.*` capabilities for VictorBots/VictorSMS. JVM-tested only;
-  the Android transport, connectors and screens are NOT built, nothing has run on a device. A real `ReplyModel` must be `PolicyInference.ask`.
+  the Android transport and screen are BUILT but never run; the VictorSMS read-only archive connector is BUILT and JVM-tested (never run against a device or the real app; its reply frames are pinned as copies in both repos); the VictorBots connector is NOT built. A real `ReplyModel` must be `PolicyInference.ask`.
   Read the report's status table and "decisions needed" before extending it. VictorSMS has no live TextNow provider by design (no official API).
 
 - **`docs/SYSTEM_SETTINGS.md`** (2026-11-15) — the native System Settings editor ("Victorious Framework"): `core-system-settings` engine
