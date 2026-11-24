@@ -204,6 +204,7 @@ class CommsBroker(
             if (p.expiresAt <= now) return err("expired", "The request expired before it was processed.", rid)
             if (p.expiresAt - now > CommsContract.MAX_TTL_MS) return err("invalid_request", "expires_at is more than 5 minutes away.", rid)
             if (kotlin.math.abs(now - p.ts) > CommsContract.MAX_SKEW_MS) return err("stale_timestamp", "The request timestamp is outside the allowed clock skew.", rid)
+            if (replay.predatesStart(p.ts)) return err("stale_timestamp", "droidcommand-AI restarted after this request was stamped, so it cannot be checked against replays. Send it again with a fresh timestamp and nonce.", rid)
             if (!replay.firstUse(caller, p.nonce)) {
                 audit(AuditEventType.ACCESS_DENIED, caller, "replayed nonce for $rid")
                 return err("replayed_nonce", "This nonce was already used; send a fresh one.", rid)
@@ -215,6 +216,9 @@ class CommsBroker(
         if (kill.engaged && cap.risk in setOf(CommsRisk.SEND, CommsRisk.CALL, CommsRisk.ADMIN) && cap.safeWhen?.invoke(p.args) != true) {
             audit(AuditEventType.BOT_MESSAGE_DENIED, caller, "${cap.id} blocked by the emergency stop")
             return refuse(caller, p, cap, "kill_switch", "All automatic communications are stopped by the owner.")
+        }
+        if (!receipts.healthy && cap.risk in setOf(CommsRisk.SEND, CommsRisk.CALL)) {
+            return refuse(caller, p, cap, "receipts_unavailable", "Stored receipts could not be read, so a send could be repeated. Nothing was sent.", record = false)
         }
         if (!rate.allow(caller, cap.risk)) return refuse(caller, p, cap, "rate_limited", "Too many ${cap.risk.name.lowercase()} requests; slow down.", record = false)
         if (cap.id == "communications.cancel_job" && receipts.byJob(caller, p.args.getValue("job_id")) == null) {
