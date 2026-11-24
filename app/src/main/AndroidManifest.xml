@@ -15,6 +15,9 @@
          prompt for it yet, so until it is granted the download runs without a visible notification. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- "Use this phone as microphone" (Paired PC): a visible, user-started foreground service of type microphone
+         that streams to ONE PC the owner chose, with Stop in its notification. Not started at boot or by any other app. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- Optional fleet worker mode (off by default): a visible service that holds a connection to the owner's own fleet coordinator
          until the owner switches it off. specialUse, not dataSync: dataSync is capped at 6 hours per 24 on Android 15. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -328,6 +331,11 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps a long-lived HTTPS connection to the owner's own fleet job coordinator on their local network or VPN, only while the owner has switched Fleet worker mode on." />
         </service>
+        <service
+            android:name=".phonemic.PhoneMicService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
         <service
             android:name=".shizuku.embedded.EmbeddedShizukuStartService"
             android:exported="false" />
