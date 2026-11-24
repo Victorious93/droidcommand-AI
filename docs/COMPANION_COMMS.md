@@ -254,3 +254,10 @@ Asserted for each run: every message handled once, zero failures, strict per-con
 - **Media understanding** (photo, video, document, voice-message analysis), captions, and the Photo Picker / SAF / MediaStore / secure-content-URI plumbing. Encrypted-at-rest share state (the JSON file is plain).
 - **Third-party apps** (TextNow and others) and calls: unchanged. TextNow has no official API; automated sending through it is not claimed.
 - **VictorLinux, VictorSuite, Victorious Mesh, RustdeskV, Victorious Browser** integrations: not touched in this change.
+
+### App wiring (2026-11-24, second slice) — compiled by CI only, never run
+- `CommunicationsModule` now provides `FileShareEngine` (state in `files/communications/file-shares.json`, emergency stop shared with the broker's `KillSwitch`), a `MediaGateway`, and wraps the backend in `ShareGatedBackend`.
+- **The gateway is `UnconnectedMediaGateway`: it returns nothing.** File-Manager's bridge is still a stub, and a conversation's contact cannot yet be resolved for the recipient check, so **every attachment send is refused** (fail closed). This is deliberate, not a bug; sending attachments needs both pieces.
+- Advanced → Communications gained "Files requested by a conversation" (approve = the narrowest grant: that one file and operation, read-only, 24 hours, still asks per send; or deny) and "Files you shared" (stop sharing). There is still no screen to create a broader grant (folder, subfolders, collection, other operations), to view access history, or to see the conversation scheduler.
+- `ConversationOrchestrator` is **not** wired yet: nothing in the app feeds it incoming messages.
+- No local Android SDK in this environment: `:app` was not compiled or tested here. CI on the PR is the only evidence.

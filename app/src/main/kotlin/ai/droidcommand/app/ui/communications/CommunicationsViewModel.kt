@@ -5,6 +5,10 @@ import ai.droidcommand.communications.CommsAdmin
 import ai.droidcommand.communications.CommsBroker
 import ai.droidcommand.communications.CommsGrant
 import ai.droidcommand.communications.CommsPermission
+import ai.droidcommand.communications.ExpansionRequest
+import ai.droidcommand.communications.FileShareEngine
+import ai.droidcommand.communications.ShareGrant
+import ai.droidcommand.communications.ShareScope
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +24,8 @@ import javax.inject.Inject
 data class CommunicationsUi(
     val grants: List<CommsGrant> = emptyList(),
     val pending: List<ApprovalItem> = emptyList(),
+    val shares: List<ShareGrant> = emptyList(),
+    val fileRequests: List<ExpansionRequest> = emptyList(),
     val stopped: Boolean = false,
     val available: Int = 0,
     val total: Int = 0,
@@ -32,6 +38,7 @@ data class CommunicationsUi(
 class CommunicationsViewModel @Inject constructor(
     private val admin: CommsAdmin,
     private val broker: CommsBroker,
+    private val shares: FileShareEngine,
 ) : ViewModel() {
     private val mutable = MutableStateFlow(read(null))
     val ui: StateFlow<CommunicationsUi> = mutable.asStateFlow()
@@ -53,6 +60,32 @@ class CommunicationsViewModel @Inject constructor(
         mutable.value = read("Permission removed.")
     }
 
+    fun revokeShare(id: String) {
+        shares.revoke(id)
+        mutable.value = read("File sharing removed.")
+    }
+
+    fun denyFileRequest(id: String) {
+        shares.denyRequest(id)
+        mutable.value = read("Request denied. Nothing was shared.")
+    }
+
+    /**
+     * Owner action. Approving creates the NARROWEST grant that satisfies the request: that one file, that one operation,
+     * read-only, for 24 hours, still asking you for each send. Widen it yourself later if you want more.
+     */
+    fun approveFileRequest(id: String) {
+        val req = shares.pendingRequests().firstOrNull { it.id == id }
+        val msg = if (req == null) {
+            "That request is no longer waiting."
+        } else {
+            val now = System.currentTimeMillis()
+            val grant = ShareGrant("s" + now + "-" + id.takeLast(6), req.subject, listOf(ShareScope.File(req.path)), setOf(req.op), true, true, now + 24 * 3_600_000L, null, now)
+            shares.approveRequest(id, grant).fold({ "Shared for 24 hours; each send still asks you." }, { it.message ?: "Could not share." })
+        }
+        mutable.value = read(msg)
+    }
+
     fun setStopped(on: Boolean) {
         if (on) admin.engageKill() else admin.releaseKill()
         mutable.value = read(if (on) "Everything automatic is stopped." else "Stop released. Existing permissions apply again.")
@@ -72,6 +105,8 @@ class CommunicationsViewModel @Inject constructor(
         return CommunicationsUi(
             grants = admin.grants(),
             pending = admin.pending(),
+            shares = shares.grants().filter { !it.revoked },
+            fileRequests = shares.pendingRequests(),
             stopped = admin.killEngaged,
             available = caps.size - unavailable.size,
             total = caps.size,
