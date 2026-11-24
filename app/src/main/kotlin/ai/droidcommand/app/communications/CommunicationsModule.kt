@@ -6,16 +6,20 @@ import ai.droidcommand.communications.CommsAdmin
 import ai.droidcommand.communications.CommsBackend
 import ai.droidcommand.communications.CommsBroker
 import ai.droidcommand.communications.CompositeBackend
+import ai.droidcommand.communications.FileShareEngine
 import ai.droidcommand.communications.GrantStore
 import ai.droidcommand.communications.JsonFileApprovalStore
 import ai.droidcommand.communications.JsonFileGrantStore
 import ai.droidcommand.communications.JsonFileReceiptStore
+import ai.droidcommand.communications.JsonFileShareStore
 import ai.droidcommand.communications.KillSwitch
+import ai.droidcommand.communications.MediaGateway
 import ai.droidcommand.communications.ModelResult
 import ai.droidcommand.communications.Owner
 import ai.droidcommand.communications.ReceiptStore
 import ai.droidcommand.communications.ReplyModel
 import ai.droidcommand.communications.ReplyService
+import ai.droidcommand.communications.ShareGatedBackend
 import ai.droidcommand.communications.VictorSmsCommsBackend
 import ai.droidcommand.fleet.messenger.FleetMessengerController
 import ai.droidcommand.fleet.messenger.MutablePairedNodeStore
@@ -85,10 +89,27 @@ object CommunicationsModule {
         return ControllerArchiveChannel { operation, params -> controller.callOwnerGrantedRead("victorsms", operation, params) }
     }
 
+    /** Owner-controlled, per-conversation file sharing. Tied to the same emergency stop as everything else in this module. */
     @Provides
     @Singleton
-    fun provideCommsBackend(archive: ArchiveChannel): CommsBackend =
-        CompositeBackend(mapOf(Owner.VICTORSMS to VictorSmsCommsBackend(archive)))
+    fun provideFileShareEngine(@ApplicationContext context: Context, stores: CommsStores): FileShareEngine {
+        val dir = context.filesDir.toPath().resolve("communications")
+        Files.createDirectories(dir)
+        return FileShareEngine(JsonFileShareStore(dir.resolve("file-shares.json").toFile()), emergencyStop = { stores.kill.engaged })
+    }
+
+    @Provides
+    @Singleton
+    fun provideMediaGateway(): MediaGateway = UnconnectedMediaGateway
+
+    /**
+     * Attachment sends pass through [ShareGatedBackend]. Until a File-Manager gateway exists, and until a conversation's contact
+     * can be resolved, every attachment send is refused: the gate fails closed rather than guessing.
+     */
+    @Provides
+    @Singleton
+    fun provideCommsBackend(archive: ArchiveChannel, shares: FileShareEngine, gateway: MediaGateway): CommsBackend =
+        ShareGatedBackend(CompositeBackend(mapOf(Owner.VICTORSMS to VictorSmsCommsBackend(archive))), shares, gateway)
 
     @Provides
     @Singleton

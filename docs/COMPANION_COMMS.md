@@ -224,3 +224,45 @@ never message text). The conversation screen shows the latest five; the log keep
 - Live SMS are not yet recorded into the VictorSMS archive, so there is nothing for an automatic reply to answer.
 - Voice-message and interactive-call capabilities beyond the catalogue entry; a scheduler for `schedule_message`; semantic (embedding) retrieval.
 - Anything on a device. The first device step is binding the service from a paired app and calling `discover`.
+
+## File sharing, attachments and multi-conversation orchestration (2026-11-24, Victorious Framework)
+
+Added to `core-communications` (pure JVM; no Android, no new dependency on File-Manager). **Tested on the JVM only. Never run on a device, a carrier or a real model.**
+
+| Piece | File | What it guarantees (each has a test) |
+|---|---|---|
+| `FileShareEngine` | `FileShare.kt` | Default deny. A grant is bound to **one conversation** (mandatory) and optionally a bot, contact and account; there is no inheritance and no "any conversation". Scopes: folder (direct children, or with subfolders), file, or an owner-picked collection. Independent operations: browse, search, preview, read, AI-analyse, download, upload, save, modify, send. Read-only grants cannot carry upload/save/modify. Expiry, per-grant approval requirement, recipient restriction (default: only that conversation's contact), immediate revocation per grant or per conversation, JSON-file persistence that fails closed on a corrupt file, access history for every allow **and** deny, emergency stop. |
+| Incoming messages | `FileShare.kt` | A request whose origin is a received message is always denied. It can only queue an `ExpansionRequest` (flagged `triggeredByIncomingMessage`); only the owner-side `approveRequest` creates a grant, and only for the asking conversation. |
+| Paths | `SharePaths` | Lexical normalisation; `..`, backslashes, NUL/control characters and percent-encoded dots/separators are **denied, not repaired**. It cannot see symlinks: a `MediaGateway` must `realpath` before reading. |
+| `AttachmentValidator`, `ProviderMedia` | `Attachments.kt` | Content sniffing (JPEG, PNG, GIF, WebP, MP4/3GP/M4A, MP3, OGG, AMR, WAV, PDF, plain text) must agree with the declared type; ELF/PE/DEX/script content and blocked extensions (including double extensions) are rejected; size is checked; names are sanitised. **SMS and TextNow routes have no automated attachment path and are refused.** The MMS 1 MB limit is a cautious assumption, not a verified carrier limit. |
+| `ShareGatedBackend` | `Attachments.kt` | Wraps any `CommsBackend`. `send_attachment`/`send_mms` run only for a file shared with *that conversation*, to a recipient the grant allows, after validation; a grant that requires approval cannot be used by an `auto` call. A refusal queues an expansion request for the owner. Everything else passes through. The broker, catalogue (still 27 capabilities) and their tests are unchanged. |
+| `ConversationOrchestrator` | `Orchestrator.kt` | One ordered lane per conversation, one shared bounded inference pool, per-conversation memory handed to the model as a snapshot, duplicate message ids absorbed, fair scheduling (a flooding conversation cannot starve others), per-conversation pause, emergency stop, queue back-pressure, snapshot/restore without answering a handled message twice. |
+
+### Synthetic load results (fake model, 2 ms per turn, 10 messages per conversation, this container's JVM)
+
+| Conversations | Messages | Inference slots | Wall time | Max concurrent model calls |
+|---|---|---|---|---|
+| 20 | 200 | 4 | 112 ms | 4 |
+| 50 | 500 | 6 | 196 ms | 6 |
+| 100 | 1000 | 8 | 292 ms | 8 |
+
+Asserted for each run: every message handled once, zero failures, strict per-conversation order, concurrency never above the slot count, and no conversation's model call ever saw another conversation's memory (canary check). **These numbers prove scheduler behaviour only.** They say nothing about real model latency, memory, battery or Android scheduling.
+
+### Not built (still Requested)
+- **Wiring:** `ShareGatedBackend` and `ConversationOrchestrator` are not yet constructed in `:app` or the Hilt graph, and the owner screens for grants, requests and history do not exist.
+- **File-Manager:** its bridge is still a read-only stub that returns no files, so no `MediaGateway` implementation exists. Until it does, nothing can actually be sent. It must stay an EXTERNAL_NODE (no AIDL, no DependencyGuard, no shared signing key).
+- **Media understanding** (photo, video, document, voice-message analysis), captions, and the Photo Picker / SAF / MediaStore / secure-content-URI plumbing. Encrypted-at-rest share state (the JSON file is plain).
+- **Third-party apps** (TextNow and others) and calls: unchanged. TextNow has no official API; automated sending through it is not claimed.
+- **VictorLinux, VictorSuite, Victorious Mesh, RustdeskV, Victorious Browser** integrations: not touched in this change.
+
+### App wiring (2026-11-24, second slice) — compiled by CI only, never run
+- `CommunicationsModule` now provides `FileShareEngine` (state in `files/communications/file-shares.json`, emergency stop shared with the broker's `KillSwitch`), a `MediaGateway`, and wraps the backend in `ShareGatedBackend`.
+- **The gateway is `UnconnectedMediaGateway`: it returns nothing.** File-Manager's bridge is still a stub, and a conversation's contact cannot yet be resolved for the recipient check, so **every attachment send is refused** (fail closed). This is deliberate, not a bug; sending attachments needs both pieces.
+- Advanced → Communications gained "Files requested by a conversation" (approve = the narrowest grant: that one file and operation, read-only, 24 hours, still asks per send; or deny) and "Files you shared" (stop sharing). There is still no screen to create a broader grant (folder, subfolders, collection, other operations), to view access history, or to see the conversation scheduler.
+- `ConversationOrchestrator` is **not** wired yet: nothing in the app feeds it incoming messages.
+- No local Android SDK in this environment: `:app` was not compiled or tested here. CI on the PR is the only evidence.
+
+### Share form, access history, and a decision needed (2026-11-24, third slice)
+- `ShareForms.build` (JVM-tested, 6 tests) turns the owner's form into a validated grant: read-only is **derived** from the operations, never typed; relative or `..` paths, the storage root, empty choices, over-long expiry and more than 20 recipients are refused with a reason. Advanced → Communications gained "Share files with a conversation…" and a "File access history" list (newest 30; allow and deny). The screens are compiled by CI only and have never been run.
+- **Paths are typed, not picked.** Android's Storage Access Framework and Photo Picker return `content://` URIs, not paths, and the engine is path-based. A picker needs a URI-based scope type and a gateway that resolves it; that is not built.
+- **Decision needed (blocks attachment sending): recipient verification.** The gate must confirm who a conversation's messages actually go to. VictorSMS's archive deliberately exposes **no phone number or account** in the conversation list (`AssistantAccessTest` asserts it), so DroidCommand has nothing authoritative to check against, and guessing from display names would be unsafe. Options: (a) let VictorSMS add each shared conversation's non-self participant numbers to the list reply (additive, still only for conversations you switch on; reverses that privacy rule); (b) keep numbers private and add a VictorSMS send-time check that the destination matches what the grant names (a write-side op, larger); (c) keep attachment sending off. I did not change VictorSMS.

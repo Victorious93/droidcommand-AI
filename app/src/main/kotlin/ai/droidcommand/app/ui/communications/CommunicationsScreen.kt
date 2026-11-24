@@ -1,6 +1,10 @@
 package ai.droidcommand.app.ui.communications
 
 import ai.droidcommand.communications.CommsPermission
+import ai.droidcommand.communications.FileOp
+import ai.droidcommand.communications.ShareForm
+import ai.droidcommand.communications.ShareKind
+import ai.droidcommand.communications.ShareScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,6 +44,7 @@ private val APPS = listOf("com.victorious.bots" to "VictorBots", "com.victorious
 fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
     val ui by vm.ui.collectAsState()
     var adding by remember { mutableStateOf(false) }
+    var sharing by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { vm.refresh() }
     LazyColumn(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Text("Communications", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
@@ -76,6 +81,42 @@ fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
                 }
             }
         }
+        item { Text("Files requested by a conversation", fontWeight = FontWeight.Bold) }
+        if (ui.fileRequests.isEmpty()) item { Text("No file requests.", style = MaterialTheme.typography.bodySmall) }
+        items(ui.fileRequests, key = { it.id }) { r ->
+            Column(Modifier.fillMaxWidth()) {
+                Text("Conversation ${r.subject.conversation} wants to ${r.op.name.lowercase().replace('_', ' ')}: ${r.path}")
+                if (r.triggeredByIncomingMessage) Text("Prompted by a received message. That message cannot grant access; only you can.", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { vm.approveFileRequest(r.id) }) { Text("Share this file (24 h)") }
+                    OutlinedButton(onClick = { vm.denyFileRequest(r.id) }) { Text("Deny") }
+                }
+            }
+        }
+        item { Text("Files you shared", fontWeight = FontWeight.Bold) }
+        item { Button(onClick = { sharing = true }) { Text("Share files with a conversation…") } }
+        if (ui.shares.isEmpty()) item { Text("No files are shared with any conversation.", style = MaterialTheme.typography.bodySmall) }
+        items(ui.shares, key = { it.id }) { g ->
+            Column(Modifier.fillMaxWidth()) {
+                Text("Conversation ${g.subject.conversation}", fontWeight = FontWeight.Bold)
+                Text(g.scopes.joinToString { sc -> shareScopeLabel(sc) }, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    g.ops.joinToString { it.name.lowercase().replace('_', ' ') } + (if (g.readOnly) " · read-only" else "") + (if (g.requireApproval) " · asks each time" else "") +
+                        (g.expiresAtMs?.let { " · expires" } ?: " · no expiry"),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(onClick = { vm.revokeShare(g.id) }) { Text("Stop sharing") }
+            }
+        }
+        item { Text("File access history", fontWeight = FontWeight.Bold) }
+        if (ui.fileHistory.isEmpty()) item { Text("No file access has been tried yet.", style = MaterialTheme.typography.bodySmall) }
+        items(ui.fileHistory.size) { i ->
+            val h = ui.fileHistory[i]
+            Text(
+                "${h.outcome.replace('_', ' ')} · ${h.op.name.lowercase().replace('_', ' ')} · conversation ${h.conversation} · ${h.path}" + (if (h.outcome == "deny") " (${h.reason})" else ""),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
         item { Text("Apps you allowed", fontWeight = FontWeight.Bold) }
         item { Button(onClick = { adding = true }) { Text("Allow an app…") } }
         if (ui.grants.none { !it.revoked }) item { Text("No app is allowed.", style = MaterialTheme.typography.bodySmall) }
@@ -90,6 +131,12 @@ fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
                 TextButton(onClick = { vm.revoke(g.id) }) { Text("Remove") }
             }
         }
+    }
+    if (sharing) {
+        ShareDialog(onDismiss = { sharing = false }, onShare = { f ->
+            vm.createShare(f)
+            sharing = false
+        })
     }
     if (adding) {
         AllowDialog(onDismiss = { adding = false }, onAllow = { app, perms, bot, hours, once ->
@@ -141,6 +188,71 @@ private fun AllowDialog(onDismiss: () -> Unit, onAllow: (String, Set<CommsPermis
             }
         },
         confirmButton = { TextButton(enabled = perms.isNotEmpty(), onClick = { onAllow(app, perms, bot, hours, once) }) { Text("Allow") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+private fun shareScopeLabel(sc: ShareScope): String = when (sc) {
+    is ShareScope.Folder -> "folder ${sc.path}" + if (sc.subfolders) " (with subfolders)" else ""
+    is ShareScope.File -> "file ${sc.path}"
+    is ShareScope.Collection -> "collection ${sc.id} (${sc.files.size} files)"
+}
+
+private val KIND_LABELS = listOf(
+    ShareKind.FOLDER to "This folder only",
+    ShareKind.FOLDER_WITH_SUBFOLDERS to "This folder and its subfolders",
+    ShareKind.FILE to "One file",
+)
+
+@Composable
+private fun ShareDialog(onDismiss: () -> Unit, onShare: (ShareForm) -> Unit) {
+    var conversation by remember { mutableStateOf("") }
+    var bot by remember { mutableStateOf("") }
+    var kind by remember { mutableStateOf(ShareKind.FOLDER) }
+    var path by remember { mutableStateOf("") }
+    var ops by remember { mutableStateOf(setOf(FileOp.SEARCH, FileOp.PREVIEW, FileOp.SEND)) }
+    var hours by remember { mutableStateOf<Long?>(24) }
+    var recipients by remember { mutableStateOf("") }
+    var approval by remember { mutableStateOf(true) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Share files with one conversation") },
+        text = {
+            LazyColumn {
+                item { Text("Nothing else is shared. Other conversations never inherit this.", style = MaterialTheme.typography.bodySmall) }
+                item { OutlinedTextField(conversation, { conversation = it }, label = { Text("Conversation id") }, singleLine = true) }
+                item { OutlinedTextField(bot, { bot = it }, label = { Text("Only for this bot id (optional)") }, singleLine = true) }
+                item {
+                    KIND_LABELS.forEach { (k, label) -> TextButton(onClick = { kind = k }) { Text((if (kind == k) "● " else "○ ") + label) } }
+                }
+                item { OutlinedTextField(path, { path = it }, label = { Text("Full path, e.g. /storage/emulated/0/DCIM/Cats") }, singleLine = true) }
+                item { Text("The bot may:", fontWeight = FontWeight.Bold) }
+                items(FileOp.entries.toList()) { op ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = op in ops, onCheckedChange = { on -> ops = if (on) ops + op else ops - op })
+                        Text(op.name.lowercase().replace('_', ' '))
+                    }
+                }
+                item { OutlinedTextField(recipients, { recipients = it }, label = { Text("Allowed recipients (blank = this conversation's contact only)") }) }
+                item {
+                    Text("For how long:", fontWeight = FontWeight.Bold)
+                    listOf<Pair<String, Long?>>("1 hour" to 1L, "1 day" to 24L, "1 week" to 168L, "Until I remove it" to null).forEach { (label, h) ->
+                        TextButton(onClick = { hours = h }) { Text((if (hours == h) "● " else "○ ") + label) }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(approval, { approval = it })
+                        Text("Ask me before each send")
+                    }
+                    Text("Upload, save and modify can change your files; they are never read-only.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = conversation.isNotBlank() && path.isNotBlank() && ops.isNotEmpty(),
+                onClick = { onShare(ShareForm(conversation, bot, kind, path, ops, hours, recipients, approval)) },
+            ) { Text("Share") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
