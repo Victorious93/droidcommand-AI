@@ -57,9 +57,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
 private sealed class PcTileDialog {
-    data class PickCommand(val profile: PcProfile) : PcTileDialog()
+    data class PickCommand(
+        val profile: PcProfile,
+    ) : PcTileDialog()
     data object AddCommand : PcTileDialog()
-    data class DeleteCommand(val command: SavedPcCommand) : PcTileDialog()
+    data class DeleteCommand(
+        val command: SavedPcCommand,
+    ) : PcTileDialog()
 }
 
 /**
@@ -126,6 +130,8 @@ fun RemotePcTile(viewModel: RemotePcViewModel = hiltViewModel()) {
             state.notice?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("remote_pc_notice"))
             }
+            ai.droidcommand.app.phonemic
+                .PhoneMicSection()
             when (val list = state.list) {
                 PcListState.Loading -> Text("Looking for your PCs…", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                 is PcListState.Unavailable -> Text(list.message, style = MaterialTheme.typography.bodySmall, color = TextSecondary)

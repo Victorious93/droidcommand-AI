@@ -231,6 +231,7 @@ fun DroidCommandNavHost(
                     onOpenBotMaker = { navController.navigate(Routes.BOT_MAKER) },
                     onOpenSkillFiles = { navController.navigate(Routes.SKILL_FILES) },
                     onOpenStatus = { navController.navigate(Routes.STATUS_BACKUP) },
+                    onOpenFleet = { navController.navigate(Routes.FLEET) { launchSingleTop = true } },
                     onCopiedLink = { scope.launch { snackbar.showSnackbar("Link copied") } },
                 )
             }
