@@ -65,6 +65,20 @@ fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
             }
         }
         item {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Switch(checked = ui.agentTools, onCheckedChange = vm::setAgentTools)
+                Column {
+                    Text("Let the assistant use these tools", fontWeight = FontWeight.Bold)
+                    Text(
+                        "Off by default. When on, Chat, Plan, Pilot and Forge can list, read and search the conversations you shared in VictorSMS, and draft or summarise replies. " +
+                            "These tools cannot send, call or change anything. Whatever they read is sent to the model your inference policy picks, which may be a PC or a cloud service.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (ui.agentTools) Text("${ui.agentToolCount} tools offered right now.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        item {
             Text(
                 "Connection: ${ui.available} of ${ui.total} abilities available" + (ui.firstReason?.let { " ($it)" } ?: ""),
                 style = MaterialTheme.typography.bodyMedium,

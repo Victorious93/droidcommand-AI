@@ -146,7 +146,7 @@ re-verifying something.
   llama.cpp on a host; never on a device or emulator.
 
 - **`docs/COMPANION_COMMS.md`** / **`docs/COMMUNICATIONS_INTEGRATION_REPORT.md`** (2026-11-24, Victorious Framework) — the third companion contract
-  (`core-communications`): unattended-capable, owner-grant based, 27 `communications.*` capabilities for VictorBots/VictorSMS. JVM-tested only;
+  (`core-communications`): unattended-capable, owner-grant based, 27 `communications.*` capabilities for VictorBots/VictorSMS (5 of them offered to droidcommand-AI's own agent only behind a default-OFF owner switch, 2026-11-24e). JVM-tested only;
   the Android transport and screen are BUILT but never run; the VictorSMS read-only archive connector is BUILT and JVM-tested (never run against a device or the real app; its reply frames are pinned as copies in both repos); the VictorBots connector is NOT built. A real `ReplyModel` must be `PolicyInference.ask`.
   Read the report's status table and "decisions needed" before extending it. VictorSMS has no live TextNow provider by design (no official API).
 

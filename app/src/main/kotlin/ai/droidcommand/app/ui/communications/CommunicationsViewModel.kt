@@ -6,6 +6,7 @@ import ai.droidcommand.communications.CommsAdmin
 import ai.droidcommand.communications.CommsBroker
 import ai.droidcommand.communications.CommsGrant
 import ai.droidcommand.communications.CommsPermission
+import ai.droidcommand.communications.CommunicationsAgentTools
 import ai.droidcommand.communications.ExpansionRequest
 import ai.droidcommand.communications.FileShareEngine
 import ai.droidcommand.communications.ShareForm
@@ -31,6 +32,9 @@ data class CommunicationsUi(
     val fileRequests: List<ExpansionRequest> = emptyList(),
     val fileHistory: List<AccessRecord> = emptyList(),
     val stopped: Boolean = false,
+    /** The owner's default-off switch for droidcommand-AI's own agent. */
+    val agentTools: Boolean = false,
+    val agentToolCount: Int = 0,
     val available: Int = 0,
     val total: Int = 0,
     val firstReason: String? = null,
@@ -43,6 +47,7 @@ class CommunicationsViewModel @Inject constructor(
     private val admin: CommsAdmin,
     private val broker: CommsBroker,
     private val shares: FileShareEngine,
+    private val agentTools: CommunicationsAgentTools,
 ) : ViewModel() {
     private val mutable = MutableStateFlow(read(null))
     val ui: StateFlow<CommunicationsUi> = mutable.asStateFlow()
@@ -99,6 +104,21 @@ class CommunicationsViewModel @Inject constructor(
         mutable.value = read(msg)
     }
 
+    /**
+     * Owner action. Saves the switch, then brings the agent's tool registry in line with it. Off removes the tools at once;
+     * a plan that already holds one is refused by the tool's own live check.
+     */
+    fun setAgentTools(on: Boolean) {
+        val n = agentTools.setEnabled(on)
+        mutable.value = read(
+            if (on) {
+                "droidcommand-AI's own agent can now use $n communications tools. They only read and draft; nothing is sent."
+            } else {
+                "The agent has no communications tools now."
+            },
+        )
+    }
+
     fun setStopped(on: Boolean) {
         if (on) admin.engageKill() else admin.releaseKill()
         mutable.value = read(if (on) "Everything automatic is stopped." else "Stop released. Existing permissions apply again.")
@@ -122,6 +142,8 @@ class CommunicationsViewModel @Inject constructor(
             fileRequests = shares.pendingRequests(),
             fileHistory = shares.history().takeLast(30).reversed(),
             stopped = admin.killEngaged,
+            agentTools = agentTools.isEnabled,
+            agentToolCount = agentTools.registeredCount(),
             available = caps.size - unavailable.size,
             total = caps.size,
             firstReason = unavailable.firstNotNullOfOrNull { (it["reason"] as? JsonPrimitive)?.contentOrNull },

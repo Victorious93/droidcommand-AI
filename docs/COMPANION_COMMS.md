@@ -216,6 +216,30 @@ never message text). The conversation screen shows the latest five; the log keep
 - Reads only. No sending, drafting, import or auto-reply goes through this connector.
 - Nothing here has bound a service, received a Messenger reply or read a real conversation on a device.
 
+## droidcommand-AI's own agent: the default-off switch (2026-11-24, Victorious Framework)
+
+droidcommand-AI's Chat, Plan, Pilot and Forge get **no** `communications_*` tools by default. Communications screen → *Let the assistant use these tools* turns them on; the choice is stored in
+`AdvancedPrefs` (`communications.agent.tools`, default **false**) and applied at app start and whenever the owner flips it.
+
+Why a switch: what these tools return is conversation text, and it goes into whichever model the owner's inference policy routes to (`docs/INFERENCE_POLICY.md`: this device, the owner's PC, or a confirmed
+cloud fallback). The owner decides that once, here, not implicitly.
+
+| Property | How it is enforced (`AgentToolSwitch.kt`, each has a test in `AgentToolSwitchTest`/`CommunicationsViewModelTest`) |
+|---|---|
+| Off means absent | While off, the five tools are not in the `ToolRegistry`, so a planner is never even shown them. `apply()` removes exactly ours, never a same-named tool someone else registered. |
+| Off means refused, even mid-plan | Each tool is wrapped in `GatedCommunicationsTool`, which reads the switch on **every call**. A plan that already holds a tool is refused the moment the owner turns it off, before the registry is updated. |
+| Reads and drafts only | The registrar's constructor refuses any capability whose risk is not READ or DRAFT. It cannot be built with `send_sms`, `place_call`, `set_auto_reply`, imports or contacts. |
+| Only what can work | Offered: `list_conversations`, `read_conversation`, `search_messages` (VictorSMS archive) and `generate_reply`, `summarize_conversation` (this app's own model). The other 22 are not offered, so the owner is never asked to approve a send that could only be refused. |
+| Choice saved before it takes effect | `setEnabled` persists, then registers, so a crash between the two cannot leave tools on that the owner turned off. |
+| VictorSMS's gates are untouched | The agent path still needs VictorSMS's *Archive read* permission for droidcommand-AI and the per-conversation assistant switch. This switch widens neither. |
+
+What this does **not** do: it does not stop the agent from using other, existing tools after it has read a message (for example the separately gated `victorsms_send` tools); those have their own switch and
+approval. It does not make `generate_reply` auto-send; there is no auto-reply path.
+
+**Tested:** the registrar and gate on the JVM (12 tests), mutation-checked (7 of 7 mutants killed); the view model in plain JVM tests (4 tests, 4 of 4 mutants killed); the Hilt graph compiles (JDK 21).
+**NOT verified:** the Application start-up call and the Hilt provider are not exercised by any test (only compiled); the screen toggle was not rendered or tapped; no real agent loop has called one of these tools;
+nothing ran on a device.
+
 ## Not built
 
 - **The VictorBots backend.** It needs a service to answer `get_style_profile` / `update_style_profile`; until then its capabilities report "not connected".

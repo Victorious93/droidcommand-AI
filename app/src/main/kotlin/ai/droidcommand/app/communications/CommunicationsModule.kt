@@ -1,10 +1,13 @@
 package ai.droidcommand.app.communications
 
+import ai.droidcommand.agent.ToolRegistry
+import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.communications.ApprovalQueue
 import ai.droidcommand.communications.ArchiveChannel
 import ai.droidcommand.communications.CommsAdmin
 import ai.droidcommand.communications.CommsBackend
 import ai.droidcommand.communications.CommsBroker
+import ai.droidcommand.communications.CommunicationsAgentTools
 import ai.droidcommand.communications.CompositeBackend
 import ai.droidcommand.communications.FileShareEngine
 import ai.droidcommand.communications.GrantStore
@@ -115,6 +118,15 @@ object CommunicationsModule {
     @Singleton
     fun provideCommsBroker(stores: CommsStores, backend: CommsBackend, model: ReplyModel, audit: JsonFileAuditLog): CommsBroker =
         CommsBroker(backend, ReplyService(model), stores.grants, stores.approvals, stores.receipts, stores.kill, audit)
+
+    /**
+     * The owner's default-off switch for droidcommand-AI's own agent. Constructing this registers nothing; the tools appear only
+     * after [CommunicationsAgentTools.apply] runs with the switch on (at start-up and when the owner flips it).
+     */
+    @Provides
+    @Singleton
+    fun provideCommunicationsAgentTools(registry: ToolRegistry, broker: CommsBroker, advanced: AdvancedPrefs): CommunicationsAgentTools =
+        CommunicationsAgentTools(registry, broker, advanced::communicationsAgentToolsEnabled, persist = advanced::setCommunicationsAgentToolsEnabled)
 
     @Provides
     @Singleton

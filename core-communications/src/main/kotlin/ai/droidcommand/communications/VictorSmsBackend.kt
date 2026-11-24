@@ -53,11 +53,7 @@ class VictorSmsCommsBackend(
     private val okTtlMs: Long = 30_000,
     private val failTtlMs: Long = 5_000,
 ) : CommsBackend {
-    private val served = mapOf(
-        "communications.list_conversations" to ArchiveWire.LIST,
-        "communications.read_conversation" to ArchiveWire.READ,
-        "communications.search_messages" to ArchiveWire.SEARCH,
-    )
+    private val served = SERVED
 
     private class Probe(val at: Long, val ttl: Long, val reason: String?, val ops: Set<String>)
 
@@ -146,6 +142,15 @@ class VictorSmsCommsBackend(
     }
 
     companion object {
+        private val SERVED = mapOf(
+            "communications.list_conversations" to ArchiveWire.LIST,
+            "communications.read_conversation" to ArchiveWire.READ,
+            "communications.search_messages" to ArchiveWire.SEARCH,
+        )
+
+        /** The capabilities this connector can ever serve. Everything else VictorSMS owns is reported unavailable. */
+        val SERVED_CAPABILITIES: Set<String> = SERVED.keys
+
         const val NOT_PROVIDED = "VictorSMS does not provide this through the assistant connector."
         private const val MAX_QUERY = 200
         private const val MIN_CONTEXT = 200
