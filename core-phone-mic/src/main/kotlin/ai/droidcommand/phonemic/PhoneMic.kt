@@ -2,8 +2,6 @@ package ai.droidcommand.phonemic
 
 import java.io.DataInputStream
 import java.io.DataOutputStream
-import java.io.InputStream
-import java.io.OutputStream
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.security.MessageDigest
@@ -28,15 +26,25 @@ const val FRAME_BYTES = SAMPLE_RATE * FRAME_MS / 1000 * 2
 const val MAX_QUEUE_MS = 400
 const val MAX_FRAME_PAYLOAD = 64 * 1024
 
-enum class Provider(val wire: String, val label: String) {
+enum class Provider(
+    val wire: String,
+    val label: String,
+) {
     DROIDCOMMAND("droidcommand", "DroidCommand-AI"),
     KEYBOARD("keyboard", "Victorious Keyboard"),
 }
 
 /** `vmic1;host;port;sessionId;secretHex;pcId;deviceId;provider;spkiSha256;expiryEpochS` */
 data class MicOffer(
-    val host: String, val port: Int, val sessionId: String, val secret: ByteArray,
-    val pcId: String, val deviceId: String, val provider: String, val spkiSha256: String, val expiresAtS: Long,
+    val host: String,
+    val port: Int,
+    val sessionId: String,
+    val secret: ByteArray,
+    val pcId: String,
+    val deviceId: String,
+    val provider: String,
+    val spkiSha256: String,
+    val expiresAtS: Long,
 ) {
     fun expired(nowS: Long) = nowS >= expiresAtS
     override fun toString() = "MicOffer(pc=$pcId, device=$deviceId, provider=$provider)" // never prints the secret
@@ -62,14 +70,24 @@ data class MicOffer(
 }
 
 object Frames {
-    const val CHALLENGE = 0; const val HELLO = 1; const val HELLO_OK = 2
-    const val AUDIO = 3; const val CTRL = 4; const val BYE = 5
-    const val READ_REQ = 6; const val READ_RESP = 7
+    const val CHALLENGE = 0
+    const val HELLO = 1
+    const val HELLO_OK = 2
+    const val AUDIO = 3
+    const val CTRL = 4
+    const val BYE = 5
+    const val READ_REQ = 6
+    const val READ_RESP = 7
 
     fun write(out: DataOutputStream, type: Int, payload: ByteArray) {
         require(payload.size <= MAX_FRAME_PAYLOAD)
-        val b = ByteBuffer.allocate(5 + payload.size).putInt(payload.size).put(type.toByte()).put(payload)
-        out.write(b.array()); out.flush()
+        val b = ByteBuffer
+            .allocate(5 + payload.size)
+            .putInt(payload.size)
+            .put(type.toByte())
+            .put(payload)
+        out.write(b.array())
+        out.flush()
     }
 
     fun read(inp: DataInputStream): Pair<Int, ByteArray> {
@@ -79,7 +97,11 @@ object Frames {
         return t to ByteArray(n).also { inp.readFully(it) }
     }
 
-    fun audio(seq: Int, pcm: ByteArray): ByteArray = ByteBuffer.allocate(4 + pcm.size).putInt(seq).put(pcm).array()
+    fun audio(seq: Int, pcm: ByteArray): ByteArray = ByteBuffer
+        .allocate(4 + pcm.size)
+        .putInt(seq)
+        .put(pcm)
+        .array()
 
     fun helloMac(o: MicOffer, nonce: ByteArray): String {
         val msg = "VMIC1|${o.pcId}|${o.deviceId}|${o.provider}|${o.sessionId}|".toByteArray() + nonce
@@ -89,7 +111,9 @@ object Frames {
 }
 
 /** Certificate pinning exactly like the fleet: accept only the cert whose SubjectPublicKeyInfo hashes to the offer's pin. */
-class SpkiPinTrust(private val pinHex: String) : X509TrustManager {
+class SpkiPinTrust(
+    private val pinHex: String,
+) : X509TrustManager {
     override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) = throw java.security.cert.CertificateException("no client auth")
     override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
         val got = MessageDigest.getInstance("SHA-256").digest(chain[0].publicKey.encoded).joinToString("") { "%02x".format(it) }
@@ -99,13 +123,26 @@ class SpkiPinTrust(private val pinHex: String) : X509TrustManager {
 }
 
 /** Bounded live buffer: when the network stalls the OLDEST audio is dropped; it is never queued without limit. */
-class LiveQueue(maxMs: Int = MAX_QUEUE_MS) {
+class LiveQueue(
+    maxMs: Int = MAX_QUEUE_MS,
+) {
     private val max = maxOf(1, maxMs / FRAME_MS)
     private val q = ArrayDeque<ByteArray>()
-    var dropped = 0; private set
-    @Synchronized fun push(f: ByteArray) { q.addLast(f); while (q.size > max) { q.removeFirst(); dropped++ } }
+    var dropped = 0
+        private set
+
+    @Synchronized fun push(f: ByteArray) {
+        q.addLast(f)
+        while (q.size > max) {
+            q.removeFirst()
+            dropped++
+        }
+    }
+
     @Synchronized fun pop(): ByteArray? = q.removeFirstOrNull()
+
     @Synchronized fun clear() = q.clear()
+
     @Synchronized fun size() = q.size
 }
 
@@ -113,56 +150,116 @@ enum class ShareState { IDLE, CONNECTING, SHARING, MUTED, SILENCED, STOPPED }
 
 /** Pure state machine for the phone UI/notification. Capture only runs in SHARING. */
 class ShareStateMachine {
-    var state = ShareState.IDLE; private set
-    fun start() { if (state == ShareState.IDLE || state == ShareState.STOPPED) state = ShareState.CONNECTING }
-    fun connected() { if (state == ShareState.CONNECTING) state = ShareState.SHARING }
-    fun mute() { if (state == ShareState.SHARING || state == ShareState.SILENCED) state = ShareState.MUTED }
-    fun unmute() { if (state == ShareState.MUTED) state = ShareState.SHARING }
+    var state = ShareState.IDLE
+        private set
+    fun start() {
+        if (state == ShareState.IDLE || state == ShareState.STOPPED) state = ShareState.CONNECTING
+    }
+    fun connected() {
+        if (state == ShareState.CONNECTING) state = ShareState.SHARING
+    }
+    fun mute() {
+        if (state == ShareState.SHARING || state == ShareState.SILENCED) state = ShareState.MUTED
+    }
+    fun unmute() {
+        if (state == ShareState.MUTED) state = ShareState.SHARING
+    }
+
     /** Another app took the mic, a call started, or the privacy switch is on: Android delivers silence. */
-    fun silenced(on: Boolean) { if (on && state == ShareState.SHARING) state = ShareState.SILENCED else if (!on && state == ShareState.SILENCED) state = ShareState.SHARING }
-    fun stop() { state = ShareState.STOPPED }
+    fun silenced(on: Boolean) {
+        if (on && state == ShareState.SHARING) {
+            state = ShareState.SILENCED
+        } else if (!on && state == ShareState.SILENCED) {
+            state = ShareState.SHARING
+        }
+    }
+    fun stop() {
+        state = ShareState.STOPPED
+    }
     val capturing get() = state == ShareState.SHARING
-    val wire get() = when (state) { ShareState.MUTED -> "muted"; ShareState.SILENCED -> "silenced"; else -> "sharing" }
+    val wire get() = when (state) {
+        ShareState.MUTED -> "muted"
+        ShareState.SILENCED -> "silenced"
+        else -> "sharing"
+    }
 }
 
 /** One connected stream. Not thread-safe except [offer] and [control], which may be called from the capture thread. */
-data class ReadResult(val ok: Boolean, val text: String, val pc: String, val window: String, val reason: String)
+data class ReadResult(
+    val ok: Boolean,
+    val text: String,
+    val pc: String,
+    val window: String,
+    val reason: String,
+)
 
 class MicStream private constructor(
-    private val sock: Socket, private val out: DataOutputStream, private val inp: DataInputStream, val offer: MicOffer,
+    private val sock: Socket,
+    private val out: DataOutputStream,
+    private val inp: DataInputStream,
+    val offer: MicOffer,
 ) : AutoCloseable {
     private var seq = 0
-    @Synchronized fun sendPcm(pcm: ByteArray) { Frames.write(out, Frames.AUDIO, Frames.audio(seq++, pcm)) }
+
+    @Synchronized fun sendPcm(pcm: ByteArray) {
+        Frames.write(out, Frames.AUDIO, Frames.audio(seq++, pcm))
+    }
+
     /** Asks the PC to read its selected text / active window. Needs the PC-side "read" opt-in; independent of mic sharing. */
     @Synchronized fun requestRead(): ReadResult {
         Frames.write(out, Frames.READ_REQ, ByteArray(0))
         val (t, body) = Frames.read(inp)
         if (t != Frames.READ_RESP) throw java.io.IOException("unexpected frame")
         val j = String(body, Charsets.UTF_8)
-        fun str(k: String) = Regex("\"$k\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(j)?.groupValues?.get(1)?.let(::unescape) ?: ""
+        fun str(k: String) = Regex("\"$k\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
+            .find(j)
+            ?.groupValues
+            ?.get(1)
+            ?.let(::unescape) ?: ""
         return ReadResult(Regex("\"ok\"\\s*:\\s*true").containsMatchIn(j), str("text"), str("pc"), str("window"), str("reason"))
     }
 
     private fun unescape(s: String): String {
-        val sb = StringBuilder(); var i = 0
+        val sb = StringBuilder()
+        var i = 0
         while (i < s.length) {
             val c = s[i]
             if (c == '\\' && i + 1 < s.length) {
                 when (val n = s[i + 1]) {
-                    'n' -> sb.append('\n'); 't' -> sb.append('\t'); '"' -> sb.append('"'); '\\' -> sb.append('\\'); '/' -> sb.append('/')
-                    'u' -> if (i + 5 < s.length) { sb.append(s.substring(i + 2, i + 6).toInt(16).toChar()); i += 4 } else sb.append(n)
+                    'n' -> sb.append('\n')
+                    't' -> sb.append('\t')
+                    '"' -> sb.append('"')
+                    '\\' -> sb.append('\\')
+                    '/' -> sb.append('/')
+                    'u' -> if (i + 5 < s.length) {
+                        sb.append(s.substring(i + 2, i + 6).toInt(16).toChar())
+                        i += 4
+                    } else {
+                        sb.append(n)
+                    }
                     else -> sb.append(n)
                 }
                 i += 2
-            } else { sb.append(c); i++ }
+            } else {
+                sb.append(c)
+                i++
+            }
         }
         return sb.toString()
     }
 
-    @Synchronized fun control(state: String) { Frames.write(out, Frames.CTRL, """{"state":"$state"}""".toByteArray()) }
+    @Synchronized fun control(state: String) {
+        Frames.write(out, Frames.CTRL, """{"state":"$state"}""".toByteArray())
+    }
     override fun close() {
-        try { synchronized(this) { Frames.write(out, Frames.BYE, ByteArray(0)) } } catch (_: Exception) {}
-        try { sock.close() } catch (_: Exception) {}
+        try {
+            synchronized(this) { Frames.write(out, Frames.BYE, ByteArray(0)) }
+        } catch (_: Exception) {
+        }
+        try {
+            sock.close()
+        } catch (_: Exception) {
+        }
     }
 
     companion object {
@@ -170,17 +267,24 @@ class MicStream private constructor(
         fun connect(o: MicOffer, nowS: Long = System.currentTimeMillis() / 1000, timeoutMs: Int = 5000): MicStream {
             require(!o.expired(nowS)) { "offer expired" }
             val ctx = SSLContext.getInstance("TLS").apply { init(null, arrayOf(SpkiPinTrust(o.spkiSha256)), SecureRandom()) }
-            val raw = Socket().apply { connect(java.net.InetSocketAddress(o.host, o.port), timeoutMs); soTimeout = timeoutMs }
+            val raw = Socket().apply {
+                connect(java.net.InetSocketAddress(o.host, o.port), timeoutMs)
+                soTimeout = timeoutMs
+            }
             val s = ctx.socketFactory.createSocket(raw, o.host, o.port, true) as SSLSocket
             s.enabledProtocols = s.supportedProtocols.filter { it == "TLSv1.3" || it == "TLSv1.2" }.toTypedArray()
             s.startHandshake()
-            val inp = DataInputStream(s.inputStream); val out = DataOutputStream(s.outputStream)
+            val inp = DataInputStream(s.inputStream)
+            val out = DataOutputStream(s.outputStream)
             val (t, nonce) = Frames.read(inp)
             check(t == Frames.CHALLENGE) { "unexpected frame" }
             val hello = """{"session_id":"${o.sessionId}","pc_id":"${o.pcId}","device_id":"${o.deviceId}","provider":"${o.provider}","mac":"${Frames.helloMac(o, nonce)}"}"""
             Frames.write(out, Frames.HELLO, hello.toByteArray())
             val (ok, _) = Frames.read(inp)
-            if (ok != Frames.HELLO_OK) { s.close(); throw SecurityException("PC rejected the session") }
+            if (ok != Frames.HELLO_OK) {
+                s.close()
+                throw SecurityException("PC rejected the session")
+            }
             s.soTimeout = 0
             return MicStream(s, out, inp, o)
         }
