@@ -22,6 +22,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -157,8 +158,21 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel(), onOpenModels: () -> U
         }
     }
 
+    // Follow the newest text, but only while the reader is already at the end of the list (or has just sent a message).
+    // The old effect called animateScrollToItem(lastIndex) on every streamed token, which (a) pulled a reader who had
+    // scrolled up back down on the next token, and (b) aligned the TOP of the last item with the top of the screen, so a
+    // reply taller than the screen grew out of view below. Checked against the previous layout, which is why "last item
+    // is on screen" is used rather than canScrollForward (a token that has already grown the item would read as "not at
+    // the end"). Not run on a device: needs a long streamed reply to confirm.
     LaunchedEffect(rows.size, state.streaming) {
-        if (rows.isNotEmpty()) listState.animateScrollToItem(rows.lastIndex)
+        if (rows.isEmpty()) return@LaunchedEffect
+        val info = listState.layoutInfo
+        val lastShown = info.visibleItemsInfo.lastOrNull()?.index
+        val readerAtTail = lastShown == null || lastShown >= info.totalItemsCount - 1
+        if (readerAtTail || rows.last().fromUser) {
+            if (lastShown != rows.lastIndex) listState.scrollToItem(rows.lastIndex)
+            listState.scrollBy(CHAT_TAIL_SCROLL_PX) // clamped at the end of the content
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
@@ -392,6 +406,9 @@ private fun ChatSheet(title: String, onDismiss: () -> Unit, content: @Composable
         }
     }
 }
+
+/** Far more than any one reply is tall; scrollBy clamps at the end of the content. */
+private const val CHAT_TAIL_SCROLL_PX = 100_000f
 
 private val SUGGESTIONS = listOf(
     "Explain something simply",
