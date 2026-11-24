@@ -1,0 +1,15 @@
+{
+  "msg_id": "m-tclose-1",
+  "payload": {
+    "reason": "closed by the owner",
+    "session_id": "term-0123456789abcdef"
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 1
+  },
+  "sender": "coordinator",
+  "sent_at": 1790000000000,
+  "target": "dev-0123456789ab",
+  "type": "terminal_close"
+}

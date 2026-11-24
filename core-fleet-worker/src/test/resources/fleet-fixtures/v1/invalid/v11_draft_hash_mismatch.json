@@ -1,0 +1,27 @@
+{
+  "envelope": {
+    "msg_id": "m-bad-16",
+    "payload": {
+      "channel": "sms",
+      "content_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "draft": {
+        "body": "Running late, call you soon.",
+        "to": [
+          "+15550100"
+        ]
+      },
+      "draft_id": "draft-0123456789abcdef",
+      "expires_ms": 1790086400000,
+      "origin": "victorlinux:owner"
+    },
+    "protocol": {
+      "major": 1,
+      "minor": 1
+    },
+    "sender": "coordinator",
+    "sent_at": 1790000000000,
+    "target": "dev-0123456789ab",
+    "type": "draft_deliver"
+  },
+  "expect_error": "bad_request"
+}

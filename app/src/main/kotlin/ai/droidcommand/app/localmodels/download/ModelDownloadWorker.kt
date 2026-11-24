@@ -52,13 +52,17 @@ class ModelDownloadWorker(
     @InstallIn(SingletonComponent::class)
     interface Dependencies {
         fun localModels(): LocalModelRuntime
+
+        fun stopSignals(): DownloadStopSignals
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo = foregroundInfo(modelLabel(), bytes = null, total = null)
 
     override suspend fun doWork(): Result {
         val model = modelFromInput() ?: return failure("This model is not in the download catalog.")
-        val runtime = EntryPointAccessors.fromApplication(applicationContext, Dependencies::class.java).localModels()
+        val dependencies = EntryPointAccessors.fromApplication(applicationContext, Dependencies::class.java)
+        val runtime = dependencies.localModels()
+        val signals = dependencies.stopSignals()
 
         try {
             setForeground(foregroundInfo(model.displayName, bytes = null, total = model.sizeBytes))
@@ -85,7 +89,15 @@ class ModelDownloadWorker(
             )
         }
 
-        if (isStopped) return Result.retry()
+        if (isStopped) {
+            // The transfer has returned, so nothing is writing the partial file any more. A Cancel (rather than a Stop)
+            // asked for it to go: delete it here, where that is safe, then tell the screen to look at the disk again.
+            withContext(Dispatchers.IO) {
+                if (signals.consumeDiscard(model.id)) runtime.discardPartial(model)
+            }
+            signals.notifyChanged(model.id)
+            return Result.retry()
+        }
         return when (InstallDisposition.of(result, runAttemptCount)) {
             InstallDisposition.DONE -> Result.success()
             InstallDisposition.RETRY -> Result.retry()

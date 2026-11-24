@@ -24,6 +24,9 @@ interface FleetTransport {
     fun upload(credential: String, jobId: String, attempt: Int, name: String, sha256: String, bytes: ByteArray)
     fun download(credential: String, artifactId: String): ByteArray
     fun rotate(credential: String): String
+
+    /** Protocol 1.1 live terminal stream. Default: unsupported (older transports/test fakes). */
+    fun terminalExchange(credential: String, sessionId: String, body: JsonObject): JsonObject = throw FleetTransportException(0, null, "terminal stream not supported by this transport")
 }
 
 /**
@@ -86,6 +89,7 @@ class HttpsFleetTransport(
 
     override fun enroll(envelope: JsonObject) = json("/v1/enroll", null, envelope)
     override fun exchange(credential: String, body: JsonObject) = json("/v1/exchange", credential, body)
+    override fun terminalExchange(credential: String, sessionId: String, body: JsonObject) = json("/v1/terminal/${enc(sessionId)}/exchange", credential, body)
     override fun rotate(credential: String): String =
         (json("/v1/rotate", credential, JsonObject(emptyMap()))["credential"] as kotlinx.serialization.json.JsonPrimitive).content
 

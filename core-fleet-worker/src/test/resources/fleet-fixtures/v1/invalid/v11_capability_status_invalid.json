@@ -1,0 +1,32 @@
+{
+  "envelope": {
+    "msg_id": "m-bad-19",
+    "payload": {
+      "app_version": "x",
+      "capabilities": {
+        "device_state": {
+          "battery_percent": 77,
+          "charging": false,
+          "foreground_busy": false,
+          "free_storage_bytes": 12345678901,
+          "thermal": "light"
+        },
+        "operations": {
+          "terminal.session": {
+            "available": true,
+            "status": "mostly_ready"
+          }
+        }
+      }
+    },
+    "protocol": {
+      "major": 1,
+      "minor": 1
+    },
+    "sender": "dev-0123456789ab",
+    "sent_at": 1790000000000,
+    "target": "coordinator",
+    "type": "hello"
+  },
+  "expect_error": "bad_request"
+}

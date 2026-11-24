@@ -127,6 +127,22 @@ class ManifestPolicyTest {
     }
 
     @Test
+    fun `the optional fleet worker service is private, has no intent filter, is specialUse with its subtype, and nothing starts it at boot`() {
+        val permissions = manifest.children("uses-permission").map { it.androidAttr("name") }
+        assertTrue("android.permission.FOREGROUND_SERVICE_SPECIAL_USE" in permissions)
+        val service = application.children("service").single { it.androidAttr("name") == ".fleetworker.FleetWorkerService" }
+        assertEquals("false", service.androidAttr("exported"))
+        assertEquals("specialUse", service.androidAttr("foregroundServiceType"))
+        assertTrue(service.children("intent-filter").isEmpty(), "only the app itself starts it")
+        val subtype = service.children("property").single { it.androidAttr("name") == "android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" }
+        assertTrue(!subtype.androidAttr("value").isNullOrBlank(), "Play reviews this text")
+        val bootReceivers = application.children("receiver")
+            .filter { r -> r.children("intent-filter").any { f -> f.children("action").any { it.androidAttr("name") == "android.intent.action.BOOT_COMPLETED" } } }
+            .map { it.androidAttr("name") }
+        assertEquals(setOf(".shizuku.embedded.ShizukuBootReceiver", ".systemsettings.SystemSettingsBootReceiver"), bootReceivers.toSet(), "the worker does not restart itself at boot")
+    }
+
+    @Test
     fun `Shizuku provider permission and queries are declared`() {
         val permissions = manifest.children("uses-permission").map { it.androidAttr("name") }
         assertTrue(ShizukuPackages.API_PERMISSION in permissions)

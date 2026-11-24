@@ -1,0 +1,16 @@
+{
+  "msg_id": "m-tstat-1",
+  "payload": {
+    "binding": "29e07e318f1453c23d87e15b248aa35e62c701419a534056e7df6bcbcfb538c9",
+    "session_id": "term-0123456789abcdef",
+    "state": "open"
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 1
+  },
+  "sender": "dev-0123456789ab",
+  "sent_at": 1790000000000,
+  "target": "coordinator",
+  "type": "terminal_status"
+}

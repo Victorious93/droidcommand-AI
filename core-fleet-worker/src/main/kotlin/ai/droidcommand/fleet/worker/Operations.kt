@@ -36,6 +36,14 @@ interface FleetOperation {
     /** True only if [tool] calls [ExecutionMarker.mark] as its first action; then a failure before the mark is a pre-run refusal (side_effects none). */
     val marksExecution: Boolean get() = false
 
+    /**
+     * May the owner's one-time batch approval ever cover this operation's confirmation tap? **No unless an operation says so.** Only
+     * an operation whose work is bounded, reversible and already shown to the owner in its arguments should return true; even then
+     * the batch checks (see `ToolBatchEligibility`) still refuse anything that needs root, its own grant, or is shell/remote-control/
+     * destructive tooling. Has no effect while the owner's batch-approval switch is off.
+     */
+    val batchable: Boolean get() = false
+
     /** Prepare job files from downloaded input artifacts; return the string input for the tool. Must validate args. */
     fun prepare(ctx: JobContext): Map<String, String>
 
