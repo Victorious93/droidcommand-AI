@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.Handyman
@@ -67,6 +68,7 @@ fun AdvancedScreen(
     onOpenN8n: () -> Unit = {},
     onOpenToolbox: () -> Unit = {},
     onOpenSystemSettings: () -> Unit = {},
+    onOpenCommunications: () -> Unit = {},
     onOpenStudio: () -> Unit = {},
     onOpenBotMaker: () -> Unit = {},
     onOpenSkillFiles: () -> Unit = {},
@@ -86,6 +88,7 @@ fun AdvancedScreen(
         onOpenN8n = onOpenN8n,
         onOpenToolbox = onOpenToolbox,
         onOpenSystemSettings = onOpenSystemSettings,
+        onOpenCommunications = onOpenCommunications,
         onOpenStudio = onOpenStudio,
         onOpenBotMaker = onOpenBotMaker,
         onOpenSkillFiles = onOpenSkillFiles,
@@ -108,6 +111,7 @@ private fun AdvancedContent(
     onOpenN8n: () -> Unit,
     onOpenToolbox: () -> Unit,
     onOpenSystemSettings: () -> Unit,
+    onOpenCommunications: () -> Unit,
     onOpenStudio: () -> Unit,
     onOpenBotMaker: () -> Unit,
     onOpenSkillFiles: () -> Unit,
@@ -226,6 +230,14 @@ private fun AdvancedContent(
                 icon = Icons.Filled.Settings,
                 onClick = onOpenSystemSettings,
                 modifier = Modifier.testTag("advanced_system_settings"),
+            )
+            DroidRowDivider()
+            DroidListRow(
+                title = "Communications (VictorBots and VictorSMS)",
+                subtitle = "Choose which apps may ask for AI help, texts and calls. Nothing is allowed by default.",
+                icon = Icons.Filled.Email,
+                onClick = onOpenCommunications,
+                modifier = Modifier.testTag("advanced_communications"),
             )
             DroidRowDivider()
             DroidListRow(

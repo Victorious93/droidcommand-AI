@@ -176,7 +176,7 @@ class ManifestPolicyTest {
     }
 
     @Test
-    fun `exported components are the launcher, CODE_ASSIST, COMPANION_ASSIST, COMPANION_EXEC, status widget, fleet-theme receiver, and Shizuku`() {
+    fun `exported components are the launcher, CODE_ASSIST, COMPANION_ASSIST, COMPANION_EXEC, COMPANION_COMMS service, status widget, fleet-theme receiver, and Shizuku`() {
         val exported = listOf("activity", "service", "receiver", "provider")
             .flatMap { application.children(it) }
             .filter { it.androidAttr("exported") == "true" }
@@ -187,6 +187,7 @@ class ManifestPolicyTest {
                 ".codeassist.CodeAssistActivity",
                 ".companionassist.CompanionAssistActivity",
                 ".companionexec.CompanionExecActivity",
+                ".communications.CompanionCommsService",
                 ".widget.StatusWidgetProvider",
                 ".fleet.FleetThemeChangedReceiver",
                 "rikka.shizuku.ShizukuProvider",
@@ -245,6 +246,16 @@ class ManifestPolicyTest {
             "ai.droidcommand.action.COMPANION_EXEC",
             filter.children("action").single().androidAttr("name"),
         )
+    }
+
+    @Test
+    fun `COMPANION_COMMS is a bound service with exactly its own action, no foreground type and no other filter`() {
+        val service = application.children("service").single { it.androidAttr("name") == ".communications.CompanionCommsService" }
+        assertEquals("true", service.androidAttr("exported"))
+        assertTrue(service.androidAttr("foregroundServiceType").isNullOrEmpty(), "a bound service, never a foreground one")
+        val filter = service.children("intent-filter").single()
+        assertEquals(listOf("ai.droidcommand.action.COMPANION_COMMS"), filter.children("action").map { it.androidAttr("name") })
+        assertTrue(filter.children("data").isEmpty() && filter.children("category").isEmpty())
     }
 
     @Test

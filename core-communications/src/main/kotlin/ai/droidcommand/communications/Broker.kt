@@ -24,6 +24,12 @@ object CommsContract {
     const val MAX_TTL_MS = 5 * 60_000L
     const val MAX_SKEW_MS = 120_000L
     const val MAX_RESULT_CHARS = 60_000
+
+    /** Messenger transport (Android): one request per message, answered on `replyTo`. Identity is `Message.sendingUid`, never the payload. */
+    const val MSG_REQUEST = 1
+    const val MSG_RESULT = 2
+    const val KEY_REQUEST = "request_json"
+    const val KEY_RESULT = "result_json"
     const val TASK_DISCOVER = "discover"
     const val TASK_CALL = "call"
     const val TASK_RECEIPT = "receipt"
@@ -120,6 +126,9 @@ class CommsBroker(
             else -> call(caller, p, local = false)
         }
     }
+
+    /** The answer for a transport that could not establish who is calling. Nothing was run. */
+    fun notPaired(detail: String): String = err("not_paired", detail)
 
     /** DroidCommand's own agent (Chat/Plan/Pilot/Forge) calling a capability. The owner's confirmation happened in the tool executor. */
     fun local(capability: String, args: Map<String, String>, botId: String? = null): String {

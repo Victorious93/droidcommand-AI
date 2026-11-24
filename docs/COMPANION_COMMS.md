@@ -1,8 +1,10 @@
 # COMPANION_COMMS v1 — Victorious Framework communications contract
 
-Added 2026-11-24. **Status: broker IMPLEMENTED, BUILT, TESTED on the JVM (34 tests, 7 security mutations verified caught).
-The Android transport, the VictorSMS/VictorBots connectors and every UI are NOT BUILT. Nothing here has run on a device,
-against a carrier, or with a real model.** Cross-repo status: `docs/COMMUNICATIONS_INTEGRATION_REPORT.md`.
+Added 2026-11-24. **Status: broker IMPLEMENTED, BUILT, TESTED on the JVM (42 tests, 11 security/durability mutations verified caught).
+The Android shell is BUILT but NEVER RUN: a bound Messenger service, Hilt wiring, durable stores and the owner screen compile
+(`:app:compileDebugKotlin`, `ManifestPolicyTest`, ktlint) but nothing has run on a device, an emulator, a carrier or a real model. The VictorSMS and
+VictorBots backend connectors are NOT BUILT, so every capability currently reports "unavailable" in discovery and a call is refused.**
+Cross-repo status: `docs/COMMUNICATIONS_INTEGRATION_REPORT.md`.
 
 ## Why a third contract
 
@@ -26,6 +28,23 @@ certificate list) and hands the request JSON to `CommsBroker.handle(caller, json
 
 droidcommand-AI never holds a copy of an archive, never sends a message itself, and never lets model output decide
 anything. VictorSMS re-checks authority independently of anything DroidCommand says (`AutomationGate`, `Outbox`).
+
+## Android transport (built, never run)
+
+`ai.droidcommand.action.COMPANION_COMMS`, exported bound **Messenger** service `.communications.CompanionCommsService`. A client binds, sends
+`Message.what = 1` with a bundle string `request_json` (the JSON below) and `replyTo`, and receives `what = 2` with `result_json`.
+Identity is **only** `Message.sendingUid`: it must map to exactly one package (shared uids are refused), the package must be in the inbound
+catalogue and not excluded, and its signing certificate must pass `CompanionAssist.verifyCaller` including an **existing owner pairing**. The
+service never starts pairing; an unpaired app gets `not_paired` and nothing runs. Pair VictorBots/VictorSMS first through the existing
+COMPANION_ASSIST password-pairing flow (both are `pending-refused` in the catalogue until then). `ManifestPolicyTest` allowlists exactly this
+component and its single action.
+
+Owner screen: Advanced → *Communications*: emergency stop, requests waiting for approval (Allow once / Deny), apps allowed (per-app permissions, optional
+bot id, lifetime, one use), Remove. The transport never receives the admin object.
+
+State (`files/communications`): `grants.json`, `approvals.json`, `receipts.json`, `emergency-stop`, written atomically. An unreadable grants or approvals
+file is quarantined (`*.corrupt-<time>`) and reads as **no authority**; an unreadable receipts file makes sends refuse (`receipts_unavailable`) because a
+repeat could no longer be detected. Nonces are memory-only, so a request stamped before the last restart is answered `stale_timestamp` and must be re-sent.
 
 ## Wire
 
@@ -138,6 +157,13 @@ handoff, never as a live provider. Do not add unofficial TextNow access.
 
 ## Not built
 
-Android bound-service transport and certificate verification wiring · VictorSMS and VictorBots backend connectors ·
-`PolicyInference` wiring · owner-side grant/approval screens · Communications screen · voice-message and interactive-call
-capabilities beyond the catalogue entry · scheduling engine · semantic (embedding) retrieval. See the integration report.
+- **The VictorSMS and VictorBots backends** (`CommsBackend`). `UnconnectedBackend` is wired, so discovery truthfully says "unavailable". The
+  VictorSMS connector is a real design slice, not a small addition: DroidCommand's `FleetMessengerController` only calls a fixed per-node operation list
+  (parameterless reads, or approval-gated ops), neither of which fits "read this conversation / retrieve context for this reply". It needs (1) new
+  parameterised read ops in the `victorsms` catalogue entry of `core-fleet-messenger`, (2) a new, separately granted `ARCHIVE_READ` op group in VictorSMS's
+  existing `BridgeService`/pairing UI (message contents cross the bridge, so it must not ride on the existing `READ` group), (3) handlers over `comms-core`
+  (`Archive`, `ContextRetriever`), and (4) a `VictorSmsCommsBackend` here. Sends and calls additionally need VictorSMS's real sender behind its own
+  `AutomationGate`/`Outbox`. VictorBots needs a service to answer `get_style_profile`.
+- Live SMS are not yet recorded into the VictorSMS archive, so there is nothing for an automatic reply to answer.
+- Voice-message and interactive-call capabilities beyond the catalogue entry; a scheduler for `schedule_message`; semantic (embedding) retrieval.
+- Anything on a device. The first device step is binding the service from a paired app and calling `discover`.
