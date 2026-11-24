@@ -77,8 +77,12 @@ interface CommsBackend {
 class CompositeBackend(private val parts: Map<Owner, CommsBackend>) : CommsBackend {
     private fun route(cap: String): CommsBackend? = CommsCatalog.get(cap)?.owner?.let { parts[it] }
 
-    override fun availability(capability: String): String? =
-        route(capability)?.availability(capability) ?: "The app that provides this (${CommsCatalog.get(capability)?.owner?.name?.lowercase()}) is not connected."
+    // `availability` returns null when the capability CAN be served, so a missing part must be decided before asking it.
+    override fun availability(capability: String): String? {
+        val part = route(capability)
+            ?: return "The app that provides this (${CommsCatalog.get(capability)?.owner?.name?.lowercase()}) is not connected."
+        return part.availability(capability)
+    }
 
     override fun call(capability: String, args: Map<String, String>, ctx: BackendContext): BackendResult =
         route(capability)?.call(capability, args, ctx) ?: BackendResult.Refused("backend_not_connected", "The app that provides this is not connected.")
@@ -306,8 +310,19 @@ class CommsBroker(
         }
         if (result !is BackendResult.Refused) authorizer.consume(grantIds)
         val receipt = when (result) {
-            is BackendResult.Ok -> mk(caller, p, cap, CommsState.COMPLETED, "ok", "", result.json)
-            is BackendResult.Running -> mk(caller, p, cap, CommsState.RUNNING, "running", "", result.json, result.jobId)
+            // Never cut a result at the limit: a truncated JSON document would be handed over as if it were whole.
+            is BackendResult.Ok ->
+                if (result.json.length > CommsContract.MAX_RESULT_CHARS) {
+                    tooLarge(caller, p, cap)
+                } else {
+                    mk(caller, p, cap, CommsState.COMPLETED, "ok", "", result.json)
+                }
+            is BackendResult.Running ->
+                if (result.json.length > CommsContract.MAX_RESULT_CHARS) {
+                    tooLarge(caller, p, cap)
+                } else {
+                    mk(caller, p, cap, CommsState.RUNNING, "running", "", result.json, result.jobId)
+                }
             is BackendResult.Refused -> mk(caller, p, cap, CommsState.REFUSED, result.code, result.message, "{}")
             is BackendResult.Failed -> mk(caller, p, cap, CommsState.FAILED, "failed", result.message, "{}")
             is BackendResult.Uncertain -> mk(caller, p, cap, CommsState.UNKNOWN, "outcome_unknown", result.message, "{}")
@@ -412,6 +427,9 @@ class CommsBroker(
             },
         )
     }
+
+    private fun tooLarge(caller: String, p: Parsed, cap: CommsCapability) =
+        mk(caller, p, cap, CommsState.FAILED, "result_too_large", "The answer is larger than ${CommsContract.MAX_RESULT_CHARS} characters. Ask for fewer items.", "{}")
 
     private fun mk(caller: String, p: Parsed, cap: CommsCapability, state: CommsState, code: String, detail: String, json: String, job: String? = null) =
         Receipt(caller, p.requestId, p.hash, cap.id, state, code, detail.take(300), json.take(CommsContract.MAX_RESULT_CHARS), job, clock())

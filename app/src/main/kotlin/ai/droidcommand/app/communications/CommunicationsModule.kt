@@ -1,21 +1,26 @@
 package ai.droidcommand.app.communications
 
 import ai.droidcommand.communications.ApprovalQueue
-import ai.droidcommand.communications.BackendContext
-import ai.droidcommand.communications.BackendResult
+import ai.droidcommand.communications.ArchiveChannel
 import ai.droidcommand.communications.CommsAdmin
 import ai.droidcommand.communications.CommsBackend
 import ai.droidcommand.communications.CommsBroker
-import ai.droidcommand.communications.ConversationContext
+import ai.droidcommand.communications.CompositeBackend
 import ai.droidcommand.communications.GrantStore
 import ai.droidcommand.communications.JsonFileApprovalStore
 import ai.droidcommand.communications.JsonFileGrantStore
 import ai.droidcommand.communications.JsonFileReceiptStore
 import ai.droidcommand.communications.KillSwitch
 import ai.droidcommand.communications.ModelResult
+import ai.droidcommand.communications.Owner
 import ai.droidcommand.communications.ReceiptStore
 import ai.droidcommand.communications.ReplyModel
 import ai.droidcommand.communications.ReplyService
+import ai.droidcommand.communications.VictorSmsCommsBackend
+import ai.droidcommand.fleet.messenger.FleetMessengerController
+import ai.droidcommand.fleet.messenger.MutablePairedNodeStore
+import ai.droidcommand.fleet.messenger.PackageIdentityResolver
+import ai.droidcommand.fleet.messenger.PairedNodeGateway
 import ai.droidcommand.llm.factory.ChatResult
 import ai.droidcommand.llm.routing.PolicyInference
 import ai.droidcommand.security.JsonFileAuditLog
@@ -45,21 +50,6 @@ class PolicyReplyModel(private val inference: PolicyInference) : ReplyModel {
     }
 }
 
-/**
- * Until the VictorSMS connector exists, every capability honestly reports that its app is not connected. Nothing is
- * simulated: discovery says "unavailable" and a call is refused.
- */
-class UnconnectedBackend : CommsBackend {
-    private val reason = "VictorSMS is not connected to droidcommand-AI yet."
-
-    override fun availability(capability: String): String = reason
-
-    override fun call(capability: String, args: Map<String, String>, ctx: BackendContext): BackendResult =
-        BackendResult.Refused("backend_not_connected", reason)
-
-    override fun context(conversation: String, query: String, maxChars: Int): ConversationContext? = null
-}
-
 @Module
 @InstallIn(SingletonComponent::class)
 object CommunicationsModule {
@@ -84,9 +74,21 @@ object CommunicationsModule {
     @Singleton
     fun provideReplyModel(policy: PolicyInference): ReplyModel = PolicyReplyModel(policy)
 
+    /**
+     * The only live connector is VictorSMS's read-only archive. VictorBots has none yet, so everything it owns reports
+     * "not connected" in discovery and is refused; nothing is simulated.
+     */
     @Provides
     @Singleton
-    fun provideCommsBackend(): CommsBackend = UnconnectedBackend()
+    fun provideArchiveChannel(store: MutablePairedNodeStore, resolver: PackageIdentityResolver, gateway: PairedNodeGateway): ArchiveChannel {
+        val controller = FleetMessengerController(store, resolver, gateway)
+        return ControllerArchiveChannel { operation, params -> controller.callOwnerGrantedRead("victorsms", operation, params) }
+    }
+
+    @Provides
+    @Singleton
+    fun provideCommsBackend(archive: ArchiveChannel): CommsBackend =
+        CompositeBackend(mapOf(Owner.VICTORSMS to VictorSmsCommsBackend(archive)))
 
     @Provides
     @Singleton
