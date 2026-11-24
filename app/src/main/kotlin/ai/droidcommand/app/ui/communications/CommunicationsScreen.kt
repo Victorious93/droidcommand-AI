@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.communications
 
 import ai.droidcommand.communications.CommsPermission
+import ai.droidcommand.communications.ShareScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -76,6 +77,32 @@ fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
                 }
             }
         }
+        item { Text("Files requested by a conversation", fontWeight = FontWeight.Bold) }
+        if (ui.fileRequests.isEmpty()) item { Text("No file requests.", style = MaterialTheme.typography.bodySmall) }
+        items(ui.fileRequests, key = { it.id }) { r ->
+            Column(Modifier.fillMaxWidth()) {
+                Text("Conversation ${r.subject.conversation} wants to ${r.op.name.lowercase().replace('_', ' ')}: ${r.path}")
+                if (r.triggeredByIncomingMessage) Text("Prompted by a received message. That message cannot grant access; only you can.", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { vm.approveFileRequest(r.id) }) { Text("Share this file (24 h)") }
+                    OutlinedButton(onClick = { vm.denyFileRequest(r.id) }) { Text("Deny") }
+                }
+            }
+        }
+        item { Text("Files you shared", fontWeight = FontWeight.Bold) }
+        if (ui.shares.isEmpty()) item { Text("No files are shared with any conversation.", style = MaterialTheme.typography.bodySmall) }
+        items(ui.shares, key = { it.id }) { g ->
+            Column(Modifier.fillMaxWidth()) {
+                Text("Conversation ${g.subject.conversation}", fontWeight = FontWeight.Bold)
+                Text(g.scopes.joinToString { sc -> shareScopeLabel(sc) }, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    g.ops.joinToString { it.name.lowercase().replace('_', ' ') } + (if (g.readOnly) " · read-only" else "") + (if (g.requireApproval) " · asks each time" else "") +
+                        (g.expiresAtMs?.let { " · expires" } ?: " · no expiry"),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(onClick = { vm.revokeShare(g.id) }) { Text("Stop sharing") }
+            }
+        }
         item { Text("Apps you allowed", fontWeight = FontWeight.Bold) }
         item { Button(onClick = { adding = true }) { Text("Allow an app…") } }
         if (ui.grants.none { !it.revoked }) item { Text("No app is allowed.", style = MaterialTheme.typography.bodySmall) }
@@ -143,4 +170,10 @@ private fun AllowDialog(onDismiss: () -> Unit, onAllow: (String, Set<CommsPermis
         confirmButton = { TextButton(enabled = perms.isNotEmpty(), onClick = { onAllow(app, perms, bot, hours, once) }) { Text("Allow") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+private fun shareScopeLabel(sc: ShareScope): String = when (sc) {
+    is ShareScope.Folder -> "folder ${sc.path}" + if (sc.subfolders) " (with subfolders)" else ""
+    is ShareScope.File -> "file ${sc.path}"
+    is ShareScope.Collection -> "collection ${sc.id} (${sc.files.size} files)"
 }
