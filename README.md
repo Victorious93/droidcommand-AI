@@ -24,74 +24,92 @@ _Steps above are taken from this repo’s build files / existing docs; anything 
 
 <!-- victorious-fleet-readme-refresh:end -->
 
-# DroidCommand AI
+<p align="center">
+  <b>Chat with it. Plan with it. Let it command the rest of your fleet — under a strict security policy.</b>
+</p>
 
-DroidCommand AI (DCA) is the **hub app** of a small fleet of independently
-installed Android apps. You talk to it in chat; it can plan work, call tools
-under a strict security policy, run build/deploy (“Forge”) workflows, and
-**command the member apps** — without folding those apps into this codebase.
+<p align="center">
+  <a href="https://github.com/Victorious93/droidcommand-AI/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Victorious93/droidcommand-AI/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/Victorious93/droidcommand-AI/actions/workflows/android-apk.yml"><img alt="Android APK" src="https://github.com/Victorious93/droidcommand-AI/actions/workflows/android-apk.yml/badge.svg"></a>
+  <a href="https://github.com/Victorious93/droidcommand-AI/actions/workflows/android-emulator.yml"><img alt="Emulator smoke" src="https://github.com/Victorious93/droidcommand-AI/actions/workflows/android-emulator.yml/badge.svg"></a>
+  <img alt="Kotlin 2.4.10" src="https://img.shields.io/badge/Kotlin-2.4.10-7F52FF?logo=kotlin&logoColor=white">
+  <img alt="JDK 21" src="https://img.shields.io/badge/JDK-21-orange">
+  <img alt="minSdk 28" src="https://img.shields.io/badge/minSdk-28-3DDC84?logo=android&logoColor=white">
+  <img alt="License: none yet" src="https://img.shields.io/badge/license-not%20yet%20chosen-lightgrey">
+</p>
 
-Think of it as the controller. The other apps (HackerAI, RootForge OS,
-VictorSuite, EDL-Commander, and so on) stay their own products. DroidCommand
-reaches them over a local connection. It does **not** replace them, and
+<p align="center">
+  <a href="#-what-is-it">What is it</a> ·
+  <a href="#-fleet-controller">Fleet</a> ·
+  <a href="#-features">Features</a> ·
+  <a href="#-screenshots">Screenshots</a> ·
+  <a href="#-quick-start">Quick start</a> ·
+  <a href="#-requirements">Requirements</a> ·
+  <a href="#-signing">Signing</a> ·
+  <a href="#-documentation-map">Docs</a> ·
+  <a href="#-contributing">Contributing</a>
+</p>
+
+---
+
+## 🧭 What is it
+
+DroidCommand AI (DCA) is the **hub app** of a small fleet of independently installed Android apps. You talk to
+it in chat; it can plan work, call tools under a strict security policy, run build/deploy (“Forge”) workflows,
+and **command the member apps** — without folding those apps into this codebase.
+
+Think of it as the controller. The other apps (HackerAI, RootForge OS, VictorSuite, EDL-Commander, and so on)
+stay their own products. DroidCommand reaches them over a local connection. It does **not** replace them, and
 uninstalling DroidCommand must not disable the independent members.
 
-The project is a multi-module **Gradle** build, written in **Kotlin**. The
-on-phone UI (`:app`) is **Jetpack Compose**. Most of the engine is
-**pure Kotlin/JVM** and builds without an Android SDK. The Android modules
-need the Android SDK and Android Gradle Plugin (AGP).
+The project is a multi-module **Gradle** build written in **Kotlin**. The on-phone UI (`:app`) is **Jetpack
+Compose**. Most of the engine is **pure Kotlin/JVM** and builds without an Android SDK; the Android modules need
+the Android SDK and Android Gradle Plugin (AGP).
 
-> **Status in one line:** the JVM engine is implemented and CI-tested; the
-> Android debug APK is built in GitHub Actions and has been launched on an
-> API 28 x86_64 emulator (launch smoke + primary-screen captures); it has
-> **not** been run on a physical device. Live LLM calls, real
-> device/root/Termux/Metasploit/SET backends, and companion-APK bindings stay
-> UNVERIFIED.
+```mermaid
+flowchart LR
+    You([You]) --> App[":app · Compose UI"]
+    App --> Agent["core-agent<br/>Pilot · Forge · planner"]
+    Agent --> LLM["core-llm*<br/>cloud · PC-hosted · on-device"]
+    Agent --> Sec{"core-security<br/>approve · deny · audit"}
+    Sec --> Tools["shell · root · Termux · ADB · build"]
+    Sec --> Fleet["Fleet members<br/>(separate apps)"]
+```
 
-Authoritative status: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
-[`docs/AUDIT_2026-09-05.md`](docs/AUDIT_2026-09-05.md). Session orientation /
-roadmap: [`CLAUDE.md`](CLAUDE.md). Kai capability map / phased plan:
-[`docs/KAI_INTEGRATION.md`](docs/KAI_INTEGRATION.md),
-[`docs/KAI_INTEGRATION_PLAN.md`](docs/KAI_INTEGRATION_PLAN.md)
-(Phase 1 Foundation landed; Phase 2 needs owner approval).
+> **Status in one line:** the JVM engine is implemented and CI-tested. The Android debug APK is built in GitHub
+> Actions and has been launched on an API 28 x86_64 emulator (launch smoke + primary-screen captures). It has
+> **not** been run on a physical device. Live LLM calls, real device/root/Termux/Metasploit/SET backends and
+> companion-APK bindings stay **UNVERIFIED**.
 
-## Fleet controller
+Authoritative status lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and
+[`docs/AUDIT_2026-09-05.md`](docs/AUDIT_2026-09-05.md) (read the addenda at the bottom first). Session
+orientation: [`CLAUDE.md`](CLAUDE.md).
 
-DroidCommand is the **fleet controller**: the hub that lists the member apps
-and, when wiring is real, sends them commands. It also **defines the
-connection class** of each member — the kind of relationship, which decides
-how talking works and which security rules apply. Those classes live in
-`core-security.KnownFleet` / `FleetIntegrationClass`. Full map:
-[`docs/FLEET_CONTROL.md`](docs/FLEET_CONTROL.md). Companion bind protocol:
-[`COMPANION_PROTOCOL.md`](COMPANION_PROTOCOL.md).
+## 🛰️ Fleet controller
 
-Honest status: **none of the members is LIVE control**. The Tools → Fleet
-screen only probes whether a package is installed. It does not run the
-member.
+DroidCommand is the **fleet controller**: the hub that lists the member apps and, when wiring is real, sends
+them commands. It also **defines the connection class** of each member — the kind of relationship, which
+decides how talking works and which security rules apply. Those classes live in
+`core-security.KnownFleet` / `FleetIntegrationClass`. Full map: [`docs/FLEET_CONTROL.md`](docs/FLEET_CONTROL.md).
+Companion bind protocol: [`COMPANION_PROTOCOL.md`](COMPANION_PROTOCOL.md).
 
-### Connection classes (one line each)
+> **Honest status:** none of the members is LIVE control. The Tools → Fleet screen only probes whether a
+> package is installed. It does not run the member.
 
-Defined in code as `BOUND_COMPANION`, `EXTERNAL_NODE`, `TERMUX_IPC`, and
-`HOST_PROCESS_TOOL`:
+### Connection classes
 
-- **BOUND_COMPANION** — a helper APK that binds to DroidCommand over AIDL,
-  must share DroidCommand’s signing certificate, and is meant to stop working
-  without the hub (`DependencyGuard`).
-- **EXTERNAL_NODE** — an independent product DroidCommand can ask questions
-  of (Messenger + shared JSON). It must keep working if DroidCommand is
-  uninstalled, and it must **never** share DroidCommand’s signing key or get
-  `DependencyGuard`.
-- **TERMUX_IPC** — talks to VictorSuite the same way Termux already allows:
-  the public `com.termux.RUN_COMMAND` intent (plus plugin IPC). Not a new
-  bound service.
-- **HOST_PROCESS_TOOL** — a program on this computer (localhost only),
-  reached as a tool through `SecureToolExecutor`. Never AIDL, never
-  `DependencyGuard`.
+| Class | Meaning |
+|---|---|
+| **`BOUND_COMPANION`** | A helper APK that binds to DroidCommand over AIDL, must share DroidCommand’s signing certificate, and is meant to stop working without the hub (`DependencyGuard`). |
+| **`EXTERNAL_NODE`** | An independent product DroidCommand can ask questions of (Messenger + shared JSON). It must keep working if DroidCommand is uninstalled, and must **never** share DroidCommand’s signing key or get `DependencyGuard`. |
+| **`TERMUX_IPC`** | Talks to VictorSuite the way Termux already allows: the public `com.termux.RUN_COMMAND` intent (plus plugin IPC). Not a new bound service. |
+| **`HOST_PROCESS_TOOL`** | A program on this computer (localhost only), reached as a tool through `SecureToolExecutor`. Never AIDL, never `DependencyGuard`. |
 
-AIDL + `DependencyGuard` apply **only** to bound companions (HackerAI,
-Pentest-Swarm-AI, EDL-Commander). RootForge OS, Victorious File Manager,
-Victorious Keyboard, Victorious Mesh, VictorSuite, and KYC-AuditLab must
-not get them.
+AIDL + `DependencyGuard` apply **only** to bound companions (HackerAI, Pentest-Swarm-AI, EDL-Commander).
+RootForge OS, Victorious File Manager, Victorious Keyboard, Victorious Mesh, Victorious Browser, VictorSuite and
+KYC-AuditLab must not get them.
+
+### Members
 
 | Member | Repo | Class | How DCA reaches it | Status |
 |---|---|---|---|---|
@@ -106,33 +124,31 @@ not get them.
 | **Victorious Mesh** | [Victorious93/victorious-mesh](https://github.com/Victorious93/victorious-mesh) | External node | `mesh_status` stub. Planned Messenger `com.victorious.mesh.action.BRIDGE`. Package `com.victorious.mesh` (debug==release). This repo does not bind it. Own release key. No DependencyGuard, no shared signing key | PLANNED |
 | **Victorious Browser** | unpublished as of 2026-10-18 (repo not in ratified facts) | External node | `browser_status` stub. Planned Messenger `com.victorious.browser.action.BRIDGE`. Package `com.victorious.browser`. This repo does not bind it. Own release key (CI-only; [planned/unverified]). No DependencyGuard, no shared signing key | PLANNED |
 
-AIDL + `DependencyGuard` apply **only** to bound companions (HackerAI, Pentest, EDL). RootForge / File Manager / Keyboard / Mesh / Browser / VictorSuite / KYC must not get them. See [`COMPANION_PROTOCOL.md`](COMPANION_PROTOCOL.md). Companion binding glue (`:core-companion`) needs the Android SDK and is **not** in the default JVM build. It is also **not** in the `includeAndroid=true` block in `settings.gradle.kts` (the opt-in Android modules are `:app` and the Android libraries listed there).
+Companion binding glue (`:core-companion`) needs the Android SDK, so it is in the opt-in Android block, not the
+default JVM build.
 
-## Features (what exists in-repo)
+## ✨ Features
 
-Honesty grades: IMPLEMENTED / PARTIAL / STUB / PLANNED — see audit docs.
-Highlights of modules that exist:
+Honesty grades: **IMPLEMENTED / PARTIAL / STUB / PLANNED** — see the audit docs. A feature is not “working”
+here unless the audit says what was actually run.
 
-- **Agent core** — state machine, tool registry/executor, Planner, Forge
-  objective loop, Pilot/Forge session (`core-agent`)
-- **LLM providers** — Anthropic, OpenAI, Google Gemini, Groq, local seam;
-  factory composition; mock-server tests (**no live API calls in CI**)
-- **Security** — fail-closed `SecurityPolicyEnforcer` / `SecureToolExecutor`
-  (allow / require-approval / deny; root & permission gating)
-- **Build & deploy (Forge)** — workspace/pipeline, local process executor
-  (refuses Android project type), remote build delegation, APK lifecycle
-  pipeline (real device executor PLANNED)
-- **Execution targets** — Android device-control tools (`DeviceController`
-  seam; growing `AdbDeviceController` implementations), shell allow-list,
-  root-gated tools (`NullRootExecutor` default), Termux `RUN_COMMAND`
-- **Security tooling clients** — HackerAI, Pentest-Swarm, Metasploit/SET
-  toolkit modules (route through secure executor)
-- **Product features** — templates/skills, RAG, web search, voice STT/TTS
-  logic, billing entitlements, prompt regen, conversations (Room), knowledge
-  graph (Android), **on-device markdown notes vault** (`core-notes`)
-- **CLI** — device-free Pilot/Forge entrypoint (`:cli`)
+| Area | What exists in-repo |
+|---|---|
+| 🧠 **Agent core** | State machine, tool registry/executor, planner, Forge objective loop, Pilot/Forge session (`core-agent`) |
+| 🔌 **LLM providers** | Anthropic, OpenAI, Google Gemini, Groq, on-device (llama.cpp/GGUF), and **PC-hosted** models (Ollama / OpenAI-compatible) behind one factory; an owner **inference policy** decides where text may go ([`docs/INFERENCE_POLICY.md`](docs/INFERENCE_POLICY.md), [`docs/PC_HOSTED_MODELS.md`](docs/PC_HOSTED_MODELS.md)). Mock-server tests — **no live API calls in CI** |
+| 🛡️ **Security** | Fail-closed `SecurityPolicyEnforcer` / `SecureToolExecutor` (allow / require-approval / deny), grants, audit log, secrets vault ([`docs/SECURITY.md`](docs/SECURITY.md)) |
+| 🔨 **Build & deploy (Forge)** | Workspace/pipeline, local process executor (refuses Android project type), remote build delegation, APK lifecycle pipeline (real device executor PLANNED) |
+| 📱 **Execution targets** | Android device-control tools (ADB seam), shell allow-list, root-gated tools (`NullRootExecutor` default), Termux `RUN_COMMAND`, Shizuku |
+| 🧰 **Security-tooling clients** | HackerAI, Pentest-Swarm, Metasploit and SET modules — all routed through the secure executor |
+| 🤖 **Bots & skills** | Helper-bot maker, skills, templates, MCP client, n8n bridge |
+| 📚 **Knowledge** | Conversations (Room), RAG, knowledge graph, on-device Markdown notes vault (`core-notes`), web search |
+| 🎙️ **Voice** | STT/TTS logic and on-device neural voice wrappers (never run on a device) |
+| 💬 **Communications** | `core-communications`: owner-grant based `communications.*` capabilities for VictorBots/VictorSMS — JVM-tested; Android transport built but never run ([`docs/COMPANION_COMMS.md`](docs/COMPANION_COMMS.md)) |
+| ⚙️ **System Settings** | Typed System/Secure/Global editor with journal, readback and rollback ([`docs/SYSTEM_SETTINGS.md`](docs/SYSTEM_SETTINGS.md)) |
+| 💳 **Billing** | Entitlement logic (`core-billing`); Play Billing glue and UI not built |
+| ⌨️ **CLI** | Device-free Pilot/Forge entrypoint (`:cli`) |
 
-## Screenshots
+## 📸 Screenshots
 
 Captured 2026-10-14 on an API 28 x86_64 emulator (AVD `dca_ui`, TCG — this
 host’s KVM hits `kvm_arch_vcpu_create`). Sources: instrumented
@@ -156,66 +172,57 @@ finished Forge run, the Confirm-action dialog, Social-Engineer Toolkit,
 clipboards / automation / coding, voice, GGUF load, and any `Null*` backend
 executing for real.
 
-## Requirements
+Walkthrough screenshots of the bot maker, Advanced and System Settings screens live in
+[`docs/images/manual`](docs/images/manual) and [`docs/images/system-settings`](docs/images/system-settings),
+used by the [user manual](docs/MANUAL.md).
 
-**JVM engine** (always included — see `settings.gradle.kts`)
+## 🚀 Quick start
 
-- JDK **21** (CI: Temurin 21; `.github/workflows/ci.yml`)
-
-**Android APK** (opt-in: `-PincludeAndroid=true`, or `includeAndroid=true` in
-user-level `~/.gradle/gradle.properties`)
-
-- Android SDK packages matching `.github/workflows/android-apk.yml`:
-  `platforms;android-36`, `build-tools;36.0.0`, `platform-tools`
-- NDK `ndk;28.2.13676358` (r28c) and CMake `cmake;3.22.1` (llama.cpp +
-  sherpa-onnx native builds)
-- AGP **8.13.2**, Kotlin **2.4.10**, Compose compiler plugin **2.4.10**
-  (`settings.gradle.kts` `pluginManagement`)
-- `:app` (`app/build.gradle.kts`): `applicationId` `ai.droidcommand.app`,
-  `minSdk` 28, `compileSdk`/`targetSdk` 36, `versionName` `0.1.0-phase0`,
-  Jetpack Compose enabled
-
-## Build and run
-
-Default Gradle includes only the JVM modules. Android modules join when
-`includeAndroid=true` (`settings.gradle.kts`). These are the commands CI
-actually runs — this README does not invent extra ones, and it does not
-claim they were re-run in the session that wrote it.
+Default Gradle includes only the JVM modules. These are the commands CI actually runs; this README does not
+invent extra ones and does not claim they were re-run when it was written.
 
 ```sh
-# JVM modules + tests (default CI: .github/workflows/ci.yml)
+# JVM modules + tests            (.github/workflows/ci.yml)
 ./gradlew test --continue
 ./gradlew ktlintCheck --continue
 
-# Android modules' unit tests + ktlint (needs SDK/AGP)
-# .github/workflows/android-checks.yml
+# Android modules' unit tests    (.github/workflows/android-checks.yml; needs SDK/AGP)
 ./gradlew -PincludeAndroid=true testDebugUnitTest ktlintCheck --continue
 
-# Android debug APK (needs SDK/AGP + NDK/CMake)
-# .github/workflows/android-apk.yml
+# Debug APK                      (.github/workflows/android-apk.yml; needs SDK/AGP + NDK/CMake)
 ./gradlew :app:assembleDebug -PincludeAndroid=true
 # → app/build/outputs/apk/debug/app-debug.apk
 
-# Smaller phone-sized debug APK (x86 / x86_64 / armeabi-v7a native libs dropped)
+# Smaller, phone-sized debug APK (drops x86 / x86_64 / armeabi-v7a native libs)
 ./gradlew :app:assembleDebug -PincludeAndroid=true -PabiFilter=arm64-v8a
 
-# Device-free CLI (JVM; no Android SDK). Examples from cli/.../Main.kt:
+# Device-free CLI (JVM; no Android SDK)
 ./gradlew :cli:run --args="list-fleet"
 ./gradlew :cli:run --args="pilot echo text=hello"
 ./gradlew :cli:run --args="--help"
 ```
 
-The debug APK bundles native llama.cpp and sherpa-onnx libraries and is
-large (hundreds of MB when all ABIs are packed). The 4-ABI artifact is
-CI’s default; `abi=arm64-v8a` / `-PabiFilter=arm64-v8a` is the phone-sized
-one. An x86_64 build has been launched on an API 28 emulator (see
-Screenshots and `.github/workflows/android-emulator.yml`); it has not been
-installed on a physical device.
+The debug APK bundles native llama.cpp and sherpa-onnx libraries and is large (hundreds of MB with all ABIs
+packed). CI’s default is the 4-ABI artifact; `-PabiFilter=arm64-v8a` is the phone-sized one. There is **no**
+`assembleRelease` job in the workflows, and `app/build.gradle.kts` does not configure a release `signingConfig`.
+First time on a real phone? Read [`docs/FIRST_DEVICE_RUN.md`](docs/FIRST_DEVICE_RUN.md) (written from the code,
+not run).
 
-There is **no** `assembleRelease` job in the workflows, and
-`app/build.gradle.kts` does not configure a release `signingConfig`.
+## 🧱 Requirements
 
-## Signing
+**JVM engine** (always included — see `settings.gradle.kts`)
+
+- JDK **21** (CI: Temurin 21)
+
+**Android APK** (opt-in: `-PincludeAndroid=true`, or `includeAndroid=true` in user-level `~/.gradle/gradle.properties`)
+
+- Android SDK: `platforms;android-36`, `build-tools;36.0.0`, `platform-tools`
+- NDK `28.2.13676358` (r28c) and CMake `3.22.1` (llama.cpp + sherpa-onnx native builds)
+- AGP **8.13.2**, Kotlin **2.4.10**, Compose compiler plugin **2.4.10**
+- `:app`: `applicationId` `ai.droidcommand.app`, `minSdk` 28, `compileSdk`/`targetSdk` 36,
+  `versionName` `0.1.11`, Jetpack Compose
+
+## 🔏 Signing
 
 Details: [`docs/SIGNING.md`](docs/SIGNING.md). Debug fingerprint also
 re-checked against the committed keystore with `keytool` (alias
@@ -263,56 +270,67 @@ APKs with the same key”). Independent members (`EXTERNAL_NODE`,
   keystore). Treat it as fleet-operator knowledge, not as something Gradle
   in this tree can prove.
 
-## Project structure
+## 🗂️ Project structure
 
 ```text
 core-agent/          Agent session, tools, planner, Forge/Pilot
-core-llm*/           Provider-independent LLM stack + vendor modules
-core-security/       Policy enforcement, secure tool execution, KnownFleet
+core-llm*/           Provider-independent LLM stack + vendor modules (+ local, factory, routing)
+core-security*/      Policy enforcement, secure tool execution, KnownFleet
 core-build*/         Forge build/deploy pipeline
 core-tools-android/  Device-control tools (ADB seam)
-core-termux/         Termux RUN_COMMAND protocol
-core-companion/      AIDL contracts (on disk; not in the Gradle include list)
-core-*/              RAG, voice, templates, notes, root, rootforge, …
+core-termux/ core-root/ core-shizuku/   Execution targets
+core-fleet-*/        Fleet messenger, tools, worker, update
+core-companion/      AIDL contracts (Android; opt-in)
+core-*/              RAG, voice, notes, skills, bots, communications, system-settings, …
 cli/                 Device-free entrypoint
-app/                 Jetpack Compose UI + Hilt (Android opt-in)
+app/                 Jetpack Compose UI + Hilt (Android; opt-in)
+tools/pc-companion/  PC-side companion (module :pc-companion)
 signing/             Committed DEBUG keystore only
-docs/                Architecture, audit, security, fleet, integration plans
+docs/                Architecture, audit, security, fleet, manual, integration plans
 ```
 
-Default build = JVM modules listed in `settings.gradle.kts`. Android
-modules join with `-PincludeAndroid=true`: `:app`, `:core-conversations`,
-`:core-rag-android`, `:core-templates-android`, `:core-knowledge-android`,
-`:core-llm-local-android`, `:core-voice-android`,
-`:core-voice-neural-android`.
+`settings.gradle.kts` is the source of truth: **54** modules are always included. Android modules join with
+`-PincludeAndroid=true`: `:app`, `:core-conversations`, `:core-companion`, `:core-rag-android`,
+`:core-templates-android`, `:core-knowledge-android`, `:core-llm-local-android`, `:core-voice-android`,
+`:core-voice-neural-android`. Re-check the file before trusting these counts as they age.
 
-## Status conventions
+## 📖 Documentation map
 
-Every intentional non-real implementation is named as such (`Mock*`,
-`Null*`). A component is IMPLEMENTED only when `./gradlew test` passes for
-it. Device, root, live LLM credentials, and on-device execution stay
-PLANNED / UNVERIFIED rather than faked. Read
-`docs/AUDIT_2026-09-05.md` (addenda first) before assuming any capability
-is complete.
+| Start here | For |
+|---|---|
+| [`docs/MANUAL.md`](docs/MANUAL.md) | Using the app (screens, bots, safety) + remote-control reference |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Per-component status |
+| [`docs/AUDIT_2026-09-05.md`](docs/AUDIT_2026-09-05.md) | Requirements matrix and dated addenda (newest at the bottom) |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Storage, networking, secrets, logging, tool execution |
+| [`docs/FLEET_CONTROL.md`](docs/FLEET_CONTROL.md) · [`COMPANION_PROTOCOL.md`](COMPANION_PROTOCOL.md) | Fleet classes and the AIDL contract |
+| [`docs/INFERENCE_POLICY.md`](docs/INFERENCE_POLICY.md) · [`docs/PC_HOSTED_MODELS.md`](docs/PC_HOSTED_MODELS.md) | Where model calls may go |
+| [`docs/ON_DEVICE_GGUF_CHECKLIST.md`](docs/ON_DEVICE_GGUF_CHECKLIST.md) · [`docs/FIRST_DEVICE_RUN.md`](docs/FIRST_DEVICE_RUN.md) | Device checklists |
+| [`docs/SIGNING.md`](docs/SIGNING.md) | Debug vs release signing |
+| [`docs/KAI_INTEGRATION.md`](docs/KAI_INTEGRATION.md) · [`docs/KAI_INTEGRATION_PLAN.md`](docs/KAI_INTEGRATION_PLAN.md) | Kai capability map and phased plan (Phase 2 needs owner approval) |
 
-## Contributing
+## 🏷️ Status conventions
 
-1. Keep status honesty: do not mark device-only work as IMPLEMENTED without
-   evidence.
-2. Prefer pure-Kotlin cores with tests; thin Android shells.
-3. Security-sensitive paths (tool execution, secrets, logging) must stay
-   fail-closed.
-4. Companion protocol changes need coordinated copies in companion repos —
-   see `COMPANION_PROTOCOL.md`.
-5. Bound-companion vs external-node vs Termux vs host-process classes must
-   not be mixed. See `docs/FLEET_CONTROL.md`.
+Every intentional non-real implementation is named as such (`Mock*`, `Null*`). A component is **IMPLEMENTED**
+only when `./gradlew test` passes for it. Device, root, live LLM credentials and on-device execution stay
+**PLANNED / UNVERIFIED** rather than faked. Read the audit addenda before assuming any capability is complete.
 
-## License
+## 🤝 Contributing
 
-**This repository does not currently ship a `LICENSE` file.** Companion
-apps are independently licensed (notably Pentest-Swarm-AI from AGPL-3.0
-upstream; VictorSuite from Termux/GPLv3). DCA integrates across process
-boundaries and does not vendor their source.
+1. Work on a branch and open a PR; never push to `main`. Merge only when every check is green.
+2. Keep status honesty: don’t mark device-only work IMPLEMENTED without evidence.
+3. Prefer pure-Kotlin cores with tests; thin Android shells.
+4. Security-sensitive paths (tool execution, secrets, logging) stay fail-closed.
+5. Companion protocol changes need coordinated copies in companion repos — see `COMPANION_PROTOCOL.md`.
+6. Don’t mix bound-companion, external-node, Termux and host-process classes — see `docs/FLEET_CONTROL.md`.
+7. Never commit secrets (API keys, tokens, keystore passwords, `.env`).
 
-Until a license is chosen and added, treat redistribution/contribution
+## 📜 License
+
+**This repository does not currently ship a `LICENSE` file.** Companion apps are independently licensed
+(notably Pentest-Swarm-AI from AGPL-3.0 upstream; VictorSuite from Termux/GPLv3). DCA integrates across process
+boundaries and does not vendor their source. Until a license is chosen, treat redistribution and contribution
 terms as undefined — add an SPDX license file before a public release.
+
+---
+
+<p align="center"><sub>Victorious Framework · droidcommand-AI</sub></p>
