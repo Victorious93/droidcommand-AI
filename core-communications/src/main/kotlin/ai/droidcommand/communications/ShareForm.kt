@@ -40,6 +40,8 @@ object ShareForms {
         if (form.conversation.isBlank()) return fail("Choose the conversation this is for.")
         if (form.ops.isEmpty()) return fail("Choose at least one thing the bot may do.")
         val picked = form.kind == ShareKind.TREE || form.kind == ShareKind.TREE_WITH_SUBFOLDERS || form.kind == ShareKind.PICKED
+        // The system pickers give this app READ access only, so a picked scope must not promise a write it cannot perform.
+        if (picked && form.ops.any { it in WRITING_OPS }) return fail("Folders and files chosen with the Android picker are read-only. Remove upload, save and modify.")
         val path = if (picked) "" else SharePaths.normalize(form.path.trim()) ?: return fail("Enter a full path starting with /, with no “..”.")
         if (path == "/" && form.kind != ShareKind.FILE) return fail("Sharing the whole storage root is not allowed. Pick a folder.")
         val ttl = form.ttlHours

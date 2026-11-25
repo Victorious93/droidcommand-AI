@@ -5,6 +5,9 @@ import ai.droidcommand.communications.FileOp
 import ai.droidcommand.communications.ShareForm
 import ai.droidcommand.communications.ShareKind
 import ai.droidcommand.communications.ShareScope
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -261,6 +265,29 @@ private fun ShareDialog(onDismiss: () -> Unit, onShare: (ShareForm) -> Unit) {
     var bot by remember { mutableStateOf("") }
     var kind by remember { mutableStateOf(ShareKind.FOLDER) }
     var path by remember { mutableStateOf("") }
+    var pickedLabel by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    fun keepAccess(uri: android.net.Uri) {
+        // Read access that survives a restart. Not every provider allows it; then the share simply fails to read later, closed.
+        runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+    }
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            keepAccess(uri)
+            kind = ShareKind.TREE
+            path = uri.toString()
+            pickedLabel = "Folder chosen with the Android folder picker"
+        }
+    }
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) {
+            uris.forEach(::keepAccess)
+            kind = ShareKind.PICKED
+            path = uris.joinToString("\n") { it.toString() }
+            pickedLabel = "${uris.size} file(s) chosen with the Android file picker"
+        }
+    }
+    val picked = kind == ShareKind.TREE || kind == ShareKind.TREE_WITH_SUBFOLDERS || kind == ShareKind.PICKED
     var ops by remember { mutableStateOf(setOf(FileOp.SEARCH, FileOp.PREVIEW, FileOp.SEND)) }
     var hours by remember { mutableStateOf<Long?>(24) }
     var recipients by remember { mutableStateOf("") }
@@ -274,9 +301,34 @@ private fun ShareDialog(onDismiss: () -> Unit, onShare: (ShareForm) -> Unit) {
                 item { OutlinedTextField(conversation, { conversation = it }, label = { Text("Conversation id") }, singleLine = true) }
                 item { OutlinedTextField(bot, { bot = it }, label = { Text("Only for this bot id (optional)") }, singleLine = true) }
                 item {
-                    KIND_LABELS.forEach { (k, label) -> TextButton(onClick = { kind = k }) { Text((if (kind == k) "● " else "○ ") + label) } }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { folderPicker.launch(null) }) { Text("Pick a folder…") }
+                        OutlinedButton(onClick = { filePicker.launch(arrayOf("*/*")) }) { Text("Pick files…") }
+                    }
+                    Text("The system picker lets this app read only what you choose. No storage permission is requested.", style = MaterialTheme.typography.bodySmall)
                 }
-                item { OutlinedTextField(path, { path = it }, label = { Text("Full path, e.g. /storage/emulated/0/DCIM/Cats") }, singleLine = true) }
+                if (picked) {
+                    item {
+                        pickedLabel?.let { Text(it, fontWeight = FontWeight.Bold) }
+                        if (kind != ShareKind.PICKED) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(kind == ShareKind.TREE_WITH_SUBFOLDERS, { on -> kind = if (on) ShareKind.TREE_WITH_SUBFOLDERS else ShareKind.TREE })
+                                Text("Include subfolders")
+                            }
+                        }
+                        TextButton(onClick = {
+                            kind = ShareKind.FOLDER
+                            path = ""
+                            pickedLabel = null
+                        }) { Text("Type a path instead") }
+                    }
+                } else {
+                    item {
+                        KIND_LABELS.filter { it.first == ShareKind.FOLDER || it.first == ShareKind.FOLDER_WITH_SUBFOLDERS || it.first == ShareKind.FILE }
+                            .forEach { (k, label) -> TextButton(onClick = { kind = k }) { Text((if (kind == k) "● " else "○ ") + label) } }
+                    }
+                    item { OutlinedTextField(path, { path = it }, label = { Text("Full path, e.g. /storage/emulated/0/DCIM/Cats") }, singleLine = true) }
+                }
                 item { Text("The bot may:", fontWeight = FontWeight.Bold) }
                 items(FileOp.entries.toList()) { op ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

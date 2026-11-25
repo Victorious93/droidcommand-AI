@@ -133,4 +133,12 @@ class ContentRefsTest {
         assertTrue(build(base.copy(kind = ShareKind.PICKED, path = "  \n ")).isFailure)
         assertTrue(build(base.copy(kind = ShareKind.PICKED, path = (1..201).joinToString("\n") { "$ext/document/primary%3AX%2F$it.jpg" })).isFailure)
     }
+
+    @Test fun `picked scopes cannot carry writing operations because the picker grants read access only`() {
+        for (k in listOf(ShareKind.TREE, ShareKind.TREE_WITH_SUBFOLDERS, ShareKind.PICKED)) {
+            val path = if (k == ShareKind.PICKED) "$ext/document/primary%3AX%2Fa.jpg" else tree
+            assertTrue(build(base.copy(kind = k, path = path, ops = setOf(FileOp.MODIFY))).isFailure, k.name)
+            assertTrue(build(base.copy(kind = k, path = path, ops = setOf(FileOp.READ, FileOp.SEND))).isSuccess, k.name)
+        }
+    }
 }
