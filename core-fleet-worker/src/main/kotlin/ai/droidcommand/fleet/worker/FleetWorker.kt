@@ -407,7 +407,7 @@ class FleetWorker(
             "assignment" -> onAssignment(p)
             "cancel" -> onCancel(p)
             "revoke" -> handleRevoked()
-            "terminal_open", "terminal_close", "draft_deliver" -> live?.onInbound((m["type"] as JsonPrimitive).content, p)
+            "terminal_open", "terminal_close", "draft_deliver", "mic_offer" -> live?.onInbound((m["type"] as JsonPrimitive).content, p)
             "node_message" -> runCatching { onNodeMessage((p["from_device"] as JsonPrimitive).content, (p["topic"] as JsonPrimitive).content, p["body"] as JsonObject) }
         }
     }

@@ -17,6 +17,19 @@ object LiveCapabilities {
         )
     }
 
+    /** 1.2: microphone-offer capabilities, reported only by builds that take offers (pass the live per-provider status). */
+    fun micOperations(droidcommand: BrokerStatus, keyboard: BrokerStatus?): Map<String, OperationState> {
+        val noKb = BrokerStatus.of("not_installed", "Victorious Keyboard is not installed")
+        fun mic(st: BrokerStatus): OperationState {
+            val ready = st.state == "ready"
+            return OperationState(
+                available = ready, granted = ready, ownerInteractionRequired = ready, reason = if (ready) null else (st.detail ?: st.state),
+                status = st.state, detail = if (ready) null else st.detail,
+            )
+        }
+        return mapOf(LiveProtocol.OP_MIC_DROIDCOMMAND to mic(droidcommand), LiveProtocol.OP_MIC_KEYBOARD to mic(keyboard ?: noKb))
+    }
+
     fun operations(shell: BrokerStatus?, sms: BrokerStatus?, email: BrokerStatus?): Map<String, OperationState> {
         val missing = BrokerStatus.of("not_installed", "VictorSuite is not installed")
         val sh = shell ?: missing

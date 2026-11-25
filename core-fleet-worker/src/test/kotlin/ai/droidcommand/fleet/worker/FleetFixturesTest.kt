@@ -32,6 +32,7 @@ class FleetFixturesTest {
             if (type == "assignment") FleetProtocol.validateAssignment(payload)
             if (type == "terminal_open") LiveProtocol.validateTerminalOpen(payload)
             if (type == "draft_deliver") LiveProtocol.validateDraftDeliver(payload)
+            if (type == "mic_offer") LiveProtocol.validateMicOffer(payload)
         }
     }
 
@@ -47,6 +48,7 @@ class FleetFixturesTest {
                 if (type in FleetProtocol.WORKER_TYPES) FleetProtocol.validateWorkerPayload(type, e["payload"] as JsonObject)
                 if (type == "terminal_open") LiveProtocol.validateTerminalOpen(e["payload"] as JsonObject)
                 if (type == "draft_deliver") LiveProtocol.validateDraftDeliver(e["payload"] as JsonObject)
+                if (type == "mic_offer") LiveProtocol.validateMicOffer(e["payload"] as JsonObject)
             }
             assertEquals(expected, ex.code, f)
         }

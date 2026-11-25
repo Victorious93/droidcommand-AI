@@ -21,6 +21,10 @@ object LiveProtocol {
     const val OP_ROOT = "terminal.root"
     const val OP_DRAFT_SMS = "message.draft.sms"
     const val OP_DRAFT_EMAIL = "message.draft.email"
+    const val OP_MIC_DROIDCOMMAND = "mic.offer.droidcommand" // 1.2
+    const val OP_MIC_KEYBOARD = "mic.offer.keyboard" // 1.2
+    val MIC_PROVIDERS = setOf("droidcommand", "keyboard")
+    val MIC_WORKER_STATES = setOf("received", "accepted", "declined", "failed", "expired")
     val PRIVILEGES = setOf("user", "root")
     val MODES = setOf("interactive", "oneshot")
     val WORKER_TERMINAL_STATES = setOf("awaiting_approval", "open", "denied", "closed", "failed", "revoked")
@@ -126,6 +130,25 @@ object LiveProtocol {
         if ((d["to"] as? JsonArray).isNullOrEmpty()) bad("a draft needs recipients")
         d.s("body", 100_000)
         if (draftContentHash(ch!!, d) != p.s("content_hash", 64)) bad("content_hash does not match the draft")
+    }
+
+    /** 1.2: the `vmic1;…` offer (holds a one-time secret). Twin of `validate_mic_offer` in victorfleet/protocol.py. */
+    fun validateMicOffer(p: JsonObject) {
+        p.s("offer_id", 96)
+        val provider = p.s("provider", 16)
+        if (provider !in MIC_PROVIDERS) bad("mic_offer.provider invalid")
+        val parts = p.s("offer", 1024)!!.split(";")
+        if (parts[0] != "vmic1" || parts.size != 10) bad("mic_offer.offer is not a vmic1 offer")
+        if (parts[7] != provider) bad("mic_offer.provider does not match the offer")
+        p.s("pc_name", 80)
+        p.l("expires_ms")
+        p["read"]?.let { if (boolOf(it) == null) bad("mic_offer.read must be a boolean") }
+    }
+
+    fun validateMicStatus(p: JsonObject) {
+        p.s("offer_id", 96)
+        if (p.s("state", 16) !in MIC_WORKER_STATES) bad("mic_status.state invalid")
+        p.s("detail", 256, true)
     }
 
     fun validateChunk(c: JsonObject) {
