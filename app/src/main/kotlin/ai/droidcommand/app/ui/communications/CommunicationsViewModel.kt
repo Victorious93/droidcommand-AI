@@ -1,11 +1,13 @@
 package ai.droidcommand.app.ui.communications
 
+import ai.droidcommand.app.communications.DraftRuntime
 import ai.droidcommand.communications.AccessRecord
 import ai.droidcommand.communications.ApprovalItem
 import ai.droidcommand.communications.CommsAdmin
 import ai.droidcommand.communications.CommsBroker
 import ai.droidcommand.communications.CommsGrant
 import ai.droidcommand.communications.CommsPermission
+import ai.droidcommand.communications.Draft
 import ai.droidcommand.communications.ExpansionRequest
 import ai.droidcommand.communications.FileShareEngine
 import ai.droidcommand.communications.ShareForm
@@ -13,10 +15,13 @@ import ai.droidcommand.communications.ShareForms
 import ai.droidcommand.communications.ShareGrant
 import ai.droidcommand.communications.ShareScope
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -30,6 +35,9 @@ data class CommunicationsUi(
     val shares: List<ShareGrant> = emptyList(),
     val fileRequests: List<ExpansionRequest> = emptyList(),
     val fileHistory: List<AccessRecord> = emptyList(),
+    val drafts: List<Draft> = emptyList(),
+    val draftsOn: Set<String> = emptySet(),
+    val sharedConversations: List<Pair<String, String>> = emptyList(),
     val stopped: Boolean = false,
     val available: Int = 0,
     val total: Int = 0,
@@ -43,6 +51,7 @@ class CommunicationsViewModel @Inject constructor(
     private val admin: CommsAdmin,
     private val broker: CommsBroker,
     private val shares: FileShareEngine,
+    private val drafts: DraftRuntime,
 ) : ViewModel() {
     private val mutable = MutableStateFlow(read(null))
     val ui: StateFlow<CommunicationsUi> = mutable.asStateFlow()
@@ -76,6 +85,36 @@ class CommunicationsViewModel @Inject constructor(
             .mapCatching { shares.grant(it).getOrThrow() }
             .fold({ "Sharing set up. Everything else stays denied." }, { it.message ?: "Could not share." })
         mutable.value = read(msg)
+    }
+
+    /** VictorSMS is reached over a bound service, so every call that touches it runs off the main thread. */
+    fun loadConversations() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = drafts.sharedConversations()
+            mutable.value = read(if (list.isEmpty()) "VictorSMS shares no conversations with this app, or could not be reached." else null).copy(sharedConversations = list)
+        }
+    }
+
+    fun setDrafts(conversation: String, on: Boolean) {
+        if (on) drafts.inbox.enable(conversation) else drafts.inbox.disable(conversation)
+        mutable.value = read(if (on) "Drafts on. Only messages that arrive from now on get a draft." else "Drafts off.").copy(sharedConversations = mutable.value.sharedConversations)
+    }
+
+    fun checkNow() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val r = drafts.checkNow()
+            val msg = when {
+                r.stopped -> "Emergency stop is on, so nothing was checked."
+                r.unavailable != null -> "Could not check: ${r.unavailable}"
+                else -> "Checked. ${r.submitted} new message(s) sent for drafting; drafts appear as the model finishes, so press Check now again to refresh." + (if (r.problems.isNotEmpty()) " " + r.problems.first() else "")
+            }
+            mutable.value = read(msg).copy(sharedConversations = mutable.value.sharedConversations)
+        }
+    }
+
+    fun dismissDraft(id: String) {
+        drafts.inbox.dismiss(id)
+        mutable.value = read("Draft dismissed.").copy(sharedConversations = mutable.value.sharedConversations)
     }
 
     fun denyFileRequest(id: String) {
@@ -121,6 +160,8 @@ class CommunicationsViewModel @Inject constructor(
             shares = shares.grants().filter { !it.revoked },
             fileRequests = shares.pendingRequests(),
             fileHistory = shares.history().takeLast(30).reversed(),
+            drafts = drafts.inbox.drafts().filter { it.state != "dismissed" }.takeLast(30).reversed(),
+            draftsOn = drafts.inbox.enabledAt().keys,
             stopped = admin.killEngaged,
             available = caps.size - unavailable.size,
             total = caps.size,

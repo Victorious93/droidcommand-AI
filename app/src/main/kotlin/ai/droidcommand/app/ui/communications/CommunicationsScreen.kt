@@ -108,6 +108,34 @@ fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
                 TextButton(onClick = { vm.revokeShare(g.id) }) { Text("Stop sharing") }
             }
         }
+        item { Text("Reply drafts", fontWeight = FontWeight.Bold) }
+        item {
+            Text(
+                "For conversations you switch on, this writes a suggested reply to each NEW message. It never sends anything: you read it and decide. Messages that were already there, and imported history, are never answered. It only checks when you press the button.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = vm::loadConversations) { Text("Choose conversations") }
+                Button(onClick = vm::checkNow, enabled = ui.draftsOn.isNotEmpty()) { Text("Check now") }
+            }
+        }
+        items(ui.sharedConversations, key = { "c" + it.first }) { (id, title) ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Switch(checked = id in ui.draftsOn, onCheckedChange = { vm.setDrafts(id, it) })
+                Text(title.ifBlank { id })
+            }
+        }
+        if (ui.drafts.isEmpty()) item { Text("No drafts yet.", style = MaterialTheme.typography.bodySmall) }
+        items(ui.drafts, key = { it.id }) { d ->
+            Column(Modifier.fillMaxWidth()) {
+                Text((if (d.state == "failed") "No draft · " else "Suggested reply · ") + "conversation ${d.conversation}", fontWeight = FontWeight.Bold)
+                Text(d.text.ifBlank { "(needs more information)" })
+                d.needsInfo?.let { Text("It needs to know: $it", style = MaterialTheme.typography.bodySmall) }
+                TextButton(onClick = { vm.dismissDraft(d.id) }) { Text("Dismiss") }
+            }
+        }
         item { Text("File access history", fontWeight = FontWeight.Bold) }
         if (ui.fileHistory.isEmpty()) item { Text("No file access has been tried yet.", style = MaterialTheme.typography.bodySmall) }
         items(ui.fileHistory.size) { i ->
