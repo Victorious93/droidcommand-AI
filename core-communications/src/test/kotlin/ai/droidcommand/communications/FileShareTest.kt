@@ -239,6 +239,12 @@ class FileShareTest {
         assertEquals(1, inner.calls.size)
     }
 
+    @Test fun `text cut in the middle of a character is still text, real garbage is not`() {
+        val cut = "caf\u00e9 au lait".toByteArray().copyOf(4) // ends after the first byte of the two-byte "\u00e9"
+        assertEquals("text/plain", AttachmentValidator.sniff(cut)!!.mime)
+        assertNull(AttachmentValidator.sniff(byteArrayOf(0x68, 0x69, 0xC3.toByte(), 0x28))) // invalid UTF-8 in the middle
+    }
+
     @Test fun `validator`() {
         val lim = ProviderMedia.limits("mms")!!
         assertNull(ProviderMedia.limits("sms"))

@@ -109,10 +109,10 @@ object CommunicationsModule {
 
     @Provides
     @Singleton
-    fun provideMediaGateway(): MediaGateway = UnconnectedMediaGateway
+    fun provideMediaGateway(@ApplicationContext context: Context): MediaGateway = ContentResolverMediaGateway(context)
 
     /**
-     * Attachment sends pass through [ShareGatedBackend]. Until a File-Manager gateway exists, and until a conversation's contact
+     * Attachment sends pass through [ShareGatedBackend]. The gateway reads only what the owner picked with Android's pickers; File-Manager's bridge is still a stub. Until a conversation's contact
      * can be resolved, every attachment send is refused: the gate fails closed rather than guessing.
      */
     @Provides
