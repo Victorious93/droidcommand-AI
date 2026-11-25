@@ -184,8 +184,34 @@ class FileShareEngine(
     /** Wire the existing KillSwitch here: while on, every file operation is denied. */
     private val emergencyStop: () -> Boolean = { false },
     private val historyLimit: Int = 5_000,
+    /**
+     * Called with the content:// references (folders, files, collection members) that NO active grant covers any more, after a
+     * grant is revoked or replaced. The app uses it to release the Android read access it took for them. Called while the engine's
+     * lock is held: it must not call back into the engine. A failure in it never undoes the revocation.
+     */
+    private val onContentReleased: (Set<String>) -> Unit = {},
 ) {
     private var state = store.load()
+
+    private fun contentRefsOf(sc: ShareScope): List<String> = when (sc) {
+        is ShareScope.Tree -> listOf(sc.uri)
+        is ShareScope.Item -> listOf(sc.uri)
+        is ShareScope.Collection -> sc.files.filter { ContentRefs.isContent(it) }
+        is ShareScope.Folder, is ShareScope.File -> emptyList()
+    }
+
+    /** References held by grants that are not revoked and not expired. An expired grant already answers no, so it holds nothing. */
+    private fun activeContentRefs(): Set<String> {
+        val now = clock()
+        return state.grants.filter { !it.revoked && (it.expiresAtMs == null || now < it.expiresAtMs) }.flatMap { g -> g.scopes.flatMap(::contentRefsOf) }.toSet()
+    }
+
+    private fun releasing(change: () -> Unit) {
+        val before = activeContentRefs()
+        change()
+        val gone = before - activeContentRefs()
+        if (gone.isNotEmpty()) runCatching { onContentReleased(gone) }
+    }
 
     private fun persist() = store.save(state)
 
@@ -209,15 +235,19 @@ class FileShareEngine(
             } ?: return Result.failure(IllegalArgumentException("A scope has an unsafe path or an unsupported reference."))
         }
         val clean = g.copy(scopes = scopes)
-        state = state.copy(grants = state.grants.filterNot { it.id == g.id } + clean)
-        persist()
+        releasing {
+            state = state.copy(grants = state.grants.filterNot { it.id == g.id } + clean)
+            persist()
+        }
         return Result.success(clean)
     }
 
     @Synchronized fun revoke(id: String): Boolean {
         val g = state.grants.firstOrNull { it.id == id && !it.revoked } ?: return false
-        state = state.copy(grants = state.grants.map { if (it.id == id) g.copy(revoked = true) else it })
-        persist()
+        releasing {
+            state = state.copy(grants = state.grants.map { if (it.id == id) g.copy(revoked = true) else it })
+            persist()
+        }
         return true
     }
 
@@ -225,8 +255,10 @@ class FileShareEngine(
     @Synchronized fun revokeConversation(conversation: String): Int {
         val hit = state.grants.filter { it.subject.conversation == conversation && !it.revoked }
         if (hit.isEmpty()) return 0
-        state = state.copy(grants = state.grants.map { if (it.subject.conversation == conversation) it.copy(revoked = true) else it })
-        persist()
+        releasing {
+            state = state.copy(grants = state.grants.map { if (it.subject.conversation == conversation) it.copy(revoked = true) else it })
+            persist()
+        }
         return hit.size
     }
 
