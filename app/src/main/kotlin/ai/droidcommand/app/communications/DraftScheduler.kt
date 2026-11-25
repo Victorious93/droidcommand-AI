@@ -11,18 +11,25 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** The owner's on/off for automatic draft checking. An interface so the screen's logic can be tested without an Android Context. */
+interface DraftAutoCheck {
+    fun isOn(): Boolean
+
+    fun setOn(on: Boolean)
+}
+
 /**
  * Victorious Framework: the owner's switch for automatic checking. OFF by default. WorkManager's shortest period is 15
  * minutes and Android may delay it further (Doze, battery saver, app standby), so this is "every so often", never "instantly".
  * The setting is remembered here and the work is (re)scheduled from it, so it survives restarts.
  */
 @Singleton
-class DraftScheduler @Inject constructor(@ApplicationContext private val context: Context) {
+class DraftScheduler @Inject constructor(@ApplicationContext private val context: Context) : DraftAutoCheck {
     private val prefs = context.getSharedPreferences("reply_drafts", Context.MODE_PRIVATE)
 
-    fun isOn(): Boolean = prefs.getBoolean(KEY_AUTO, false)
+    override fun isOn(): Boolean = prefs.getBoolean(KEY_AUTO, false)
 
-    fun setOn(on: Boolean) {
+    override fun setOn(on: Boolean) {
         prefs.edit { putBoolean(KEY_AUTO, on) }
         val wm = WorkManager.getInstance(context)
         if (!on) {

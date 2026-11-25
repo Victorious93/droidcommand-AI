@@ -1,7 +1,7 @@
 package ai.droidcommand.app.ui.communications
 
+import ai.droidcommand.app.communications.DraftAutoCheck
 import ai.droidcommand.app.communications.DraftRuntime
-import ai.droidcommand.app.communications.DraftScheduler
 import ai.droidcommand.communications.AccessRecord
 import ai.droidcommand.communications.ApprovalItem
 import ai.droidcommand.communications.CommsAdmin
@@ -59,7 +59,7 @@ class CommunicationsViewModel @Inject constructor(
     private val shares: FileShareEngine,
     private val agentTools: CommunicationsAgentTools,
     private val drafts: DraftRuntime,
-    private val scheduler: DraftScheduler,
+    private val scheduler: DraftAutoCheck,
 ) : ViewModel() {
     private val mutable = MutableStateFlow(read(null))
     val ui: StateFlow<CommunicationsUi> = mutable.asStateFlow()

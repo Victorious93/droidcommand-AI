@@ -153,4 +153,8 @@ object CommunicationsModule {
         val orchestrator = ConversationOrchestrator(pool, 1, DraftTurnEngine(ReplyService(model), backend, inbox, stopped), { _, _ -> })
         return DraftRuntime(inbox, ArchivePoller(archive, inbox, orchestrator, stopped), archive, orchestrator)
     }
+
+    @Provides
+    @Singleton
+    fun provideDraftAutoCheck(scheduler: DraftScheduler): DraftAutoCheck = scheduler
 }
