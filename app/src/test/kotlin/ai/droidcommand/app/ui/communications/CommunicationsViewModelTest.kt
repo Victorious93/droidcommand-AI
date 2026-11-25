@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.communications
 
 import ai.droidcommand.agent.ToolRegistry
+import ai.droidcommand.app.communications.DraftAutoCheck
 import ai.droidcommand.app.communications.DraftRuntime
 import ai.droidcommand.communications.ApprovalQueue
 import ai.droidcommand.communications.ArchiveAnswer
@@ -44,6 +45,17 @@ class CommunicationsViewModelTest {
         override fun call(operation: String, params: kotlinx.serialization.json.JsonObject) = ArchiveAnswer.Unavailable("test")
     }
 
+    private class FakeAutoCheck : DraftAutoCheck {
+        // Not named "on": a property called `on` would generate a setOn(Boolean) that clashes with the interface's setOn.
+        var enabled = false
+
+        override fun isOn() = enabled
+
+        override fun setOn(on: Boolean) {
+            enabled = on
+        }
+    }
+
     private class Setup {
         var stored = false
         val registry = ToolRegistry()
@@ -54,13 +66,15 @@ class CommunicationsViewModelTest {
         val tools = CommunicationsAgentTools(registry, broker, { stored }, persist = { stored = it })
         val inbox = DraftInbox()
         val orchestrator = ConversationOrchestrator(Executors.newSingleThreadExecutor(), 1, TurnEngine { TurnResult(null) }, { _, _ -> })
-        val drafts = DraftRuntime(inbox, ArchivePoller(NoArchive, inbox, orchestrator), NoArchive)
+        val drafts = DraftRuntime(inbox, ArchivePoller(NoArchive, inbox, orchestrator), NoArchive, orchestrator)
+        val auto = FakeAutoCheck()
         val vm = CommunicationsViewModel(
             CommsAdmin(grants, approvals, kill),
             broker,
             FileShareEngine(InMemoryShareStore(), emergencyStop = { kill.engaged }),
             tools,
             drafts,
+            auto,
         )
     }
 
@@ -101,6 +115,21 @@ class CommunicationsViewModelTest {
         s.vm.refresh()
         s.vm.setStopped(true)
         s.vm.setStopped(false)
+        assertFalse(s.vm.ui.value.agentTools)
+        assertTrue(s.registry.list().isEmpty())
+    }
+
+    @Test
+    fun `automatic checking starts off and the switch drives the scheduler, nothing else`() {
+        val s = Setup()
+        assertFalse(s.vm.ui.value.autoCheck)
+        s.vm.setAutoCheck(true)
+        assertTrue(s.auto.enabled)
+        assertTrue(s.vm.ui.value.autoCheck)
+        s.vm.setAutoCheck(false)
+        assertFalse(s.auto.enabled)
+        assertFalse(s.vm.ui.value.autoCheck)
+        // It is a separate switch from the agent tools and must never touch them.
         assertFalse(s.vm.ui.value.agentTools)
         assertTrue(s.registry.list().isEmpty())
     }

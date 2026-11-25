@@ -151,6 +151,10 @@ object CommunicationsModule {
         val pool = Executors.newFixedThreadPool(2) { r -> Thread(r, "reply-drafts").apply { isDaemon = true } }
         val stopped = { stores.kill.engaged }
         val orchestrator = ConversationOrchestrator(pool, 1, DraftTurnEngine(ReplyService(model), backend, inbox, stopped), { _, _ -> })
-        return DraftRuntime(inbox, ArchivePoller(archive, inbox, orchestrator, stopped), archive)
+        return DraftRuntime(inbox, ArchivePoller(archive, inbox, orchestrator, stopped), archive, orchestrator)
     }
+
+    @Provides
+    @Singleton
+    fun provideDraftAutoCheck(scheduler: DraftScheduler): DraftAutoCheck = scheduler
 }

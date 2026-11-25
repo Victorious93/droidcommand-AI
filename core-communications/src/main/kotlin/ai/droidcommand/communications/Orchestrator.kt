@@ -140,6 +140,24 @@ class ConversationOrchestrator(
         stopped = true
     }
 
+    /** Messages finished so far, whether the model answered or failed. Lets a caller wait for work it just submitted. */
+    fun processed(): Long = handled.get() + failed.get()
+
+    /** Blocks until [processed] reaches [target] or [timeoutMs] passes. True when the target was reached. Never throws on interrupt. */
+    fun awaitProcessed(target: Long, timeoutMs: Long): Boolean {
+        val end = System.currentTimeMillis() + timeoutMs
+        while (processed() < target) {
+            if (System.currentTimeMillis() >= end) return false
+            try {
+                Thread.sleep(25)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return processed() >= target
+            }
+        }
+        return true
+    }
+
     fun pendingCount() = lanes.values.sumOf { synchronized(it) { it.queue.size } }
 
     fun memoryOf(conversation: String): List<String> = lanes[conversation]?.let { synchronized(it) { it.memory.toList() } } ?: emptyList()
