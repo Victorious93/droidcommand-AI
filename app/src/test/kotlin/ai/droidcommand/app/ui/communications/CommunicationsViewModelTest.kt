@@ -46,12 +46,13 @@ class CommunicationsViewModelTest {
     }
 
     private class FakeAutoCheck : DraftAutoCheck {
-        var on = false
+        // Not named "on": a property called `on` would generate a setOn(Boolean) that clashes with the interface's setOn.
+        var enabled = false
 
-        override fun isOn() = on
+        override fun isOn() = enabled
 
         override fun setOn(on: Boolean) {
-            this.on = on
+            enabled = on
         }
     }
 
@@ -123,10 +124,10 @@ class CommunicationsViewModelTest {
         val s = Setup()
         assertFalse(s.vm.ui.value.autoCheck)
         s.vm.setAutoCheck(true)
-        assertTrue(s.auto.on)
+        assertTrue(s.auto.enabled)
         assertTrue(s.vm.ui.value.autoCheck)
         s.vm.setAutoCheck(false)
-        assertFalse(s.auto.on)
+        assertFalse(s.auto.enabled)
         assertFalse(s.vm.ui.value.autoCheck)
         // It is a separate switch from the agent tools and must never touch them.
         assertFalse(s.vm.ui.value.agentTools)
