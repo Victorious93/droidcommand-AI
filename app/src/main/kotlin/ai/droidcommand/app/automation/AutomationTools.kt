@@ -9,12 +9,13 @@ import ai.droidcommand.llm.factory.ChatResult
 import ai.droidcommand.llm.factory.CloudPromptClient
 import ai.droidcommand.llm.factory.CloudProviderCatalog
 import ai.droidcommand.llm.factory.CloudProviderSpec
-import ai.droidcommand.shell.ProcessBuilderShellExecutor
 import ai.droidcommand.shell.ShellCommand
 import ai.droidcommand.shell.ShellExecutionResult
 import ai.droidcommand.shell.ShellExecutor
-import ai.droidcommand.shell.ShellSecurityPolicy
 import ai.droidcommand.shell.ShellTool
+import ai.droidcommand.termux.TermuxCommand
+import ai.droidcommand.termux.TermuxExecutionResult
+import ai.droidcommand.termux.TermuxExecutor
 
 /**
  * Sends one prompt to a cloud provider for an automation key. It is gated like the shell tool: [SecurityLevel.SENSITIVE]
@@ -52,13 +53,38 @@ class AiPromptTool(
 }
 
 /**
- * The shell executor for automation keys. It reads the allowlist on every run, so an edit takes effect at once, and it
- * builds a [ProcessBuilderShellExecutor] with that list, so the executor's own policy check still applies. With an empty
- * list nothing runs.
+ * The shell executor for automation keys. On a phone every product shell action goes through VictorSuite
+ * (VictorSuite docs/SHELL_ROUTING.md), so this never starts a process in DroidCommand's own sandbox: it checks the
+ * owner's allowlist (read on every run, empty by default, so nothing runs) and then hands the argv to VictorSuite through
+ * [TermuxExecutor] (`com.termux.RUN_COMMAND` with a pending-intent result). A working directory is refused because
+ * DroidCommand cannot vouch for a path inside VictorSuite's sandbox. Output goes back to the caller only and is not logged.
  */
-class AllowlistShellExecutor(private val allowedExecutables: () -> Set<String>) : ShellExecutor {
-    override fun execute(command: ShellCommand, isCancelled: () -> Boolean): ShellExecutionResult =
-        ProcessBuilderShellExecutor(ShellSecurityPolicy(allowedExecutables = allowedExecutables())).execute(command, isCancelled)
+class AllowlistShellExecutor(
+    private val termux: TermuxExecutor,
+    private val allowedExecutables: () -> Set<String>,
+) : ShellExecutor {
+    override fun execute(command: ShellCommand, isCancelled: () -> Boolean): ShellExecutionResult {
+        if (command.executable !in allowedExecutables()) {
+            return ShellExecutionResult.Failure("Executable '${command.executable}' is not in the allowed executable list")
+        }
+        if (command.workingDirectory != null) {
+            return ShellExecutionResult.Failure("A working directory is not supported for automation commands run in VictorSuite")
+        }
+        if (!termux.isAvailable()) {
+            return ShellExecutionResult.Failure(UNAVAILABLE)
+        }
+        val request = TermuxCommand(command.executable, command.args, null, command.environment, command.timeoutMillis)
+        return when (val result = termux.execute(request, isCancelled)) {
+            is TermuxExecutionResult.Success ->
+                ShellExecutionResult.Success(result.exitCode, result.stdout, result.stderr, result.durationMillis)
+            is TermuxExecutionResult.Failure -> ShellExecutionResult.Failure(result.reason, result.cause)
+        }
+    }
+
+    companion object {
+        const val UNAVAILABLE =
+            "VictorSuite is not installed or DroidCommand has not been granted RUN_COMMAND, so the command did not run"
+    }
 }
 
 /**

@@ -6,6 +6,9 @@ import ai.droidcommand.llm.LlmResponse
 import ai.droidcommand.shell.ShellCommand
 import ai.droidcommand.shell.ShellExecutionResult
 import ai.droidcommand.shell.ShellTool
+import ai.droidcommand.termux.TermuxCommand
+import ai.droidcommand.termux.TermuxExecutionResult
+import ai.droidcommand.termux.TermuxExecutor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -32,8 +35,45 @@ class AutomationToolsTest {
 
     @Test
     fun `with an empty allowlist the executor refuses without starting a process`() {
-        val result = AllowlistShellExecutor { emptySet() }.execute(ShellCommand("ls"))
+        val termux = RecordingTermux()
+        val result = AllowlistShellExecutor(termux) { emptySet() }.execute(ShellCommand("ls"))
         assertIs<ShellExecutionResult.Failure>(result)
+        assertTrue(termux.calls.isEmpty())
+    }
+
+    @Test
+    fun `an allowed command is handed to VictorSuite, not run in DroidCommand's process`() {
+        val termux = RecordingTermux()
+        val result = AllowlistShellExecutor(termux) { setOf("ls") }.execute(ShellCommand("ls", listOf("-l")))
+        assertEquals(ShellExecutionResult.Success(0, "out", "", 5), result)
+        assertEquals(listOf(TermuxCommand("ls", listOf("-l"))), termux.calls)
+    }
+
+    @Test
+    fun `without VictorSuite or RUN_COMMAND nothing runs and the reason says so`() {
+        val termux = RecordingTermux(available = false)
+        val result = AllowlistShellExecutor(termux) { setOf("ls") }.execute(ShellCommand("ls"))
+        assertEquals(ShellExecutionResult.Failure(AllowlistShellExecutor.UNAVAILABLE), result)
+        assertTrue(termux.calls.isEmpty())
+    }
+
+    @Test
+    fun `a working directory is refused before anything is sent`() {
+        val termux = RecordingTermux()
+        val result = AllowlistShellExecutor(termux) { setOf("ls") }.execute(ShellCommand("ls", workingDirectory = "/sdcard"))
+        assertIs<ShellExecutionResult.Failure>(result)
+        assertTrue(termux.calls.isEmpty())
+    }
+
+    private class RecordingTermux(private val available: Boolean = true) : TermuxExecutor {
+        val calls = mutableListOf<TermuxCommand>()
+
+        override fun isAvailable() = available
+
+        override fun execute(command: TermuxCommand, isCancelled: () -> Boolean): TermuxExecutionResult {
+            calls += command
+            return TermuxExecutionResult.Success(0, "out", "", 5)
+        }
     }
 
     @Test

@@ -98,4 +98,10 @@ class ShizukuToolTest {
         val timedOut = RecordingShell(result = PrivilegedResult.Success(143, "", "", true))
         assertIs<ToolResult.Failure>(ShizukuTool(timedOut, ShizukuToolKind.EXEC).execute(mapOf("executable" to "id")))
     }
+
+    @Test
+    fun `fixedPurpose never includes the arbitrary-command kind`() {
+        val names = ShizukuTool.fixedPurpose(NullPrivilegedShell()).map { it.spec.name }
+        assertEquals(listOf("shizuku_read_device_state", "shizuku_pm_grant"), names)
+    }
 }
