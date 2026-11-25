@@ -99,6 +99,17 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         prefs.edit { putBoolean(KEY_VSMS_BOTS, enabled) }
     }
 
+    /**
+     * Off by default. When false droidcommand-AI's own agent has no `communications_*` tools at all. When true it is
+     * offered the archive reads, `generate_reply` and `summarize_conversation` (never a send or a call), and what they
+     * return goes to whichever model the inference policy routes to. VictorSMS still applies its own two gates.
+     */
+    fun communicationsAgentToolsEnabled(): Boolean = prefs.getBoolean(KEY_COMMS_AGENT, false)
+
+    fun setCommunicationsAgentToolsEnabled(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_COMMS_AGENT, enabled) }
+    }
+
     /** Numbers bots may text, one per line. Empty means none. */
     fun victorSmsBotRecipients(): Set<String> =
         (prefs.getString(KEY_VSMS_RECIPIENTS, "") ?: "").lines().map { it.trim() }.filter { it.isNotEmpty() }.toSet()
@@ -140,6 +151,7 @@ class AdvancedPrefs @Inject constructor(@ApplicationContext context: Context) {
         private const val KEY_TOOLBOX_AI = "toolbox.ai.enabled"
         private const val KEY_VSMS_BOTS = "victorsms.bots.enabled"
         private const val KEY_VSMS_RECIPIENTS = "victorsms.bots.recipients"
+        private const val KEY_COMMS_AGENT = "communications.agent.tools"
 
         private fun labelKey(mode: AgentMode) = "engine.label.${mode.name}"
         val PUBLIC_LIMIT_CHOICES = listOf(10, 25, 50)

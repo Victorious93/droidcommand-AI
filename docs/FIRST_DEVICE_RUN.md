@@ -65,8 +65,9 @@ VictorSMS: switch the conversation off, untick Archive read, switch External con
 Settings → *Link by password* → **Revoke** next to `com.victorious.bots`. Nothing in this run writes to your SMS database or sends anything.
 
 ## Found while writing this (not fixed here)
-- **The 27 `communications_*` agent tools are not registered.** `CommunicationsTools.all(broker)` has no caller in the app, so droidcommand-AI's own Chat/Plan/Pilot/Forge cannot use
-  them; earlier notes said "not run by a real agent loop", which understated it. Registering them exposes private conversation text to whatever model the owner's inference policy
-  routes to, so it should be a default-off switch the owner chooses, not a silent default.
+- **The 27 `communications_*` agent tools were not registered (fixed 2026-11-24f, default OFF).** `CommunicationsTools.all(broker)` had no caller, so droidcommand-AI's own Chat/Plan/Pilot/Forge could not use
+  them. Now Communications → *Let the assistant use these tools* offers five of them (the three archive reads, `generate_reply`, `summarize_conversation`) while it is on, and none while it is off; the other
+  22 are never offered (see `COMPANION_COMMS.md`). Extra first-device check: with the switch **off**, ask Chat to list your conversations and confirm it has no such tool; turn it on, repeat, and confirm it
+  can only read what VictorSMS shared. Not run on a device.
 - `sms.list_threads` and `sms.read_thread` are authorized in VictorSMS and answer "not implemented" (reading text threads over the bridge is not built).
 - `node_id` in VictorSMS's replies is an echo for matching a reply to its request, not an identity proof; identity is the signing certificate and the sender uid.
