@@ -135,3 +135,54 @@ this container's JVM. Memory, battery, on-device SQLite speed and model latency 
 3. **VictorBots:** a screen for profiles/agents and a service that answers `get_style_profile`; add its tables to backup.
 4. **First device run** (needs a phone or a KVM host): bind the service from a paired app and call `discover`; import a real redacted export.
 5. Then voice messages, scheduling, interactive calls.
+
+## Final status — 2026-11-25 (Victorious Framework)
+
+This section supersedes the "Next slice" list above for the pieces named here. Nothing below is **Verified** in the report's own sense: **nothing has run on a device, an emulator with the communications screens open, a carrier, or a real model.** Everything is JVM-tested, and the `:app` code is compiled by CI only.
+
+### What was merged this session (all in `droidcommand-AI`, squash commits on `main`)
+
+| PR | Merge commit | What it added |
+|---|---|---|
+| #343 | `8cdc740` | `FileShareEngine` (default-deny, per-conversation file grants), attachment validator + `ShareGatedBackend`, `ConversationOrchestrator` |
+| #344 | `329a9ce` | Engine and gate wired into `CommunicationsModule`; owner request / stop-sharing UI |
+| #345 | `1d6020d` | Owner share form (read-only derived from the operations), file access history |
+| #347 | `a50f1a8` | Reply drafts for new live messages (archive poller + scheduler + draft inbox). **Drafts only; nothing is sent** |
+| #351 | `106ffcf` | Optional automatic checking (WorkManager, default off, 15-minute minimum) |
+| #355 | `39ae6a2` | Android folder and file pickers (`content://` scopes, read-only), `ContentResolverMediaGateway` |
+
+`core-communications` on `main`: **137 tests, 0 failures**, ktlint clean (some of the growth since the first report came from PR #349, which was not mine). Mutation checks of the security rules: caught in every set tried (file-share engine, draft pipeline, content-reference containment: 4 of 4 for the last). Bugs found by tests or CI and fixed along the way: recipient rule applied only to the first matching grant; two `content://` parser holes (a malformed `/tree/<id>/document` accepted as opaque; `primary:../x` passing the `..` check); text sniffing rejecting a file cut mid-character; a non-exhaustive `when` and a JVM `setOn` signature clash that only CI's compiler could see.
+
+### Synthetic load (fake model, 2 ms per turn, 10 messages per conversation, one JVM)
+
+| Conversations | Messages | Inference slots | Wall time | Max concurrent model calls |
+|---|---|---|---|---|
+| 20 | 200 | 4 | 112 ms | 4 |
+| 50 | 500 | 6 | 196 ms | 6 |
+| 100 | 1000 | 8 | 292 ms | 8 |
+
+Each run kept strict per-conversation order, handled every message once, and no conversation's model call saw another's memory. This proves scheduler behaviour only. **No physical-device, multi-SIM, battery, memory or real-model load test was run.**
+
+### Status against the brief (what exists now)
+
+| Area | Status |
+|---|---|
+| Per-conversation file permissions (folder, subfolders, file, collection, read-only, expiry, approval, recipient limit, revocation, history, no inheritance, incoming message cannot authorise) | **Implemented, JVM-tested.** Owner form and request screens: Built, never run |
+| Scoped storage / Storage Access Framework | **Implemented** for picked folders and files (read-only). Photo Picker not used (grants are not persistable); MediaStore not used |
+| Attachment validation (content sniffing, executable and double-extension blocking, size and route limits) | **Implemented, JVM-tested.** SMS and TextNow routes refuse attachments (no supported automated path). The 1 MB MMS limit is an assumption, not a verified carrier limit |
+| 20 / 50 / 100 concurrent conversations | **Scheduler implemented and synthetically load-tested** (table above); not wired to a live feed |
+| Reply drafts from new messages, manual and automatic checking | **Implemented, JVM-tested, `:app` compiled by CI.** Never run on a device. No notification when a draft is ready |
+| Emergency stop | Applies to file access, drafting and the existing broker paths |
+
+### Not built, or blocked (do not read any of this as done)
+
+- **Sending anything.** There is no way to place or send a draft, an attachment, a voice message or a call from this work. VictorSMS's write side is not built.
+- **Recipient verification (blocks attachment sending).** VictorSMS deliberately exposes no phone number or account in its conversation list (its own test asserts it), so DroidCommand has nothing authoritative to check who a message goes to. **Owner decision needed:** (a) VictorSMS adds participant numbers to the list reply for conversations you switch on (reverses that privacy rule); (b) keep numbers private and add a send-time destination check inside VictorSMS (my recommendation; a larger write-side change); (c) keep attachment sending off.
+- **Auto-send.** Whether VictorSMS may ever send without a tap reverses its documented "never auto-sent" rule. Still an owner decision (see decision 1 above in this report).
+- **File-Manager gateway.** Its fleet bridge is still a read-only stub that returns no files, so File-Manager is not yet the storage gateway. It must remain an EXTERNAL_NODE (no AIDL, no DependencyGuard, no shared signing key).
+- **Handing a picked file to VictorSMS** needs a per-send `grantUriPermission`; not built. Stopping a share denies at once in the engine, but Android's persisted read grant is not yet released.
+- **Bots cannot list or search shared files** (the 27-capability catalogue is unchanged).
+- **Media understanding** (photos, video, documents, voice messages), captions, speech, calls, interactive calling.
+- **Third-party apps** including TextNow (no official API; automated sending is not claimed), and the VictorBots connector and screens.
+- **Not touched in this work:** VictorBots, VictorSMS, File-Manager, VictorLinux, VictorSuite, Victorious Mesh, RustdeskV, Victorious Browser. No README or user manual in those repos was updated.
+- **No screenshots, no physical-device testing, no release APK.** CI builds a debug APK on every PR; I never downloaded one, so I have no APK checksum. One CI artifact digest was recorded for reference: the artifact zip of run 45468478159 (PR #344's head `d47b8da`) reported `sha256:8b4689abbf1044340106f35de4e5695a683329b7b4b38cb3055c3f58b9717b3b`; that is the zip, it was never downloaded or verified, and it expires 2026-12-01.
