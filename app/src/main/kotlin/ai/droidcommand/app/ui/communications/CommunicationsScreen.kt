@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.communications
 
 import ai.droidcommand.communications.CommsPermission
+import ai.droidcommand.communications.ContentRefs
 import ai.droidcommand.communications.FileOp
 import ai.droidcommand.communications.ShareForm
 import ai.droidcommand.communications.ShareKind
@@ -251,7 +252,13 @@ private fun shareScopeLabel(sc: ShareScope): String = when (sc) {
     is ShareScope.Folder -> "folder ${sc.path}" + if (sc.subfolders) " (with subfolders)" else ""
     is ShareScope.File -> "file ${sc.path}"
     is ShareScope.Collection -> "collection ${sc.id} (${sc.files.size} files)"
+    is ShareScope.Tree -> "picked folder ${pickedName(sc.uri)}" + if (sc.subfolders) " (with subfolders)" else ""
+    is ShareScope.Item -> "picked file ${pickedName(sc.uri)}"
 }
+
+/** The last part of a picked reference's document id, for display only ("primary:DCIM/Cats" shows as "Cats"). */
+private fun pickedName(uri: String): String =
+    ContentRefs.parse(uri)?.let { (it.docId ?: it.treeId)?.substringAfterLast('/')?.substringAfterLast(':') }?.takeIf { it.isNotBlank() } ?: "(chosen with the picker)"
 
 private val KIND_LABELS = listOf(
     ShareKind.FOLDER to "This folder only",
