@@ -79,5 +79,12 @@ class ShizukuTool(
     companion object {
         fun all(shell: PrivilegedShell): List<ShizukuTool> =
             ShizukuToolKind.entries.map { ShizukuTool(shell, it) }
+
+        /**
+         * Every kind except [ShizukuToolKind.EXEC]. The Android app registers only these: an arbitrary privileged command
+         * on a phone must go through VictorSuite, not DroidCommand's own Shizuku user service.
+         */
+        fun fixedPurpose(shell: PrivilegedShell): List<ShizukuTool> =
+            ShizukuToolKind.entries.filter { it != ShizukuToolKind.EXEC }.map { ShizukuTool(shell, it) }
     }
 }
