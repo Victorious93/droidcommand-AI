@@ -1,7 +1,11 @@
 package ai.droidcommand.app.ui.communications
 
 import ai.droidcommand.agent.ToolRegistry
+import ai.droidcommand.app.communications.DraftRuntime
 import ai.droidcommand.communications.ApprovalQueue
+import ai.droidcommand.communications.ArchiveAnswer
+import ai.droidcommand.communications.ArchiveChannel
+import ai.droidcommand.communications.ArchivePoller
 import ai.droidcommand.communications.BackendContext
 import ai.droidcommand.communications.BackendResult
 import ai.droidcommand.communications.CommsAdmin
@@ -9,12 +13,17 @@ import ai.droidcommand.communications.CommsBackend
 import ai.droidcommand.communications.CommsBroker
 import ai.droidcommand.communications.CommunicationsAgentTools
 import ai.droidcommand.communications.ConversationContext
+import ai.droidcommand.communications.ConversationOrchestrator
+import ai.droidcommand.communications.DraftInbox
 import ai.droidcommand.communications.FileShareEngine
 import ai.droidcommand.communications.InMemoryGrantStore
 import ai.droidcommand.communications.InMemoryReceiptStore
 import ai.droidcommand.communications.InMemoryShareStore
 import ai.droidcommand.communications.KillSwitch
+import ai.droidcommand.communications.TurnEngine
+import ai.droidcommand.communications.TurnResult
 import ai.droidcommand.security.InMemoryAuditLog
+import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -30,6 +39,11 @@ class CommunicationsViewModelTest {
         override fun context(conversation: String, query: String, maxChars: Int): ConversationContext? = null
     }
 
+    /** A VictorSMS that is never reachable: the draft pipeline is not what these tests are about. */
+    private object NoArchive : ArchiveChannel {
+        override fun call(operation: String, params: kotlinx.serialization.json.JsonObject) = ArchiveAnswer.Unavailable("test")
+    }
+
     private class Setup {
         var stored = false
         val registry = ToolRegistry()
@@ -38,11 +52,15 @@ class CommunicationsViewModelTest {
         val approvals = ApprovalQueue(clock = System::currentTimeMillis)
         val broker = CommsBroker(Backend(), null, grants, approvals, InMemoryReceiptStore(), kill, InMemoryAuditLog())
         val tools = CommunicationsAgentTools(registry, broker, { stored }, persist = { stored = it })
+        val inbox = DraftInbox()
+        val orchestrator = ConversationOrchestrator(Executors.newSingleThreadExecutor(), 1, TurnEngine { TurnResult(null) }, { _, _ -> })
+        val drafts = DraftRuntime(inbox, ArchivePoller(NoArchive, inbox, orchestrator), NoArchive)
         val vm = CommunicationsViewModel(
             CommsAdmin(grants, approvals, kill),
             broker,
             FileShareEngine(InMemoryShareStore(), emergencyStop = { kill.engaged }),
             tools,
+            drafts,
         )
     }
 

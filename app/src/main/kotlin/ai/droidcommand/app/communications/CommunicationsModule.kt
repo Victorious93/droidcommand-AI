@@ -4,14 +4,19 @@ import ai.droidcommand.agent.ToolRegistry
 import ai.droidcommand.app.prefs.AdvancedPrefs
 import ai.droidcommand.communications.ApprovalQueue
 import ai.droidcommand.communications.ArchiveChannel
+import ai.droidcommand.communications.ArchivePoller
 import ai.droidcommand.communications.CommsAdmin
 import ai.droidcommand.communications.CommsBackend
 import ai.droidcommand.communications.CommsBroker
 import ai.droidcommand.communications.CommunicationsAgentTools
 import ai.droidcommand.communications.CompositeBackend
+import ai.droidcommand.communications.ConversationOrchestrator
+import ai.droidcommand.communications.DraftInbox
+import ai.droidcommand.communications.DraftTurnEngine
 import ai.droidcommand.communications.FileShareEngine
 import ai.droidcommand.communications.GrantStore
 import ai.droidcommand.communications.JsonFileApprovalStore
+import ai.droidcommand.communications.JsonFileDraftStore
 import ai.droidcommand.communications.JsonFileGrantStore
 import ai.droidcommand.communications.JsonFileReceiptStore
 import ai.droidcommand.communications.JsonFileShareStore
@@ -38,6 +43,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import java.nio.file.Files
+import java.util.concurrent.Executors
 import javax.inject.Singleton
 
 /**
@@ -131,4 +137,20 @@ object CommunicationsModule {
     @Provides
     @Singleton
     fun provideCommsAdmin(stores: CommsStores): CommsAdmin = CommsAdmin(stores.grants, stores.approvals, stores.kill)
+
+    /**
+     * Reply drafts for conversations you switch on. Two worker threads share one model; the orchestrator keeps each
+     * conversation in order and bounded. Nothing it does sends: its delivery hook is empty by construction.
+     */
+    @Provides
+    @Singleton
+    fun provideDraftRuntime(@ApplicationContext context: Context, stores: CommsStores, backend: CommsBackend, model: ReplyModel, archive: ArchiveChannel): DraftRuntime {
+        val dir = context.filesDir.toPath().resolve("communications")
+        Files.createDirectories(dir)
+        val inbox = DraftInbox(JsonFileDraftStore(dir.resolve("drafts.json").toFile()))
+        val pool = Executors.newFixedThreadPool(2) { r -> Thread(r, "reply-drafts").apply { isDaemon = true } }
+        val stopped = { stores.kill.engaged }
+        val orchestrator = ConversationOrchestrator(pool, 1, DraftTurnEngine(ReplyService(model), backend, inbox, stopped), { _, _ -> })
+        return DraftRuntime(inbox, ArchivePoller(archive, inbox, orchestrator, stopped), archive)
+    }
 }
