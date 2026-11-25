@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.communications
 
 import ai.droidcommand.app.communications.DraftRuntime
+import ai.droidcommand.app.communications.DraftScheduler
 import ai.droidcommand.communications.AccessRecord
 import ai.droidcommand.communications.ApprovalItem
 import ai.droidcommand.communications.CommsAdmin
@@ -38,6 +39,7 @@ data class CommunicationsUi(
     val fileHistory: List<AccessRecord> = emptyList(),
     val drafts: List<Draft> = emptyList(),
     val draftsOn: Set<String> = emptySet(),
+    val autoCheck: Boolean = false,
     val sharedConversations: List<Pair<String, String>> = emptyList(),
     val stopped: Boolean = false,
     /** The owner's default-off switch for droidcommand-AI's own agent. */
@@ -57,6 +59,7 @@ class CommunicationsViewModel @Inject constructor(
     private val shares: FileShareEngine,
     private val agentTools: CommunicationsAgentTools,
     private val drafts: DraftRuntime,
+    private val scheduler: DraftScheduler,
 ) : ViewModel() {
     private val mutable = MutableStateFlow(read(null))
     val ui: StateFlow<CommunicationsUi> = mutable.asStateFlow()
@@ -115,6 +118,11 @@ class CommunicationsViewModel @Inject constructor(
             }
             mutable.value = read(msg).copy(sharedConversations = mutable.value.sharedConversations)
         }
+    }
+
+    fun setAutoCheck(on: Boolean) {
+        scheduler.setOn(on)
+        mutable.value = read(if (on) "Automatic checking is on: about every 15 minutes or more, when Android allows." else "Automatic checking is off.").copy(sharedConversations = mutable.value.sharedConversations)
     }
 
     fun dismissDraft(id: String) {
@@ -182,6 +190,7 @@ class CommunicationsViewModel @Inject constructor(
             fileHistory = shares.history().takeLast(30).reversed(),
             drafts = drafts.inbox.drafts().filter { it.state != "dismissed" }.takeLast(30).reversed(),
             draftsOn = drafts.inbox.enabledAt().keys,
+            autoCheck = scheduler.isOn(),
             stopped = admin.killEngaged,
             agentTools = agentTools.isEnabled,
             agentToolCount = agentTools.registeredCount(),

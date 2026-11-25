@@ -187,4 +187,29 @@ class OrchestratorTest {
         assertTrue(handledIds.isNotEmpty())
         pool2.shutdown()
     }
+
+    @Test fun `awaitProcessed returns once the submitted work is done, and gives up on time when it never is`() {
+        val gate = CountDownLatch(1)
+        val pool = Executors.newFixedThreadPool(2)
+        val o = ConversationOrchestrator(pool, 1, {
+            gate.await()
+            TurnResult(null)
+        }, { _, _ -> })
+        val before = o.processed()
+        (0 until 3).forEach { o.submit(InboundMessage("c$it", "m", "x", 0)) }
+        assertTrue(!o.awaitProcessed(before + 3, 150), "must time out while the model is blocked")
+        gate.countDown()
+        assertTrue(o.awaitProcessed(before + 3, 5_000), "must return once all three are processed")
+        assertEquals(before + 3, o.processed())
+        pool.shutdown()
+    }
+
+    @Test fun `a failing turn still counts as processed so a waiting caller is not stuck`() {
+        val pool = Executors.newFixedThreadPool(1)
+        val o = ConversationOrchestrator(pool, 1, { error("boom") }, { _, _ -> })
+        o.submit(InboundMessage("c", "m", "x", 0))
+        assertTrue(o.awaitProcessed(1, 5_000))
+        assertEquals(1L, o.failed.get())
+        pool.shutdown()
+    }
 }

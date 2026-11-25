@@ -125,7 +125,7 @@ fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
         item { Text("Reply drafts", fontWeight = FontWeight.Bold) }
         item {
             Text(
-                "For conversations you switch on, this writes a suggested reply to each NEW message. It never sends anything: you read it and decide. Messages that were already there, and imported history, are never answered. It only checks when you press the button.",
+                "For conversations you switch on, this writes a suggested reply to each NEW message. It never sends anything: you read it and decide. Messages that were already there, and imported history, are never answered. It checks when you press the button, or automatically if you turn that on below.",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -133,6 +133,15 @@ fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = vm::loadConversations) { Text("Choose conversations") }
                 Button(onClick = vm::checkNow, enabled = ui.draftsOn.isNotEmpty()) { Text("Check now") }
+            }
+        }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Switch(checked = ui.autoCheck, onCheckedChange = vm::setAutoCheck)
+                Column {
+                    Text("Check automatically", fontWeight = FontWeight.Bold)
+                    Text("About every 15 minutes or more; Android may delay it to save battery. Only when the battery is not low. Still drafts only.", style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
         items(ui.sharedConversations, key = { "c" + it.first }) { (id, title) ->
