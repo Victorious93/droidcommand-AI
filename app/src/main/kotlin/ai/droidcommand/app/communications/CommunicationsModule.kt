@@ -11,7 +11,6 @@ import ai.droidcommand.communications.CommsBroker
 import ai.droidcommand.communications.CommunicationsAgentTools
 import ai.droidcommand.communications.CompositeBackend
 import ai.droidcommand.communications.ConversationOrchestrator
-import ai.droidcommand.communications.DraftHandOff
 import ai.droidcommand.communications.DraftInbox
 import ai.droidcommand.communications.DraftTurnEngine
 import ai.droidcommand.communications.FileShareEngine
@@ -95,22 +94,16 @@ object CommunicationsModule {
      */
     @Provides
     @Singleton
-    fun provideArchiveChannel(store: MutablePairedNodeStore, resolver: PackageIdentityResolver, gateway: PairedNodeGateway): ArchiveChannel {
-        val controller = FleetMessengerController(store, resolver, gateway)
-        return ControllerArchiveChannel { operation, params -> controller.callOwnerGrantedRead("victorsms", operation, params) }
-    }
+    fun provideCommsFleetController(
+        store: MutablePairedNodeStore,
+        resolver: PackageIdentityResolver,
+        gateway: PairedNodeGateway,
+    ): FleetMessengerController = FleetMessengerController(store, resolver, gateway)
 
-    /**
-     * The hand-off to VictorSMS: conversation-addressed drafts the owner reviews and sends there. A separate controller from the
-     * read-only archive channel, because this path is approval-gated; VictorSMS still needs its own owner-side Drafts grant.
-     */
     @Provides
     @Singleton
-    @Named("handoff")
-    fun provideHandOffChannel(store: MutablePairedNodeStore, resolver: PackageIdentityResolver, gateway: PairedNodeGateway): ArchiveChannel {
-        val controller = FleetMessengerController(store, resolver, gateway)
-        return ControllerArchiveChannel { operation, params -> controller.callApprovalGated("victorsms", operation, params) }
-    }
+    fun provideArchiveChannel(controller: FleetMessengerController): ArchiveChannel =
+        ControllerArchiveChannel { operation, params -> controller.callOwnerGrantedRead("victorsms", operation, params) }
 
     /** Owner-controlled, per-conversation file sharing. Tied to the same emergency stop as everything else in this module. */
     @Provides
@@ -134,6 +127,16 @@ object CommunicationsModule {
     @Singleton
     fun provideCommsBackend(archive: ArchiveChannel, @Named("handoff") handoff: ArchiveChannel, shares: FileShareEngine, gateway: MediaGateway): CommsBackend =
         ShareGatedBackend(CompositeBackend(mapOf(Owner.VICTORSMS to VictorSmsCommsBackend(archive, handoff = handoff))), shares, gateway)
+
+    /**
+     * What the bots' text and respond capabilities go through: VictorSMS's conversation-addressed draft hand-off, so the owner
+     * reviews and presses Send there. Approval-gated at the fleet controller, never the ungated read path.
+     */
+    @Provides
+    @Singleton
+    @Named("handoff")
+    fun provideHandOffChannel(controller: FleetMessengerController): ArchiveChannel =
+        ControllerArchiveChannel { operation, params -> controller.callApprovalGated("victorsms", operation, params) }
 
     @Provides
     @Singleton
@@ -159,14 +162,23 @@ object CommunicationsModule {
      */
     @Provides
     @Singleton
-    fun provideDraftRuntime(@ApplicationContext context: Context, stores: CommsStores, backend: CommsBackend, model: ReplyModel, archive: ArchiveChannel, @Named("handoff") handoff: ArchiveChannel): DraftRuntime {
+    fun provideDraftRuntime(
+        @ApplicationContext context: Context,
+        stores: CommsStores,
+        backend: CommsBackend,
+        model: ReplyModel,
+        archive: ArchiveChannel,
+        controller: FleetMessengerController,
+    ): DraftRuntime {
         val dir = context.filesDir.toPath().resolve("communications")
         Files.createDirectories(dir)
         val inbox = DraftInbox(JsonFileDraftStore(dir.resolve("drafts.json").toFile()))
         val pool = Executors.newFixedThreadPool(2) { r -> Thread(r, "reply-drafts").apply { isDaemon = true } }
         val stopped = { stores.kill.engaged }
         val orchestrator = ConversationOrchestrator(pool, 1, DraftTurnEngine(ReplyService(model), backend, inbox, stopped), { _, _ -> })
-        return DraftRuntime(inbox, ArchivePoller(archive, inbox, orchestrator, stopped), archive, orchestrator, DraftHandOff(inbox, handoff, stopped))
+        return DraftRuntime(inbox, ArchivePoller(archive, inbox, orchestrator, stopped), archive, orchestrator, stopped) { operation, params ->
+            controller.callApprovalGated("victorsms", operation, params)
+        }
     }
 
     @Provides

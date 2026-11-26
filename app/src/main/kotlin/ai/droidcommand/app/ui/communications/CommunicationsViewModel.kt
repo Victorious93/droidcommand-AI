@@ -10,7 +10,6 @@ import ai.droidcommand.communications.CommsGrant
 import ai.droidcommand.communications.CommsPermission
 import ai.droidcommand.communications.CommunicationsAgentTools
 import ai.droidcommand.communications.Draft
-import ai.droidcommand.communications.DraftHandOff
 import ai.droidcommand.communications.ExpansionRequest
 import ai.droidcommand.communications.FileShareEngine
 import ai.droidcommand.communications.ShareForm
@@ -20,11 +19,14 @@ import ai.droidcommand.communications.ShareScope
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -64,6 +66,8 @@ class CommunicationsViewModel @Inject constructor(
 ) : ViewModel() {
     private val mutable = MutableStateFlow(read(null))
     val ui: StateFlow<CommunicationsUi> = mutable.asStateFlow()
+    private val mutableReviewing = MutableStateFlow(false)
+    val reviewing: StateFlow<Boolean> = mutableReviewing.asStateFlow()
 
     fun refresh() {
         mutable.value = read(null)
@@ -126,34 +130,25 @@ class CommunicationsViewModel @Inject constructor(
         mutable.value = read(if (on) "Automatic checking is on: about every 15 minutes or more, when Android allows." else "Automatic checking is off.").copy(sharedConversations = mutable.value.sharedConversations)
     }
 
-    /** Hands a draft to VictorSMS for you to review and send there. Runs off the main thread: VictorSMS is a bound service. */
-    fun sendViaVictorSms(id: String, text: String? = null) {
-        val h = drafts.handOff
-        if (h == null) {
-            mutable.value = read("The hand-off to VictorSMS is not available in this build.").copy(sharedConversations = mutable.value.sharedConversations)
-            return
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            val msg = when (val o = h.handOff(id, text)) {
-                is DraftHandOff.Outcome.Done -> o.message
-                is DraftHandOff.Outcome.Refused -> o.message
-            }
-            mutable.value = read(msg).copy(sharedConversations = mutable.value.sharedConversations)
-        }
-    }
-
-    /** Asks VictorSMS what became of the drafts handed over. */
-    fun refreshHandOffs() {
-        val h = drafts.handOff ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            val n = h.refresh()
-            mutable.value = read(if (n == 0) "No change in VictorSMS." else "$n draft(s) updated from VictorSMS.").copy(sharedConversations = mutable.value.sharedConversations)
-        }
-    }
-
     fun dismissDraft(id: String) {
         drafts.inbox.dismiss(id)
         mutable.value = read("Draft dismissed.").copy(sharedConversations = mutable.value.sharedConversations)
+    }
+
+    fun reviewDraft(id: String, statusOnly: Boolean = false) {
+        if (!mutableReviewing.compareAndSet(false, true)) return
+        viewModelScope.launch {
+            try {
+                val message = withContext(Dispatchers.IO) { drafts.reviewDraft(id, statusOnly) }
+                mutable.update { it.copy(message = message) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                mutable.update { it.copy(message = "Could not reach VictorSMS. Check Drafts to review in VictorSMS.") }
+            } finally {
+                mutableReviewing.value = false
+            }
+        }
     }
 
     fun denyFileRequest(id: String) {
