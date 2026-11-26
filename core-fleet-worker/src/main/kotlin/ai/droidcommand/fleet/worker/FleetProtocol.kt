@@ -48,7 +48,7 @@ object FleetProtocol {
     val WORKER_TYPES = setOf(
         "enroll_request", "hello", "heartbeat", "ack", "progress", "complete", "fail", "cancel_ack",
         "approval_needed", "artifact_offer", "node_message", "terminal_status", "draft_status",
-        "mic_status", // 1.2
+        "mic_status",
     )
     val COORD_TYPES = setOf("enroll_response", "welcome", "assignment", "cancel", "revoke", "artifact_grant", "node_message", "reject", "terminal_open", "terminal_close", "draft_deliver", "mic_offer")
     val ERROR_CODES = setOf(

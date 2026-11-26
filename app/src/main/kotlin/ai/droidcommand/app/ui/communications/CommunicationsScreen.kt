@@ -1,10 +1,14 @@
 package ai.droidcommand.app.ui.communications
 
+import ai.droidcommand.app.communications.PickedAccessLedger
 import ai.droidcommand.communications.CommsPermission
+import ai.droidcommand.communications.ContentRefs
 import ai.droidcommand.communications.FileOp
 import ai.droidcommand.communications.ShareForm
 import ai.droidcommand.communications.ShareKind
 import ai.droidcommand.communications.ShareScope
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -43,6 +48,7 @@ private val APPS = listOf("com.victorious.bots" to "VictorBots", "com.victorious
 @Composable
 fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
     val ui by vm.ui.collectAsState()
+    val reviewing by vm.reviewing.collectAsState()
     var adding by remember { mutableStateOf(false) }
     var sharing by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { vm.refresh() }
@@ -125,7 +131,7 @@ fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
         item { Text("Reply drafts", fontWeight = FontWeight.Bold) }
         item {
             Text(
-                "For conversations you switch on, this writes a suggested reply to each NEW message. It never sends anything: you read it and decide. Messages that were already there, and imported history, are never answered. It only checks when you press the button.",
+                "For conversations you switch on, this writes a suggested reply to each NEW message. It never sends anything: you read it and decide. Messages that were already there, and imported history, are never answered. It checks when you press the button, or automatically if you turn that on below.",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -133,6 +139,15 @@ fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = vm::loadConversations) { Text("Choose conversations") }
                 Button(onClick = vm::checkNow, enabled = ui.draftsOn.isNotEmpty()) { Text("Check now") }
+            }
+        }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Switch(checked = ui.autoCheck, onCheckedChange = vm::setAutoCheck)
+                Column {
+                    Text("Check automatically", fontWeight = FontWeight.Bold)
+                    Text("About every 15 minutes or more; Android may delay it to save battery. Only when the battery is not low. Still drafts only.", style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
         items(ui.sharedConversations, key = { "c" + it.first }) { (id, title) ->
@@ -144,10 +159,23 @@ fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
         if (ui.drafts.isEmpty()) item { Text("No drafts yet.", style = MaterialTheme.typography.bodySmall) }
         items(ui.drafts, key = { it.id }) { d ->
             Column(Modifier.fillMaxWidth()) {
-                Text((if (d.state == "failed") "No draft · " else "Suggested reply · ") + "conversation ${d.conversation}", fontWeight = FontWeight.Bold)
+                val conversation = ui.sharedConversations.firstOrNull { it.first == d.conversation }?.second
+                val title = if (d.state == "failed") "No draft" else "Suggested reply"
+                val subtitle = conversation?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
+                Text(title + subtitle, fontWeight = FontWeight.Bold)
                 Text(d.text.ifBlank { "(needs more information)" })
                 d.needsInfo?.let { Text("It needs to know: $it", style = MaterialTheme.typography.bodySmall) }
-                TextButton(onClick = { vm.dismissDraft(d.id) }) { Text("Dismiss") }
+                if (d.state == "pending" && d.text.isNotBlank()) {
+                    OutlinedButton(enabled = !ui.stopped && !reviewing, onClick = { vm.reviewDraft(d.id) }) {
+                        Text("Review in VictorSMS")
+                    }
+                    Row {
+                        TextButton(enabled = !reviewing, onClick = { vm.reviewDraft(d.id, statusOnly = true) }) { Text("Check review status") }
+                        TextButton(onClick = { vm.dismissDraft(d.id) }) { Text("Dismiss") }
+                    }
+                } else {
+                    TextButton(onClick = { vm.dismissDraft(d.id) }) { Text("Dismiss") }
+                }
             }
         }
         item { Text("File access history", fontWeight = FontWeight.Bold) }
@@ -238,7 +266,13 @@ private fun shareScopeLabel(sc: ShareScope): String = when (sc) {
     is ShareScope.Folder -> "folder ${sc.path}" + if (sc.subfolders) " (with subfolders)" else ""
     is ShareScope.File -> "file ${sc.path}"
     is ShareScope.Collection -> "collection ${sc.id} (${sc.files.size} files)"
+    is ShareScope.Tree -> "picked folder ${pickedName(sc.uri)}" + if (sc.subfolders) " (with subfolders)" else ""
+    is ShareScope.Item -> "picked file ${pickedName(sc.uri)}"
 }
+
+/** The last part of a picked reference's document id, for display only ("primary:DCIM/Cats" shows as "Cats"). */
+private fun pickedName(uri: String): String =
+    ContentRefs.parse(uri)?.let { (it.docId ?: it.treeId)?.substringAfterLast('/')?.substringAfterLast(':') }?.takeIf { it.isNotBlank() } ?: "(chosen with the picker)"
 
 private val KIND_LABELS = listOf(
     ShareKind.FOLDER to "This folder only",
@@ -252,6 +286,27 @@ private fun ShareDialog(onDismiss: () -> Unit, onShare: (ShareForm) -> Unit) {
     var bot by remember { mutableStateOf("") }
     var kind by remember { mutableStateOf(ShareKind.FOLDER) }
     var path by remember { mutableStateOf("") }
+    var pickedLabel by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val ledger = remember { PickedAccessLedger(context) }
+    fun keepAccess(uri: android.net.Uri) = ledger.keep(uri) // read access that survives a restart, released again when the share stops
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            keepAccess(uri)
+            kind = ShareKind.TREE
+            path = uri.toString()
+            pickedLabel = "Folder chosen with the Android folder picker"
+        }
+    }
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) {
+            uris.forEach(::keepAccess)
+            kind = ShareKind.PICKED
+            path = uris.joinToString("\n") { it.toString() }
+            pickedLabel = "${uris.size} file(s) chosen with the Android file picker"
+        }
+    }
+    val picked = kind == ShareKind.TREE || kind == ShareKind.TREE_WITH_SUBFOLDERS || kind == ShareKind.PICKED
     var ops by remember { mutableStateOf(setOf(FileOp.SEARCH, FileOp.PREVIEW, FileOp.SEND)) }
     var hours by remember { mutableStateOf<Long?>(24) }
     var recipients by remember { mutableStateOf("") }
@@ -265,9 +320,34 @@ private fun ShareDialog(onDismiss: () -> Unit, onShare: (ShareForm) -> Unit) {
                 item { OutlinedTextField(conversation, { conversation = it }, label = { Text("Conversation id") }, singleLine = true) }
                 item { OutlinedTextField(bot, { bot = it }, label = { Text("Only for this bot id (optional)") }, singleLine = true) }
                 item {
-                    KIND_LABELS.forEach { (k, label) -> TextButton(onClick = { kind = k }) { Text((if (kind == k) "● " else "○ ") + label) } }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { folderPicker.launch(null) }) { Text("Pick a folder…") }
+                        OutlinedButton(onClick = { filePicker.launch(arrayOf("*/*")) }) { Text("Pick files…") }
+                    }
+                    Text("The system picker lets this app read only what you choose. No storage permission is requested.", style = MaterialTheme.typography.bodySmall)
                 }
-                item { OutlinedTextField(path, { path = it }, label = { Text("Full path, e.g. /storage/emulated/0/DCIM/Cats") }, singleLine = true) }
+                if (picked) {
+                    item {
+                        pickedLabel?.let { Text(it, fontWeight = FontWeight.Bold) }
+                        if (kind != ShareKind.PICKED) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(kind == ShareKind.TREE_WITH_SUBFOLDERS, { on -> kind = if (on) ShareKind.TREE_WITH_SUBFOLDERS else ShareKind.TREE })
+                                Text("Include subfolders")
+                            }
+                        }
+                        TextButton(onClick = {
+                            kind = ShareKind.FOLDER
+                            path = ""
+                            pickedLabel = null
+                        }) { Text("Type a path instead") }
+                    }
+                } else {
+                    item {
+                        KIND_LABELS.filter { it.first == ShareKind.FOLDER || it.first == ShareKind.FOLDER_WITH_SUBFOLDERS || it.first == ShareKind.FILE }
+                            .forEach { (k, label) -> TextButton(onClick = { kind = k }) { Text((if (kind == k) "● " else "○ ") + label) } }
+                    }
+                    item { OutlinedTextField(path, { path = it }, label = { Text("Full path, e.g. /storage/emulated/0/DCIM/Cats") }, singleLine = true) }
+                }
                 item { Text("The bot may:", fontWeight = FontWeight.Bold) }
                 items(FileOp.entries.toList()) { op ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

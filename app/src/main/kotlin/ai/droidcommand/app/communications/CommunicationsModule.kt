@@ -44,6 +44,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import java.nio.file.Files
 import java.util.concurrent.Executors
+import javax.inject.Named
 import javax.inject.Singleton
 
 /**
@@ -93,10 +94,16 @@ object CommunicationsModule {
      */
     @Provides
     @Singleton
-    fun provideArchiveChannel(store: MutablePairedNodeStore, resolver: PackageIdentityResolver, gateway: PairedNodeGateway): ArchiveChannel {
-        val controller = FleetMessengerController(store, resolver, gateway)
-        return ControllerArchiveChannel { operation, params -> controller.callOwnerGrantedRead("victorsms", operation, params) }
-    }
+    fun provideCommsFleetController(
+        store: MutablePairedNodeStore,
+        resolver: PackageIdentityResolver,
+        gateway: PairedNodeGateway,
+    ): FleetMessengerController = FleetMessengerController(store, resolver, gateway)
+
+    @Provides
+    @Singleton
+    fun provideArchiveChannel(controller: FleetMessengerController): ArchiveChannel =
+        ControllerArchiveChannel { operation, params -> controller.callOwnerGrantedRead("victorsms", operation, params) }
 
     /** Owner-controlled, per-conversation file sharing. Tied to the same emergency stop as everything else in this module. */
     @Provides
@@ -104,21 +111,32 @@ object CommunicationsModule {
     fun provideFileShareEngine(@ApplicationContext context: Context, stores: CommsStores): FileShareEngine {
         val dir = context.filesDir.toPath().resolve("communications")
         Files.createDirectories(dir)
-        return FileShareEngine(JsonFileShareStore(dir.resolve("file-shares.json").toFile()), emergencyStop = { stores.kill.engaged })
+        val ledger = PickedAccessLedger(context)
+        return FileShareEngine(JsonFileShareStore(dir.resolve("file-shares.json").toFile()), emergencyStop = { stores.kill.engaged }, onContentReleased = { ledger.release(it) })
     }
 
     @Provides
     @Singleton
-    fun provideMediaGateway(): MediaGateway = UnconnectedMediaGateway
+    fun provideMediaGateway(@ApplicationContext context: Context): MediaGateway = ContentResolverMediaGateway(context)
 
     /**
-     * Attachment sends pass through [ShareGatedBackend]. Until a File-Manager gateway exists, and until a conversation's contact
+     * Attachment sends pass through [ShareGatedBackend]. The gateway reads only what the owner picked with Android's pickers; File-Manager's bridge is still a stub. Until a conversation's contact
      * can be resolved, every attachment send is refused: the gate fails closed rather than guessing.
      */
     @Provides
     @Singleton
-    fun provideCommsBackend(archive: ArchiveChannel, shares: FileShareEngine, gateway: MediaGateway): CommsBackend =
-        ShareGatedBackend(CompositeBackend(mapOf(Owner.VICTORSMS to VictorSmsCommsBackend(archive))), shares, gateway)
+    fun provideCommsBackend(archive: ArchiveChannel, @Named("handoff") handoff: ArchiveChannel, shares: FileShareEngine, gateway: MediaGateway): CommsBackend =
+        ShareGatedBackend(CompositeBackend(mapOf(Owner.VICTORSMS to VictorSmsCommsBackend(archive, handoff = handoff))), shares, gateway)
+
+    /**
+     * What the bots' text and respond capabilities go through: VictorSMS's conversation-addressed draft hand-off, so the owner
+     * reviews and presses Send there. Approval-gated at the fleet controller, never the ungated read path.
+     */
+    @Provides
+    @Singleton
+    @Named("handoff")
+    fun provideHandOffChannel(controller: FleetMessengerController): ArchiveChannel =
+        ControllerArchiveChannel { operation, params -> controller.callApprovalGated("victorsms", operation, params) }
 
     @Provides
     @Singleton
@@ -144,13 +162,26 @@ object CommunicationsModule {
      */
     @Provides
     @Singleton
-    fun provideDraftRuntime(@ApplicationContext context: Context, stores: CommsStores, backend: CommsBackend, model: ReplyModel, archive: ArchiveChannel): DraftRuntime {
+    fun provideDraftRuntime(
+        @ApplicationContext context: Context,
+        stores: CommsStores,
+        backend: CommsBackend,
+        model: ReplyModel,
+        archive: ArchiveChannel,
+        controller: FleetMessengerController,
+    ): DraftRuntime {
         val dir = context.filesDir.toPath().resolve("communications")
         Files.createDirectories(dir)
         val inbox = DraftInbox(JsonFileDraftStore(dir.resolve("drafts.json").toFile()))
         val pool = Executors.newFixedThreadPool(2) { r -> Thread(r, "reply-drafts").apply { isDaemon = true } }
         val stopped = { stores.kill.engaged }
         val orchestrator = ConversationOrchestrator(pool, 1, DraftTurnEngine(ReplyService(model), backend, inbox, stopped), { _, _ -> })
-        return DraftRuntime(inbox, ArchivePoller(archive, inbox, orchestrator, stopped), archive)
+        return DraftRuntime(inbox, ArchivePoller(archive, inbox, orchestrator, stopped), archive, orchestrator, stopped) { operation, params ->
+            controller.callApprovalGated("victorsms", operation, params)
+        }
     }
+
+    @Provides
+    @Singleton
+    fun provideDraftAutoCheck(scheduler: DraftScheduler): DraftAutoCheck = scheduler
 }

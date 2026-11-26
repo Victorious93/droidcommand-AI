@@ -1,6 +1,7 @@
 package ai.droidcommand.app.ui.communications
 
 import ai.droidcommand.agent.ToolRegistry
+import ai.droidcommand.app.communications.DraftAutoCheck
 import ai.droidcommand.app.communications.DraftRuntime
 import ai.droidcommand.communications.ApprovalQueue
 import ai.droidcommand.communications.ArchiveAnswer
@@ -22,7 +23,12 @@ import ai.droidcommand.communications.InMemoryShareStore
 import ai.droidcommand.communications.KillSwitch
 import ai.droidcommand.communications.TurnEngine
 import ai.droidcommand.communications.TurnResult
+import ai.droidcommand.fleet.messenger.LiveCallResult
 import ai.droidcommand.security.InMemoryAuditLog
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -44,6 +50,17 @@ class CommunicationsViewModelTest {
         override fun call(operation: String, params: kotlinx.serialization.json.JsonObject) = ArchiveAnswer.Unavailable("test")
     }
 
+    private class FakeAutoCheck : DraftAutoCheck {
+        // Not named "on": a property called `on` would generate a setOn(Boolean) that clashes with the interface's setOn.
+        var enabled = false
+
+        override fun isOn() = enabled
+
+        override fun setOn(on: Boolean) {
+            enabled = on
+        }
+    }
+
     private class Setup {
         var stored = false
         val registry = ToolRegistry()
@@ -54,14 +71,37 @@ class CommunicationsViewModelTest {
         val tools = CommunicationsAgentTools(registry, broker, { stored }, persist = { stored = it })
         val inbox = DraftInbox()
         val orchestrator = ConversationOrchestrator(Executors.newSingleThreadExecutor(), 1, TurnEngine { TurnResult(null) }, { _, _ -> })
-        val drafts = DraftRuntime(inbox, ArchivePoller(NoArchive, inbox, orchestrator), NoArchive)
+        val reviewCalls = mutableListOf<Pair<String, JsonObject>>()
+        val drafts = DraftRuntime(inbox, ArchivePoller(NoArchive, inbox, orchestrator), NoArchive, orchestrator, { kill.engaged }) { op, params ->
+            reviewCalls += op to params
+            LiveCallResult.Success(op, buildJsonObject { put("state", "received") })
+        }
+        val auto = FakeAutoCheck()
         val vm = CommunicationsViewModel(
             CommsAdmin(grants, approvals, kill),
             broker,
             FileShareEngine(InMemoryShareStore(), emergencyStop = { kill.engaged }),
             tools,
             drafts,
+            auto,
         )
+    }
+
+    @Test
+    fun archiveDraftReviewCorrelatesRetriesAndDoesNotSendARecipient() {
+        val s = Setup()
+        val conversation = "0123456789abcdef0123456789abcdef"
+        val draft = s.inbox.add(conversation, "42", "Sounds good", null)
+        repeat(2) { assertTrue(s.drafts.reviewDraft(draft.id, statusOnly = false).startsWith("Waiting in VictorSMS")) }
+        s.drafts.reviewDraft(draft.id, statusOnly = true)
+        val (deliver, retry, status) = s.reviewCalls
+        assertEquals("message.draft.from_archive", deliver.first)
+        assertEquals(deliver, retry)
+        assertEquals(setOf("draftId", "conversation", "body"), deliver.second.keys)
+        assertEquals(conversation, deliver.second["conversation"]?.jsonPrimitive?.content)
+        assertEquals("message.draft.status", status.first)
+        assertEquals(setOf("draftId"), status.second.keys)
+        assertEquals(deliver.second["draftId"], status.second["draftId"])
     }
 
     @Test
@@ -101,6 +141,21 @@ class CommunicationsViewModelTest {
         s.vm.refresh()
         s.vm.setStopped(true)
         s.vm.setStopped(false)
+        assertFalse(s.vm.ui.value.agentTools)
+        assertTrue(s.registry.list().isEmpty())
+    }
+
+    @Test
+    fun `automatic checking starts off and the switch drives the scheduler, nothing else`() {
+        val s = Setup()
+        assertFalse(s.vm.ui.value.autoCheck)
+        s.vm.setAutoCheck(true)
+        assertTrue(s.auto.enabled)
+        assertTrue(s.vm.ui.value.autoCheck)
+        s.vm.setAutoCheck(false)
+        assertFalse(s.auto.enabled)
+        assertFalse(s.vm.ui.value.autoCheck)
+        // It is a separate switch from the agent tools and must never touch them.
         assertFalse(s.vm.ui.value.agentTools)
         assertTrue(s.registry.list().isEmpty())
     }

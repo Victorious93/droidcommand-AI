@@ -35,9 +35,17 @@ sealed class ShareScope {
     @Serializable
     data class File(val path: String) : ShareScope()
 
-    /** An owner-approved set of exact files, for example a hand-picked album. */
+    /** An owner-approved set of exact files (paths or content:// references), for example a hand-picked album. */
     @Serializable
     data class Collection(val id: String, val files: Set<String>) : ShareScope()
+
+    /** A folder the owner picked with Android's folder picker (a content:// tree reference). Direct children only unless [subfolders]. */
+    @Serializable
+    data class Tree(val uri: String, val subfolders: Boolean = false) : ShareScope()
+
+    /** One file the owner picked (a content:// document reference). Matches that exact document only. */
+    @Serializable
+    data class Item(val uri: String) : ShareScope()
 }
 
 /** Who a grant is for. [conversation] is mandatory: it is what makes cross-conversation leakage impossible by construction. */
@@ -159,6 +167,9 @@ object SharePaths {
         return "/" + out.joinToString("/")
     }
 
+    /** A plain absolute path, or a content:// reference in its one canonical spelling. Null for anything else. */
+    fun normalizeAny(raw: String): String? = if (ContentRefs.isContent(raw)) ContentRefs.canonical(raw) else normalize(raw)
+
     fun within(path: String, folder: String, subfolders: Boolean): Boolean {
         if (folder == "/") return subfolders || path.count { it == '/' } == 1
         val prefix = "$folder/"
@@ -173,8 +184,34 @@ class FileShareEngine(
     /** Wire the existing KillSwitch here: while on, every file operation is denied. */
     private val emergencyStop: () -> Boolean = { false },
     private val historyLimit: Int = 5_000,
+    /**
+     * Called with the content:// references (folders, files, collection members) that NO active grant covers any more, after a
+     * grant is revoked or replaced. The app uses it to release the Android read access it took for them. Called while the engine's
+     * lock is held: it must not call back into the engine. A failure in it never undoes the revocation.
+     */
+    private val onContentReleased: (Set<String>) -> Unit = {},
 ) {
     private var state = store.load()
+
+    private fun contentRefsOf(sc: ShareScope): List<String> = when (sc) {
+        is ShareScope.Tree -> listOf(sc.uri)
+        is ShareScope.Item -> listOf(sc.uri)
+        is ShareScope.Collection -> sc.files.filter { ContentRefs.isContent(it) }
+        is ShareScope.Folder, is ShareScope.File -> emptyList()
+    }
+
+    /** References held by grants that are not revoked and not expired. An expired grant already answers no, so it holds nothing. */
+    private fun activeContentRefs(): Set<String> {
+        val now = clock()
+        return state.grants.filter { !it.revoked && (it.expiresAtMs == null || now < it.expiresAtMs) }.flatMap { g -> g.scopes.flatMap(::contentRefsOf) }.toSet()
+    }
+
+    private fun releasing(change: () -> Unit) {
+        val before = activeContentRefs()
+        change()
+        val gone = before - activeContentRefs()
+        if (gone.isNotEmpty()) runCatching { onContentReleased(gone) }
+    }
 
     private fun persist() = store.save(state)
 
@@ -190,21 +227,27 @@ class FileShareEngine(
                 is ShareScope.Folder -> SharePaths.normalize(sc.path)?.let { sc.copy(path = it) }
                 is ShareScope.File -> SharePaths.normalize(sc.path)?.let { sc.copy(path = it) }
                 is ShareScope.Collection -> {
-                    val files = sc.files.map { SharePaths.normalize(it) }
+                    val files = sc.files.map { SharePaths.normalizeAny(it) }
                     if (files.any { it == null }) null else sc.copy(files = files.filterNotNull().toSet())
                 }
-            } ?: return Result.failure(IllegalArgumentException("A scope has an unsafe path."))
+                is ShareScope.Tree -> ContentRefs.treeOf(sc.uri)?.takeIf { !ContentRefs.isRoot(it) }?.let { sc.copy(uri = it.canonical) }
+                is ShareScope.Item -> ContentRefs.parse(sc.uri)?.takeIf { it.docId != null || it.treeId == null }?.let { sc.copy(uri = it.canonical) }
+            } ?: return Result.failure(IllegalArgumentException("A scope has an unsafe path or an unsupported reference."))
         }
         val clean = g.copy(scopes = scopes)
-        state = state.copy(grants = state.grants.filterNot { it.id == g.id } + clean)
-        persist()
+        releasing {
+            state = state.copy(grants = state.grants.filterNot { it.id == g.id } + clean)
+            persist()
+        }
         return Result.success(clean)
     }
 
     @Synchronized fun revoke(id: String): Boolean {
         val g = state.grants.firstOrNull { it.id == id && !it.revoked } ?: return false
-        state = state.copy(grants = state.grants.map { if (it.id == id) g.copy(revoked = true) else it })
-        persist()
+        releasing {
+            state = state.copy(grants = state.grants.map { if (it.id == id) g.copy(revoked = true) else it })
+            persist()
+        }
         return true
     }
 
@@ -212,8 +255,10 @@ class FileShareEngine(
     @Synchronized fun revokeConversation(conversation: String): Int {
         val hit = state.grants.filter { it.subject.conversation == conversation && !it.revoked }
         if (hit.isEmpty()) return 0
-        state = state.copy(grants = state.grants.map { if (it.subject.conversation == conversation) it.copy(revoked = true) else it })
-        persist()
+        releasing {
+            state = state.copy(grants = state.grants.map { if (it.subject.conversation == conversation) it.copy(revoked = true) else it })
+            persist()
+        }
         return hit.size
     }
 
@@ -250,7 +295,7 @@ class FileShareEngine(
 
     /** Records a request for more access. Does not widen anything. Duplicate pending requests are collapsed. */
     @Synchronized fun requestExpansion(req: ShareRequest): ExpansionRequest {
-        val path = SharePaths.normalize(req.path) ?: req.path.take(200)
+        val path = SharePaths.normalizeAny(req.path) ?: req.path.take(200)
         state.requests.firstOrNull { it.state == "pending" && it.subject == req.subject && it.op == req.op && it.path == path }?.let { return it }
         val item = ExpansionRequest(
             "x" + (state.requests.size + 1) + "-" + clock(), req.subject, req.op, path,
@@ -263,7 +308,7 @@ class FileShareEngine(
 
     @Synchronized fun decide(req: ShareRequest): ShareDecision {
         val d = evaluate(req)
-        val path = SharePaths.normalize(req.path) ?: "(rejected path)"
+        val path = SharePaths.normalizeAny(req.path) ?: "(rejected path)"
         val (outcome, reason, gid) = when (d) {
             is ShareDecision.Allow -> Triple("allow", "granted", d.grantId)
             is ShareDecision.NeedsApproval -> Triple("needs_approval", "owner approval required", d.grantId)
@@ -278,7 +323,7 @@ class FileShareEngine(
     private fun evaluate(req: ShareRequest): ShareDecision {
         if (emergencyStop()) return ShareDecision.Deny("Emergency stop is on.")
         if (req.origin == Origin.INCOMING_MESSAGE) return ShareDecision.Deny("A received message cannot authorise file access.")
-        val path = SharePaths.normalize(req.path) ?: return ShareDecision.Deny("The path is not a plain absolute path.")
+        val path = SharePaths.normalizeAny(req.path) ?: return ShareDecision.Deny("The path is not a plain absolute path or an allowed content reference.")
         val now = clock()
         val candidates = state.grants.filter { g ->
             !g.revoked && (g.expiresAtMs == null || now < g.expiresAtMs) && subjectCovers(g.subject, req.subject) && req.op in g.ops &&
@@ -309,5 +354,7 @@ class FileShareEngine(
         is ShareScope.Folder -> path == scope.path || SharePaths.within(path, scope.path, scope.subfolders)
         is ShareScope.File -> scope.path == path
         is ShareScope.Collection -> path in scope.files
+        is ShareScope.Tree -> ContentRefs.parse(path)?.let { req -> ContentRefs.parse(scope.uri)?.let { tree -> ContentRefs.within(req, tree, scope.subfolders) } } ?: false
+        is ShareScope.Item -> path == scope.uri
     }
 }

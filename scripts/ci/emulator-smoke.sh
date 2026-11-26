@@ -7,7 +7,10 @@
 #      crashed process, a runner that never started, and a run of zero tests (docs/CRASH_REPAIR_REPORT.md).
 #   2. scripts/qa/startup-matrix.sh: cold starts with other fleet apps' ContentProviders absent, throwing, returning
 #      null / malformed rows, or blocking; the app must stay alive with MainActivity resumed.
-# BEST-EFFORT, never gates: the screenshot walk (README images). It cannot turn a red run green or a green run red.
+#   3. the screenshot walk (PrimaryScreensScreenshotTest, both tests; also the README images). It gates since 2026-11-25: it had
+#      failed 11 of its steps unnoticed for days while the job stayed green, and the failures were test bugs a gate would have
+#      shown at once. Judged by the same strict verifier. Screenshots and FAILED-<step>.png/.txt are pulled BEFORE the verdict,
+#      so a red walk still leaves its evidence.
 #
 # Evidence kept in $OUT: raw runner logs, verdict summaries, sanitized crash/ANR logcat on failure, validation-summary.md.
 set -euo pipefail
@@ -31,6 +34,12 @@ REQUIRED=(
   "ai.droidcommand.app.StartupResilienceTest#everyPrimaryTabOpensAndStaysUsable"
   "ai.droidcommand.app.StartupResilienceTest#noTrustHintCoversTheTabBarWithoutVictorLaunch"
   "ai.droidcommand.app.StartupResilienceTest#repeatedActivityLaunchesStayAlive"
+)
+
+# The screenshot walk: one entry per test in PrimaryScreensScreenshotTest. Same rule as above.
+WALK_REQUIRED=(
+  "ai.droidcommand.app.PrimaryScreensScreenshotTest#capturePrimaryScreens"
+  "ai.droidcommand.app.PrimaryScreensScreenshotTest#captureToolApprovalAndSet"
 )
 
 # Crash / ANR evidence with obvious secrets masked. Kept only when something failed.
@@ -93,17 +102,36 @@ if [[ $matrix -ne 0 ]] || ! grep -q $'\tPASS\t' "$OUT/startup-matrix.tsv"; then
   exit 1
 fi
 
+# ---- 3. mandatory screenshot walk ---------------------------------------------------------------------------------
+# Runs after the cheaper checks so their verdicts are already on disk. Screenshots (and the FAILED-* dumps a failed step
+# writes) are pulled BEFORE the verdict is read, so a red walk still uploads its evidence.
+walk_args=()
+for t in "${WALK_REQUIRED[@]}"; do walk_args+=(--require "$t"); done
+walk_class_list="$(IFS=,; echo "${WALK_REQUIRED[*]}")"
+
+set +e
+adb shell am instrument -w -r -e class "$walk_class_list" "$RUNNER" 2>&1 | tee "$OUT/screenshot-instrument.log"
+set -e
+mkdir -p "$ROOT/emulator-screenshots"
+adb pull /sdcard/Android/data/ai.droidcommand.app/files/screenshots/. "$ROOT/emulator-screenshots/" || true
+
+set +e
+python3 -I scripts/ci/verify-instrumentation.py "$OUT/screenshot-instrument.log" \
+  "${walk_args[@]}" --expect-count "${#WALK_REQUIRED[@]}" --summary "$OUT/screenshot-verdict.md"
+walk_verdict=$?
+set -e
+if [[ $walk_verdict -ne 0 ]]; then
+  echo "::error::screenshot walk did not pass (see emulator-logs/screenshot-instrument.log and the FAILED-* files in the emulator-screenshots artifact)"
+  save_failure_logs
+  exit 1
+fi
+
 # ---- validation summary: what was ACTUALLY executed, for the release notes ----------------------------------------
 {
   echo "Emulator validation for commit \`${GITHUB_SHA:-unknown}\` ($(adb shell getprop ro.product.cpu.abi | tr -d '\r'), API $(adb shell getprop ro.build.version.sdk | tr -d '\r')):"
   cat "$OUT/instrument-verdict.md"
   echo "- Cold-start fault matrix, ${STARTS} cold starts per scenario: $(grep -c $'\tPASS\t' "$OUT/startup-matrix.tsv") passed, $(grep -c $'\tFAIL\t' "$OUT/startup-matrix.tsv" || true) failed (scenarios: no companion, 7 VictorLaunch-theme provider fault shapes, 3 VictorSuite My PC provider fault shapes)."
+  echo "- Screenshot walk (every primary screen plus the approval and System Toolbox dialogs):"
+  cat "$OUT/screenshot-verdict.md"
 } > "$OUT/validation-summary.md"
 echo "VALIDATION PASSED"
-
-# ---- 3. best-effort screenshots (README images). Never gates, never hides a failure above. ------------------------------
-adb shell am instrument -w -r \
-  -e class ai.droidcommand.app.PrimaryScreensScreenshotTest \
-  "$RUNNER" | tee "$OUT/screenshot-instrument.log" || true
-mkdir -p "$ROOT/emulator-screenshots"
-adb pull /sdcard/Android/data/ai.droidcommand.app/files/screenshots/. "$ROOT/emulator-screenshots/" || true

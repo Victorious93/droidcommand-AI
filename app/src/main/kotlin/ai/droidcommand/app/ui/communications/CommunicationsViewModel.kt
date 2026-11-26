@@ -1,5 +1,6 @@
 package ai.droidcommand.app.ui.communications
 
+import ai.droidcommand.app.communications.DraftAutoCheck
 import ai.droidcommand.app.communications.DraftRuntime
 import ai.droidcommand.communications.AccessRecord
 import ai.droidcommand.communications.ApprovalItem
@@ -18,11 +19,14 @@ import ai.droidcommand.communications.ShareScope
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -38,6 +42,7 @@ data class CommunicationsUi(
     val fileHistory: List<AccessRecord> = emptyList(),
     val drafts: List<Draft> = emptyList(),
     val draftsOn: Set<String> = emptySet(),
+    val autoCheck: Boolean = false,
     val sharedConversations: List<Pair<String, String>> = emptyList(),
     val stopped: Boolean = false,
     /** The owner's default-off switch for droidcommand-AI's own agent. */
@@ -57,9 +62,12 @@ class CommunicationsViewModel @Inject constructor(
     private val shares: FileShareEngine,
     private val agentTools: CommunicationsAgentTools,
     private val drafts: DraftRuntime,
+    private val scheduler: DraftAutoCheck,
 ) : ViewModel() {
     private val mutable = MutableStateFlow(read(null))
     val ui: StateFlow<CommunicationsUi> = mutable.asStateFlow()
+    private val mutableReviewing = MutableStateFlow(false)
+    val reviewing: StateFlow<Boolean> = mutableReviewing.asStateFlow()
 
     fun refresh() {
         mutable.value = read(null)
@@ -117,9 +125,30 @@ class CommunicationsViewModel @Inject constructor(
         }
     }
 
+    fun setAutoCheck(on: Boolean) {
+        scheduler.setOn(on)
+        mutable.value = read(if (on) "Automatic checking is on: about every 15 minutes or more, when Android allows." else "Automatic checking is off.").copy(sharedConversations = mutable.value.sharedConversations)
+    }
+
     fun dismissDraft(id: String) {
         drafts.inbox.dismiss(id)
         mutable.value = read("Draft dismissed.").copy(sharedConversations = mutable.value.sharedConversations)
+    }
+
+    fun reviewDraft(id: String, statusOnly: Boolean = false) {
+        if (!mutableReviewing.compareAndSet(false, true)) return
+        viewModelScope.launch {
+            try {
+                val message = withContext(Dispatchers.IO) { drafts.reviewDraft(id, statusOnly) }
+                mutable.update { it.copy(message = message) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                mutable.update { it.copy(message = "Could not reach VictorSMS. Check Drafts to review in VictorSMS.") }
+            } finally {
+                mutableReviewing.value = false
+            }
+        }
     }
 
     fun denyFileRequest(id: String) {
@@ -182,6 +211,7 @@ class CommunicationsViewModel @Inject constructor(
             fileHistory = shares.history().takeLast(30).reversed(),
             drafts = drafts.inbox.drafts().filter { it.state != "dismissed" }.takeLast(30).reversed(),
             draftsOn = drafts.inbox.enabledAt().keys,
+            autoCheck = scheduler.isOn(),
             stopped = admin.killEngaged,
             agentTools = agentTools.isEnabled,
             agentToolCount = agentTools.registeredCount(),

@@ -57,10 +57,11 @@ object AttachmentValidator {
         return (h.isNotEmpty() && h[0].toInt() == 0x7f && at(1, "ELF")) || at(0, "MZ") || at(0, "dex\n") || at(0, "#!")
     }
 
-    private fun isUtf8(h: ByteArray) = runCatching {
-        Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(h))
-        true
-    }.getOrDefault(false)
+    /** Valid UTF-8, where an incomplete character at the very end is fine: the head is only the first bytes of a longer file. */
+    private fun isUtf8(h: ByteArray): Boolean {
+        val dec = Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+        return !dec.decode(java.nio.ByteBuffer.wrap(h), java.nio.CharBuffer.allocate(h.size + 1), false).isError
+    }
 
     fun safeName(raw: String): String {
         val base = raw.substringAfterLast('/').substringAfterLast('\\')

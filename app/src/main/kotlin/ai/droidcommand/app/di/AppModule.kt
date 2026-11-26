@@ -278,7 +278,8 @@ object AppModule {
         identityResolver: PackageIdentityResolver,
         pairedGateway: PairedNodeGateway,
     ): ToolRegistry = ToolRegistry().apply {
-        register(AutomationShellTool(AllowlistShellExecutor { advanced.shellAllowlist() }))
+        // Routed through VictorSuite (RUN_COMMAND); DroidCommand never spawns a shell itself on a phone.
+        register(AutomationShellTool(AllowlistShellExecutor(termux) { advanced.shellAllowlist() }))
         register(
             AiPromptTool(
                 CloudPromptClient(vault, transport),
@@ -289,7 +290,10 @@ object AppModule {
         )
         register(RootTool(NullRootExecutor()))
         register(TermuxTool(termux))
-        ShizukuTool.all(privilegedShell).forEach { register(it) }
+        // Fixed-purpose Shizuku operations only. The arbitrary-command kind (run_shizuku_command) is not registered: a privileged
+        // shell on the phone is VictorSuite's job (its privileged switch and owner approval). scripts/ci/check_app_shell_routes.py
+        // fails CI if it comes back.
+        ShizukuTool.fixedPurpose(privilegedShell).forEach { register(it) }
         register(MetasploitTool(metasploit))
         register(KaliAuthorizedScanTool(kaliPlaybookRunner))
         register(SetTool(setExecutor))

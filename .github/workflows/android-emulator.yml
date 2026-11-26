@@ -3,8 +3,9 @@ name: Emulator Smoke Test
 # Launches the :app debug APK on a real Android emulator. MANDATORY (gates the job and any release):
 # the instrumented tests listed in scripts/ci/emulator-smoke.sh (launch, corrupt persisted state, recreation and
 # background/resume, every primary tab, repeated launches) judged by scripts/ci/verify-instrumentation.py, and the
-# cold-start fault matrix (scripts/qa/startup-matrix.sh). BEST-EFFORT, never gating: PrimaryScreensScreenshotTest
-# (walks Chat/Tools/Notes/Memory/Settings/Pilot/Forge/Logs and dumps PNGs for the README).
+# cold-start fault matrix (scripts/qa/startup-matrix.sh), and the screenshot walk (both tests of PrimaryScreensScreenshotTest:
+# every primary screen plus the approval and System Toolbox dialogs; it also writes the README PNGs). The walk gated nothing until
+# 2026-11-25 and hid 11 failing steps for days; its screenshots and FAILED-<step> dumps are uploaded even when it fails.
 # This is the first thing in this repo that actually RUNS the app on an Android
 # runtime — every :app addendum in docs/AUDIT_2026-09-05.md through slice 3 ends
 # with "no device or emulator". A green run here moves the app launch path past
