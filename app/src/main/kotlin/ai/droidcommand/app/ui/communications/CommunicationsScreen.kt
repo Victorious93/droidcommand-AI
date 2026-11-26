@@ -160,8 +160,9 @@ fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
         items(ui.drafts, key = { it.id }) { d ->
             Column(Modifier.fillMaxWidth()) {
                 val conversation = ui.sharedConversations.firstOrNull { it.first == d.conversation }?.second
-                Text((if (d.state == "failed") "No draft" else "Suggested reply") +
-                    (conversation?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""), fontWeight = FontWeight.Bold)
+                val title = if (d.state == "failed") "No draft" else "Suggested reply"
+                val subtitle = conversation?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
+                Text(title + subtitle, fontWeight = FontWeight.Bold)
                 Text(d.text.ifBlank { "(needs more information)" })
                 d.needsInfo?.let { Text("It needs to know: $it", style = MaterialTheme.typography.bodySmall) }
                 if (d.state == "pending" && d.text.isNotBlank()) {
