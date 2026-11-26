@@ -1,5 +1,6 @@
 package ai.droidcommand.app
 
+import ai.droidcommand.config.ThemeMode
 import android.graphics.Bitmap
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -17,6 +18,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiSelector
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -41,6 +43,7 @@ class PrimaryScreensScreenshotTest {
 
     private lateinit var device: UiDevice
     private lateinit var outDir: File
+    private var themeBefore = ThemeMode.SYSTEM
 
     @Before
     fun setUp() {
@@ -54,6 +57,12 @@ class PrimaryScreensScreenshotTest {
             File(instrumentation.targetContext.externalCacheDir, "screenshots"),
         )
         outDir = candidates.first { it.mkdirs() || it.isDirectory }
+        themeBefore = compose.forceDarkTheme()
+    }
+
+    @After
+    fun restoreTheme() {
+        compose.restoreTheme(themeBefore)
     }
 
     @Test
