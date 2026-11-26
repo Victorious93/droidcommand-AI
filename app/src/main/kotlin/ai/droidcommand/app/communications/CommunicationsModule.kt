@@ -44,6 +44,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import java.nio.file.Files
 import java.util.concurrent.Executors
+import javax.inject.Named
 import javax.inject.Singleton
 
 /**
@@ -124,8 +125,18 @@ object CommunicationsModule {
      */
     @Provides
     @Singleton
-    fun provideCommsBackend(archive: ArchiveChannel, shares: FileShareEngine, gateway: MediaGateway): CommsBackend =
-        ShareGatedBackend(CompositeBackend(mapOf(Owner.VICTORSMS to VictorSmsCommsBackend(archive))), shares, gateway)
+    fun provideCommsBackend(archive: ArchiveChannel, @Named("handoff") handoff: ArchiveChannel, shares: FileShareEngine, gateway: MediaGateway): CommsBackend =
+        ShareGatedBackend(CompositeBackend(mapOf(Owner.VICTORSMS to VictorSmsCommsBackend(archive, handoff = handoff))), shares, gateway)
+
+    /**
+     * What the bots' text and respond capabilities go through: VictorSMS's conversation-addressed draft hand-off, so the owner
+     * reviews and presses Send there. Approval-gated at the fleet controller, never the ungated read path.
+     */
+    @Provides
+    @Singleton
+    @Named("handoff")
+    fun provideHandOffChannel(controller: FleetMessengerController): ArchiveChannel =
+        ControllerArchiveChannel { operation, params -> controller.callApprovalGated("victorsms", operation, params) }
 
     @Provides
     @Singleton

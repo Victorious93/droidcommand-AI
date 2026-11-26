@@ -41,6 +41,15 @@ class ApprovalGatedCallTest {
     }
 
     @Test
+    fun `the draft hand-off operations are never an ungated read or a live call`() {
+        for (op in listOf("message.draft.from_archive", "message.draft.status")) {
+            assertFalse(ExternalNodeCatalog.VICTOR_SMS.isLiveAllowed(op), op)
+            assertFalse(ExternalNodeCatalog.VICTOR_SMS.isReadOnly(op), op)
+            assertTrue(op !in ExternalNodeCatalog.VICTOR_SMS.ownerGrantedReadOperations, op)
+        }
+    }
+
+    @Test
     fun `a gated operation reaches the node with its parameters when the node is paired and trusted`() {
         val channel = echoing { response(it) }
         val c = paired(channel)
