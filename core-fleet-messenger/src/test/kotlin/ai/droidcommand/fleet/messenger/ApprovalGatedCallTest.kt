@@ -31,8 +31,14 @@ class ApprovalGatedCallTest {
     }
 
     @Test
-    fun `the victorsms catalog entry lists send and status as approval-gated and nothing else`() {
-        assertEquals(setOf("sms.send", "sms.send.status"), ExternalNodeCatalog.VICTOR_SMS.approvalGatedOperations)
+    fun `the victorsms catalog entry lists send, the conversation draft hand-off and their status as approval-gated and nothing else`() {
+        assertEquals(
+            setOf("sms.send", "sms.send.status", "message.draft.from_archive", "message.draft.status"),
+            ExternalNodeCatalog.VICTOR_SMS.approvalGatedOperations,
+        )
+        assertFalse(ExternalNodeCatalog.VICTOR_SMS.isLiveAllowed("message.draft.from_archive"))
+        assertFalse(ExternalNodeCatalog.VICTOR_SMS.isReadOnly("message.draft.from_archive"))
+        assertTrue("message.draft.from_archive" !in ExternalNodeCatalog.VICTOR_SMS.ownerGrantedReadOperations, "a draft hand-off is never an ungated read")
         assertFalse(ExternalNodeCatalog.VICTOR_SMS.isLiveAllowed("sms.send"))
         assertTrue(ExternalNodeCatalog.all.filter { it.id != "victorsms" }.all { it.approvalGatedOperations.isEmpty() })
     }

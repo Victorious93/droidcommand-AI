@@ -156,11 +156,17 @@ fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
             }
         }
         if (ui.drafts.isEmpty()) item { Text("No drafts yet.", style = MaterialTheme.typography.bodySmall) }
+        if (ui.drafts.any { it.state == "handed_off" }) item { TextButton(onClick = vm::refreshHandOffs) { Text("Refresh VictorSMS status") } }
         items(ui.drafts, key = { it.id }) { d ->
             Column(Modifier.fillMaxWidth()) {
                 Text((if (d.state == "failed") "No draft · " else "Suggested reply · ") + "conversation ${d.conversation}", fontWeight = FontWeight.Bold)
                 Text(d.text.ifBlank { "(needs more information)" })
                 d.needsInfo?.let { Text("It needs to know: $it", style = MaterialTheme.typography.bodySmall) }
+                handOffLabel(d.state)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                if (d.state == "pending" && d.text.isNotBlank()) {
+                    TextButton(onClick = { vm.sendViaVictorSms(d.id) }) { Text("Send via VictorSMS") }
+                    Text("This only creates a draft in VictorSMS. You review it there and press Send yourself.", style = MaterialTheme.typography.bodySmall)
+                }
                 TextButton(onClick = { vm.dismissDraft(d.id) }) { Text("Dismiss") }
             }
         }
@@ -363,4 +369,14 @@ private fun ShareDialog(onDismiss: () -> Unit, onShare: (ShareForm) -> Unit) {
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+/** What happened to a draft handed to VictorSMS, in plain words. "Submitted" is not "delivered": VictorSMS only knows it passed the text to the phone's sender. */
+private fun handOffLabel(state: String): String? = when (state) {
+    "handed_off" -> "Waiting in VictorSMS for you to review and press Send."
+    "handoff_submitted" -> "You sent it from VictorSMS. Delivery to the recipient is not confirmed."
+    "handoff_declined" -> "Declined or expired in VictorSMS. Nothing was sent."
+    "handoff_failed" -> "VictorSMS could not send it. Nothing reached the recipient."
+    "handoff_unknown" -> "The send was interrupted. Check the conversation in VictorSMS before sending again."
+    else -> null
 }

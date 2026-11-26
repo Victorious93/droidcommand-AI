@@ -11,6 +11,7 @@ import ai.droidcommand.communications.CommsBroker
 import ai.droidcommand.communications.CommunicationsAgentTools
 import ai.droidcommand.communications.CompositeBackend
 import ai.droidcommand.communications.ConversationOrchestrator
+import ai.droidcommand.communications.DraftHandOff
 import ai.droidcommand.communications.DraftInbox
 import ai.droidcommand.communications.DraftTurnEngine
 import ai.droidcommand.communications.FileShareEngine
@@ -44,6 +45,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import java.nio.file.Files
 import java.util.concurrent.Executors
+import javax.inject.Named
 import javax.inject.Singleton
 
 /**
@@ -98,6 +100,18 @@ object CommunicationsModule {
         return ControllerArchiveChannel { operation, params -> controller.callOwnerGrantedRead("victorsms", operation, params) }
     }
 
+    /**
+     * The hand-off to VictorSMS: conversation-addressed drafts the owner reviews and sends there. A separate controller from the
+     * read-only archive channel, because this path is approval-gated; VictorSMS still needs its own owner-side Drafts grant.
+     */
+    @Provides
+    @Singleton
+    @Named("handoff")
+    fun provideHandOffChannel(store: MutablePairedNodeStore, resolver: PackageIdentityResolver, gateway: PairedNodeGateway): ArchiveChannel {
+        val controller = FleetMessengerController(store, resolver, gateway)
+        return ControllerArchiveChannel { operation, params -> controller.callApprovalGated("victorsms", operation, params) }
+    }
+
     /** Owner-controlled, per-conversation file sharing. Tied to the same emergency stop as everything else in this module. */
     @Provides
     @Singleton
@@ -118,8 +132,8 @@ object CommunicationsModule {
      */
     @Provides
     @Singleton
-    fun provideCommsBackend(archive: ArchiveChannel, shares: FileShareEngine, gateway: MediaGateway): CommsBackend =
-        ShareGatedBackend(CompositeBackend(mapOf(Owner.VICTORSMS to VictorSmsCommsBackend(archive))), shares, gateway)
+    fun provideCommsBackend(archive: ArchiveChannel, @Named("handoff") handoff: ArchiveChannel, shares: FileShareEngine, gateway: MediaGateway): CommsBackend =
+        ShareGatedBackend(CompositeBackend(mapOf(Owner.VICTORSMS to VictorSmsCommsBackend(archive, handoff = handoff))), shares, gateway)
 
     @Provides
     @Singleton
@@ -145,14 +159,14 @@ object CommunicationsModule {
      */
     @Provides
     @Singleton
-    fun provideDraftRuntime(@ApplicationContext context: Context, stores: CommsStores, backend: CommsBackend, model: ReplyModel, archive: ArchiveChannel): DraftRuntime {
+    fun provideDraftRuntime(@ApplicationContext context: Context, stores: CommsStores, backend: CommsBackend, model: ReplyModel, archive: ArchiveChannel, @Named("handoff") handoff: ArchiveChannel): DraftRuntime {
         val dir = context.filesDir.toPath().resolve("communications")
         Files.createDirectories(dir)
         val inbox = DraftInbox(JsonFileDraftStore(dir.resolve("drafts.json").toFile()))
         val pool = Executors.newFixedThreadPool(2) { r -> Thread(r, "reply-drafts").apply { isDaemon = true } }
         val stopped = { stores.kill.engaged }
         val orchestrator = ConversationOrchestrator(pool, 1, DraftTurnEngine(ReplyService(model), backend, inbox, stopped), { _, _ -> })
-        return DraftRuntime(inbox, ArchivePoller(archive, inbox, orchestrator, stopped), archive, orchestrator)
+        return DraftRuntime(inbox, ArchivePoller(archive, inbox, orchestrator, stopped), archive, orchestrator, DraftHandOff(inbox, handoff, stopped))
     }
 
     @Provides

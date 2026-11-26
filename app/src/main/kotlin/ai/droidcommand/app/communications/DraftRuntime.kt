@@ -5,6 +5,7 @@ import ai.droidcommand.communications.ArchiveChannel
 import ai.droidcommand.communications.ArchivePoller
 import ai.droidcommand.communications.ArchiveWire
 import ai.droidcommand.communications.ConversationOrchestrator
+import ai.droidcommand.communications.DraftHandOff
 import ai.droidcommand.communications.DraftInbox
 import ai.droidcommand.communications.PollReport
 import kotlinx.serialization.json.JsonArray
@@ -23,6 +24,8 @@ class DraftRuntime(
     private val poller: ArchivePoller,
     private val channel: ArchiveChannel,
     private val orchestrator: ConversationOrchestrator,
+    /** Null where the hand-off to VictorSMS is not wired. */
+    val handOff: DraftHandOff? = null,
 ) {
     /** Conversations VictorSMS currently shares with the assistant, as (id, title). Empty if VictorSMS cannot be reached. Blocking: call off the main thread. */
     fun sharedConversations(): List<Pair<String, String>> {

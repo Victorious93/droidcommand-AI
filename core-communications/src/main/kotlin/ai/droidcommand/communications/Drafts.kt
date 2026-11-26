@@ -115,6 +115,14 @@ class DraftInbox(private val store: DraftStore = InMemoryDraftStore(), private v
 
     @Synchronized fun pending(): List<Draft> = state.drafts.filter { it.state == "pending" }
 
+    /** Moves a draft from one of [from] to [to]. False if it is gone or in another state, so a stale tap changes nothing. */
+    @Synchronized fun transition(id: String, from: Set<String>, to: String): Boolean {
+        if (state.drafts.none { it.id == id && it.state in from }) return false
+        state = state.copy(drafts = state.drafts.map { if (it.id == id) it.copy(state = to) else it })
+        persist()
+        return true
+    }
+
     @Synchronized fun dismiss(id: String): Boolean {
         if (state.drafts.none { it.id == id && it.state != "dismissed" }) return false
         state = state.copy(drafts = state.drafts.map { if (it.id == id) it.copy(state = "dismissed") else it })

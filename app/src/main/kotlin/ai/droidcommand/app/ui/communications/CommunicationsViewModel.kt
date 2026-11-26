@@ -10,6 +10,7 @@ import ai.droidcommand.communications.CommsGrant
 import ai.droidcommand.communications.CommsPermission
 import ai.droidcommand.communications.CommunicationsAgentTools
 import ai.droidcommand.communications.Draft
+import ai.droidcommand.communications.DraftHandOff
 import ai.droidcommand.communications.ExpansionRequest
 import ai.droidcommand.communications.FileShareEngine
 import ai.droidcommand.communications.ShareForm
@@ -123,6 +124,31 @@ class CommunicationsViewModel @Inject constructor(
     fun setAutoCheck(on: Boolean) {
         scheduler.setOn(on)
         mutable.value = read(if (on) "Automatic checking is on: about every 15 minutes or more, when Android allows." else "Automatic checking is off.").copy(sharedConversations = mutable.value.sharedConversations)
+    }
+
+    /** Hands a draft to VictorSMS for you to review and send there. Runs off the main thread: VictorSMS is a bound service. */
+    fun sendViaVictorSms(id: String, text: String? = null) {
+        val h = drafts.handOff
+        if (h == null) {
+            mutable.value = read("The hand-off to VictorSMS is not available in this build.").copy(sharedConversations = mutable.value.sharedConversations)
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val msg = when (val o = h.handOff(id, text)) {
+                is DraftHandOff.Outcome.Done -> o.message
+                is DraftHandOff.Outcome.Refused -> o.message
+            }
+            mutable.value = read(msg).copy(sharedConversations = mutable.value.sharedConversations)
+        }
+    }
+
+    /** Asks VictorSMS what became of the drafts handed over. */
+    fun refreshHandOffs() {
+        val h = drafts.handOff ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val n = h.refresh()
+            mutable.value = read(if (n == 0) "No change in VictorSMS." else "$n draft(s) updated from VictorSMS.").copy(sharedConversations = mutable.value.sharedConversations)
+        }
     }
 
     fun dismissDraft(id: String) {

@@ -122,7 +122,11 @@ object ExternalNodeCatalog {
         packages = listOf("com.victorious.sms"),
         capabilitiesOperation = "sms.capabilities.get",
         statusOperation = "sms.status",
-        approvalGatedOperations = setOf("sms.send", "sms.send.status"),
+        approvalGatedOperations = setOf(
+            "sms.send", "sms.send.status",
+            // Conversation-addressed hand-off (2026-11-26): VictorSMS works out the number itself and the owner reviews and presses Send.
+            "message.draft.from_archive", "message.draft.status",
+        ),
         ownerGrantedReadOperations = setOf(
             "comms.capabilities", "comms.conversations.list", "comms.conversation.read", "comms.messages.search", "comms.context.retrieve",
         ),
