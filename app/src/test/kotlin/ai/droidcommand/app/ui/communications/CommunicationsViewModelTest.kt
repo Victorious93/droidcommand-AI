@@ -23,7 +23,12 @@ import ai.droidcommand.communications.InMemoryShareStore
 import ai.droidcommand.communications.KillSwitch
 import ai.droidcommand.communications.TurnEngine
 import ai.droidcommand.communications.TurnResult
+import ai.droidcommand.fleet.messenger.LiveCallResult
 import ai.droidcommand.security.InMemoryAuditLog
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -66,7 +71,11 @@ class CommunicationsViewModelTest {
         val tools = CommunicationsAgentTools(registry, broker, { stored }, persist = { stored = it })
         val inbox = DraftInbox()
         val orchestrator = ConversationOrchestrator(Executors.newSingleThreadExecutor(), 1, TurnEngine { TurnResult(null) }, { _, _ -> })
-        val drafts = DraftRuntime(inbox, ArchivePoller(NoArchive, inbox, orchestrator), NoArchive, orchestrator)
+        val reviewCalls = mutableListOf<Pair<String, JsonObject>>()
+        val drafts = DraftRuntime(inbox, ArchivePoller(NoArchive, inbox, orchestrator), NoArchive, orchestrator, { kill.engaged }) { op, params ->
+            reviewCalls += op to params
+            LiveCallResult.Success(op, buildJsonObject { put("state", "received") })
+        }
         val auto = FakeAutoCheck()
         val vm = CommunicationsViewModel(
             CommsAdmin(grants, approvals, kill),
@@ -76,6 +85,23 @@ class CommunicationsViewModelTest {
             drafts,
             auto,
         )
+    }
+
+    @Test
+    fun archiveDraftReviewCorrelatesRetriesAndDoesNotSendARecipient() {
+        val s = Setup()
+        val conversation = "0123456789abcdef0123456789abcdef"
+        val draft = s.inbox.add(conversation, "42", "Sounds good", null)
+        repeat(2) { assertTrue(s.drafts.reviewDraft(draft.id, statusOnly = false).startsWith("Waiting in VictorSMS")) }
+        s.drafts.reviewDraft(draft.id, statusOnly = true)
+        val (deliver, retry, status) = s.reviewCalls
+        assertEquals("message.draft.from_archive", deliver.first)
+        assertEquals(deliver, retry)
+        assertEquals(setOf("draftId", "conversation", "body"), deliver.second.keys)
+        assertEquals(conversation, deliver.second["conversation"]?.jsonPrimitive?.content)
+        assertEquals("message.draft.status", status.first)
+        assertEquals(setOf("draftId"), status.second.keys)
+        assertEquals(deliver.second["draftId"], status.second["draftId"])
     }
 
     @Test
