@@ -140,7 +140,7 @@ class VictorSmsCommsBackend(
                         }.toString(),
                     )
                 }
-                else -> handoffFailure(a)
+                else -> handoffFailure(a, statusCheck = true)
             }
         }
         val conversation = args["conversation"].orEmpty()
@@ -171,8 +171,12 @@ class VictorSmsCommsBackend(
         }
     }
 
-    private fun handoffFailure(a: ArchiveAnswer): BackendResult = when (a) {
-        is ArchiveAnswer.Refused -> BackendResult.Refused(a.code, explainHandoff(a.code, a.message))
+    private fun handoffFailure(a: ArchiveAnswer, statusCheck: Boolean = false): BackendResult = when (a) {
+        // VictorSMS answers not_found to a status check for a draft it has no record of; for a new draft it means the conversation is not shared.
+        is ArchiveAnswer.Refused -> BackendResult.Refused(
+            a.code,
+            if (statusCheck && a.code == "not_found") "VictorSMS has no record of that draft. It may have expired." else explainHandoff(a.code, a.message),
+        )
         is ArchiveAnswer.Unavailable -> BackendResult.Refused("backend_unavailable", a.message)
         is ArchiveAnswer.Failed -> BackendResult.Failed(a.message)
         is ArchiveAnswer.Ok -> BackendResult.Failed("Unexpected reply from VictorSMS.")

@@ -126,3 +126,71 @@ class HandoffTest {
         VictorSmsCommsBackend.HANDOFF_CAPABILITIES.forEach { assertTrue(b.availability(it) != null, it) }
     }
 }
+
+/**
+ * Victorious Framework: the reply frames below are COPIES of what VictorSMS's `BridgeService.draftReply` builds (read from
+ * `victorsms` `bridge/BridgeService.kt` and `DraftHandoff.kt`, 2026-11-26): success is `{draftId, state[, detail]}` with a lowercase
+ * state; failures are the machine codes below. They are pinned here, not shared code, so a change on the VictorSMS side shows up as a
+ * failing test only when someone updates the copy. Never run against a real VictorSMS.
+ */
+class HandoffFramesTest {
+    private val handoff = FakeArchive()
+    private val backend = VictorSmsCommsBackend(FakeArchive(), { 1_000L }, handoff = handoff)
+    private val uid = "0123456789abcdef0123456789abcdef"
+    private val ctx = BackendContext("com.victorious.bots", "bot1", "req-000002", "approved", null)
+    private fun frame(vararg p: Pair<String, String>) = ArchiveAnswer.Ok(buildJsonObject { p.forEach { (k, v) -> put(k, v) } })
+    private fun call(cap: String, args: Map<String, String>) = backend.call(cap, args, ctx)
+
+    @Test fun `VictorSMS's success frame for a new draft is accepted as awaiting the owner`() {
+        handoff.answer = { _, _ -> frame("draftId" to "dca-req-000002", "state" to "received") }
+        val j = Json.parseToJsonElement((call("communications.create_draft", mapOf("conversation" to uid, "body" to "hi")) as BackendResult.Ok).json).jsonObject
+        assertEquals("dca-req-000002", j["draft_id"]!!.jsonPrimitive.content)
+        assertEquals("awaiting_owner", j["state"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun `a repeated delivery of the same draft id returns the current state and is not treated as a new send`() {
+        handoff.answer = { _, _ -> frame("draftId" to "dca-req-000002", "state" to "submitted") }
+        val j = Json.parseToJsonElement((call("communications.send_sms", mapOf("conversation" to uid, "body" to "hi")) as BackendResult.Ok).json).jsonObject
+        assertEquals("submitted", j["state"]!!.jsonPrimitive.content)
+        assertEquals("false", j["awaiting_owner"]!!.jsonPrimitive.content)
+        assertEquals("false", j["sent"]!!.jsonPrimitive.content, "this connector never claims it sent")
+    }
+
+    @Test fun `VictorSMS's status frame carries a detail that is shown as plain words, not echoed`() {
+        handoff.answer = { _, _ -> frame("draftId" to "dca-req-000002", "state" to "unknown", "detail" to "Submission was interrupted. Check your conversation before sending again.") }
+        val j = Json.parseToJsonElement((call("communications.get_delivery_status", mapOf("message_id" to "dca-req-000002")) as BackendResult.Ok).json).jsonObject
+        assertEquals("unknown", j["state"]!!.jsonPrimitive.content)
+        assertEquals("false", j["delivery_confirmed"]!!.jsonPrimitive.content)
+        assertTrue("interrupted" in j["detail"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun `every error code VictorSMS gives for these ops is explained in plain words`() {
+        val expectations = mapOf(
+            "not_found" to "shared with the assistant",
+            "no_sms_recipient" to "one-to-one",
+            "invalid_parameters" to "1,600",
+            "permission_denied" to "Drafts",
+            "expired" to "expired",
+            "unsupported_operation" to "Update VictorSMS",
+        )
+        for ((code, words) in expectations) {
+            handoff.answer = { _, _ -> ArchiveAnswer.Refused(code, "x") }
+            val r = call("communications.create_draft", mapOf("conversation" to uid, "body" to "hi")) as BackendResult.Refused
+            assertEquals(code, r.code)
+            assertTrue(words in r.message, "$code -> ${r.message}")
+        }
+    }
+
+    @Test fun `not_found on a status check means no record of the draft, not an unshared conversation`() {
+        handoff.answer = { _, _ -> ArchiveAnswer.Refused("not_found", "x") }
+        val r = call("communications.get_delivery_status", mapOf("message_id" to "dca-req-000002")) as BackendResult.Refused
+        assertTrue("no record" in r.message && "shared" !in r.message, r.message)
+    }
+
+    @Test fun `a state this app does not know is reported unknown rather than guessed`() {
+        handoff.answer = { _, _ -> frame("draftId" to "dca-req-000002", "state" to "delivered") }
+        val j = Json.parseToJsonElement((call("communications.get_delivery_status", mapOf("message_id" to "dca-req-000002")) as BackendResult.Ok).json).jsonObject
+        assertEquals("unknown", j["state"]!!.jsonPrimitive.content)
+        assertEquals("false", j["delivery_confirmed"]!!.jsonPrimitive.content)
+    }
+}
