@@ -93,10 +93,16 @@ object CommunicationsModule {
      */
     @Provides
     @Singleton
-    fun provideArchiveChannel(store: MutablePairedNodeStore, resolver: PackageIdentityResolver, gateway: PairedNodeGateway): ArchiveChannel {
-        val controller = FleetMessengerController(store, resolver, gateway)
-        return ControllerArchiveChannel { operation, params -> controller.callOwnerGrantedRead("victorsms", operation, params) }
-    }
+    fun provideCommsFleetController(
+        store: MutablePairedNodeStore,
+        resolver: PackageIdentityResolver,
+        gateway: PairedNodeGateway,
+    ): FleetMessengerController = FleetMessengerController(store, resolver, gateway)
+
+    @Provides
+    @Singleton
+    fun provideArchiveChannel(controller: FleetMessengerController): ArchiveChannel =
+        ControllerArchiveChannel { operation, params -> controller.callOwnerGrantedRead("victorsms", operation, params) }
 
     /** Owner-controlled, per-conversation file sharing. Tied to the same emergency stop as everything else in this module. */
     @Provides
@@ -144,14 +150,23 @@ object CommunicationsModule {
      */
     @Provides
     @Singleton
-    fun provideDraftRuntime(@ApplicationContext context: Context, stores: CommsStores, backend: CommsBackend, model: ReplyModel, archive: ArchiveChannel): DraftRuntime {
+    fun provideDraftRuntime(
+        @ApplicationContext context: Context,
+        stores: CommsStores,
+        backend: CommsBackend,
+        model: ReplyModel,
+        archive: ArchiveChannel,
+        controller: FleetMessengerController,
+    ): DraftRuntime {
         val dir = context.filesDir.toPath().resolve("communications")
         Files.createDirectories(dir)
         val inbox = DraftInbox(JsonFileDraftStore(dir.resolve("drafts.json").toFile()))
         val pool = Executors.newFixedThreadPool(2) { r -> Thread(r, "reply-drafts").apply { isDaemon = true } }
         val stopped = { stores.kill.engaged }
         val orchestrator = ConversationOrchestrator(pool, 1, DraftTurnEngine(ReplyService(model), backend, inbox, stopped), { _, _ -> })
-        return DraftRuntime(inbox, ArchivePoller(archive, inbox, orchestrator, stopped), archive, orchestrator)
+        return DraftRuntime(inbox, ArchivePoller(archive, inbox, orchestrator, stopped), archive, orchestrator, stopped) { operation, params ->
+            controller.callApprovalGated("victorsms", operation, params)
+        }
     }
 
     @Provides

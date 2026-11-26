@@ -298,7 +298,10 @@ Asserted for each run: every message handled once, zero failures, strict per-con
 - A message is drafted once, also after a restart (state in `files/communications/drafts.json`). A model failure is shown as a "No draft" entry with the reason, not hidden. The emergency stop halts polling and drafting.
 - **Manual, not scheduled.** It checks only when you press "Check now". There is no background worker, so nothing runs while the screen is closed. A periodic worker needs a real device to tune battery and timing, and I have none here.
 - Not verified: the Android screen has never been displayed; the VictorSMS read path has never run against the real app; reply quality and model latency are unmeasured; the draft's model call goes through the owner's inference policy only as far as `ReplyModel` does (`PolicyReplyModel`).
-- Still no way to **send** a draft. Placing a draft into VictorSMS (`create_draft`) or sending it is VictorSMS's write side, which is not built and sits behind your decision on auto-send (see "Decisions needed" in the integration report).
+- **Review in VictorSMS** hands a waiting reply draft to the paired phone app through `message.draft.from_archive`.
+  VictorSMS requires **Drafts** and **Archive read**, plus the conversation's assistant access switch. It resolves the
+  native SMS recipient locally, then presents the draft for editing and approval. **Check review status** queries the
+  same draft ID. The existing broker's `communications.create_draft` capability is independent of this owner-screen action.
 
 ### Automatic checking for reply drafts (2026-11-25) — drafts only, unmeasured on a device
 - `DraftCheckWorker` (WorkManager, unique periodic work, 15-minute period, battery-not-low) runs the same poll as "Check now" and waits up to 4 minutes for the drafts it queued (`ConversationOrchestrator.awaitProcessed`, 2 JVM tests), because the process may be frozen once a worker returns. Unfinished drafts are not lost: a message counts as handled only after its draft is stored, so the next period picks it up.

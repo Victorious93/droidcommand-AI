@@ -48,6 +48,7 @@ private val APPS = listOf("com.victorious.bots" to "VictorBots", "com.victorious
 @Composable
 fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
     val ui by vm.ui.collectAsState()
+    val reviewing by vm.reviewing.collectAsState()
     var adding by remember { mutableStateOf(false) }
     var sharing by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { vm.refresh() }
@@ -158,10 +159,22 @@ fun CommunicationsScreen(vm: CommunicationsViewModel = hiltViewModel()) {
         if (ui.drafts.isEmpty()) item { Text("No drafts yet.", style = MaterialTheme.typography.bodySmall) }
         items(ui.drafts, key = { it.id }) { d ->
             Column(Modifier.fillMaxWidth()) {
-                Text((if (d.state == "failed") "No draft · " else "Suggested reply · ") + "conversation ${d.conversation}", fontWeight = FontWeight.Bold)
+                val conversation = ui.sharedConversations.firstOrNull { it.first == d.conversation }?.second
+                Text((if (d.state == "failed") "No draft" else "Suggested reply") +
+                    (conversation?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""), fontWeight = FontWeight.Bold)
                 Text(d.text.ifBlank { "(needs more information)" })
                 d.needsInfo?.let { Text("It needs to know: $it", style = MaterialTheme.typography.bodySmall) }
-                TextButton(onClick = { vm.dismissDraft(d.id) }) { Text("Dismiss") }
+                if (d.state == "pending" && d.text.isNotBlank()) {
+                    OutlinedButton(enabled = !ui.stopped && !reviewing, onClick = { vm.reviewDraft(d.id) }) {
+                        Text("Review in VictorSMS")
+                    }
+                    Row {
+                        TextButton(enabled = !reviewing, onClick = { vm.reviewDraft(d.id, statusOnly = true) }) { Text("Check review status") }
+                        TextButton(onClick = { vm.dismissDraft(d.id) }) { Text("Dismiss") }
+                    }
+                } else {
+                    TextButton(onClick = { vm.dismissDraft(d.id) }) { Text("Dismiss") }
+                }
             }
         }
         item { Text("File access history", fontWeight = FontWeight.Bold) }

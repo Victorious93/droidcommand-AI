@@ -60,6 +60,9 @@ data class ExternalNodeSpec(
 }
 
 object ExternalNodeCatalog {
+    const val VICTOR_SMS_DRAFT_FROM_ARCHIVE = "message.draft.from_archive"
+    const val VICTOR_SMS_DRAFT_STATUS = "message.draft.status"
+
     val ROOTFORGE = ExternalNodeSpec(
         id = "rootforge",
         displayName = "RootForge OS",
@@ -122,7 +125,7 @@ object ExternalNodeCatalog {
         packages = listOf("com.victorious.sms"),
         capabilitiesOperation = "sms.capabilities.get",
         statusOperation = "sms.status",
-        approvalGatedOperations = setOf("sms.send", "sms.send.status"),
+        approvalGatedOperations = setOf("sms.send", "sms.send.status", VICTOR_SMS_DRAFT_FROM_ARCHIVE, VICTOR_SMS_DRAFT_STATUS),
         ownerGrantedReadOperations = setOf(
             "comms.capabilities", "comms.conversations.list", "comms.conversation.read", "comms.messages.search", "comms.context.retrieve",
         ),
