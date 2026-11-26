@@ -4,6 +4,7 @@ import ai.droidcommand.app.bots.HelperBot
 import ai.droidcommand.app.bots.HelperBots
 import ai.droidcommand.config.AssistantCapabilitySettings
 import ai.droidcommand.config.FileAssistantCapabilitySettingsStore
+import ai.droidcommand.config.ThemeMode
 import android.graphics.Bitmap
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -16,6 +17,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiSelector
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -37,6 +39,7 @@ class ManualScreenshotsTest {
 
     private lateinit var device: UiDevice
     private lateinit var outDir: File
+    private var themeBefore = ThemeMode.SYSTEM
 
     private val researchId = "11111111-1111-1111-1111-111111111111"
     private val writerId = "22222222-2222-2222-2222-222222222222"
@@ -52,6 +55,7 @@ class ManualScreenshotsTest {
             File(target.getExternalFilesDir(null), "screenshots"),
             File(target.externalCacheDir, "screenshots"),
         ).first { it.mkdirs() || it.isDirectory }
+        themeBefore = compose.forceDarkTheme()
         FileAssistantCapabilitySettingsStore(target.filesDir.toPath().resolve("assistant-capabilities.settings"))
             .save(AssistantCapabilitySettings(botMakerEnabled = true, linuxEnvironmentEnabled = true))
         target.getSharedPreferences("helper_bots", android.content.Context.MODE_PRIVATE).edit()
@@ -64,6 +68,11 @@ class ManualScreenshotsTest {
                     ),
                 ),
             ).commit()
+    }
+
+    @After
+    fun restoreTheme() {
+        compose.restoreTheme(themeBefore)
     }
 
     @Test
