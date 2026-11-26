@@ -1,12 +1,12 @@
 package ai.droidcommand.app.ui.communications
 
+import ai.droidcommand.app.communications.PickedAccessLedger
 import ai.droidcommand.communications.CommsPermission
 import ai.droidcommand.communications.ContentRefs
 import ai.droidcommand.communications.FileOp
 import ai.droidcommand.communications.ShareForm
 import ai.droidcommand.communications.ShareKind
 import ai.droidcommand.communications.ShareScope
-import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -274,10 +274,8 @@ private fun ShareDialog(onDismiss: () -> Unit, onShare: (ShareForm) -> Unit) {
     var path by remember { mutableStateOf("") }
     var pickedLabel by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
-    fun keepAccess(uri: android.net.Uri) {
-        // Read access that survives a restart. Not every provider allows it; then the share simply fails to read later, closed.
-        runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-    }
+    val ledger = remember { PickedAccessLedger(context) }
+    fun keepAccess(uri: android.net.Uri) = ledger.keep(uri) // read access that survives a restart, released again when the share stops
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             keepAccess(uri)

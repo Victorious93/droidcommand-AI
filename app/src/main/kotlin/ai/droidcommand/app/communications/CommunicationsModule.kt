@@ -104,7 +104,8 @@ object CommunicationsModule {
     fun provideFileShareEngine(@ApplicationContext context: Context, stores: CommsStores): FileShareEngine {
         val dir = context.filesDir.toPath().resolve("communications")
         Files.createDirectories(dir)
-        return FileShareEngine(JsonFileShareStore(dir.resolve("file-shares.json").toFile()), emergencyStop = { stores.kill.engaged })
+        val ledger = PickedAccessLedger(context)
+        return FileShareEngine(JsonFileShareStore(dir.resolve("file-shares.json").toFile()), emergencyStop = { stores.kill.engaged }, onContentReleased = { ledger.release(it) })
     }
 
     @Provides

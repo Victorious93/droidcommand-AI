@@ -186,3 +186,18 @@ Each run kept strict per-conversation order, handled every message once, and no 
 - **Third-party apps** including TextNow (no official API; automated sending is not claimed), and the VictorBots connector and screens.
 - **Not touched in this work:** VictorBots, VictorSMS, File-Manager, VictorLinux, VictorSuite, Victorious Mesh, RustdeskV, Victorious Browser. No README or user manual in those repos was updated.
 - **No screenshots, no physical-device testing, no release APK.** CI builds a debug APK on every PR; I never downloaded one, so I have no APK checksum. One CI artifact digest was recorded for reference: the artifact zip of run 45468478159 (PR #344's head `d47b8da`) reported `sha256:8b4689abbf1044340106f35de4e5695a683329b7b4b38cb3055c3f58b9717b3b`; that is the zip, it was never downloaded or verified, and it expires 2026-12-01.
+
+## Decisions recorded — 2026-11-25 (owner said "You choose")
+
+The two decisions listed above as open were delegated to me. I chose the option that keeps every existing VictorSMS rule intact. **The owner can overrule either; nothing here is built on them yet.**
+
+1. **Recipient verification: option (b).** VictorSMS keeps its privacy rule (no phone number or account in the conversation list). DroidCommand never supplies or learns a destination number: it names a *conversation*, and VictorSMS derives the destination itself from its own archive. A grant's recipient restriction, if any, is to be enforced **inside VictorSMS** at send time. That check is part of VictorSMS's write side, which is **not built**; until it is, the gate stays fail-closed (`ShareGatedBackend` still refuses a conversation-addressed attachment send because no contact can be resolved).
+2. **Auto-send: not enabled.** VictorSMS's documented "never auto-sent" rule stands. Every send, attachments included, needs the owner's tap on the phone, like VictorSMS's existing remote `sms.send` ("Approve SMS?" screen). `AutomationGate`'s Auto/Autonomous modes stay unwired to a real sender.
+
+### A bigger blocker found while doing this
+
+**VictorSMS cannot send MMS from the SIM at all.** Its manual says so ("Not implemented: sending MMS from the SIM; alias MMS goes through Twilio"), and the only attachment route it has is Twilio alias MMS, which needs a **public `https://` image URL**. That route is not acceptable for a private photo (it would publish it), so it is not used. Native attachment sending therefore needs a new on-device MMS sender in VictorSMS, which requires a real SIM and the default-SMS role to build and verify. Not attempted: it cannot be verified here and an unverifiable MMS sender would be a guess. Plain text SMS with owner approval already exists in VictorSMS and is unaffected.
+
+### Built in this step
+
+When a share stops, the engine now reports the picked references that no active grant covers any more, and the app releases only the Android read grants the share dialog itself took (a ledger, so chat attachments, model import and the other features' grants are never touched). 8 JVM tests, 3 of 3 mutation checks caught; the app part is compiled by CI only and never run. Limits: an expired grant is not released at the moment it expires (only when a later revoke or replace happens); if the owner picked the very same folder or file for another feature, Android keeps one grant per URI and releasing it here releases it there too.
