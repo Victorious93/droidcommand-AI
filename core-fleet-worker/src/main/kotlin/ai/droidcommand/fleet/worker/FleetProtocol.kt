@@ -48,8 +48,9 @@ object FleetProtocol {
     val WORKER_TYPES = setOf(
         "enroll_request", "hello", "heartbeat", "ack", "progress", "complete", "fail", "cancel_ack",
         "approval_needed", "artifact_offer", "node_message", "terminal_status", "draft_status",
+        "mic_status",
     )
-    val COORD_TYPES = setOf("enroll_response", "welcome", "assignment", "cancel", "revoke", "artifact_grant", "node_message", "reject", "terminal_open", "terminal_close", "draft_deliver")
+    val COORD_TYPES = setOf("enroll_response", "welcome", "assignment", "cancel", "revoke", "artifact_grant", "node_message", "reject", "terminal_open", "terminal_close", "draft_deliver", "mic_offer")
     val ERROR_CODES = setOf(
         "bad_request", "unauthorized", "revoked", "unsupported_protocol", "unknown_type", "too_large", "stale_attempt",
         "unknown_job", "quota_exceeded", "capability_missing", "permission_denied", "approval_required", "device_busy", "deadline_exceeded",
@@ -160,6 +161,7 @@ object FleetProtocol {
         when (type) {
             "terminal_status" -> LiveProtocol.validateTerminalStatus(p)
             "draft_status" -> LiveProtocol.validateDraftStatus(p)
+            "mic_status" -> LiveProtocol.validateMicStatus(p)
             "enroll_request" -> {
                 p.str("device_name", 80)
                 p.str("public_key_pem", 2048)

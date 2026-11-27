@@ -1,0 +1,70 @@
+{
+  "msg_id": "m-hello-4",
+  "payload": {
+    "app_version": "droidcommand-0.0.0-fixture",
+    "capabilities": {
+      "device_state": {
+        "battery_percent": 77,
+        "charging": false,
+        "foreground_busy": false,
+        "free_storage_bytes": 12345678901,
+        "thermal": "light"
+      },
+      "max_concurrent": 2,
+      "operations": {
+        "hash_files": {
+          "available": true,
+          "granted": true
+        },
+        "message.draft.email": {
+          "available": false,
+          "detail": "VictorSMS is not installed",
+          "granted": false,
+          "min_version": "0.3.0",
+          "status": "not_installed"
+        },
+        "message.draft.sms": {
+          "available": false,
+          "detail": "SMS permission not granted",
+          "granted": false,
+          "status": "permission_needed"
+        },
+        "mic.offer.droidcommand": {
+          "available": true,
+          "granted": true,
+          "status": "ready"
+        },
+        "mic.offer.keyboard": {
+          "available": false,
+          "detail": "Victorious Keyboard is not installed",
+          "granted": false,
+          "status": "not_installed"
+        },
+        "shell.oneshot": {
+          "available": true,
+          "granted": true,
+          "owner_interaction_required": true,
+          "status": "ready"
+        },
+        "terminal.session": {
+          "available": true,
+          "granted": true,
+          "status": "ready"
+        }
+      },
+      "root": {
+        "available": false,
+        "granted": false
+      }
+    },
+    "running": []
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 2
+  },
+  "sender": "dev-0123456789ab",
+  "sent_at": 1790000000000,
+  "target": "coordinator",
+  "type": "hello"
+}

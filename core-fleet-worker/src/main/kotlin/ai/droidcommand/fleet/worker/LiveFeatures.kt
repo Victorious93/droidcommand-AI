@@ -74,11 +74,23 @@ class LiveFeatures(
     private val clock: () -> Long = System::currentTimeMillis,
     private val executor: Executor = Executor { Thread(it, "fleet-terminal").apply { isDaemon = true }.start() },
     private val graceMs: Long = 8_000,
+    /** Protocol 1.2 microphone offers. Null = this build does not take them (it then reports no mic capability). */
+    private val mics: MicOfferSink? = null,
 ) {
     private val seenSessions = LinkedHashSet<String>()
     private val sessions = ConcurrentHashMap<String, Session>()
 
     init {
+        mics?.setOutcomeListener { id, state, detail ->
+            sendStatus(
+                "mic_status",
+                buildJsonObject {
+                    put("offer_id", id)
+                    put("state", state)
+                    detail?.let { put("detail", it.take(200)) }
+                },
+            )
+        }
         drafts?.setOutcomeListener { id, st ->
             sendStatus(
                 "draft_status",
@@ -96,6 +108,7 @@ class LiveFeatures(
             "terminal_open" -> runCatching { onTerminalOpen(p) }.onFailure { e -> (p["session_id"] as? JsonPrimitive)?.contentOrNull?.let { fail(it, "bad request: ${e.message}") } }
             "terminal_close" -> (p["session_id"] as? JsonPrimitive)?.contentOrNull?.let { sessions[it]?.endFromCoordinator("closed by the desktop") }
             "draft_deliver" -> runCatching { onDraft(p) }
+            "mic_offer" -> runCatching { onMicOffer(p) }
         }
     }
 
@@ -315,5 +328,32 @@ class LiveFeatures(
         if ((p["expires_ms"] as JsonPrimitive).content.toLong() <= clock()) return st("failed", "the draft had expired")
         val r = d.deliver(IncomingDraft(id, ch, p["draft"] as JsonObject, hash, (p["origin"] as JsonPrimitive).content))
         st(r.state, r.detail)
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------- mic offers (1.2)
+    private fun onMicOffer(p: JsonObject) {
+        LiveProtocol.validateMicOffer(p)
+        val id = (p["offer_id"] as JsonPrimitive).content
+        fun st(state: String, detail: String? = null) = sendStatus(
+            "mic_status",
+            buildJsonObject {
+                put("offer_id", id)
+                put("state", state)
+                detail?.let { put("detail", it.take(200)) }
+            },
+        )
+        val provider = (p["provider"] as JsonPrimitive).content
+        val m = mics ?: return st("failed", "this DroidCommand build does not take microphone offers")
+        val s = m.status(provider)
+        if (s.state != "ready") return st("failed", "${s.state.replace('_', ' ')}${s.detail?.let { " — $it" } ?: ""}")
+        val expires = (p["expires_ms"] as JsonPrimitive).content.toLong()
+        if (expires <= clock()) return st("expired", "the offer had expired")
+        val r = m.deliver(
+            IncomingMicOffer(
+                id, provider, (p["offer"] as JsonPrimitive).content, (p["pc_name"] as JsonPrimitive).content, expires,
+                LiveProtocol.boolOf(p["read"]) == true,
+            ),
+        )
+        st(r)
     }
 }

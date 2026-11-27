@@ -1,0 +1,19 @@
+{
+  "msg_id": "m-mic-1",
+  "payload": {
+    "expires_ms": 1790003600000,
+    "offer": "vmic1;192.168.1.20;47111;sess-fixture;0000000000000000000000000000000000000000000000000000000000000000;pc-fixture;dev-0123456789ab;keyboard;eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee;1790003600",
+    "offer_id": "mic-0123456789abcdef",
+    "pc_name": "Studio PC",
+    "provider": "keyboard",
+    "read": false
+  },
+  "protocol": {
+    "major": 1,
+    "minor": 2
+  },
+  "sender": "coordinator",
+  "sent_at": 1790000000000,
+  "target": "dev-0123456789ab",
+  "type": "mic_offer"
+}

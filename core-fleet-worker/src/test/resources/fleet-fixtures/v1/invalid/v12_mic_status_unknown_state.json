@@ -1,0 +1,18 @@
+{
+  "envelope": {
+    "msg_id": "m-bad-23",
+    "payload": {
+      "offer_id": "mic-1",
+      "state": "recording"
+    },
+    "protocol": {
+      "major": 1,
+      "minor": 2
+    },
+    "sender": "dev-0123456789ab",
+    "sent_at": 1790000000000,
+    "target": "coordinator",
+    "type": "mic_status"
+  },
+  "expect_error": "bad_request"
+}
