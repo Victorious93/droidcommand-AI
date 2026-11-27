@@ -32,6 +32,7 @@ class MicOfferInbox(
     private val pending = ConcurrentHashMap<String, IncomingMicOffer>()
     private val seen = LinkedHashSet<String>()
     private val handedOut = ConcurrentHashMap<String, String>() // offerId -> provider, until the owner decides
+
     @Volatile private var listener: (String, String, String?) -> Unit = { _, _, _ -> }
 
     override fun status(provider: String) = providerStatus(provider)
